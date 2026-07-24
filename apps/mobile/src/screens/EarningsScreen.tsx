@@ -4,7 +4,7 @@ import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 
 import { apiClient } from '../api/client';
 import type { EarningsDaily } from '../api/types';
 import { Card } from '../components/Card';
-import { TabBar } from '../components/TabBar';
+import { TabBar, type TabKey } from '../components/TabBar';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useOnlineStore } from '../store/onlineStore';
@@ -13,7 +13,7 @@ import { theme } from '../theme';
 export const EarningsScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const isOnline = useOnlineStore((s) => s.isOnline);
-  const [activeTab, setActiveTab] = React.useState<'home' | 'earnings' | 'profile'>('earnings');
+  const [activeTab, setActiveTab] = React.useState<TabKey>('earnings');
 
   const {
     data: earnings,
@@ -29,9 +29,10 @@ export const EarningsScreen: React.FC = () => {
     refetchInterval: 60_000,
   });
 
-  const handleTabPress = (tab: 'home' | 'earnings' | 'profile') => {
+  const handleTabPress = (tab: TabKey) => {
     setActiveTab(tab);
     if (tab === 'home') navigation.navigate(isOnline ? 'Active' : 'Online');
+    if (tab === 'trips') navigation.navigate('TripHistory');
     if (tab === 'profile') navigation.navigate('Profile');
   };
 

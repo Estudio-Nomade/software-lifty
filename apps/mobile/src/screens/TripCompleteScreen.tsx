@@ -3,8 +3,9 @@ import React, { useRef, useEffect } from 'react';
 import { Alert, Animated, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { apiClient } from '../api/client';
 import { Button } from '../components/Button';
-import { TabBar } from '../components/TabBar';
+import { TabBar, type TabKey } from '../components/TabBar';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useOnlineStore } from '../store/onlineStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
@@ -14,9 +15,10 @@ export const TripCompleteScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const activeTripId = useTripStore((s) => s.activeTripId);
   const clearTrip = useTripStore((s) => s.clearTrip);
-  const [activeTab, setActiveTab] = React.useState<'home' | 'earnings' | 'profile'>('home');
+  const [activeTab, setActiveTab] = React.useState<TabKey>('home');
   const [collecting, setCollecting] = React.useState(false);
   const [collectingMP, setCollectingMP] = React.useState(false);
+  const isOnline = useOnlineStore((s) => s.isOnline);
 
   const { amount, commission, driverEarnings } = useLocalSearchParams<{
     amount?: string;
@@ -94,6 +96,14 @@ export const TripCompleteScreen: React.FC = () => {
     navigation.navigate('Online');
   };
 
+  const handleTabPress = (tab: TabKey) => {
+    setActiveTab(tab);
+    if (tab === 'home') navigation.navigate(isOnline ? 'Active' : 'Online');
+    if (tab === 'earnings') navigation.navigate('Earnings');
+    if (tab === 'trips') navigation.navigate('TripHistory');
+    if (tab === 'profile') navigation.navigate('Profile');
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -144,7 +154,7 @@ export const TripCompleteScreen: React.FC = () => {
           style={styles.button}
         />
       </Animated.View>
-      <TabBar activeTab={activeTab} onTabPress={setActiveTab} />
+      <TabBar activeTab={activeTab} onTabPress={handleTabPress} />
     </View>
   );
 };

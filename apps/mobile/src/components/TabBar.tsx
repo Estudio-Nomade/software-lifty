@@ -3,13 +3,15 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../theme';
 
+export type TabKey = 'home' | 'earnings' | 'trips' | 'profile';
+
 interface TabBarProps {
-  activeTab: 'home' | 'earnings' | 'profile';
-  onTabPress: (tab: 'home' | 'earnings' | 'profile') => void;
+  activeTab: TabKey;
+  onTabPress: (tab: TabKey) => void;
 }
 
 interface TabItem {
-  key: 'home' | 'earnings' | 'profile';
+  key: TabKey;
   label: string;
   icon: string;
 }
@@ -17,6 +19,7 @@ interface TabItem {
 const tabs: TabItem[] = [
   { key: 'home', label: 'Inicio', icon: '🏠' },
   { key: 'earnings', label: 'Cobros', icon: '💰' },
+  { key: 'trips', label: 'Viajes', icon: '🚗' },
   { key: 'profile', label: 'Perfil', icon: '👤' },
 ];
 
@@ -53,7 +56,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     backgroundColor: theme.colors.white,
     paddingTop: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.md,
     borderTopWidth: 1,
     borderTopColor: theme.colors.lightGray,
   },

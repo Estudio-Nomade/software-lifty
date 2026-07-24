@@ -14,8 +14,10 @@ import { apiClient } from '../api/client';
 import type { Trip, TripStatus } from '../api/types';
 import { Card } from '../components/Card';
 import { Navbar } from '../components/Navbar';
+import { TabBar, type TabKey } from '../components/TabBar';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useOnlineStore } from '../store/onlineStore';
 import { theme } from '../theme';
 
 const LIMIT = 20;
@@ -94,6 +96,15 @@ export const TripHistoryScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const [page, setPage] = useState(1);
   const [allTrips, setAllTrips] = useState<Trip[]>([]);
+  const isOnline = useOnlineStore((s) => s.isOnline);
+  const [activeTab, setActiveTab] = useState<TabKey>('trips');
+
+  const handleTabPress = (tab: TabKey) => {
+    setActiveTab(tab);
+    if (tab === 'home') navigation.navigate(isOnline ? 'Active' : 'Online');
+    if (tab === 'earnings') navigation.navigate('Earnings');
+    if (tab === 'profile') navigation.navigate('Profile');
+  };
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<Trip[]>({
     queryKey: ['trip-history', page],
@@ -188,6 +199,7 @@ export const TripHistoryScreen: React.FC = () => {
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
       <Navbar title="Historial" onBack={() => navigation.goBack()} showBack />
       {renderContent()}
+      <TabBar activeTab={activeTab} onTabPress={handleTabPress} />
     </View>
   );
 };
