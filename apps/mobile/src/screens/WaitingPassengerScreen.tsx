@@ -14,6 +14,7 @@ import { apiClient } from '../api/client';
 import { Button } from '../components/Button';
 import { ChatBubble } from '../components/ChatBubble';
 import { LiftyWatermark } from '../components/LiftyWatermark';
+import { OTPInput } from '../components/OTPInput';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { sendMessage, subscribeToTripChannel } from '../lib/realtime';
 import { useAuthStore } from '../store/authStore';
@@ -30,6 +31,10 @@ export const WaitingPassengerScreen: React.FC = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationError, setVerificationError] = useState('');
+  const [verifying, setVerifying] = useState(false);
   const chatScrollRef = useRef<ScrollView>(null);
 
   const activeTripId = useTripStore((s) => s.activeTripId);
@@ -83,17 +88,26 @@ export const WaitingPassengerScreen: React.FC = () => {
   const timerColor = seconds > AMBER_THRESHOLD ? theme.colors.turquoise : theme.colors.amber;
   const hasTimeLeft = seconds > 0;
 
-  const handleStartTrip = async () => {
-    if (!activeTripId) return;
-    setLoading(true);
+  const handleStartTripPress = () => {
+    setVerificationCode('');
+    setVerificationError('');
+    setShowVerificationModal(true);
+  };
+
+  const handleVerifyAndStart = async () => {
+    if (!activeTripId || verificationCode.length !== 4) return;
+    setVerifying(true);
+    setVerificationError('');
     try {
-      await apiClient.post(`/trips/${activeTripId}/start`);
+      await apiClient.post(`/trips/${activeTripId}/start`, { verification_code: verificationCode });
+      setShowVerificationModal(false);
       setTripStatus('in_trip');
       navigation.navigate('TripInProgress');
-    } catch {
-      Alert.alert('Error', 'No se pudo iniciar el viaje.');
+    } catch (err: any) {
+      const message = err?.response?.data?.error?.message ?? 'No se pudo iniciar el viaje.';
+      setVerificationError(message);
     } finally {
-      setLoading(false);
+      setVerifying(false);
     }
   };
 
@@ -129,15 +143,59 @@ export const WaitingPassengerScreen: React.FC = () => {
               title="CANCELAR VIAJE"
               variant="danger"
               onPress={handleCancelConfirm}
+              loading={loading}
               style={styles.modalButton}
             />
             <Button
               title="SEGUIR ESPERANDO"
               onPress={() => setShowModal(false)}
+              disabled={loading}
               style={styles.modalButton}
             />
           </View>
         </View>
+      )}
+
+      {showVerificationModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modal}>
+            <Text style={styles.modalTitle}>Código de verificación</Text>
+            <Text style={styles.modalText}>Pedile al pasajero el código de 4 dígitos</Text>
+            <OTPInput
+              length={4}
+              value={verificationCode}
+              onChange={(val) => {
+                setVerificationCode(val);
+                if (verificationError) setVerificationError('');
+              }}
+            />
+            {verificationError ? (
+              <Text style={styles.verificationError}>{verificationError}</Text>
+            ) : null}
+            <Button
+              title="CONFIRMAR"
+              variant="cta"
+              onPress={handleVerifyAndStart}
+              loading={verifying}
+              disabled={verificationCode.length !== 4}
+              style={styles.modalButton}
+            />
+            <Button
+              title="CANCELAR"
+              onPress={() => setShowVerificationModal(false)}
+              style={styles.modalButton}
+            />
+          </View>
+        </View>
+      )}
+
+      {__DEV__ && (
+        <TouchableOpacity
+          style={styles.devButton}
+          onPress={() => navigation.navigate('PassengerCode')}
+        >
+          <Text style={styles.devButtonText}>Ver código pasajero</Text>
+        </TouchableOpacity>
       )}
 
       <View style={styles.spacer} />
@@ -181,12 +239,7 @@ export const WaitingPassengerScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <Button
-        title="INICIAR VIAJE"
-        onPress={handleStartTrip}
-        loading={loading}
-        style={styles.button}
-      />
+      <Button title="INICIAR VIAJE" onPress={handleStartTripPress} style={styles.button} />
 
       <TouchableOpacity onPress={() => setShowModal(true)}>
         <Text style={styles.cancelLink}>
@@ -331,5 +384,25 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     width: 270,
+  },
+  verificationError: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.dangerRed,
+    textAlign: 'center',
+  },
+  devButton: {
+    position: 'absolute',
+    top: 50,
+    right: 16,
+    backgroundColor: theme.colors.turquoise,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.md,
+    zIndex: 5,
+  },
+  devButtonText: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.white,
   },
 });

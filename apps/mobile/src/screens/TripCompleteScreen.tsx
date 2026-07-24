@@ -1,8 +1,20 @@
 import { useLocalSearchParams } from 'expo-router';
 import React, { useRef, useEffect } from 'react';
-import { Alert, Animated, StatusBar, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Animated,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { apiClient } from '../api/client';
+import { reportTags } from '../api/types';
 import { Button } from '../components/Button';
+import { StarRating } from '../components/StarRating';
 import { TabBar } from '../components/TabBar';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTripStore } from '../store/tripStore';
@@ -10,13 +22,20 @@ import { theme } from '../theme';
 
 const formatCurrency = (value: number) => `$${value.toLocaleString('es-AR')}`;
 
+type Step = 'collect' | 'rate';
+
 export const TripCompleteScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const activeTripId = useTripStore((s) => s.activeTripId);
   const clearTrip = useTripStore((s) => s.clearTrip);
   const [activeTab, setActiveTab] = React.useState<'home' | 'earnings' | 'profile'>('home');
+  const [step, setStep] = React.useState<Step>('collect');
   const [collecting, setCollecting] = React.useState(false);
   const [collectingMP, setCollectingMP] = React.useState(false);
+  const [rating, setRating] = React.useState(0);
+  const [comment, setComment] = React.useState('');
+  const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
+  const [submitting, setSubmitting] = React.useState(false);
 
   const { amount, commission, driverEarnings } = useLocalSearchParams<{
     amount?: string;
@@ -47,20 +66,17 @@ export const TripCompleteScreen: React.FC = () => {
     ]).start();
   }, [fadeAnim, scaleAnim]);
 
+  const goOnline = () => {
+    clearTrip();
+    navigation.navigate('Online');
+  };
+
   const handleCollect = async () => {
     if (!activeTripId) return;
     setCollecting(true);
     try {
       await apiClient.put(`/trips/${activeTripId}/collect`, { payment_method: 'cash' });
-      Alert.alert('Cobrado', 'El viaje fue cobrado exitosamente.', [
-        {
-          text: 'OK',
-          onPress: () => {
-            clearTrip();
-            navigation.navigate('Online');
-          },
-        },
-      ]);
+      setStep('rate');
     } catch {
       Alert.alert('Error', 'No se pudo registrar el cobro.');
     } finally {
@@ -73,15 +89,7 @@ export const TripCompleteScreen: React.FC = () => {
     setCollectingMP(true);
     try {
       await apiClient.put(`/trips/${activeTripId}/collect`, { payment_method: 'mercadopago' });
-      Alert.alert('Cobrado', 'El viaje fue cobrado exitosamente por Mercado Pago.', [
-        {
-          text: 'OK',
-          onPress: () => {
-            clearTrip();
-            navigation.navigate('Online');
-          },
-        },
-      ]);
+      setStep('rate');
     } catch {
       Alert.alert('Error', 'No se pudo registrar el cobro.');
     } finally {
@@ -89,61 +97,128 @@ export const TripCompleteScreen: React.FC = () => {
     }
   };
 
-  const handleGoHome = () => {
-    clearTrip();
-    navigation.navigate('Online');
+  const handleSubmitRating = async () => {
+    if (!activeTripId || rating === 0) return;
+    setSubmitting(true);
+    try {
+      const body: { rating: number; tags?: string; comment?: string } = { rating };
+      if (selectedTags.length > 0) body.tags = selectedTags.join(',');
+      if (comment.trim()) body.comment = comment.trim();
+      await apiClient.post(`/ratings/trips/${activeTripId}`, body);
+      goOnline();
+    } catch {
+      Alert.alert('Error', 'No se pudo enviar la calificación.');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const handleSkipRating = () => {
+    goOnline();
+  };
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
+  };
+
+  const renderCollectStep = () => (
+    <>
+      <Text style={styles.completedLabel}>Viaje completado!</Text>
+      <Text style={styles.earnedLabel}>Ganaste</Text>
+      <Text style={styles.earnedAmount}>{formatCurrency(tripAmount)}</Text>
+
+      <View style={styles.breakdown}>
+        <Text style={styles.breakdownItem}>Comision Lifty: -{formatCurrency(tripCommission)}</Text>
+        <Text style={styles.breakdownItemEarnings}>
+          Tu ganancia: {formatCurrency(tripDriverEarnings)}
+        </Text>
+      </View>
+
+      <View style={styles.summaryCard}>
+        <Text style={styles.summaryDestination}>Terminal de Omnibus</Text>
+        <Text style={styles.summaryInfo}>5 min · 3.2 km</Text>
+      </View>
+
+      <Button
+        title="Cobre en efectivo"
+        onPress={handleCollect}
+        loading={collecting}
+        style={styles.button}
+      />
+      <Button
+        title="Cobre por Mercado Pago"
+        onPress={handleCollectMP}
+        loading={collectingMP}
+        variant="secondary"
+        style={styles.button}
+      />
+    </>
+  );
+
+  const renderRateStep = () => (
+    <>
+      <Text style={styles.completedLabel}>Viaje completado!</Text>
+      <Text style={styles.rateTitle}>Como fue tu pasajero?</Text>
+
+      <StarRating rating={rating} onRate={setRating} />
+
+      <View style={styles.reportSection}>
+        <Text style={styles.reportLabel}>Reportar un problema (opcional)</Text>
+        <View style={styles.tagsContainer}>
+          {reportTags.map((tag) => {
+            const selected = selectedTags.includes(tag);
+            return (
+              <TouchableOpacity
+                key={tag}
+                onPress={() => toggleTag(tag)}
+                style={[styles.tag, selected && styles.tagSelected]}
+              >
+                <Text style={[styles.tagText, selected && styles.tagTextSelected]}>{tag}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      <TextInput
+        style={styles.commentInput}
+        placeholder="Deja un comentario (opcional)"
+        placeholderTextColor={theme.colors.mediumGray}
+        value={comment}
+        onChangeText={setComment}
+        multiline
+        textAlignVertical="top"
+      />
+
+      <Button
+        title="Enviar calificacion"
+        onPress={handleSubmitRating}
+        loading={submitting}
+        disabled={rating === 0}
+        style={styles.button}
+      />
+      <Button title="Omitir" variant="secondary" onPress={handleSkipRating} style={styles.button} />
+    </>
+  );
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <Animated.View
-        style={[
-          styles.content,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: scaleAnim }],
-          },
-        ]}
-      >
-        <Text style={styles.completedLabel}>Viaje completado!</Text>
-        <Text style={styles.earnedLabel}>Ganaste</Text>
-        <Text style={styles.earnedAmount}>{formatCurrency(tripAmount)}</Text>
-
-        <View style={styles.breakdown}>
-          <Text style={styles.breakdownItem}>
-            Comision Lifty: -{formatCurrency(tripCommission)}
-          </Text>
-          <Text style={styles.breakdownItemEarnings}>
-            Tu ganancia: {formatCurrency(tripDriverEarnings)}
-          </Text>
-        </View>
-
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryDestination}>Terminal de Omnibus</Text>
-          <Text style={styles.summaryInfo}>5 min · 3.2 km</Text>
-        </View>
-
-        <Button
-          title="Cobre en efectivo"
-          onPress={handleCollect}
-          loading={collecting}
-          style={styles.button}
-        />
-        <Button
-          title="Cobre por Mercado Pago"
-          onPress={handleCollectMP}
-          loading={collectingMP}
-          variant="secondary"
-          style={styles.button}
-        />
-        <Button
-          title="VOLVER AL INICIO"
-          variant="secondary"
-          onPress={handleGoHome}
-          style={styles.button}
-        />
-      </Animated.View>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Animated.View
+          style={[
+            styles.content,
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: scaleAnim }],
+            },
+          ]}
+        >
+          {step === 'collect' ? renderCollectStep() : renderRateStep()}
+        </Animated.View>
+      </ScrollView>
       <TabBar activeTab={activeTab} onTabPress={setActiveTab} />
     </View>
   );
@@ -154,6 +229,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.white,
     gap: theme.spacing.lg,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingBottom: theme.spacing['2xl'],
   },
   content: {
     flex: 1,
@@ -205,6 +285,55 @@ const styles = StyleSheet.create({
   summaryInfo: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
+  },
+  rateTitle: {
+    fontSize: theme.fontSize.lg,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.deepBlue,
+  },
+  reportSection: {
+    width: 300,
+    gap: theme.spacing.sm,
+  },
+  reportLabel: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.mediumGray,
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  tag: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.mediumGray,
+  },
+  tagSelected: {
+    backgroundColor: theme.colors.turquoise,
+    borderColor: theme.colors.turquoise,
+  },
+  tagText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.mediumGray,
+  },
+  tagTextSelected: {
+    color: theme.colors.white,
+    fontWeight: theme.fontWeight.medium,
+  },
+  commentInput: {
+    width: 300,
+    minHeight: 80,
+    maxHeight: 120,
+    borderRadius: theme.radius.inputRadius,
+    borderWidth: 1,
+    borderColor: theme.colors.mediumGray,
+    padding: theme.spacing.md,
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.deepBlue,
   },
   button: {
     width: 300,

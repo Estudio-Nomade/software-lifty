@@ -1,8 +1,8 @@
-import { and, desc, eq, inArray, not, sql } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, inArray, not, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
-import { drivers, tripEvents, trips } from '../../shared/db/schema';
-import { AppError, NotFoundError } from '../../shared/lib/errors';
+import { drivers, ratings, tripEvents, trips, users } from '../../shared/db/schema';
+import { AppError, BadRequestError, NotFoundError } from '../../shared/lib/errors';
 import { logger } from '../../shared/lib/logger';
 import { getPayment } from '../../shared/lib/mercado-pago';
 import { calculateFare, calculatePlatformFee } from '../../shared/lib/pricing';
@@ -192,7 +192,43 @@ export const tripService = {
 
   async acceptTrip(user: AuthUser, tripId: string) {
     const driverId = await getDriverId(user);
-    return transitionTrip(driverId, tripId, 'accepted');
+    const verificationCode = Math.floor(1000 + Math.random() * 9000).toString();
+
+    return db.transaction(async (tx) => {
+      const trip = await findTrip(driverId, tripId, tx);
+
+      const allowed = VALID_TRANSITIONS[trip.status];
+      if (!allowed || !allowed.includes('accepted')) {
+        throw new AppError(
+          `Invalid transition from ${trip.status} to accepted`,
+          400,
+          'BAD_REQUEST',
+        );
+      }
+
+      await tx
+        .update(trips)
+        .set({
+          status: 'accepted',
+          verification_code: verificationCode,
+          updated_at: new Date(),
+        })
+        .where(eq(trips.id, tripId));
+
+      await recordEvent(tripId, trip.status, 'accepted', tx);
+
+      const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
+
+      if (trip.passenger_id) {
+        sendPushToUser(trip.passenger_id, {
+          title: 'Tu conductor aceptó el viaje',
+          body: `Código de verificación: ${verificationCode}`,
+          data: { type: 'trip:verification', trip_id: tripId, verification_code: verificationCode },
+        });
+      }
+
+      return updated;
+    });
   },
 
   async rejectTrip(user: AuthUser, tripId: string) {
@@ -210,8 +246,20 @@ export const tripService = {
     return transitionTrip(driverId, tripId, 'waiting');
   },
 
-  async startTrip(user: AuthUser, tripId: string) {
+  async startTrip(user: AuthUser, tripId: string, verificationCode: string) {
     const driverId = await getDriverId(user);
+
+    const trip = await db
+      .select({ verification_code: trips.verification_code })
+      .from(trips)
+      .where(and(eq(trips.id, tripId), eq(trips.driver_id, driverId)))
+      .limit(1);
+
+    if (!trip[0]) throw new NotFoundError('Trip not found');
+    if (trip[0].verification_code !== verificationCode) {
+      throw new BadRequestError('El código de verificación no coincide');
+    }
+
     return transitionTrip(driverId, tripId, 'in_trip');
   },
 
@@ -229,8 +277,19 @@ export const tripService = {
   async getActiveTrip(user: AuthUser) {
     const driverId = await getDriverId(user);
     const result = await db
-      .select()
+      .select({
+        ...getTableColumns(trips),
+        passenger_name: users.full_name,
+        passenger_avatar_url: users.avatar_url,
+        passenger_phone: users.phone,
+        passenger_rating: sql<number | null>`(
+          SELECT ROUND(AVG(r.score)::numeric, 1)::float
+          FROM ${ratings} r
+          WHERE r.ratee_id = ${trips.passenger_id}
+        )`,
+      })
       .from(trips)
+      .leftJoin(users, eq(trips.passenger_id, users.id))
       .where(and(eq(trips.driver_id, driverId), not(inArray(trips.status, TERMINAL_STATUSES))))
       .orderBy(desc(trips.created_at))
       .limit(1);
@@ -251,7 +310,24 @@ export const tripService = {
 
   async getTripById(user: AuthUser, tripId: string) {
     const driverId = await getDriverId(user);
-    return findTrip(driverId, tripId);
+    const [trip] = await db
+      .select({
+        ...getTableColumns(trips),
+        passenger_name: users.full_name,
+        passenger_avatar_url: users.avatar_url,
+        passenger_phone: users.phone,
+        passenger_rating: sql<number | null>`(
+          SELECT ROUND(AVG(r.score)::numeric, 1)::float
+          FROM ${ratings} r
+          WHERE r.ratee_id = ${trips.passenger_id}
+        )`,
+      })
+      .from(trips)
+      .leftJoin(users, eq(trips.passenger_id, users.id))
+      .where(and(eq(trips.id, tripId), eq(trips.driver_id, driverId)))
+      .limit(1);
+    if (!trip) throw new NotFoundError('Trip not found');
+    return trip;
   },
 
   async collectTrip(

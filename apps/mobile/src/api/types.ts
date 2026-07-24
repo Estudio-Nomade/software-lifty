@@ -115,6 +115,11 @@ export const tripSchema = z.object({
   is_collected: z.boolean(),
   created_at: z.string(),
   updated_at: z.string(),
+  passenger_name: z.string().nullable(),
+  passenger_avatar_url: z.string().nullable(),
+  passenger_phone: z.string().nullable(),
+  passenger_rating: z.number().nullable(),
+  verification_code: z.string().length(4).nullable(),
 });
 
 export const earningsDailySchema = z.object({
@@ -162,5 +167,28 @@ export type Trip = z.infer<typeof tripSchema>;
 export type TripStatus = z.infer<typeof tripStatusSchema>;
 export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
 export type DriverDocument = z.infer<typeof documentSchema>;
+export const rateTripBodySchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  tags: z.string().optional(),
+  comment: z.string().optional(),
+});
+
+export const rateTripResponseSchema = z.object({
+  rating_id: z.string(),
+  message: z.string(),
+});
+
+export const reportTags = [
+  'No se presentó',
+  'Mala actitud',
+  'Sucio/desorden',
+  'Dañó el vehículo',
+  'Demora excesiva',
+  'Pago incompleto',
+] as const;
+
 export type District = z.infer<typeof districtSchema>;
 export type DistrictDetail = z.infer<typeof districtDetailSchema>;
+export type RateTripBody = z.infer<typeof rateTripBodySchema>;
+export type RateTripResponse = z.infer<typeof rateTripResponseSchema>;
+export type ReportTag = (typeof reportTags)[number];
