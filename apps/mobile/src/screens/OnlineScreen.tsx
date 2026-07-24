@@ -14,6 +14,7 @@ import { Toggle } from '../components/Toggle';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
+import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
 import { stopTracking } from '../lib/location';
 import { useOnlineStore } from '../store/onlineStore';
 import { theme } from '../theme';
@@ -26,6 +27,7 @@ export const OnlineScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'home' | 'earnings' | 'profile'>('home');
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
+  const heatmapPoints = useHeatmapPolling();
   const signOut = useSignOut();
 
   const {
@@ -249,7 +251,7 @@ export const OnlineScreen: React.FC = () => {
         </View>
 
         <View style={styles.mapContainer}>
-          <MapView followUserLocation />
+          <MapView followUserLocation heatmapPoints={heatmapPoints} />
         </View>
 
         {renderEarningsCard()}

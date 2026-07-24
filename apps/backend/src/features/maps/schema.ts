@@ -24,3 +24,11 @@ export const fareEstimateBody = t.Object({
   dest_lng: t.Number(),
   vehicle_type: t.String(),
 });
+
+export const heatmapQuery = t.Object({
+  sw_lat: t.Number(),
+  sw_lng: t.Number(),
+  ne_lat: t.Number(),
+  ne_lng: t.Number(),
+  grid_size: t.Optional(t.Number({ minimum: 1, maximum: 10, default: 5 })),
+});

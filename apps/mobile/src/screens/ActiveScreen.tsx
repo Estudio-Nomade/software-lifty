@@ -12,6 +12,7 @@ import { SideMenu } from '../components/SideMenu';
 import { Toggle } from '../components/Toggle';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
+import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
 import { startTracking, stopTracking } from '../lib/location';
 import { subscribeToDriverChannel } from '../lib/realtime';
 import { useAuthStore } from '../store/authStore';
@@ -39,6 +40,7 @@ export const ActiveScreen: React.FC = () => {
   const setOnlineSince = useOnlineStore((s) => s.setOnlineSince);
   const driverId = useAuthStore((s) => s.driverId);
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const heatmapPoints = useHeatmapPolling();
   const [menuVisible, setMenuVisible] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [onlineTime, setOnlineTime] = useState(0);
@@ -196,7 +198,12 @@ export const ActiveScreen: React.FC = () => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
 
-      <MapView style={StyleSheet.absoluteFill as any} followUserLocation />
+      {/* Heatmap hidden naturally when navigating away to IncomingRequest (component unmounts) */}
+      <MapView
+        style={StyleSheet.absoluteFill as any}
+        followUserLocation
+        heatmapPoints={heatmapPoints}
+      />
 
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity

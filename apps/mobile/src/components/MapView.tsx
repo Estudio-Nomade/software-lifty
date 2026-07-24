@@ -21,11 +21,17 @@ interface MarkerData {
   color?: string;
 }
 
+interface HeatmapPoint {
+  coordinate: [number, number];
+  weight: number;
+}
+
 interface MapViewProps {
   centerCoordinate?: [number, number];
   zoom?: number;
   markers?: MarkerData[];
   routeLine?: Array<[number, number]>;
+  heatmapPoints?: HeatmapPoint[];
   followUserLocation?: boolean;
   style?: ViewStyle;
   onError?: () => void;
@@ -190,6 +196,61 @@ const MAP_HTML = `<!DOCTYPE html>
     }
   }
 
+  var HEATMAP_SOURCE_ID = 'heatmap-source';
+  var HEATMAP_LAYER_ID = 'heatmap-layer';
+
+  function updateHeatmap(points) {
+    if (!points || points.length === 0) {
+      if (map.getLayer(HEATMAP_LAYER_ID)) map.removeLayer(HEATMAP_LAYER_ID);
+      if (map.getSource(HEATMAP_SOURCE_ID)) map.removeSource(HEATMAP_SOURCE_ID);
+      return;
+    }
+
+    var geojson = {
+      type: 'FeatureCollection',
+      features: points.map(function (p) {
+        return {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: p.coordinate },
+          properties: { weight: p.weight },
+        };
+      }),
+    };
+
+    var existing = map.getSource(HEATMAP_SOURCE_ID);
+    if (existing) {
+      existing.setData(geojson);
+    } else {
+      map.addSource(HEATMAP_SOURCE_ID, { type: 'geojson', data: geojson });
+      map.addLayer({
+        id: HEATMAP_LAYER_ID,
+        type: 'heatmap',
+        source: HEATMAP_SOURCE_ID,
+        paint: {
+          'heatmap-weight': ['get', 'weight'],
+          'heatmap-intensity': 0.6,
+          'heatmap-radius': [
+            'interpolate', ['linear'], ['zoom'],
+            10, 8,
+            12, 15,
+            15, 30,
+            18, 60,
+          ],
+          'heatmap-color': [
+            'interpolate', ['linear'], ['heatmap-density'],
+            0,    'rgba(33,102,172,0)',
+            0.2,  'rgb(103,169,207)',
+            0.4,  'rgb(209,229,240)',
+            0.6,  'rgb(253,219,199)',
+            0.8,  'rgb(239,138,98)',
+            1.0,  'rgb(178,24,43)',
+          ],
+          'heatmap-opacity': 0.7,
+        },
+      });
+    }
+  }
+
   map.on('load', function () {
     mapLoaded = true;
     if (pendingRoute) {
@@ -246,6 +307,9 @@ const MAP_HTML = `<!DOCTYPE html>
         if (msg.enabled) startFollowUser();
         else stopFollowUser();
         break;
+      case 'heatmap':
+        updateHeatmap(msg.points || []);
+        break;
     }
   });
 
@@ -264,6 +328,7 @@ export const MapView: React.FC<MapViewProps> = ({
   zoom = DEFAULT_ZOOM,
   markers = [],
   routeLine,
+  heatmapPoints,
   followUserLocation = false,
   style,
   onError,
@@ -339,6 +404,17 @@ export const MapView: React.FC<MapViewProps> = ({
       }),
     );
   }, [followUserLocation, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded || !webViewRef.current) return;
+
+    webViewRef.current.postMessage(
+      JSON.stringify({
+        type: 'heatmap',
+        points: heatmapPoints || [],
+      }),
+    );
+  }, [heatmapPoints, isLoaded]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {

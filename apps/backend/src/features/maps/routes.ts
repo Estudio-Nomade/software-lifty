@@ -1,6 +1,12 @@
 import { Elysia } from 'elysia';
 import { authGuard } from '../../shared/middleware/require-auth';
-import { autocompleteQuery, directionsQuery, fareEstimateBody, geocodeQuery } from './schema';
+import {
+  autocompleteQuery,
+  directionsQuery,
+  fareEstimateBody,
+  geocodeQuery,
+  heatmapQuery,
+} from './schema';
 import { mapsService } from './service';
 
 import { safeCall } from '../../shared/lib/route-utils';
@@ -51,4 +57,20 @@ export const mapsRoutes = new Elysia({ prefix: '/maps' })
         set,
       ),
     { body: fareEstimateBody, requireAuth: true },
+  )
+  .get(
+    '/heatmap',
+    ({ query, set }) =>
+      safeCall(
+        () =>
+          mapsService.getHeatmap(
+            query.sw_lat,
+            query.sw_lng,
+            query.ne_lat,
+            query.ne_lng,
+            query.grid_size,
+          ),
+        set,
+      ),
+    { query: heatmapQuery, requireAuth: true },
   );
