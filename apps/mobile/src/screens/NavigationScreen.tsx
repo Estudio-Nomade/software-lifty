@@ -17,6 +17,8 @@ import { Button } from '../components/Button';
 import { MapView } from '../components/MapView';
 import { RatingStars } from '../components/RatingStars';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
+import type { ManeuverStep } from '../hooks/useManeuverInstructions';
 import { haversineDistance } from '../lib/geo';
 import { startTracking, stopTracking } from '../lib/location';
 import { decodePolyline } from '../lib/polyline';
@@ -38,6 +40,9 @@ export const NavigationScreen: React.FC = () => {
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const [distKm, setDistKm] = useState<number | null>(null);
   const [nearPassenger, setNearPassenger] = useState(false);
+  const [steps, setSteps] = useState<ManeuverStep[]>([]);
+
+  const { instruction } = useManeuverInstructions(steps, locationLat, locationLng);
 
   const pickupCoord: [number, number] = trip
     ? [trip.origin_lng, trip.origin_lat]
@@ -85,6 +90,7 @@ export const NavigationScreen: React.FC = () => {
       setDistKm(data.distance_km);
       const coords = decodePolyline(data.polyline);
       setRouteCoords(coords);
+      setSteps(data.steps ?? []);
     } catch (err) {
       if (__DEV__) console.warn('[Navigation] fetchDirections failed:', err);
     }
@@ -194,6 +200,7 @@ export const NavigationScreen: React.FC = () => {
             {Math.round(etaMinutes)} min · {distKm} km
           </Text>
         ) : null}
+        {instruction ? <Text style={styles.instruction}>{instruction}</Text> : null}
         <View style={styles.commsButtons}>
           <Button
             title="📞 Llamar"
@@ -277,6 +284,16 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.deepBlue,
+  },
+  instruction: {
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.turquoise,
+    backgroundColor: 'rgba(0, 194, 179, 0.08)',
+    borderRadius: theme.radius.sm,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.xs,
   },
   navButtons: {
     flexDirection: 'row',

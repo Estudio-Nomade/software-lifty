@@ -141,6 +141,7 @@ describe('Maps Proxy', () => {
     expect(data.distance_km).toBeGreaterThan(0);
     expect(data.duration_minutes).toBeNumber();
     expect(data.polyline).toBeString();
+    expect(Array.isArray(data.steps)).toBe(true);
   });
 
   test('directions should score alternative routes by road hierarchy', async () => {
@@ -159,6 +160,7 @@ describe('Maps Proxy', () => {
     expect(data.duration_minutes).toBeNumber();
     expect(data.polyline).toBeString();
     expect(data.polyline.length).toBeGreaterThan(0);
+    expect(Array.isArray(data.steps)).toBe(true);
   });
 
   test('fare-estimate calculates fare', async () => {
