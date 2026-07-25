@@ -22,6 +22,7 @@ jest.mock('../../components/MapView', () => ({ MapView: () => null }));
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { IncomingRequestScreen } from '../../screens/IncomingRequestScreen';
+import { useLocationStore } from '../../store/locationStore';
 import { useTripStore } from '../../store/tripStore';
 
 const REAL_TRIP = {
@@ -47,6 +48,18 @@ const REAL_TRIP = {
   is_collected: false,
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
+  passenger_name: 'Juan Pérez',
+  passenger_avatar_url: 'https://example.com/avatar.jpg',
+  passenger_phone: '+5491112345678',
+  passenger_rating: 4.5,
+};
+
+const REAL_TRIP_NO_PASSENGER = {
+  ...REAL_TRIP,
+  passenger_name: null,
+  passenger_avatar_url: null,
+  passenger_phone: null,
+  passenger_rating: null,
 };
 
 describe('IncomingRequestScreen', () => {
@@ -56,6 +69,7 @@ describe('IncomingRequestScreen', () => {
     mockPut.mockReset();
     mockNavigate.mockReset();
     useTripStore.getState().clearTrip();
+    useLocationStore.getState().clearLocation();
     mockGet.mockResolvedValue({ data: REAL_TRIP });
     mockPost.mockResolvedValue({ data: { ...REAL_TRIP, status: 'accepted' } });
     mockPut.mockResolvedValue({ data: {} });
@@ -100,5 +114,42 @@ describe('IncomingRequestScreen', () => {
     await waitFor(() => {
       expect(mockPost).toHaveBeenCalledWith('/trips/trip-real-1/reject');
     });
+  });
+
+  test('shows passenger name when passenger data is present', async () => {
+    const { getByText } = await render(<IncomingRequestScreen />);
+    await waitFor(() => expect(getByText('Juan Pérez')).toBeTruthy());
+  });
+
+  test('shows passenger avatar when avatar_url is provided', async () => {
+    const { getByTestId } = await render(<IncomingRequestScreen />);
+    await waitFor(() => expect(getByTestId('avatar-image')).toBeTruthy());
+  });
+
+  test('shows passenger fallback avatar when avatar_url is null', async () => {
+    mockGet.mockResolvedValue({
+      data: { ...REAL_TRIP, passenger_avatar_url: null },
+    });
+    const { getByTestId } = await render(<IncomingRequestScreen />);
+    await waitFor(() => expect(getByTestId('avatar-fallback')).toBeTruthy());
+  });
+
+  test('hides passenger row when passenger_name is null', async () => {
+    mockGet.mockResolvedValue({ data: REAL_TRIP_NO_PASSENGER });
+    const { queryByText } = await render(<IncomingRequestScreen />);
+    await waitFor(() => expect(queryByText('Origen Real 123')).toBeTruthy());
+    expect(queryByText('Juan Pérez')).toBeNull();
+  });
+
+  test('shows ETA when location and trip data are available', async () => {
+    useLocationStore.getState().setLocation(-31.4, -64.1);
+    const { getByText } = await render(<IncomingRequestScreen />);
+    await waitFor(() => expect(getByText('~12 min al pickup')).toBeTruthy());
+  });
+
+  test('does not fetch ETA when location is not available', async () => {
+    const { queryByText } = await render(<IncomingRequestScreen />);
+    await waitFor(() => expect(queryByText('Origen Real 123')).toBeTruthy());
+    expect(queryByText(/min al pickup/)).toBeNull();
   });
 });

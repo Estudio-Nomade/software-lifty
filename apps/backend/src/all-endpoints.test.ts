@@ -443,8 +443,8 @@ describe('Trips', () => {
       },
       token,
     );
-    await req('POST', `/api/trips/${trip.id}/accept`, undefined, token);
-    const { status } = await req('POST', `/api/trips/${trip.id}/start`, undefined, token);
+    const a = await req('POST', `/api/trips/${trip.id}/accept`, undefined, token);
+    const { status } = await req('POST', `/api/trips/${trip.id}/start`, { verification_code: a.data.verification_code }, token);
     expect(status).toBe(400);
   });
   test('all trip mutations require auth → 401', async () => {
