@@ -22,6 +22,15 @@ export interface DirectionsResult {
   distance_km: number;
   duration_minutes: number;
   polyline: string;
+  steps: ManeuverStep[];
+}
+
+export interface ManeuverStep {
+  maneuver_type: string;
+  maneuver_modifier?: string;
+  name: string;
+  distance: number;
+  geometry: string;
 }
 
 export interface DistanceMatrixResult {
@@ -33,6 +42,7 @@ interface OSRMStep {
   name: string;
   distance: number;
   duration: number;
+  geometry: string;
   maneuver: {
     type: string;
     modifier?: string;
@@ -209,7 +219,7 @@ export async function directions(
 ): Promise<DirectionsResult> {
   try {
     if (process.env.NODE_ENV === 'test') {
-      return { distance_km: 5.2, duration_minutes: 12, polyline: 'mock_polyline' };
+      return { distance_km: 5.2, duration_minutes: 12, polyline: 'mock_polyline', steps: [] };
     }
 
     const cacheKey = `geo:directions:${origin_lat},${origin_lng}:${dest_lat},${dest_lng}`;
@@ -249,10 +259,23 @@ export async function directions(
 
     const distance_km = Math.round((bestRoute.distance / 1000) * 100) / 100;
     const duration_minutes = Math.round((bestRoute.duration / 60) * 100) / 100;
+
+    const rawSteps = bestRoute.legs?.[0]?.steps ?? [];
+    const steps: ManeuverStep[] = rawSteps
+      .filter((s) => s.distance >= 50)
+      .map((s) => ({
+        maneuver_type: s.maneuver.type,
+        maneuver_modifier: s.maneuver.modifier,
+        name: s.name,
+        distance: s.distance,
+        geometry: s.geometry,
+      }));
+
     const result: DirectionsResult = {
       distance_km,
       duration_minutes,
       polyline: bestRoute.geometry,
+      steps,
     };
 
     await cacheSet(cacheKey, JSON.stringify(result), 300);
@@ -262,7 +285,7 @@ export async function directions(
     const distance_km =
       Math.round(haversineDistance(origin_lat, origin_lng, dest_lat, dest_lng) * 100) / 100;
     const duration_minutes = Math.round(distance_km * 3);
-    return { distance_km, duration_minutes, polyline: '' };
+    return { distance_km, duration_minutes, polyline: '', steps: [] };
   }
 }
 
