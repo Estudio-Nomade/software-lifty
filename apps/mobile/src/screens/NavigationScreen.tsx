@@ -5,6 +5,7 @@ import { apiClient } from '../api/client';
 import { Button } from '../components/Button';
 import { MapView } from '../components/MapView';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { haversineDistance } from '../lib/geo';
 import { startTracking, stopTracking } from '../lib/location';
 import { decodePolyline } from '../lib/polyline';
 import { useLocationStore } from '../store/locationStore';
@@ -23,6 +24,7 @@ export const NavigationScreen: React.FC = () => {
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const [distKm, setDistKm] = useState<number | null>(null);
+  const [nearPassenger, setNearPassenger] = useState(false);
 
   const pickupCoord: [number, number] = trip
     ? [trip.origin_lng, trip.origin_lat]
@@ -45,6 +47,12 @@ export const NavigationScreen: React.FC = () => {
   }, [trip, tripStatus, setTripStatus]);
 
   const lastFetchRef = useRef(0);
+
+  useEffect(() => {
+    if (!locationLat || !locationLng || !trip) return;
+    const distance = haversineDistance(locationLat, locationLng, trip.origin_lat, trip.origin_lng);
+    setNearPassenger(distance < 0.05);
+  }, [locationLat, locationLng, trip]);
 
   useEffect(() => {
     if (!locationLat || !locationLng || !trip) return;
@@ -123,6 +131,12 @@ export const NavigationScreen: React.FC = () => {
       <View style={styles.bottomCard}>
         <Text style={styles.label}>Rumbo al pasajero</Text>
         <Text style={styles.address}>{trip?.origin_address ?? 'Origen'}</Text>
+        {trip?.pickup_instructions ? (
+          <View style={styles.instructionsPill}>
+            <Text style={styles.instructionsLabel}>📝</Text>
+            <Text style={styles.instructionsText}>{trip.pickup_instructions}</Text>
+          </View>
+        ) : null}
         {etaMinutes !== null && distKm !== null ? (
           <Text style={styles.eta}>
             {Math.round(etaMinutes)} min · {distKm} km
@@ -144,10 +158,12 @@ export const NavigationScreen: React.FC = () => {
             textStyle={styles.navButtonText}
           />
         </View>
+        {nearPassenger && <Text style={styles.nearPassengerText}>Estas cerca del pasajero</Text>}
         <Button
           title="LLEGUE"
           onPress={handleArrive}
           loading={loading}
+          variant={nearPassenger ? 'cta' : 'primary'}
           style={styles.arrivedButton}
         />
       </View>
@@ -208,5 +224,28 @@ const styles = StyleSheet.create({
   arrivedButton: {
     width: '100%',
     marginTop: theme.spacing.sm,
+  },
+  instructionsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.lightGray,
+    borderRadius: theme.radius.sm,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    gap: theme.spacing.xs,
+  },
+  instructionsLabel: {
+    fontSize: theme.fontSize.xs,
+  },
+  instructionsText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.deepBlue,
+    flex: 1,
+  },
+  nearPassengerText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.turquoise,
+    textAlign: 'center',
   },
 });

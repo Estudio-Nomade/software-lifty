@@ -103,6 +103,7 @@ export const tripSchema = z.object({
   dest_address: z.string().nullable(),
   dest_lat: z.number(),
   dest_lng: z.number(),
+  pickup_instructions: z.string().nullable(),
   distance_km: z.number().nullable(),
   duration_minutes: z.number().nullable(),
   base_fare: z.number().nullable(),

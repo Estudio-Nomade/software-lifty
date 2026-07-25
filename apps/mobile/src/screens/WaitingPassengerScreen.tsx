@@ -152,6 +152,13 @@ export const WaitingPassengerScreen: React.FC = () => {
       <Text style={styles.waitingFor}>Esperando al pasajero</Text>
       <Text style={styles.address}>en {trip?.origin_address ?? 'Origen'}</Text>
 
+      {trip?.pickup_instructions ? (
+        <View style={styles.instructionsCard}>
+          <Text style={styles.instructionsLabel}>📝</Text>
+          <Text style={styles.instructionsText}>{trip.pickup_instructions}</Text>
+        </View>
+      ) : null}
+
       <View style={styles.chatArea}>
         <LiftyWatermark />
         <ScrollView
@@ -238,6 +245,26 @@ const styles = StyleSheet.create({
   address: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
+  },
+  instructionsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.lightGray,
+    borderRadius: theme.radius.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.turquoise,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    gap: theme.spacing.xs,
+    width: 327,
+  },
+  instructionsLabel: {
+    fontSize: theme.fontSize.sm,
+  },
+  instructionsText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.deepBlue,
+    flex: 1,
   },
   chatArea: {
     width: 343,

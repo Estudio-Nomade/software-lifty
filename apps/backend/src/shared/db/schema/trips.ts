@@ -23,6 +23,7 @@ export const trips = pgTable('trips', {
   dest_lng: real('dest_lng').notNull(),
   origin_address: varchar('origin_address', { length: 512 }),
   dest_address: varchar('dest_address', { length: 512 }),
+  pickup_instructions: varchar('pickup_instructions', { length: 256 }),
   distance_km: real('distance_km'),
   duration_minutes: integer('duration_minutes'),
   base_fare: doublePrecision('base_fare'),

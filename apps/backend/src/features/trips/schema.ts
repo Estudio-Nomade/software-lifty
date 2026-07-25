@@ -11,6 +11,7 @@ export const createTripBody = t.Object({
   dest_lng: t.Number(),
   origin_address: t.Optional(t.String()),
   dest_address: t.Optional(t.String()),
+  pickup_instructions: t.Optional(t.String()),
   distance_km: t.Number(),
   duration_minutes: t.Number(),
   vehicle_type: t.String(),
