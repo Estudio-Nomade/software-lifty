@@ -15,8 +15,9 @@ import { apiClient } from '../api/client';
 import { reportTags } from '../api/types';
 import { Button } from '../components/Button';
 import { StarRating } from '../components/StarRating';
-import { TabBar } from '../components/TabBar';
+import { TabBar, type TabKey } from '../components/TabBar';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useOnlineStore } from '../store/onlineStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
@@ -28,7 +29,7 @@ export const TripCompleteScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const activeTripId = useTripStore((s) => s.activeTripId);
   const clearTrip = useTripStore((s) => s.clearTrip);
-  const [activeTab, setActiveTab] = React.useState<'home' | 'earnings' | 'profile'>('home');
+  const [activeTab, setActiveTab] = React.useState<TabKey>('home');
   const [step, setStep] = React.useState<Step>('collect');
   const [collecting, setCollecting] = React.useState(false);
   const [collectingMP, setCollectingMP] = React.useState(false);
@@ -36,6 +37,7 @@ export const TripCompleteScreen: React.FC = () => {
   const [comment, setComment] = React.useState('');
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [submitting, setSubmitting] = React.useState(false);
+  const isOnline = useOnlineStore((s) => s.isOnline);
 
   const { amount, commission, driverEarnings } = useLocalSearchParams<{
     amount?: string;
@@ -121,6 +123,14 @@ export const TripCompleteScreen: React.FC = () => {
     setSelectedTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
     );
+  };
+
+  const handleTabPress = (tab: TabKey) => {
+    setActiveTab(tab);
+    if (tab === 'home') navigation.navigate(isOnline ? 'Active' : 'Online');
+    if (tab === 'earnings') navigation.navigate('Earnings');
+    if (tab === 'trips') navigation.navigate('TripHistory');
+    if (tab === 'profile') navigation.navigate('Profile');
   };
 
   const renderCollectStep = () => (
@@ -219,7 +229,7 @@ export const TripCompleteScreen: React.FC = () => {
           {step === 'collect' ? renderCollectStep() : renderRateStep()}
         </Animated.View>
       </ScrollView>
-      <TabBar activeTab={activeTab} onTabPress={setActiveTab} />
+      <TabBar activeTab={activeTab} onTabPress={handleTabPress} />
     </View>
   );
 };

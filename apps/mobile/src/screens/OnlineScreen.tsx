@@ -9,7 +9,7 @@ import type { EarningsDaily } from '../api/types';
 import { Card } from '../components/Card';
 import { MapView } from '../components/MapView';
 import { SideMenu } from '../components/SideMenu';
-import { TabBar } from '../components/TabBar';
+import { TabBar, type TabKey } from '../components/TabBar';
 import { Toggle } from '../components/Toggle';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -24,7 +24,7 @@ export const OnlineScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const isOnline = useOnlineStore((s) => s.isOnline);
   const setOnline = useOnlineStore((s) => s.setOnline);
-  const [activeTab, setActiveTab] = useState<'home' | 'earnings' | 'profile'>('home');
+  const [activeTab, setActiveTab] = useState<TabKey>('home');
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const heatmapPoints = useHeatmapPolling();
@@ -81,9 +81,10 @@ export const OnlineScreen: React.FC = () => {
     [setOnline, navigation, documentsPendingReview],
   );
 
-  const handleTabPress = (tab: 'home' | 'earnings' | 'profile') => {
+  const handleTabPress = (tab: TabKey) => {
     setActiveTab(tab);
     if (tab === 'earnings') navigation.navigate('Earnings');
+    if (tab === 'trips') navigation.navigate('TripHistory');
     if (tab === 'profile') navigation.navigate('Profile');
   };
 
