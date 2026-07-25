@@ -1,13 +1,6 @@
 import type React from 'react';
-import { useState } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  runOnJS,
-} from 'react-native-reanimated';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Dimensions, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { theme } from '../theme';
 
 interface BottomSheetProps {
@@ -18,100 +11,108 @@ interface BottomSheetProps {
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const SPRING_CONFIG = {
-  damping: 50,
-  stiffness: 300,
-  mass: 0.5,
-};
-
 export const BottomSheet: React.FC<BottomSheetProps> = ({ snapPoints, children, onSnapChange }) => {
   const [collapsedHeight, expandedHeight] = snapPoints;
   const maxTranslateY = SCREEN_HEIGHT - collapsedHeight;
   const minTranslateY = SCREEN_HEIGHT - expandedHeight;
 
-  const translateY = useSharedValue(maxTranslateY);
+  const translateY = useRef(new Animated.Value(maxTranslateY)).current;
   const [snapIndex, setSnapIndex] = useState(0);
 
-  const snapTo = (index: number) => {
-    'worklet';
-    const target = index === 0 ? maxTranslateY : minTranslateY;
-    translateY.value = withSpring(target, SPRING_CONFIG);
-  };
+  const snapTo = useCallback(
+    (index: number) => {
+      const target = index === 0 ? maxTranslateY : minTranslateY;
+      Animated.spring(translateY, {
+        toValue: target,
+        damping: 50,
+        stiffness: 300,
+        mass: 0.5,
+        useNativeDriver: true,
+      }).start();
+    },
+    [translateY, maxTranslateY, minTranslateY],
+  );
 
-  const onSnap = (index: number) => {
-    'worklet';
-    runOnJS(setSnapIndex)(index);
-    if (onSnapChange) {
-      runOnJS(onSnapChange)(index);
-    }
-  };
+  const notifySnap = useCallback(
+    (index: number) => {
+      setSnapIndex(index);
+      onSnapChange?.(index);
+    },
+    [onSnapChange],
+  );
 
-  const contextY = useSharedValue(0);
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderMove: (_, gestureState) => {
+        const candidate = (translateY as unknown as { _value: number })._value + gestureState.dy;
+        const clamped = Math.max(minTranslateY, Math.min(maxTranslateY, candidate));
+        translateY.setValue(clamped);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        const currentY = (translateY as unknown as { _value: number })._value;
+        const threshold = (maxTranslateY + minTranslateY) / 2;
 
-  const panGesture = Gesture.Pan()
-    .onStart(() => {
-      contextY.value = translateY.value;
-    })
-    .onUpdate((event) => {
-      const candidate = contextY.value + event.translationY;
-      translateY.value = Math.max(minTranslateY, Math.min(maxTranslateY, candidate));
-    })
-    .onEnd((event) => {
-      const currentY = translateY.value;
-      const threshold = (maxTranslateY + minTranslateY) / 2;
+        if (gestureState.vy < -0.5) {
+          snapTo(1);
+          notifySnap(1);
+        } else if (gestureState.vy > 0.5) {
+          snapTo(0);
+          notifySnap(0);
+        } else if (currentY < threshold) {
+          snapTo(1);
+          notifySnap(1);
+        } else {
+          snapTo(0);
+          notifySnap(0);
+        }
+      },
+    }),
+  ).current;
 
-      if (event.velocityY < -500) {
-        snapTo(1);
-        onSnap(1);
-      } else if (event.velocityY > 500) {
-        snapTo(0);
-        onSnap(0);
-      } else if (currentY < threshold) {
-        snapTo(1);
-        onSnap(1);
-      } else {
-        snapTo(0);
-        onSnap(0);
+  useEffect(() => {
+    const listenerId = translateY.addListener(({ value }) => {
+      const next = value <= threshold ? 1 : 0;
+      if (next !== snapIndex) {
+        setSnapIndex(next);
       }
     });
+    const threshold = (maxTranslateY + minTranslateY) / 2;
+    return () => {
+      translateY.removeListener(listenerId);
+    };
+  }, [translateY, maxTranslateY, minTranslateY, snapIndex]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+  const overlayOpacity = translateY.interpolate({
+    inputRange: [minTranslateY, maxTranslateY],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
 
-  const overlayStyle = useAnimatedStyle(() => ({
-    opacity: (maxTranslateY - translateY.value) / (maxTranslateY - minTranslateY),
-  }));
-
-  const sheetHeight = expandedHeight;
-
-  const handleOverlayPress = () => {
-    'worklet';
+  const handleOverlayPress = useCallback(() => {
     snapTo(0);
-    onSnap(0);
-  };
-
-  const tapGesture = Gesture.Tap().onEnd(handleOverlayPress);
+    notifySnap(0);
+  }, [snapTo, notifySnap]);
 
   return (
     <>
-      <GestureDetector gesture={tapGesture}>
-        <Animated.View
-          style={[
-            styles.overlay,
-            overlayStyle,
-            { pointerEvents: snapIndex === 1 ? 'auto' : 'none' },
-          ]}
-        />
-      </GestureDetector>
-      <GestureDetector gesture={panGesture}>
-        <Animated.View style={[styles.sheet, animatedStyle, { height: sheetHeight }]}>
-          <View style={styles.handleContainer}>
-            <View style={styles.handle} />
-          </View>
-          {children}
-        </Animated.View>
-      </GestureDetector>
+      <Animated.View
+        style={[
+          styles.overlay,
+          { opacity: overlayOpacity },
+          { pointerEvents: snapIndex === 1 ? 'auto' : 'none' },
+        ]}
+      >
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleOverlayPress} />
+      </Animated.View>
+      <Animated.View
+        style={[styles.sheet, { transform: [{ translateY }], height: expandedHeight }]}
+      >
+        <View style={styles.handleContainer} {...panResponder.panHandlers}>
+          <View style={styles.handle} />
+        </View>
+        {children}
+      </Animated.View>
     </>
   );
 };
