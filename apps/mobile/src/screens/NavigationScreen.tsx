@@ -1,9 +1,21 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Linking, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  LayoutAnimation,
+  Linking,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { apiClient } from '../api/client';
+import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { MapView } from '../components/MapView';
+import { RatingStars } from '../components/RatingStars';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { startTracking, stopTracking } from '../lib/location';
 import { decodePolyline } from '../lib/polyline';
@@ -14,6 +26,7 @@ import { theme } from '../theme';
 export const NavigationScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const [loading, setLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const trip = useTripStore((s) => s.trip);
   const tripStatus = useTripStore((s) => s.tripStatus);
   const setTripStatus = useTripStore((s) => s.setTripStatus);
@@ -89,6 +102,11 @@ export const NavigationScreen: React.FC = () => {
     Linking.openURL(url).catch(() => Alert.alert('Error', 'No se pudo abrir Maps'));
   };
 
+  const toggleCard = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsExpanded((prev) => !prev);
+  };
+
   const handleArrive = async () => {
     if (!trip) return;
     setLoading(true);
@@ -120,6 +138,32 @@ export const NavigationScreen: React.FC = () => {
           routeLine={routeCoords.length > 0 ? routeCoords : undefined}
         />
       </View>
+      {trip?.passenger_name ? (
+        <View style={styles.passengerCard}>
+          <TouchableOpacity
+            style={isExpanded ? styles.passengerCardExpanded : styles.passengerCardCollapsed}
+            onPress={toggleCard}
+            activeOpacity={0.9}
+          >
+            <Avatar
+              uri={trip.passenger_avatar_url}
+              name={trip.passenger_name}
+              size={isExpanded ? 56 : 32}
+            />
+            {isExpanded ? (
+              <View style={styles.passengerExpandedInfo}>
+                <Text style={styles.passengerName}>{trip.passenger_name}</Text>
+                {trip.passenger_rating != null && <RatingStars rating={trip.passenger_rating} />}
+                {trip.passenger_phone ? (
+                  <Text style={styles.passengerPhone}>{trip.passenger_phone}</Text>
+                ) : null}
+              </View>
+            ) : (
+              <Text style={styles.passengerNameSmall}>{trip.passenger_name}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <View style={styles.bottomCard}>
         <Text style={styles.label}>Rumbo al pasajero</Text>
         <Text style={styles.address}>{trip?.origin_address ?? 'Origen'}</Text>
@@ -208,5 +252,44 @@ const styles = StyleSheet.create({
   arrivedButton: {
     width: '100%',
     marginTop: theme.spacing.sm,
+  },
+  passengerCard: {
+    backgroundColor: 'rgba(13, 43, 69, 0.85)',
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+    overflow: 'hidden',
+  },
+  passengerCardCollapsed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    minHeight: 48,
+  },
+  passengerCardExpanded: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+  },
+  passengerExpandedInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  passengerName: {
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.white,
+  },
+  passengerNameSmall: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.white,
+  },
+  passengerPhone: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.mediumGray,
   },
 });

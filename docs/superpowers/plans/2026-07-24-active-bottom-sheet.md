@@ -1,9 +1,323 @@
+# Bottom Sheet + Metricas en ActiveScreen — Implementation Plan
+
+> **Para agentes:** Usar superpowers:subagent-driven-development (recomendado) o superpowers:executing-plans para implementar este plan paso a paso. Cada paso usa checkbox (`- [ ]`) para tracking.
+
+**Goal:** Reemplazar el floatingCard fijo de ActiveScreen por un bottom sheet deslizable con dos snap points (colapsado ~100px, expandido 45%), que muestra toggle online/offline colapsado y metricas (viajes, ganancias, tiempo online) al expandirse.
+
+**Architecture:** Un componente generico `BottomSheet` usa `react-native-reanimated` (Gesture.Pan + useAnimatedStyle + withSpring) para animar entre dos snap points. `ActiveScreen` reemplaza su `floatingCard` por este sheet. El tiempo online se persiste en `onlineStore` + `AsyncStorage` para sobrevivir crashes.
+
+**Tech Stack:** React Native `Animated` → `react-native-reanimated`, zustand, AsyncStorage, tanstack/react-query, expo-router
+
+**Spec:** `specs/spec-active-bottom-sheet/SPEC.md`
+**Issue:** #132
+
+## Global Constraints
+
+- Expo SDK 54, react-native-reanimated (sin @gorhom/bottom-sheet ni react-native-gesture-handler adicional)
+- Sheet colapsado: ~100px. Expandido: 45% pantalla (via `Dimensions.get('window').height`)
+- Tiempo online persiste en AsyncStorage, se reconcilia en mount
+- Metricas usan `useQuery` con `queryKey: ['earnings-daily']` (comparte cache con EarningsScreen)
+- Estilos: solo `theme.colors.*`, `theme.spacing.*`, `theme.fontSize.*`, `theme.radius.*`
+- Named exports, `StyleSheet.create()`, sin default exports
+
+---
+
+### Task 1: Instalar react-native-reanimated
+
+**Files:**
+- Modify: `apps/mobile/package.json`
+
+**Produces:** `react-native-reanimated` disponible como dependencia.
+
+- [ ] **Step 1: Instalar la dependencia**
+
+```bash
+bun --filter @lifty/mobile add react-native-reanimated
+```
+
+- [ ] **Step 2: Verificar instalacion**
+
+```bash
+grep reanimated apps/mobile/package.json
+```
+
+Expected: muestra la linea con `"react-native-reanimated"` en `dependencies`.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add apps/mobile/package.json apps/mobile/bun.lockb
+git commit -m "chore(mobile): add react-native-reanimated for bottom sheet"
+```
+
+---
+
+### Task 2: Agregar onlineSince al onlineStore con persistencia en AsyncStorage
+
+**Files:**
+- Modify: `apps/mobile/src/store/onlineStore.ts`
+
+**Interfaces:**
+- Consumes: `AsyncStorage` from `@react-native-async-storage/async-storage` (ya instalado)
+- Produces: `useOnlineStore` expone `onlineSince: number | null`, `setOnlineSince(ts: number | null)`, `setOnline` actualizado para guardar/limpiar AsyncStorage
+
+- [ ] **Step 1: Actualizar onlineStore.ts**
+
+Leer el archivo actual y reemplazar todo su contenido:
+
+```typescript
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { create } from 'zustand';
+
+const ONLINE_SINCE_KEY = 'lifty_online_since';
+
+interface OnlineState {
+  isOnline: boolean;
+  onlineSince: number | null;
+  heartbeatIntervalRef: ReturnType<typeof setInterval> | null;
+  setOnline: (value: boolean) => void;
+  setOnlineSince: (ts: number | null) => void;
+  setHeartbeatRef: (ref: ReturnType<typeof setInterval> | null) => void;
+}
+
+export const useOnlineStore = create<OnlineState>()((set) => ({
+  isOnline: false,
+  onlineSince: null,
+  heartbeatIntervalRef: null,
+  setOnline: (isOnline) => {
+    if (isOnline) {
+      const now = Date.now();
+      AsyncStorage.setItem(ONLINE_SINCE_KEY, String(now)).catch(() => {});
+      set({ isOnline: true, onlineSince: now });
+    } else {
+      AsyncStorage.removeItem(ONLINE_SINCE_KEY).catch(() => {});
+      set({ isOnline: false, onlineSince: null });
+    }
+  },
+  setOnlineSince: (onlineSince) => set({ onlineSince }),
+  setHeartbeatRef: (heartbeatIntervalRef) => set({ heartbeatIntervalRef }),
+}));
+```
+
+- [ ] **Step 2: Verificar que compila**
+
+```bash
+bun --filter @lifty/mobile run typecheck
+```
+
+Expected: sin errores de tipo.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add apps/mobile/src/store/onlineStore.ts
+git commit -m "feat(mobile): add onlineSince to onlineStore with AsyncStorage persistence"
+```
+
+---
+
+### Task 3: Crear componente BottomSheet
+
+**Files:**
+- Create: `apps/mobile/src/components/BottomSheet.tsx`
+
+**Interfaces:**
+- Consumes: `react-native-reanimated` (Gesture, useSharedValue, useAnimatedStyle, withSpring, runOnJS)
+- Produces: `<BottomSheet snapPoints={[collapsed, expanded]} onSnapChange={(idx) => ...}>`
+
+- [ ] **Step 1: Crear el componente BottomSheet.tsx**
+
+```typescript
+import type React from 'react';
+import { useState } from 'react';
+import { Dimensions, StyleSheet, View } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  runOnJS,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-reanimated';
+import { theme } from '../theme';
+
+interface BottomSheetProps {
+  snapPoints: [number, number];
+  children: React.ReactNode;
+  onSnapChange?: (index: number) => void;
+}
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const SPRING_CONFIG = {
+  damping: 50,
+  stiffness: 300,
+  mass: 0.5,
+};
+
+export const BottomSheet: React.FC<BottomSheetProps> = ({
+  snapPoints,
+  children,
+  onSnapChange,
+}) => {
+  const [collapsedHeight, expandedHeight] = snapPoints;
+  const maxTranslateY = SCREEN_HEIGHT - collapsedHeight;
+  const minTranslateY = SCREEN_HEIGHT - expandedHeight;
+
+  const translateY = useSharedValue(maxTranslateY);
+  const [snapIndex, setSnapIndex] = useState(0);
+
+  const snapTo = (index: number) => {
+    'worklet';
+    const target = index === 0 ? maxTranslateY : minTranslateY;
+    translateY.value = withSpring(target, SPRING_CONFIG);
+  };
+
+  const onSnap = (index: number) => {
+    'worklet';
+    runOnJS(setSnapIndex)(index);
+    if (onSnapChange) {
+      runOnJS(onSnapChange)(index);
+    }
+  };
+
+  const contextY = useSharedValue(0);
+
+  const panGesture = Gesture.Pan()
+    .onStart(() => {
+      contextY.value = translateY.value;
+    })
+    .onUpdate((event) => {
+      const candidate = contextY.value + event.translationY;
+      translateY.value = Math.max(minTranslateY, Math.min(maxTranslateY, candidate));
+    })
+    .onEnd((event) => {
+      const currentY = translateY.value;
+      const threshold = (maxTranslateY + minTranslateY) / 2;
+
+      if (event.velocityY < -500) {
+        snapTo(1);
+        onSnap(1);
+      } else if (event.velocityY > 500) {
+        snapTo(0);
+        onSnap(0);
+      } else if (currentY < threshold) {
+        snapTo(1);
+        onSnap(1);
+      } else {
+        snapTo(0);
+        onSnap(0);
+      }
+    });
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: (maxTranslateY - translateY.value) / (maxTranslateY - minTranslateY),
+  }));
+
+  const sheetHeight = expandedHeight;
+
+  const handleOverlayPress = () => {
+    snapTo(0);
+    onSnap(0);
+  };
+
+  const tapGesture = Gesture.Tap().onEnd(handleOverlayPress);
+
+  return (
+    <>
+      <GestureDetector gesture={tapGesture}>
+        <Animated.View
+          style={[
+            styles.overlay,
+            overlayStyle,
+            { pointerEvents: snapIndex === 1 ? 'auto' : 'none' },
+          ]}
+        />
+      </GestureDetector>
+      <GestureDetector gesture={panGesture}>
+        <Animated.View style={[styles.sheet, animatedStyle, { height: sheetHeight }]}>
+          <View style={styles.handleContainer}>
+            <View style={styles.handle} />
+          </View>
+          {children}
+        </Animated.View>
+      </GestureDetector>
+    </>
+  );
+};
+
+const styles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: theme.colors.white,
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  handleContainer: {
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.mediumGray,
+  },
+});
+```
+
+- [ ] **Step 2: Verificar typecheck**
+
+```bash
+bun --filter @lifty/mobile run typecheck
+```
+
+Expected: sin errores. Si falla por imports de `react-native-reanimated`, verificar que `Gesture` y `GestureDetector` se importen correctamente.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add apps/mobile/src/components/BottomSheet.tsx
+git commit -m "feat(mobile): add BottomSheet component with reanimated gesture"
+```
+
+---
+
+### Task 4: Reemplazar floatingCard por BottomSheet en ActiveScreen
+
+**Files:**
+- Modify: `apps/mobile/src/screens/ActiveScreen.tsx`
+
+**Interfaces:**
+- Consumes: `BottomSheet`, `useOnlineStore` (con `onlineSince`), `useQuery` de tanstack, `apiClient`
+- Produces: Sheet colapsado con toggle + "Conectado", expandido con metricas + boton "Ver ganancias"
+
+- [ ] **Step 1: Escribir el nuevo ActiveScreen.tsx**
+
+Reemplazar el contenido completo de `apps/mobile/src/screens/ActiveScreen.tsx`:
+
+```typescript
 import { useQuery } from '@tanstack/react-query';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiClient } from '../api/client';
 import type { EarningsDaily } from '../api/types';
 import { BottomSheet } from '../components/BottomSheet';
@@ -12,16 +326,17 @@ import { SideMenu } from '../components/SideMenu';
 import { Toggle } from '../components/Toggle';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
-import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
 import { startTracking, stopTracking } from '../lib/location';
 import { subscribeToDriverChannel } from '../lib/realtime';
 import { useAuthStore } from '../store/authStore';
-import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
+import { useOnlineStore } from '../store/onlineStore';
 import { theme } from '../theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const COLLAPSED_HEIGHT = 100;
 const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.45;
+const ONLINE_SINCE_KEY = 'lifty_online_since';
+
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -40,7 +355,6 @@ export const ActiveScreen: React.FC = () => {
   const setOnlineSince = useOnlineStore((s) => s.setOnlineSince);
   const driverId = useAuthStore((s) => s.driverId);
   const [toggleError, setToggleError] = useState<string | null>(null);
-  const heatmapPoints = useHeatmapPolling();
   const [menuVisible, setMenuVisible] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [onlineTime, setOnlineTime] = useState(0);
@@ -54,14 +368,10 @@ export const ActiveScreen: React.FC = () => {
         const stored = await AsyncStorage.getItem(ONLINE_SINCE_KEY);
         if (stored) {
           const ts = Number(stored);
-          if (!Number.isNaN(ts)) {
-            setOnlineSince(ts);
-            useOnlineStore.setState({ isOnline: true });
-          }
+          if (!Number.isNaN(ts)) setOnlineSince(ts);
         } else {
           const now = Date.now();
           setOnlineSince(now);
-          useOnlineStore.setState({ isOnline: true });
           AsyncStorage.setItem(ONLINE_SINCE_KEY, String(now)).catch(() => {});
         }
       } catch {}
@@ -198,12 +508,7 @@ export const ActiveScreen: React.FC = () => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
 
-      {/* Heatmap hidden naturally when navigating away to IncomingRequest (component unmounts) */}
-      <MapView
-        style={StyleSheet.absoluteFill as any}
-        followUserLocation
-        heatmapPoints={heatmapPoints}
-      />
+      <MapView style={StyleSheet.absoluteFill as any} followUserLocation />
 
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity
@@ -403,3 +708,47 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.bold,
   },
 });
+```
+
+- [ ] **Step 2: Verificar typecheck**
+
+```bash
+bun --filter @lifty/mobile run typecheck
+```
+
+Expected: sin errores de tipo.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add apps/mobile/src/screens/ActiveScreen.tsx
+git commit -m "feat(mobile): replace floatingCard with bottom sheet + metrics in ActiveScreen"
+```
+
+---
+
+### Task 5: Verificacion final
+
+- [ ] **Step 1: Correr typecheck completo**
+
+```bash
+bun run typecheck
+```
+
+Expected: ambos proyectos pasan.
+
+- [ ] **Step 2: Correr lint**
+
+```bash
+bun run lint
+```
+
+Expected: sin errores de biome.
+
+- [ ] **Step 3: Correr tests**
+
+```bash
+bun run test
+```
+
+Expected: todos los tests pasan.

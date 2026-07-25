@@ -1,7 +1,7 @@
 import { Elysia } from 'elysia';
 import { rateLimit } from '../../shared/middleware/ratelimit';
 import { authGuard } from '../../shared/middleware/require-auth';
-import { collectBody, createTripBody, tripIdParams } from './schema';
+import { collectBody, createTripBody, startTripBody, tripIdParams } from './schema';
 import { tripService } from './service';
 
 import { safeCall } from '../../shared/lib/route-utils';
@@ -26,6 +26,22 @@ const completeRateLimit = rateLimit({
   max: Number(process.env.TRIP_COMPLETE_RATE_LIMIT_MAX) || 3,
   windowMs: Number(process.env.TRIP_RATE_LIMIT_WINDOW_MS) || 60_000,
 }).as('scoped');
+
+const startRateLimit = rateLimit({
+  name: 'rate-limit-trip-start',
+  keyPrefix: 'ratelimit:trip:start:ip',
+  max: Number(process.env.TRIP_START_RATE_LIMIT_MAX) || 10,
+  windowMs: Number(process.env.TRIP_RATE_LIMIT_WINDOW_MS) || 60_000,
+}).as('scoped');
+
+const startRoute = new Elysia()
+  .use(startRateLimit)
+  .post(
+    '/:id/start',
+    ({ user, params, body, set }) =>
+      safeCall(() => tripService.startTrip(user, params.id, body.verification_code), set),
+    { params: tripIdParams, body: startTripBody, requireAuth: true },
+  );
 
 const acceptRoute = new Elysia()
   .use(acceptRateLimit)
@@ -90,11 +106,7 @@ export const tripRoutes = new Elysia({ prefix: '/trips' })
     ({ user, params, set }) => safeCall(() => tripService.arrivedTrip(user, params.id), set),
     { params: tripIdParams, requireAuth: true },
   )
-  .post(
-    '/:id/start',
-    ({ user, params, set }) => safeCall(() => tripService.startTrip(user, params.id), set),
-    { params: tripIdParams, requireAuth: true },
-  )
+  .use(startRoute)
   .use(completeRoute)
   .use(cancelRoute)
   .put(

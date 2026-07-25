@@ -34,6 +34,7 @@ const SCREEN_TO_ROUTE = {
   SelectProvince: '/select-province',
   SelectDistrict: '/select-district',
   DistrictTerms: '/district-terms',
+  PassengerCode: '/passenger-code',
 } as const;
 
 export type ScreenName = keyof typeof SCREEN_TO_ROUTE;

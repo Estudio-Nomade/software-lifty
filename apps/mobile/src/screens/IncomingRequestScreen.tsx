@@ -3,11 +3,14 @@ import { useEffect, useRef, useState } from 'react';
 import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { apiClient } from '../api/client';
 import type { Trip } from '../api/types';
+import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { MapView } from '../components/MapView';
+import { RatingStars } from '../components/RatingStars';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { stopTracking } from '../lib/location';
+import { useLocationStore } from '../store/locationStore';
 import { useOnlineStore } from '../store/onlineStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
@@ -26,7 +29,10 @@ export const IncomingRequestScreen: React.FC = () => {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [seconds, setSeconds] = useState(RESPONSE_SECONDS);
   const [accepted, setAccepted] = useState(false);
+  const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const timedOut = useRef(false);
+  const lat = useLocationStore((s) => s.lat);
+  const lng = useLocationStore((s) => s.lng);
 
   const disconnect = () => {
     const ref = useOnlineStore.getState().heartbeatIntervalRef;
@@ -83,6 +89,23 @@ export const IncomingRequestScreen: React.FC = () => {
     return () => clearInterval(timer);
   }, [seconds, accepted, trip]);
 
+  useEffect(() => {
+    if (!trip || lat == null || lng == null) return;
+    apiClient
+      .get('/maps/directions', {
+        params: {
+          origin_lat: lat,
+          origin_lng: lng,
+          dest_lat: trip.origin_lat,
+          dest_lng: trip.origin_lng,
+        },
+      })
+      .then((response) => {
+        setEtaMinutes(response.data?.duration_minutes ?? null);
+      })
+      .catch(() => {});
+  }, [trip, lat, lng]);
+
   const handleAccept = async () => {
     if (!trip) return;
     try {
@@ -119,6 +142,16 @@ export const IncomingRequestScreen: React.FC = () => {
         </View>
 
         <Card style={styles.routeCard}>
+          {trip?.passenger_name ? (
+            <View style={styles.passengerRow}>
+              <Avatar uri={trip.passenger_avatar_url} name={trip.passenger_name} size={48} />
+              <View style={styles.passengerInfo}>
+                <Text style={styles.passengerName}>{trip.passenger_name}</Text>
+                {trip.passenger_rating != null && <RatingStars rating={trip.passenger_rating} />}
+              </View>
+            </View>
+          ) : null}
+          {etaMinutes != null && <Text style={styles.etaText}>~{etaMinutes} min al pickup</Text>}
           <View style={styles.routePoint}>
             <Text style={styles.routeIconStart}>📍</Text>
             <Text style={styles.routeText}>{trip?.origin_address ?? 'Origen'}</Text>
@@ -239,5 +272,23 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.turquoise,
+  },
+  passengerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  passengerInfo: {
+    gap: 2,
+  },
+  passengerName: {
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.deepBlue,
+  },
+  etaText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.mediumGray,
   },
 });
