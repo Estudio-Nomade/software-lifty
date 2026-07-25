@@ -1,6 +1,5 @@
 import * as Crypto from 'expo-crypto';
 
-// biome-ignore lint/suspicious/noExplicitAny: crypto polyfill for React Native (Hermes)
 const g = globalThis as any;
 
 if (!g.crypto) {
