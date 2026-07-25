@@ -110,6 +110,14 @@ export const NavigationScreen: React.FC = () => {
     Linking.openURL(url).catch(() => Alert.alert('Error', 'No se pudo abrir Maps'));
   };
 
+  const callPassenger = () => {
+    const phone = trip?.passenger_phone;
+    if (!phone) return;
+    Linking.openURL(`tel:${phone}`).catch(() =>
+      Alert.alert('Error', 'No se pudo iniciar la llamada'),
+    );
+  };
+
   const toggleCard = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setIsExpanded((prev) => !prev);
@@ -186,6 +194,23 @@ export const NavigationScreen: React.FC = () => {
             {Math.round(etaMinutes)} min · {distKm} km
           </Text>
         ) : null}
+        <View style={styles.commsButtons}>
+          <Button
+            title="📞 Llamar"
+            variant="secondary"
+            onPress={callPassenger}
+            disabled={!trip?.passenger_phone}
+            style={styles.commsButton}
+            textStyle={styles.commsButtonText}
+          />
+          <Button
+            title="💬 Chat"
+            variant="secondary"
+            onPress={() => navigation.navigate('Chat')}
+            style={styles.commsButton}
+            textStyle={styles.commsButtonText}
+          />
+        </View>
         <View style={styles.navButtons}>
           <Button
             title="Abrir en Waze"
@@ -263,6 +288,17 @@ const styles = StyleSheet.create({
     height: 40,
   },
   navButtonText: {
+    fontSize: theme.fontSize.sm,
+  },
+  commsButtons: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  commsButton: {
+    flex: 1,
+    height: 40,
+  },
+  commsButtonText: {
     fontSize: theme.fontSize.sm,
   },
   arrivedButton: {
