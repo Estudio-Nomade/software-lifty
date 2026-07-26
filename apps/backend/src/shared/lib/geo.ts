@@ -23,6 +23,7 @@ export interface DirectionsResult {
   duration_minutes: number;
   polyline: string;
   steps: ManeuverStep[];
+  alternatives: DirectionsResult[];
 }
 
 export interface ManeuverStep {
@@ -219,7 +220,13 @@ export async function directions(
 ): Promise<DirectionsResult> {
   try {
     if (process.env.NODE_ENV === 'test') {
-      return { distance_km: 5.2, duration_minutes: 12, polyline: 'mock_polyline', steps: [] };
+      return {
+        distance_km: 5.2,
+        duration_minutes: 12,
+        polyline: 'mock_polyline',
+        steps: [],
+        alternatives: [],
+      };
     }
 
     const cacheKey = `geo:directions:${origin_lat},${origin_lng}:${dest_lat},${dest_lng}`;
@@ -244,38 +251,39 @@ export async function directions(
 
     if (data.code !== 'Ok' || !data.routes?.length) throw new Error('No routes found');
 
-    let bestRoute = data.routes[0];
-    let bestScore = Number.NEGATIVE_INFINITY;
+    const scored = data.routes
+      .map((route) => {
+        const s = route.legs?.[0]?.steps;
+        if (!s || s.length === 0) return null;
+        return { route, score: scoreRoute(s) };
+      })
+      .filter((r): r is { route: (typeof data.routes)[number]; score: number } => r !== null)
+      .sort((a, b) => b.score - a.score);
 
-    for (const route of data.routes) {
-      const steps = route.legs?.[0]?.steps;
-      if (!steps || steps.length === 0) continue;
-      const s = scoreRoute(steps);
-      if (s > bestScore) {
-        bestScore = s;
-        bestRoute = route;
-      }
-    }
+    if (scored.length === 0) throw new Error('No valid routes found');
 
-    const distance_km = Math.round((bestRoute.distance / 1000) * 100) / 100;
-    const duration_minutes = Math.round((bestRoute.duration / 60) * 100) / 100;
+    const convertSteps = (rawSteps: OSRMStep[]): ManeuverStep[] =>
+      rawSteps
+        .filter((s) => s.distance >= 50)
+        .map((s) => ({
+          maneuver_type: s.maneuver.type,
+          maneuver_modifier: s.maneuver.modifier,
+          name: s.name,
+          distance: s.distance,
+          geometry: s.geometry,
+        }));
 
-    const rawSteps = bestRoute.legs?.[0]?.steps ?? [];
-    const steps: ManeuverStep[] = rawSteps
-      .filter((s) => s.distance >= 50)
-      .map((s) => ({
-        maneuver_type: s.maneuver.type,
-        maneuver_modifier: s.maneuver.modifier,
-        name: s.name,
-        distance: s.distance,
-        geometry: s.geometry,
-      }));
+    const buildResult = (route: (typeof data.routes)[number]): DirectionsResult => ({
+      distance_km: Math.round((route.distance / 1000) * 100) / 100,
+      duration_minutes: Math.round((route.duration / 60) * 100) / 100,
+      polyline: route.geometry,
+      steps: convertSteps(route.legs?.[0]?.steps ?? []),
+      alternatives: [],
+    });
 
     const result: DirectionsResult = {
-      distance_km,
-      duration_minutes,
-      polyline: bestRoute.geometry,
-      steps,
+      ...buildResult(scored[0].route),
+      alternatives: scored.length > 1 ? [buildResult(scored[1].route)] : [],
     };
 
     await cacheSet(cacheKey, JSON.stringify(result), 300);
@@ -285,7 +293,7 @@ export async function directions(
     const distance_km =
       Math.round(haversineDistance(origin_lat, origin_lng, dest_lat, dest_lng) * 100) / 100;
     const duration_minutes = Math.round(distance_km * 3);
-    return { distance_km, duration_minutes, polyline: '', steps: [] };
+    return { distance_km, duration_minutes, polyline: '', steps: [], alternatives: [] };
   }
 }
 
