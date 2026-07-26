@@ -33,6 +33,7 @@ export const trips = pgTable('trips', {
   total_fare: doublePrecision('total_fare'),
   platform_fee: doublePrecision('platform_fee'),
   driver_earnings: doublePrecision('driver_earnings'),
+  tip_amount: doublePrecision('tip_amount').default(0),
   payment_method: varchar('payment_method', { length: 30 }).default('cash'),
   is_collected: boolean('is_collected').default(false).notNull(),
   tolerance_minutes: integer('tolerance_minutes').default(5),

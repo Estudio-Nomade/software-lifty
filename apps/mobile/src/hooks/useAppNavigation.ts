@@ -43,7 +43,12 @@ export type ScreenName = keyof typeof SCREEN_TO_ROUTE;
 export interface ScreenParams {
   KYCWebView: { url: string };
   UploadDocument: { docType: string; docLabel: string; mode?: string };
-  TripComplete: { amount?: string; commission?: string; driverEarnings?: string };
+  TripComplete: {
+    amount?: string;
+    commission?: string;
+    driverEarnings?: string;
+    tipAmount?: string;
+  };
 }
 
 const BACK_FALLBACK: Record<string, string> = {
