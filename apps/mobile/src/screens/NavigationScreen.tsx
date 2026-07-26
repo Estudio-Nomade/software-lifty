@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { apiClient } from '../api/client';
+import { AlternativeRoutePill } from '../components/AlternativeRoutePill';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { MapView } from '../components/MapView';
@@ -41,8 +42,16 @@ export const NavigationScreen: React.FC = () => {
   const [distKm, setDistKm] = useState<number | null>(null);
   const [nearPassenger, setNearPassenger] = useState(false);
   const [steps, setSteps] = useState<ManeuverStep[]>([]);
+  const [altRouteCoords, setAltRouteCoords] = useState<[number, number][]>([]);
+  const [altEtaMinutes, setAltEtaMinutes] = useState<number | null>(null);
+  const [altDistKm, setAltDistKm] = useState<number | null>(null);
+  const [altSteps, setAltSteps] = useState<ManeuverStep[]>([]);
+  const [activeRoute, setActiveRoute] = useState<'primary' | 'alternative'>('primary');
 
-  const { instruction } = useManeuverInstructions(steps, locationLat, locationLng);
+  const isPrimary = activeRoute === 'primary';
+  const activeSteps = isPrimary ? steps : altSteps;
+
+  const { instruction } = useManeuverInstructions(activeSteps, locationLat, locationLng);
 
   const pickupCoord: [number, number] = trip
     ? [trip.origin_lng, trip.origin_lat]
@@ -91,6 +100,19 @@ export const NavigationScreen: React.FC = () => {
       const coords = decodePolyline(data.polyline);
       setRouteCoords(coords);
       setSteps(data.steps ?? []);
+
+      if (data.alternatives?.length) {
+        const alt = data.alternatives[0];
+        setAltEtaMinutes(alt.duration_minutes);
+        setAltDistKm(alt.distance_km);
+        setAltRouteCoords(decodePolyline(alt.polyline));
+        setAltSteps(alt.steps ?? []);
+      } else {
+        setAltRouteCoords([]);
+        setAltEtaMinutes(null);
+        setAltDistKm(null);
+        setAltSteps([]);
+      }
     } catch (err) {
       if (__DEV__) console.warn('[Navigation] fetchDirections failed:', err);
     }
@@ -143,6 +165,20 @@ export const NavigationScreen: React.FC = () => {
     }
   };
 
+  const isPrimaryNav = activeRoute === 'primary';
+  const activeCoords = isPrimaryNav ? routeCoords : altRouteCoords;
+  const activeEta = isPrimaryNav ? etaMinutes : altEtaMinutes;
+  const activeDist = isPrimaryNav ? distKm : altDistKm;
+  const altCoords = isPrimaryNav ? altRouteCoords : routeCoords;
+  const pillPrimaryTime = isPrimaryNav ? etaMinutes : altEtaMinutes;
+  const pillAltTime = isPrimaryNav ? altEtaMinutes : etaMinutes;
+
+  const handleToggleRoute = () => {
+    setActiveRoute((prev) => (prev === 'primary' ? 'alternative' : 'primary'));
+  };
+
+  const showPill = altRouteCoords.length > 0 && pillPrimaryTime !== null && pillAltTime !== null;
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -157,9 +193,17 @@ export const NavigationScreen: React.FC = () => {
               color: theme.colors.dangerRed,
             },
           ]}
-          routeLine={routeCoords.length > 0 ? routeCoords : undefined}
+          routeLine={activeCoords.length > 0 ? activeCoords : undefined}
+          alternativeRouteLine={altCoords.length > 0 ? altCoords : undefined}
         />
       </View>
+      {showPill && (
+        <AlternativeRoutePill
+          primaryTime={pillPrimaryTime}
+          altTime={pillAltTime}
+          onToggle={handleToggleRoute}
+        />
+      )}
       {trip?.passenger_name ? (
         <View style={styles.passengerCard}>
           <TouchableOpacity
@@ -195,9 +239,9 @@ export const NavigationScreen: React.FC = () => {
             <Text style={styles.instructionsText}>{trip.pickup_instructions}</Text>
           </View>
         ) : null}
-        {etaMinutes !== null && distKm !== null ? (
+        {activeEta !== null && activeDist !== null ? (
           <Text style={styles.eta}>
-            {Math.round(etaMinutes)} min · {distKm} km
+            {Math.round(activeEta)} min · {activeDist} km
           </Text>
         ) : null}
         {instruction ? <Text style={styles.instruction}>{instruction}</Text> : null}

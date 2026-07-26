@@ -31,6 +31,7 @@ interface MapViewProps {
   zoom?: number;
   markers?: MarkerData[];
   routeLine?: Array<[number, number]>;
+  alternativeRouteLine?: Array<[number, number]>;
   heatmapPoints?: HeatmapPoint[];
   followUserLocation?: boolean;
   style?: ViewStyle;
@@ -161,6 +162,36 @@ const MAP_HTML = `<!DOCTYPE html>
       return;
     }
     applyRoute(coordinates);
+  }
+
+  var ALT_ROUTE_SOURCE_ID = 'route-line-alt';
+  var ALT_ROUTE_LAYER_ID = 'route-line-layer-alt';
+
+  function applyAlternativeRoute(coordinates) {
+    var geojson = {
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'LineString', coordinates: coordinates || [] },
+    };
+
+    var existing = map.getSource(ALT_ROUTE_SOURCE_ID);
+    if (existing) {
+      existing.setData(geojson);
+    } else {
+      map.addSource(ALT_ROUTE_SOURCE_ID, { type: 'geojson', data: geojson });
+      map.addLayer({
+        id: ALT_ROUTE_LAYER_ID,
+        type: 'line',
+        source: ALT_ROUTE_SOURCE_ID,
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#FFB020', 'line-width': 3, 'line-opacity': 0.6, 'line-dasharray': [2, 2] },
+      }, ROUTE_LAYER_ID);
+    }
+  }
+
+  function clearAlternativeRoute() {
+    if (map.getLayer(ALT_ROUTE_LAYER_ID)) map.removeLayer(ALT_ROUTE_LAYER_ID);
+    if (map.getSource(ALT_ROUTE_SOURCE_ID)) map.removeSource(ALT_ROUTE_SOURCE_ID);
   }
 
   function startFollowUser() {
@@ -310,6 +341,13 @@ const MAP_HTML = `<!DOCTYPE html>
       case 'heatmap':
         updateHeatmap(msg.points || []);
         break;
+      case 'alternativeRoute':
+        if (msg.coordinates && msg.coordinates.length >= 2) {
+          applyAlternativeRoute(msg.coordinates);
+        } else {
+          clearAlternativeRoute();
+        }
+        break;
     }
   });
 
@@ -328,6 +366,7 @@ export const MapView: React.FC<MapViewProps> = ({
   zoom = DEFAULT_ZOOM,
   markers = [],
   routeLine,
+  alternativeRouteLine,
   heatmapPoints,
   followUserLocation = false,
   style,
@@ -382,6 +421,17 @@ export const MapView: React.FC<MapViewProps> = ({
       }),
     );
   }, [routeLine, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded || !webViewRef.current) return;
+
+    webViewRef.current.postMessage(
+      JSON.stringify({
+        type: 'alternativeRoute',
+        coordinates: alternativeRouteLine || [],
+      }),
+    );
+  }, [alternativeRouteLine, isLoaded]);
 
   useEffect(() => {
     if (!isLoaded || !webViewRef.current || !routeLine || routeLine.length < 2) return;

@@ -194,3 +194,28 @@ export type DistrictDetail = z.infer<typeof districtDetailSchema>;
 export type RateTripBody = z.infer<typeof rateTripBodySchema>;
 export type RateTripResponse = z.infer<typeof rateTripResponseSchema>;
 export type ReportTag = (typeof reportTags)[number];
+
+export const maneuverStepSchema = z.object({
+  maneuver_type: z.string(),
+  maneuver_modifier: z.string().optional(),
+  name: z.string(),
+  distance: z.number(),
+  geometry: z.string(),
+});
+
+export const directionsResponseSchema = z.object({
+  distance_km: z.number(),
+  duration_minutes: z.number(),
+  polyline: z.string(),
+  steps: z.array(maneuverStepSchema),
+  alternatives: z.array(
+    z.object({
+      distance_km: z.number(),
+      duration_minutes: z.number(),
+      polyline: z.string(),
+      steps: z.array(maneuverStepSchema),
+    }),
+  ),
+});
+
+export type DirectionsResponse = z.infer<typeof directionsResponseSchema>;

@@ -142,6 +142,7 @@ describe('Maps Proxy', () => {
     expect(data.duration_minutes).toBeNumber();
     expect(data.polyline).toBeString();
     expect(Array.isArray(data.steps)).toBe(true);
+    expect(Array.isArray(data.alternatives)).toBe(true);
   });
 
   test('directions should score alternative routes by road hierarchy', async () => {
@@ -161,6 +162,22 @@ describe('Maps Proxy', () => {
     expect(data.polyline).toBeString();
     expect(data.polyline.length).toBeGreaterThan(0);
     expect(Array.isArray(data.steps)).toBe(true);
+    expect(Array.isArray(data.alternatives)).toBe(true);
+  });
+
+  test('directions response includes alternatives field', async () => {
+    const token = await registerAndGetToken(phone, password);
+
+    const { status, data } = await request(
+      'GET',
+      '/api/maps/directions?origin_lat=-34.6037&origin_lng=-58.3816&dest_lat=-34.6158&dest_lng=-58.4333',
+      undefined,
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.alternatives).toBeDefined();
+    expect(Array.isArray(data.alternatives)).toBe(true);
   });
 
   test('fare-estimate calculates fare', async () => {

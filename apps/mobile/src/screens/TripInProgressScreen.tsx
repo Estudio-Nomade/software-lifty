@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { apiClient } from '../api/client';
+import { AlternativeRoutePill } from '../components/AlternativeRoutePill';
 import { Button } from '../components/Button';
 import { MapView } from '../components/MapView';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -32,6 +33,11 @@ export const TripInProgressScreen: React.FC = () => {
   const [distKm, setDistKm] = useState<number | null>(null);
   const totalDistKmRef = useRef<number | null>(trip?.distance_km ?? null);
   const [steps, setSteps] = useState<ManeuverStep[]>([]);
+  const [altRouteCoords, setAltRouteCoords] = useState<[number, number][]>([]);
+  const [altEtaMinutes, setAltEtaMinutes] = useState<number | null>(null);
+  const [altDistKm, setAltDistKm] = useState<number | null>(null);
+  const [altSteps, setAltSteps] = useState<ManeuverStep[]>([]);
+  const [activeRoute, setActiveRoute] = useState<'primary' | 'alternative'>('primary');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchDirections = useCallback(async () => {
@@ -52,6 +58,19 @@ export const TripInProgressScreen: React.FC = () => {
       const coords = decodePolyline(data.polyline);
       setRouteCoords(coords);
       setSteps(data.steps ?? []);
+
+      if (data.alternatives?.length) {
+        const alt = data.alternatives[0];
+        setAltEtaMinutes(alt.duration_minutes);
+        setAltDistKm(alt.distance_km);
+        setAltRouteCoords(decodePolyline(alt.polyline));
+        setAltSteps(alt.steps ?? []);
+      } else {
+        setAltRouteCoords([]);
+        setAltEtaMinutes(null);
+        setAltDistKm(null);
+        setAltSteps([]);
+      }
     } catch (err) {
       if (__DEV__) console.warn('[TripInProgress] fetchDirections failed:', err);
     }
@@ -95,30 +114,56 @@ export const TripInProgressScreen: React.FC = () => {
     }
   };
 
+  const isPrimary = activeRoute === 'primary';
+  const activeCoords = isPrimary ? routeCoords : altRouteCoords;
+  const activeEta = isPrimary ? etaMinutes : altEtaMinutes;
+  const activeDist = isPrimary ? distKm : altDistKm;
+  const activeSteps = isPrimary ? steps : altSteps;
+  const altCoords = isPrimary ? altRouteCoords : routeCoords;
+  const pillPrimaryTime = isPrimary ? etaMinutes : altEtaMinutes;
+  const pillAltTime = isPrimary ? altEtaMinutes : etaMinutes;
+
+  const handleToggleRoute = () => {
+    setActiveRoute((prev) => (prev === 'primary' ? 'alternative' : 'primary'));
+  };
+
+  const showPill = altRouteCoords.length > 0 && pillPrimaryTime !== null && pillAltTime !== null;
+
   const progress =
-    totalDistKmRef.current && distKm !== null
+    totalDistKmRef.current && activeDist !== null
       ? Math.min(
           100,
-          Math.max(0, ((totalDistKmRef.current - distKm) / totalDistKmRef.current) * 100),
+          Math.max(0, ((totalDistKmRef.current - activeDist) / totalDistKmRef.current) * 100),
         )
       : trip?.distance_km
         ? 0
         : 55;
 
-  const { instruction } = useManeuverInstructions(steps, locationLat, locationLng);
+  const { instruction } = useManeuverInstructions(activeSteps, locationLat, locationLng);
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.mapArea}>
-        <MapView followUserLocation routeLine={routeCoords.length > 0 ? routeCoords : undefined} />
+        <MapView
+          followUserLocation
+          routeLine={activeCoords.length > 0 ? activeCoords : undefined}
+          alternativeRouteLine={altCoords.length > 0 ? altCoords : undefined}
+        />
       </View>
+      {showPill && (
+        <AlternativeRoutePill
+          primaryTime={pillPrimaryTime}
+          altTime={pillAltTime}
+          onToggle={handleToggleRoute}
+        />
+      )}
       <View style={styles.bottomCard}>
         <Text style={styles.label}>En viaje</Text>
         <Text style={styles.destination}>{trip?.dest_address ?? 'Destino'}</Text>
-        {etaMinutes !== null && distKm !== null ? (
+        {activeEta !== null && activeDist !== null ? (
           <Text style={styles.eta}>
-            ~{Math.round(etaMinutes)} min · {distKm} km
+            ~{Math.round(activeEta)} min · {activeDist} km
           </Text>
         ) : null}
         {instruction ? <Text style={styles.instruction}>{instruction}</Text> : null}
