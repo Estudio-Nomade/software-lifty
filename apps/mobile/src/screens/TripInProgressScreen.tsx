@@ -86,6 +86,7 @@ export const TripInProgressScreen: React.FC = () => {
         amount: String(tripData?.total_fare ?? 2500),
         commission: String(tripData?.platform_fee ?? 500),
         driverEarnings: String(tripData?.driver_earnings ?? 2000),
+        tipAmount: String(tripData?.tip_amount ?? 0),
       });
     } catch {
       navigation.navigate('TripComplete');

@@ -39,15 +39,17 @@ export const TripCompleteScreen: React.FC = () => {
   const [submitting, setSubmitting] = React.useState(false);
   const isOnline = useOnlineStore((s) => s.isOnline);
 
-  const { amount, commission, driverEarnings } = useLocalSearchParams<{
+  const { amount, commission, driverEarnings, tipAmount } = useLocalSearchParams<{
     amount?: string;
     commission?: string;
     driverEarnings?: string;
+    tipAmount?: string;
   }>();
 
   const tripAmount = Number(amount) || 2500;
   const tripCommission = Number(commission) || 500;
   const tripDriverEarnings = Number(driverEarnings) || 2000;
+  const tip = Number(tipAmount) || 0;
 
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -141,8 +143,11 @@ export const TripCompleteScreen: React.FC = () => {
 
       <View style={styles.breakdown}>
         <Text style={styles.breakdownItem}>Comision Lifty: -{formatCurrency(tripCommission)}</Text>
+        {tip > 0 ? (
+          <Text style={styles.breakdownItemTip}>Propina: +{formatCurrency(tip)}</Text>
+        ) : null}
         <Text style={styles.breakdownItemEarnings}>
-          Tu ganancia: {formatCurrency(tripDriverEarnings)}
+          Tu ganancia: {formatCurrency(tripDriverEarnings + tip)}
         </Text>
       </View>
 
@@ -275,6 +280,11 @@ const styles = StyleSheet.create({
   breakdownItem: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
+  },
+  breakdownItemTip: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.turquoise,
   },
   breakdownItemEarnings: {
     fontSize: theme.fontSize.sm,

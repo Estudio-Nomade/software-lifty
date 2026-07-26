@@ -112,6 +112,7 @@ export const tripSchema = z.object({
   total_fare: z.number().nullable(),
   platform_fee: z.number().nullable(),
   driver_earnings: z.number().nullable(),
+  tip_amount: z.number().optional(),
   payment_method: z.string().nullable(),
   is_collected: z.boolean(),
   created_at: z.string(),
