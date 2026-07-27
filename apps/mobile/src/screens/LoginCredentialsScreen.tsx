@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
@@ -257,7 +258,11 @@ export const LoginCredentialsScreen: React.FC = () => {
           containerStyle={styles.inputField}
           rightElement={
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
-              <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁'}</Text>
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={theme.colors.mediumGray}
+              />
             </TouchableOpacity>
           }
         />

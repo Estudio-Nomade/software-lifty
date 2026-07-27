@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import type React from 'react';
 import { useState } from 'react';
 import {
@@ -205,13 +206,17 @@ export const RegisterScreen: React.FC = () => {
             textContentType="password"
             containerStyle={styles.inputField}
           />
-          <TouchableOpacity
-            onPress={() => setShowPassword(!showPassword)}
-            style={styles.showPasswordRow}
-          >
-            <Text style={styles.showPasswordText}>
-              {showPassword ? '🙈 Ocultar contrasena' : '👁 Mostrar contrasena'}
-            </Text>
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <View style={styles.showPasswordRow}>
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={18}
+                color={theme.colors.mediumGray}
+              />
+              <Text style={styles.showPasswordText}>
+                {showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+              </Text>
+            </View>
           </TouchableOpacity>
           {passwordMismatch && (
             <Text style={styles.mismatchText}>Las contrasenas no coinciden</Text>
@@ -284,6 +289,9 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
   },
   showPasswordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginVertical: theme.spacing.sm,
   },
   showPasswordText: {

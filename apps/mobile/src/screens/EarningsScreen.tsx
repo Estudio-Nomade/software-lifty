@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import React from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -125,11 +126,17 @@ export const EarningsScreen: React.FC = () => {
             <Card>
               <Text style={styles.cardTitle}>Desglose de hoy</Text>
               <View style={styles.row}>
-                <Text style={styles.rowLabel}>💵 Efectivo</Text>
+                <View style={styles.rowLabelContainer}>
+                  <Ionicons name="cash-outline" size={16} color={theme.colors.mediumGray} />
+                  <Text style={styles.rowLabel}>Efectivo</Text>
+                </View>
                 <Text style={styles.rowValue}>{formatCurrency(earnings.cash)}</Text>
               </View>
               <View style={styles.row}>
-                <Text style={styles.rowLabel}>🏦 Transferencia</Text>
+                <View style={styles.rowLabelContainer}>
+                  <Ionicons name="card-outline" size={16} color={theme.colors.mediumGray} />
+                  <Text style={styles.rowLabel}>Transferencia</Text>
+                </View>
                 <Text style={[styles.rowValue, { color: theme.colors.turquoise }]}>
                   {formatCurrency(earnings.transfer)}
                 </Text>
@@ -314,6 +321,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 4,
+  },
+  rowLabelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   rowLabel: {
     fontSize: theme.fontSize.md,
