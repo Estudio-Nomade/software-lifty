@@ -10,12 +10,13 @@ import {
 } from 'react-native';
 import { theme } from '../theme';
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'cta';
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'cta' | 'outline';
 
 interface ButtonProps {
   title: string;
   onPress: () => void;
   variant?: ButtonVariant;
+  outlineColor?: string;
   disabled?: boolean;
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -69,12 +70,26 @@ const variantStyles: Record<ButtonVariant, { container: ViewStyle; text: TextSty
       fontWeight: theme.fontWeight.bold,
     },
   },
+  outline: {
+    container: {
+      backgroundColor: 'transparent',
+      height: theme.dimensions.buttonHeight,
+      borderRadius: theme.radius.buttonRadius,
+      borderWidth: 1.5,
+      borderColor: theme.colors.turquoise,
+    },
+    text: {
+      color: theme.colors.turquoise,
+      textTransform: 'uppercase',
+    },
+  },
 };
 
 export const Button: React.FC<ButtonProps> = ({
   title,
   onPress,
   variant = 'primary',
+  outlineColor,
   disabled = false,
   loading = false,
   style,
@@ -82,17 +97,37 @@ export const Button: React.FC<ButtonProps> = ({
 }) => {
   const variantStyle = variantStyles[variant];
 
+  const outlineOverride =
+    variant === 'outline' && outlineColor
+      ? { borderColor: outlineColor, color: outlineColor }
+      : null;
+
   return (
     <TouchableOpacity
-      style={[styles.container, variantStyle.container, disabled && styles.disabled, style]}
+      style={[
+        styles.container,
+        variantStyle.container,
+        disabled && styles.disabled,
+        outlineOverride && { borderColor: outlineOverride.borderColor },
+        style,
+      ]}
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.8}
     >
       {loading ? (
-        <ActivityIndicator color={variantStyle.text.color} />
+        <ActivityIndicator color={outlineOverride?.color ?? variantStyle.text.color} />
       ) : (
-        <Text style={[styles.text, variantStyle.text, textStyle]}>{title}</Text>
+        <Text
+          style={[
+            styles.text,
+            variantStyle.text,
+            outlineOverride && { color: outlineOverride.color },
+            textStyle,
+          ]}
+        >
+          {title}
+        </Text>
       )}
     </TouchableOpacity>
   );
