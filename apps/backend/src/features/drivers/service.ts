@@ -1,10 +1,11 @@
-import { and, eq, ne } from 'drizzle-orm';
+import { and, count, eq, ne } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import {
   districts,
   driverDocuments,
   driverLocations,
   drivers,
+  trips,
   users,
   vehicles,
 } from '../../shared/db/schema';
@@ -793,6 +794,11 @@ export const driversService = {
       };
     }
 
+    const [tripStats] = await db
+      .select({ total_trips: count() })
+      .from(trips)
+      .where(and(eq(trips.driver_id, row.id), eq(trips.status, 'completed')));
+
     return {
       id: row.id,
       user_id: row.user_id,
@@ -803,7 +809,7 @@ export const driversService = {
       status: row.status,
       kyc_status: row.kyc_status,
       rating_avg: row.rating_avg,
-      total_trips: row.total_trips,
+      total_trips: tripStats?.total_trips ?? 0,
       completion_rate: row.completion_rate,
       is_online: row.is_online,
       documents_pending_review: row.documents_pending_review,
