@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import type React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,14 +38,14 @@ export const Navbar: React.FC<NavbarProps> = ({
     if (showHamburger) {
       return (
         <TouchableOpacity onPress={onHamburgerPress} style={styles.iconButton}>
-          <Text style={styles.iconText}>☰</Text>
+          <Ionicons name="menu" size={24} color={theme.colors.white} />
         </TouchableOpacity>
       );
     }
     if (showBack) {
       return (
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={[styles.backText, { color: theme.colors.white }]}>←</Text>
+          <Ionicons name="arrow-back" size={20} color={theme.colors.white} />
         </TouchableOpacity>
       );
     }
@@ -99,10 +100,6 @@ const styles = StyleSheet.create({
     padding: theme.spacing.xs,
     minWidth: 40,
   },
-  backText: {
-    fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.medium,
-  },
   title: {
     color: theme.colors.white,
     fontSize: theme.fontSize.md,
@@ -116,11 +113,6 @@ const styles = StyleSheet.create({
   iconButton: {
     minWidth: 40,
     padding: theme.spacing.xs,
-  },
-  iconText: {
-    fontSize: theme.fontSize.xl,
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.white,
   },
   avatarButton: {
     minWidth: 40,
