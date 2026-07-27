@@ -7,6 +7,7 @@ import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
 import { driverDocuments, drivers, users, vehicles } from '../../shared/db/schema';
 import { DOC_TYPES } from '../../shared/lib/documents';
+import { notifyAdminWithdrawal } from './notifications';
 import { createTestToken } from '../../shared/testing/utils';
 
 let app: any;
@@ -204,5 +205,60 @@ describe('Admin', () => {
     );
 
     expect(status).toBe(403);
+  });
+
+  test('notifyAdminWithdrawal sends email to admin recipients', async () => {
+    const db = getDb();
+
+    const [driverUser] = await db
+      .insert(users)
+      .values({ phone: '+5492617777777', full_name: 'Withdrawal Driver', role: 'driver' })
+      .returning({ id: users.id });
+
+    const [driver] = await db
+      .insert(drivers)
+      .values({ user_id: driverUser.id, status: 'approved', kyc_status: 'approved' })
+      .returning({ id: drivers.id });
+
+    await db
+      .insert(users)
+      .values({ phone: '+5492616666666', email: 'admin@lifty.app', role: 'admin' });
+
+    await notifyAdminWithdrawal({
+      driverId: driver.id,
+      amount: 1500.75,
+      withdrawalId: '00000000-0000-0000-0000-000000000001',
+      accountNumber: '0000003100088888888888',
+    });
+  });
+
+  test('notifyAdminWithdrawal handles missing driver gracefully', async () => {
+    await notifyAdminWithdrawal({
+      driverId: '00000000-0000-0000-0000-000000000099',
+      amount: 500,
+      withdrawalId: '00000000-0000-0000-0000-000000000002',
+      accountNumber: '0000003100011111111111',
+    });
+  });
+
+  test('notifyAdminWithdrawal handles no admin recipients', async () => {
+    const db = getDb();
+
+    const [driverUser] = await db
+      .insert(users)
+      .values({ phone: '+5492615555555', full_name: 'Solo Driver', role: 'driver' })
+      .returning({ id: users.id });
+
+    const [driver] = await db
+      .insert(drivers)
+      .values({ user_id: driverUser.id, status: 'approved', kyc_status: 'approved' })
+      .returning({ id: drivers.id });
+
+    await notifyAdminWithdrawal({
+      driverId: driver.id,
+      amount: 300,
+      withdrawalId: '00000000-0000-0000-0000-000000000003',
+      accountNumber: '1234',
+    });
   });
 });
