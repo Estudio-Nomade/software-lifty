@@ -4,6 +4,7 @@ import { authGuard } from '../../shared/middleware/require-auth';
 import {
   addDocumentBody,
   driverIdParams,
+  heartbeatBody,
   reuploadDocBody,
   setDistrictBody,
   toggleOnlineBody,
@@ -52,9 +53,11 @@ export const driversRoutes = new Elysia({ prefix: '/drivers' })
     ({ user, body, set }) => safeCall(() => driversService.toggleOnline(user, body.is_online), set),
     { body: toggleOnlineBody, requireAuth: true },
   )
-  .put('/me/heartbeat', ({ user, set }) => safeCall(() => driversService.heartbeat(user), set), {
-    requireAuth: true,
-  })
+  .put(
+    '/me/heartbeat',
+    ({ user, body, set }) => safeCall(() => driversService.heartbeat(user, body), set),
+    { body: heartbeatBody, requireAuth: true },
+  )
   .put(
     '/me',
     ({ user, body, set }) => safeCall(() => driversService.updateProfile(user, body), set),

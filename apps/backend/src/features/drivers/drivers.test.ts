@@ -9,7 +9,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
-import { districts, driverDocuments, drivers, users, vehicles } from '../../shared/db/schema';
+import { districts, driverDocuments, driverLocations, drivers, users, vehicles } from '../../shared/db/schema';
 import { DOC_TYPES } from '../../shared/lib/documents';
 import { getRedis } from '../../shared/lib/redis';
 import { extractStoragePath, type StorageProvider } from '../../shared/lib/storage';
@@ -325,6 +325,57 @@ describe('Driver Profile', () => {
     const { status, data } = await request('PUT', '/api/drivers/me/heartbeat', undefined, token);
     expect(status).toBe(404);
     expect(data.error.message).toContain('Onboarding');
+  });
+
+  test('PUT /me/heartbeat with lat/lng stores real coordinates in driver_locations', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    const db = getDb();
+
+    await db
+      .update(drivers)
+      .set({ status: 'approved', is_online: true })
+      .where(eq(drivers.id, driverId));
+
+    const { status } = await request('PUT', '/api/drivers/me/heartbeat', {
+      lat: -34.6037,
+      lng: -58.3816,
+      heading: 180,
+    }, token);
+
+    expect(status).toBe(200);
+
+    const [loc] = await db
+      .select({ lat: driverLocations.lat, lng: driverLocations.lng, heading: driverLocations.heading })
+      .from(driverLocations)
+      .where(eq(driverLocations.driver_id, driverId))
+      .limit(1);
+
+    expect(loc).toBeDefined();
+    expect(loc.lat).toBeCloseTo(-34.6037, 1);
+    expect(loc.lng).toBeCloseTo(-58.3816, 1);
+    expect(loc.heading).toBe(180);
+  });
+
+  test('PUT /me/heartbeat without lat/lng does not create location row', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    const db = getDb();
+
+    await db
+      .update(drivers)
+      .set({ status: 'approved', is_online: true })
+      .where(eq(drivers.id, driverId));
+
+    const { status } = await request('PUT', '/api/drivers/me/heartbeat', undefined, token);
+
+    expect(status).toBe(200);
+
+    const [loc] = await db
+      .select({ driver_id: driverLocations.driver_id })
+      .from(driverLocations)
+      .where(eq(driverLocations.driver_id, driverId))
+      .limit(1);
+
+    expect(loc).toBeUndefined();
   });
 
   test('GET /me includes vehicle data', async () => {

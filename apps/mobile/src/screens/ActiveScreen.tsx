@@ -13,9 +13,11 @@ import { Toggle } from '../components/Toggle';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
+import { useLocationWS } from '../hooks/useLocationWS';
 import { startTracking, stopTracking } from '../lib/location';
 import { subscribeToDriverChannel } from '../lib/realtime';
 import { useAuthStore } from '../store/authStore';
+import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
 import { theme } from '../theme';
 
@@ -45,6 +47,7 @@ export const ActiveScreen: React.FC = () => {
   const [onlineTime, setOnlineTime] = useState(0);
   const disconnectedRef = useRef(false);
   const signOut = useSignOut();
+  useLocationWS();
 
   useEffect(() => {
     const reconcile = async () => {
@@ -70,7 +73,8 @@ export const ActiveScreen: React.FC = () => {
 
   useEffect(() => {
     const heartbeatInterval = setInterval(() => {
-      apiClient.put('/drivers/me/heartbeat').catch(() => {});
+      const { lat, lng, heading } = useLocationStore.getState();
+      apiClient.put('/drivers/me/heartbeat', { lat, lng, heading }).catch(() => {});
     }, 30_000);
     useOnlineStore.getState().setHeartbeatRef(heartbeatInterval);
 
