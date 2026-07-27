@@ -8,3 +8,9 @@ export const reviewBody = t.Object({
 export const driverIdParams = t.Object({
   driver_id: t.String(),
 });
+
+export const withdrawalsQuery = t.Object({
+  status: t.Optional(t.String()),
+  from: t.Optional(t.String()),
+  to: t.Optional(t.String()),
+});

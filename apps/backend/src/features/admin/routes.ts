@@ -3,7 +3,7 @@ import { safeCall } from '../../shared/lib/route-utils';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { authGuard } from '../../shared/middleware/require-auth';
 import { approveDriver } from './approve';
-import { driverIdParams, reviewBody } from './schema';
+import { driverIdParams, reviewBody, withdrawalsQuery } from './schema';
 import { adminService } from './service';
 
 export const adminApproveRoute = new Elysia().get('/admin/approve', async ({ query, set }) => {
@@ -60,4 +60,12 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
       );
     },
     { params: driverIdParams, body: reviewBody, requireAuth: true },
+  )
+  .get(
+    '/withdrawals/pending',
+    ({ user, query, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminService.listPendingWithdrawals(query), set);
+    },
+    { query: withdrawalsQuery, requireAuth: true },
   );
