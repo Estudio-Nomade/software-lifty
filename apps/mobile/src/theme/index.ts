@@ -45,7 +45,7 @@ export const theme = {
     buttonHeight: 48,
     buttonCTAHeight: 56,
     inputHeight: 48,
-    navbarHeight: 56,
+    navbarHeight: 64,
     screenWidth: 375,
     tabBarHeight: 68,
   },
