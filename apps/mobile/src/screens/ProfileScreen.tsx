@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -20,6 +19,7 @@ import {
 import { z } from 'zod';
 import { apiClient, getValidated } from '../api/client';
 import { type DriverDocument, documentSchema } from '../api/types';
+import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
@@ -99,10 +99,6 @@ function docsStatusIcon(docs: DriverDocument[]): React.JSX.Element {
     return <Ionicons name="time-outline" size={18} color={theme.colors.amber} />;
   }
   return <Ionicons name="time-outline" size={18} color={theme.colors.amber} />;
-}
-
-function isRealUrl(url: string | null): url is string {
-  return !!url && (url.startsWith('http://') || url.startsWith('https://'));
 }
 
 export const ProfileScreen: React.FC = () => {
@@ -278,11 +274,7 @@ export const ProfileScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Card style={styles.profileCard} padding={theme.spacing.lg}>
           <View style={styles.avatar}>
-            {isRealUrl(profile?.avatar_url ?? null) ? (
-              <Image source={{ uri: profile!.avatar_url! }} style={styles.avatarImage} />
-            ) : (
-              <Text style={styles.avatarIcon}>👤</Text>
-            )}
+            <Avatar uri={profile?.avatar_url ?? null} name={profile?.full_name ?? ''} size={72} />
           </View>
           <Text style={styles.name}>{profile?.full_name || 'Sin nombre'}</Text>
           <View style={styles.stats}>
@@ -389,13 +381,11 @@ export const ProfileScreen: React.FC = () => {
               contentContainerStyle={styles.modalScrollContent}
             >
               <TouchableOpacity style={styles.editAvatar} onPress={handlePickPhoto}>
-                {editPhotoUri ? (
-                  <Image source={{ uri: editPhotoUri }} style={styles.editAvatarImage} />
-                ) : isRealUrl(profile?.avatar_url ?? null) ? (
-                  <Image source={{ uri: profile!.avatar_url! }} style={styles.editAvatarImage} />
-                ) : (
-                  <Text style={styles.editAvatarIcon}>📷</Text>
-                )}
+                <Avatar
+                  uri={editPhotoUri ?? profile?.avatar_url ?? null}
+                  name={profile?.full_name ?? ''}
+                  size={80}
+                />
                 <Text style={styles.editAvatarLabel}>Cambiar foto</Text>
               </TouchableOpacity>
 
@@ -432,7 +422,13 @@ export const ProfileScreen: React.FC = () => {
       </Modal>
 
       <TabBar activeTab={activeTab} onTabPress={handleTabPress} />
-      <SideMenu visible={menuVisible} onClose={() => setMenuVisible(false)} menuItems={menuItems} />
+      <SideMenu
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        userName={profile?.full_name}
+        avatarUrl={profile?.avatar_url ?? null}
+        menuItems={menuItems}
+      />
     </View>
   );
 };
@@ -468,14 +464,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarIcon: {
-    fontSize: 32,
-    color: theme.colors.mediumGray,
   },
   name: {
     fontSize: theme.fontSize.lg,
@@ -604,14 +592,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
-  },
-  editAvatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: theme.radius.full,
-  },
-  editAvatarIcon: {
-    fontSize: 40,
   },
   editAvatarLabel: {
     fontSize: theme.fontSize.sm,

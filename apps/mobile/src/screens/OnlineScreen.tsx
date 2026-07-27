@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { z } from 'zod';
 import { apiClient, getValidated } from '../api/client';
 import { driverStatusSchema, earningsDailySchema } from '../api/types';
 import type { EarningsDaily } from '../api/types';
@@ -28,6 +29,17 @@ export const OnlineScreen: React.FC = () => {
   const [menuVisible, setMenuVisible] = useState(false);
   const heatmapPoints = useHeatmapPolling();
   const signOut = useSignOut();
+
+  const profileSchema = z.object({
+    full_name: z.string(),
+    avatar_url: z.string().nullable(),
+  });
+
+  const { data: profile } = useQuery({
+    queryKey: ['driver-profile'],
+    queryFn: () => getValidated('/drivers/me', profileSchema),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const {
     data: earnings,
@@ -214,7 +226,13 @@ export const OnlineScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-      <Navbar showHamburger onHamburgerPress={() => setMenuVisible(true)} showAvatar />
+      <Navbar
+        showHamburger
+        onHamburgerPress={() => setMenuVisible(true)}
+        showAvatar
+        avatarName={profile?.full_name}
+        avatarUrl={profile?.avatar_url ?? null}
+      />
 
       <View style={styles.main}>
         <View style={styles.toggleSection}>
@@ -244,7 +262,13 @@ export const OnlineScreen: React.FC = () => {
 
       <TabBar activeTab={activeTab} onTabPress={handleTabPress} />
 
-      <SideMenu visible={menuVisible} onClose={() => setMenuVisible(false)} menuItems={menuItems} />
+      <SideMenu
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        userName={profile?.full_name}
+        avatarUrl={profile?.avatar_url ?? null}
+        menuItems={menuItems}
+      />
     </View>
   );
 };
