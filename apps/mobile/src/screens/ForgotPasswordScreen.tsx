@@ -13,6 +13,8 @@ import {
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { OTPInput } from '../components/OTPInput';
+import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
+import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useForgotPassword, useResetPassword } from '../hooks/useAuth';
 import { resolvePostAuthRoute } from '../lib/postAuthRouting';
@@ -21,6 +23,7 @@ import { theme } from '../theme';
 
 export const ForgotPasswordScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const { loading } = useAuth();
 
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -101,6 +104,14 @@ export const ForgotPasswordScreen: React.FC = () => {
       setError(message);
     }
   };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <LoadingOverlay visible />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -224,6 +235,12 @@ export const ForgotPasswordScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: theme.colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   container: {
     flex: 1,
     backgroundColor: theme.colors.white,

@@ -1,11 +1,29 @@
 import type React from 'react';
 import { StatusBar, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
+import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
+import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
 export const WelcomeScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const { loading } = useAuth();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+        <LoadingOverlay visible />
+      </View>
+    );
+  }
+
+  if (isAuthenticated) {
+    return null;
+  }
 
   return (
     <View style={styles.container}>
@@ -36,6 +54,12 @@ export const WelcomeScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: theme.colors.deepBlue,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   container: {
     flex: 1,
     backgroundColor: theme.colors.deepBlue,
