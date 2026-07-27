@@ -184,6 +184,7 @@ export const TripHistoryScreen: React.FC = () => {
 
     return (
       <FlatList
+        style={{ flex: 1 }}
         data={allTrips}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <TripCard trip={item} />}
@@ -198,7 +199,7 @@ export const TripHistoryScreen: React.FC = () => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
       <Navbar title="Historial" onBack={() => navigation.goBack()} showBack />
-      {renderContent()}
+      <View style={{ flex: 1 }}>{renderContent()}</View>
       <TabBar activeTab={activeTab} onTabPress={handleTabPress} />
     </View>
   );
@@ -210,6 +211,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.lightGray,
   },
   content: {
+    flexGrow: 1,
     alignItems: 'center',
     gap: theme.spacing.md,
     paddingVertical: theme.spacing.md,
