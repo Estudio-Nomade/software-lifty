@@ -19,7 +19,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0D2B45"
+        "backgroundColor": "#0F2A44"
       },
       "package": "com.lifty.conductor",
       "versionCode": 1,
