@@ -43,7 +43,7 @@ LiftyApp/
 ## Theme
 Import from `src/theme/index.ts`. All UI must use `theme.colors.*`, `theme.spacing.*`, `theme.fontSize.*`, `theme.radius.*`, `theme.dimensions.*`. Never hardcode colors or sizes.
 
-Key colors: `deepBlue` (#0D2B45), `turquoise` (#00C2B3), `white`, `lightGray` (#F1F4F6), `mediumGray` (#A8B1BA), `dangerRed` (#FF6B6B).
+Key colors: `deepBlue` (#0F2A44), `turquoise` (#1BBFAE), `white`, `lightGray` (#EDF1F5), `mediumGray` (#8A93A0), `dangerRed` (#FF6B6B).
 
 ## TypeScript
 - `@/*` path alias mapped to `./src/*` in tsconfig paths

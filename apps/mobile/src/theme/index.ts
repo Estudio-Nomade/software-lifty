@@ -1,9 +1,9 @@
 export const theme = {
   colors: {
-    turquoise: '#00C2B3',
-    deepBlue: '#0D2B45',
-    lightGray: '#F1F4F6',
-    mediumGray: '#A8B1BA',
+    turquoise: '#1BBFAE',
+    deepBlue: '#0F2A44',
+    lightGray: '#EDF1F5',
+    mediumGray: '#8A93A0',
     white: '#FFFFFF',
     dangerRed: '#FF6B6B',
     amber: '#FFB020',
