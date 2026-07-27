@@ -163,38 +163,38 @@ export const ActiveScreen: React.FC = () => {
     () => [
       {
         label: 'Inicio',
-        icon: '🏠',
+        icon: 'home-outline' as const,
         onPress: () => {},
       },
       {
         label: 'Ganancias',
-        icon: '💰',
+        icon: 'wallet-outline' as const,
         onPress: () => navigation.navigate('Earnings'),
       },
       {
         label: 'Metodo de cobro',
-        icon: '💳',
+        icon: 'card-outline' as const,
         onPress: () => navigation.navigate('PaymentMethod'),
       },
       {
         label: 'Perfil',
-        icon: '👤',
+        icon: 'person-outline' as const,
         onPress: () => navigation.navigate('Profile'),
       },
       {
         label: 'Historial de viajes',
-        icon: '📋',
+        icon: 'document-text-outline' as const,
         onPress: () => navigation.navigate('TripHistory'),
       },
       {
         label: 'Desconectarse',
-        icon: '🔌',
+        icon: 'power-outline' as const,
         onPress: () => handleToggle(false),
         dividerTop: true,
       },
       {
         label: 'Cerrar sesion',
-        icon: '🚪',
+        icon: 'log-out-outline' as const,
         onPress: () => signOut.mutateAsync(),
         danger: true,
       },

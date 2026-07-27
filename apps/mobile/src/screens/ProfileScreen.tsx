@@ -153,32 +153,32 @@ export const ProfileScreen: React.FC = () => {
     () => [
       {
         label: 'Inicio',
-        icon: '🏠',
+        icon: 'home-outline' as const,
         onPress: () => navigation.navigate(isOnline ? 'Active' : 'Online'),
       },
       {
         label: 'Ganancias',
-        icon: '💰',
+        icon: 'wallet-outline' as const,
         onPress: () => navigation.navigate('Earnings'),
       },
       {
         label: 'Metodo de cobro',
-        icon: '💳',
+        icon: 'card-outline' as const,
         onPress: () => navigation.navigate('PaymentMethod'),
       },
       {
         label: 'Perfil',
-        icon: '👤',
+        icon: 'person-outline' as const,
         onPress: () => {},
       },
       {
         label: 'Historial de viajes',
-        icon: '📋',
+        icon: 'document-text-outline' as const,
         onPress: () => navigation.navigate('TripHistory'),
       },
       {
         label: 'Cerrar sesion',
-        icon: '🚪',
+        icon: 'log-out-outline' as const,
         onPress: () => signOut.mutate(),
         danger: true,
         dividerTop: true,

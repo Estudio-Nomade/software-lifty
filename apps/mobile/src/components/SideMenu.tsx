@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import type React from 'react';
 import { useEffect, useRef } from 'react';
 import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -9,7 +10,7 @@ const DRAWER_WIDTH = SCREEN_WIDTH * 0.72;
 
 interface MenuItem {
   label: string;
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
   danger?: boolean;
   dividerTop?: boolean;
@@ -82,7 +83,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
         {userName && (
           <View style={styles.userSection}>
             <View style={styles.avatarLarge}>
-              <Text style={styles.avatarLargeText}>👤</Text>
+              <Ionicons name="person" size={28} color={theme.colors.mediumGray} />
             </View>
             <Text style={styles.userName} numberOfLines={1}>
               {userName}
@@ -101,7 +102,11 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                 item.onPress();
               }}
             >
-              <Text style={styles.menuIcon}>{item.icon}</Text>
+              <Ionicons
+                name={item.icon}
+                size={18}
+                color={item.danger ? theme.colors.dangerRed : theme.colors.deepBlue}
+              />
               <Text style={[styles.menuLabel, item.danger && styles.menuLabelDanger]}>
                 {item.label}
               </Text>
@@ -121,7 +126,11 @@ export const SideMenu: React.FC<SideMenuProps> = ({
                   item.onPress();
                 }}
               >
-                <Text style={styles.menuIcon}>{item.icon}</Text>
+                <Ionicons
+                  name={item.icon}
+                  size={18}
+                  color={item.danger ? theme.colors.dangerRed : theme.colors.deepBlue}
+                />
                 <Text style={[styles.menuLabel, item.danger && styles.menuLabelDanger]}>
                   {item.label}
                 </Text>
@@ -176,9 +185,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: theme.spacing.sm,
   },
-  avatarLargeText: {
-    fontSize: 28,
-  },
   userName: {
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.bold,
@@ -203,11 +209,6 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.lightGray,
     marginTop: theme.spacing.sm,
     paddingTop: theme.spacing.md,
-  },
-  menuIcon: {
-    fontSize: 18,
-    width: 28,
-    textAlign: 'center',
   },
   menuLabel: {
     fontSize: theme.fontSize.md,
