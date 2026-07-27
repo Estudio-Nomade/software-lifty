@@ -41,7 +41,13 @@ interface MapViewProps {
 const DEFAULT_CENTER: [number, number] = [-65.1833, -31.9333];
 const DEFAULT_ZOOM = 15;
 
-const MAP_HTML = `<!DOCTYPE html>
+function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: string }) {
+  const r = Number.parseInt(colors.turquoise.slice(1, 3), 16);
+  const g = Number.parseInt(colors.turquoise.slice(3, 5), 16);
+  const b = Number.parseInt(colors.turquoise.slice(5, 7), 16);
+  const turquoiseRgba = `rgba(${r}, ${g}, ${b}, 0.4)`;
+
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -51,7 +57,7 @@ const MAP_HTML = `<!DOCTYPE html>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body, #map { width: 100%; height: 100%; overflow: hidden; }
-  body { background: #F1F4F6; }
+  body { background: ${colors.lightGray}; }
   .marker-dot {
     width: 16px; height: 16px;
     border-radius: 50%;
@@ -61,8 +67,8 @@ const MAP_HTML = `<!DOCTYPE html>
   }
   .pulsing-circle {
     width: 18px; height: 18px;
-    background: rgba(0, 194, 179, 0.4);
-    border: 2px solid #00C2B3;
+    background: ${turquoiseRgba};
+    border: 2px solid ${colors.turquoise};
     border-radius: 50%;
     animation: pulse 2s infinite;
   }
@@ -103,7 +109,7 @@ const MAP_HTML = `<!DOCTYPE html>
     markers.forEach(function (m) { m.remove(); });
     markers = [];
     newMarkers.forEach(function (mk) {
-      var color = mk.color || '#00C2B3';
+      var color = mk.color || '${colors.turquoise}';
       var el = document.createElement('div');
       el.className = 'marker-dot';
       el.style.background = color;
@@ -146,7 +152,7 @@ const MAP_HTML = `<!DOCTYPE html>
         type: 'line',
         source: ROUTE_SOURCE_ID,
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#00C2B3', 'line-width': 4, 'line-opacity': 0.9 },
+        paint: { 'line-color': '${colors.turquoise}', 'line-width': 4, 'line-opacity': 0.9 },
       });
     }
   }
@@ -184,7 +190,7 @@ const MAP_HTML = `<!DOCTYPE html>
         type: 'line',
         source: ALT_ROUTE_SOURCE_ID,
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#FFB020', 'line-width': 3, 'line-opacity': 0.6, 'line-dasharray': [2, 2] },
+        paint: { 'line-color': '${colors.amber}', 'line-width': 3, 'line-opacity': 0.6, 'line-dasharray': [2, 2] },
       }, ROUTE_LAYER_ID);
     }
   }
@@ -360,6 +366,7 @@ const MAP_HTML = `<!DOCTYPE html>
 </script>
 </body>
 </html>`;
+}
 
 export const MapView: React.FC<MapViewProps> = ({
   centerCoordinate = DEFAULT_CENTER,
@@ -372,6 +379,12 @@ export const MapView: React.FC<MapViewProps> = ({
   style,
   onError,
 }) => {
+  const mapHtml = generateMapHtml({
+    turquoise: theme.colors.turquoise,
+    lightGray: theme.colors.lightGray,
+    amber: theme.colors.amber,
+  });
+
   const webViewRef = useRef<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -503,7 +516,7 @@ export const MapView: React.FC<MapViewProps> = ({
       <WebViewComponent
         key={retryKey.current}
         ref={webViewRef}
-        source={{ html: MAP_HTML }}
+        source={{ html: mapHtml }}
         style={styles.webview}
         onLoadEnd={() => setIsLoaded(true)}
         onError={handleWebViewError}
