@@ -16,7 +16,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { apiClient } from '../api/client';
+import { z } from 'zod';
+import { apiClient, getValidated } from '../api/client';
+import { type DriverDocument, documentSchema } from '../api/types';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
@@ -52,16 +54,6 @@ interface ProfileData {
   created_at: string;
 }
 
-interface DocumentItem {
-  id: string;
-  doc_type: string;
-  file_url: string;
-  status?: string;
-  verified_at: string | null;
-  expires_at: string | null;
-  created_at: string;
-}
-
 // Maps a backend doc_type back to the UploadDocument screen's docType param.
 const DOC_TYPE_TO_UPLOAD: Record<string, string> = {
   license_front: 'drivers_license',
@@ -82,19 +74,19 @@ const MANAGEABLE_DOCS: { docType: string; label: string }[] = [
   { docType: 'background_check', label: 'Certificado de antecedentes penales' },
 ];
 
-function docsStatusLabel(docs: DocumentItem[]): string {
+function docsStatusLabel(docs: DriverDocument[]): string {
   if (docs.length === 0) return 'No cargado';
   if (docs.some((d) => d.status === 'rejected')) return 'Rechazado';
-  if (docs.length < 2) return 'Incompleto: falta una cara';
   if (docs.some((d) => d.status === 'pending_review')) return 'Pendiente de revision';
-  if (docs.every((d) => d.verified_at || d.status === 'approved')) return 'Verificado';
+  if (docs.every((d) => d.status === 'approved' || !!d.verified_at)) return 'Verificado';
   return 'Pendiente';
 }
 
-function docsStatusIcon(docs: DocumentItem[]): string {
+function docsStatusIcon(docs: DriverDocument[]): string {
   if (docs.length === 0) return '➕';
   if (docs.some((d) => d.status === 'rejected')) return '❌';
-  if (docs.length === 2 && docs.every((d) => d.verified_at || d.status === 'approved')) return '✅';
+  if (docs.every((d) => d.status === 'approved' || !!d.verified_at)) return '✅';
+  if (docs.some((d) => d.status === 'pending_review')) return '⏳';
   return '⏳';
 }
 
@@ -109,7 +101,7 @@ export const ProfileScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabKey>('profile');
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [documents, setDocuments] = useState<DriverDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
   const [editFirstName, setEditFirstName] = useState('');
@@ -123,10 +115,10 @@ export const ProfileScreen: React.FC = () => {
       setLoading(true);
       const [profileRes, docsRes] = await Promise.all([
         apiClient.get('/drivers/me'),
-        apiClient.get('/drivers/me/documents'),
+        getValidated('/drivers/me/documents', z.array(documentSchema)),
       ]);
       setProfile(profileRes.data);
-      setDocuments(docsRes.data);
+      setDocuments(docsRes);
     } catch {
     } finally {
       setLoading(false);

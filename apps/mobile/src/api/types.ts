@@ -156,7 +156,6 @@ export const paymentMethodSchema = z.object({
 
 export const documentSchema = z.object({
   id: z.string(),
-  driver_id: z.string(),
   doc_type: z.enum([
     'license_front',
     'license_back',
@@ -168,7 +167,9 @@ export const documentSchema = z.object({
     'background_check_back',
   ]),
   file_url: z.string(),
-  file_name: z.string(),
+  status: z.enum(['pending_review', 'approved', 'rejected', 'superseded']).nullable().optional(),
+  verified_at: z.string().nullable().optional(),
+  expires_at: z.string().nullable().optional(),
   created_at: z.string(),
 });
 
