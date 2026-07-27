@@ -184,14 +184,19 @@ export const ActiveScreen: React.FC = () => {
         onPress: () => navigation.navigate('TripHistory'),
       },
       {
+        label: 'Desconectarse',
+        icon: '🔌',
+        onPress: () => handleToggle(false),
+        dividerTop: true,
+      },
+      {
         label: 'Cerrar sesion',
         icon: '🚪',
         onPress: () => signOut.mutateAsync(),
         danger: true,
-        dividerTop: true,
       },
     ],
-    [navigation, signOut],
+    [navigation, signOut, handleToggle],
   );
 
   return (
@@ -214,9 +219,13 @@ export const ActiveScreen: React.FC = () => {
           <Text style={styles.menuIcon}>☰</Text>
         </TouchableOpacity>
         <View style={styles.headerRight}>
-          <View style={styles.connectedBadge}>
-            <Text style={styles.connectedBadgeText}>Conectado</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.connectedBadge}
+            activeOpacity={0.7}
+            onPress={() => handleToggle(false)}
+          >
+            <Text style={styles.connectedBadgeText}>Conectado ⏻</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.avatarButton}
             activeOpacity={0.7}
