@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import type React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,14 +14,14 @@ interface TabBarProps {
 interface TabItem {
   key: TabKey;
   label: string;
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
 }
 
 const tabs: TabItem[] = [
-  { key: 'home', label: 'Inicio', icon: '🏠' },
-  { key: 'earnings', label: 'Cobros', icon: '💰' },
-  { key: 'trips', label: 'Viajes', icon: '🚗' },
-  { key: 'profile', label: 'Perfil', icon: '👤' },
+  { key: 'home', label: 'Inicio', icon: 'home-outline' },
+  { key: 'earnings', label: 'Cobros', icon: 'wallet-outline' },
+  { key: 'trips', label: 'Viajes', icon: 'car-outline' },
+  { key: 'profile', label: 'Perfil', icon: 'person-outline' },
 ];
 
 export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabPress }) => {
@@ -37,7 +38,13 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabPress }) => {
             onPress={() => onTabPress(tab.key)}
             activeOpacity={0.7}
           >
-            <Text style={[styles.icon, !isActive && styles.inactiveIcon]}>{tab.icon}</Text>
+            <Ionicons
+              name={tab.icon}
+              size={22}
+              color={isActive ? theme.colors.turquoise : theme.colors.mediumGray}
+              style={!isActive && styles.inactiveIcon}
+              accessibilityLabel={`${tab.label} tab`}
+            />
             <Text style={[styles.label, isActive ? styles.activeLabel : styles.inactiveLabel]}>
               {tab.label}
             </Text>
@@ -66,9 +73,6 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xs,
     minWidth: 64,
     minHeight: 48,
-  },
-  icon: {
-    fontSize: 22,
   },
   inactiveIcon: {
     opacity: 0.4,

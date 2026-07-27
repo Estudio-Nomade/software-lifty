@@ -91,7 +91,7 @@ export const OnlineScreen: React.FC = () => {
     () => [
       {
         label: 'Inicio',
-        icon: '🏠',
+        icon: 'home-outline' as const,
         onPress: () => {
           if (isOnline) {
             navigation.navigate('Active');
@@ -100,28 +100,28 @@ export const OnlineScreen: React.FC = () => {
       },
       {
         label: 'Ganancias',
-        icon: '💰',
+        icon: 'wallet-outline' as const,
         onPress: () => navigation.navigate('Earnings'),
       },
       {
         label: 'Metodo de cobro',
-        icon: '💳',
+        icon: 'card-outline' as const,
         onPress: () => navigation.navigate('PaymentMethod'),
       },
       {
         label: 'Perfil',
-        icon: '👤',
+        icon: 'person-outline' as const,
         onPress: () => navigation.navigate('Profile'),
       },
       {
         label: 'Historial de viajes',
-        icon: '📋',
+        icon: 'document-text-outline' as const,
         onPress: () => navigation.navigate('TripHistory'),
       },
       {
         label: 'Cerrar sesion',
-        icon: '🚪',
-        onPress: () => signOut.mutateAsync(),
+        icon: 'log-out-outline' as const,
+        onPress: () => signOut.mutate(),
         danger: true,
         dividerTop: true,
       },
