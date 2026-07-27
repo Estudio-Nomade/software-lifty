@@ -13,6 +13,8 @@ import {
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { OTPInput } from '../components/OTPInput';
+import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
+import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useResendCode, useSignUp, useVerifyEmail } from '../hooks/useAuth';
 import { useAuthStore } from '../store/authStore';
@@ -21,6 +23,7 @@ import { theme } from '../theme';
 export const RegisterScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const setDriverStatus = useAuthStore((s) => s.setDriverStatus);
+  const { loading } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -90,6 +93,14 @@ export const RegisterScreen: React.FC = () => {
       setError(message);
     }
   };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <LoadingOverlay visible />
+      </View>
+    );
+  }
 
   if (step === 'verify') {
     return (
@@ -225,6 +236,12 @@ export const RegisterScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: theme.colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   container: {
     flex: 1,
     backgroundColor: theme.colors.white,

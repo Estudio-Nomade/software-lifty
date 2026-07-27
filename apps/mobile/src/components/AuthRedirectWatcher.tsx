@@ -1,6 +1,5 @@
 import { useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
-import { InteractionManager } from 'react-native';
 import type { DriverStatus } from '../api/types';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { STEP_ROUTE, routeForDriverStatus } from '../lib/postAuthRouting';
@@ -26,9 +25,7 @@ export function AuthRedirectWatcher() {
       resetRedirect();
       const current = segments[0] ?? '';
       if (current !== undefined && !AUTH_FLOW_ROUTES.includes(current)) {
-        InteractionManager.runAfterInteractions(() => {
-          router.replace('/');
-        });
+        router.replace('/');
       }
     }
   }, [needsRedirect, resetRedirect, router, segments]);
@@ -44,9 +41,7 @@ export function AuthRedirectWatcher() {
     });
     const screen = target?.screen || fallback.screen || 'OnboardingStep1';
 
-    InteractionManager.runAfterInteractions(() => {
-      replace(screen);
-    });
+    replace(screen);
   }, [sessionRestored, isAuthenticated, segments, onboardingStep, driverStatus, replace]);
 
   return null;
