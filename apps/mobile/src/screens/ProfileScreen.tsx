@@ -379,7 +379,7 @@ export const ProfileScreen: React.FC = () => {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Editar perfil</Text>
               <TouchableOpacity onPress={() => setEditVisible(false)}>
-                <Text style={styles.modalClose}>✕</Text>
+                <Ionicons name="close" size={24} color={theme.colors.mediumGray} />
               </TouchableOpacity>
             </View>
 
@@ -599,11 +599,6 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
-  },
-  modalClose: {
-    fontSize: theme.fontSize.lg,
-    color: theme.colors.mediumGray,
-    padding: 8,
   },
   editAvatar: {
     alignItems: 'center',
