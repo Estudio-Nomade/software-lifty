@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../theme';
+import { Avatar } from './Avatar';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const DRAWER_WIDTH = SCREEN_WIDTH * 0.72;
@@ -20,6 +21,7 @@ interface SideMenuProps {
   visible: boolean;
   onClose: () => void;
   userName?: string;
+  avatarUrl?: string | null;
   menuItems: MenuItem[];
   footerItems?: MenuItem[];
 }
@@ -28,6 +30,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
   visible,
   onClose,
   userName,
+  avatarUrl,
   menuItems,
   footerItems,
 }) => {
@@ -83,7 +86,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({
         {userName && (
           <View style={styles.userSection}>
             <View style={styles.avatarLarge}>
-              <Ionicons name="person" size={28} color={theme.colors.mediumGray} />
+              <Avatar uri={avatarUrl ?? null} name={userName} size={64} />
             </View>
             <Text style={styles.userName} numberOfLines={1}>
               {userName}

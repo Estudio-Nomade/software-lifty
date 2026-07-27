@@ -4,6 +4,7 @@ import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle } from 'react-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { theme } from '../theme';
+import { Avatar } from './Avatar';
 
 interface NavbarProps {
   title?: string;
@@ -15,6 +16,8 @@ interface NavbarProps {
   showHamburger?: boolean;
   onHamburgerPress?: () => void;
   showAvatar?: boolean;
+  avatarName?: string;
+  avatarUrl?: string | null;
   style?: ViewStyle;
 }
 
@@ -28,6 +31,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   showHamburger = false,
   onHamburgerPress,
   showAvatar = false,
+  avatarName,
+  avatarUrl,
   style,
 }) => {
   const insets = useSafeAreaInsets();
@@ -61,7 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           activeOpacity={0.7}
           onPress={() => navigation.navigate('Profile')}
         >
-          <Text style={styles.avatarText}>👤</Text>
+          <Avatar uri={avatarUrl ?? null} name={avatarName ?? ''} size={32} />
         </TouchableOpacity>
       );
     }
@@ -116,8 +121,5 @@ const styles = StyleSheet.create({
   },
   avatarButton: {
     minWidth: 40,
-  },
-  avatarText: {
-    fontSize: 20,
   },
 });
