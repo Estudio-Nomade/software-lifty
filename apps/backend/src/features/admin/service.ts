@@ -1,6 +1,13 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
-import { driverDocuments, drivers, users, vehicles } from '../../shared/db/schema';
+import {
+  driverDocuments,
+  drivers,
+  payoutMethods,
+  users,
+  vehicles,
+  withdrawals,
+} from '../../shared/db/schema';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { notifyDriverApproved, notifyDriverRejected } from './notifications';
@@ -146,5 +153,38 @@ export const adminService = {
       status: newStatus,
       message: `Driver ${action === 'approve' ? 'approved' : 'rejected'}`,
     };
+  },
+
+  async listPendingWithdrawals(params?: { status?: string; from?: string; to?: string }) {
+    const statusFilter = params?.status ?? 'processing';
+
+    const filters = [eq(withdrawals.status, statusFilter)];
+
+    if (params?.from) {
+      filters.push(gte(withdrawals.created_at, new Date(params.from)));
+    }
+    if (params?.to) {
+      filters.push(lte(withdrawals.created_at, new Date(params.to)));
+    }
+
+    const rows = await db
+      .select({
+        id: withdrawals.id,
+        amount: withdrawals.amount,
+        status: withdrawals.status,
+        created_at: withdrawals.created_at,
+        mp_withdrawal_id: withdrawals.mp_withdrawal_id,
+        driver_name: users.full_name,
+        driver_phone: users.phone,
+        account_number: payoutMethods.account_number,
+      })
+      .from(withdrawals)
+      .innerJoin(drivers, eq(withdrawals.driver_id, drivers.id))
+      .innerJoin(users, eq(drivers.user_id, users.id))
+      .innerJoin(payoutMethods, eq(withdrawals.payout_method_id, payoutMethods.id))
+      .where(and(...filters))
+      .orderBy(withdrawals.created_at);
+
+    return rows;
   },
 };

@@ -95,7 +95,8 @@ export const WithdrawScreen: React.FC = () => {
         <View style={styles.successContainer}>
           <Text style={styles.successTitle}>Solicitud enviada</Text>
           <Text style={styles.successBody}>
-            Tu retiro de {formatCurrency(parsedAmount)} esta siendo procesado.
+            Tu retiro de {formatCurrency(parsedAmount)} sera procesado. El admin te entregara el
+            efectivo en el proximo horario de pago.
           </Text>
           <Button title="Volver a ganancias" onPress={() => navigation.navigate('Earnings')} />
         </View>

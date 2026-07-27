@@ -7,6 +7,7 @@ import { logger } from '../../shared/lib/logger';
 import { createWithdrawal, getPayment } from '../../shared/lib/mercado-pago';
 import { calculatePlatformFee } from '../../shared/lib/pricing';
 import type { AuthUser } from '../../shared/middleware/auth';
+import { notifyAdminWithdrawal } from '../admin/notifications';
 
 export const paymentsService = {
   async processWebhook(body: { payment_id: string; trip_id: string; status?: string }) {
@@ -198,6 +199,13 @@ export const paymentsService = {
       .update(withdrawals)
       .set({ status: mpResult.status, mp_withdrawal_id: mpResult.id })
       .where(eq(withdrawals.id, withdrawal.id));
+
+    notifyAdminWithdrawal({
+      driverId,
+      amount,
+      withdrawalId: withdrawal.id,
+      accountNumber: pm.account_number,
+    });
 
     return {
       withdrawal_id: withdrawal.id,

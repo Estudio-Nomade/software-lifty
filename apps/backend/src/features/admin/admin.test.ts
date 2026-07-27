@@ -1,20 +1,24 @@
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://lifty:lifty@localhost:5433/lifty_test';
+process.env.SUPABASE_URL = '';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
-import { driverDocuments, drivers, users, vehicles } from '../../shared/db/schema';
+import { driverDocuments, drivers, payoutMethods, users, vehicles, withdrawals } from '../../shared/db/schema';
 import { DOC_TYPES } from '../../shared/lib/documents';
+import { notifyAdminWithdrawal } from './notifications';
 import { createTestToken } from '../../shared/testing/utils';
 
 let app: any;
 
 async function truncateTables() {
   const db = getDb();
+  await db.delete(withdrawals);
   await db.delete(driverDocuments);
   await db.delete(vehicles);
+  await db.delete(payoutMethods);
   await db.delete(drivers);
   await db.delete(users);
 }
@@ -66,6 +70,32 @@ async function createReviewDriver(): Promise<{ token: string; driverId: string }
   }
 
   return { token, driverId };
+}
+
+async function createWithdrawalScenario(status = 'processing', suffix = '') {
+  const db = getDb();
+
+  const [driverUser] = await db
+    .insert(users)
+    .values({ phone: `+549261777${suffix}777`, full_name: 'Withdrawal Driver', role: 'driver', kyc_status: 'approved' })
+    .returning({ id: users.id });
+
+  const [driver] = await db
+    .insert(drivers)
+    .values({ user_id: driverUser.id, status: 'approved', kyc_status: 'approved', admin_review_status: 'approved' })
+    .returning({ id: drivers.id });
+
+  const [payoutMethod] = await db
+    .insert(payoutMethods)
+    .values({ driver_id: driver.id, method_type: 'mercadopago', account_number: '0000003100088888888888' })
+    .returning({ id: payoutMethods.id });
+
+    const [withdrawal] = await db
+    .insert(withdrawals)
+    .values({ driver_id: driver.id, amount: 1500.75, payout_method_id: payoutMethod.id, status, mp_withdrawal_id: `mp_withdrawal_${suffix}123` })
+    .returning({ id: withdrawals.id });
+
+  return { driverUser, driver, payoutMethod, withdrawal };
 }
 
 beforeAll(() => {
@@ -204,5 +234,157 @@ describe('Admin', () => {
     );
 
     expect(status).toBe(403);
+  });
+
+  test('notifyAdminWithdrawal sends email to admin recipients', async () => {
+    const db = getDb();
+
+    const [driverUser] = await db
+      .insert(users)
+      .values({ phone: '+5492617777777', full_name: 'Withdrawal Driver', role: 'driver' })
+      .returning({ id: users.id });
+
+    const [driver] = await db
+      .insert(drivers)
+      .values({ user_id: driverUser.id, status: 'approved', kyc_status: 'approved' })
+      .returning({ id: drivers.id });
+
+    await db
+      .insert(users)
+      .values({ phone: '+5492616666666', email: 'admin@lifty.app', role: 'admin' });
+
+    await notifyAdminWithdrawal({
+      driverId: driver.id,
+      amount: 1500.75,
+      withdrawalId: '00000000-0000-0000-0000-000000000001',
+      accountNumber: '0000003100088888888888',
+    });
+  });
+
+  test('notifyAdminWithdrawal handles missing driver gracefully', async () => {
+    await notifyAdminWithdrawal({
+      driverId: '00000000-0000-0000-0000-000000000099',
+      amount: 500,
+      withdrawalId: '00000000-0000-0000-0000-000000000002',
+      accountNumber: '0000003100011111111111',
+    });
+  });
+
+  test('notifyAdminWithdrawal handles no admin recipients', async () => {
+    const db = getDb();
+
+    const [driverUser] = await db
+      .insert(users)
+      .values({ phone: '+5492615555555', full_name: 'Solo Driver', role: 'driver' })
+      .returning({ id: users.id });
+
+    const [driver] = await db
+      .insert(drivers)
+      .values({ user_id: driverUser.id, status: 'approved', kyc_status: 'approved' })
+      .returning({ id: drivers.id });
+
+    await notifyAdminWithdrawal({
+      driverId: driver.id,
+      amount: 300,
+      withdrawalId: '00000000-0000-0000-0000-000000000003',
+      accountNumber: '1234',
+    });
+  });
+
+  test('GET /withdrawals/pending without auth returns 401', async () => {
+    const { status } = await request('GET', '/api/admin/withdrawals/pending');
+    expect(status).toBe(401);
+  });
+
+  test('GET /withdrawals/pending with non-admin returns 403', async () => {
+    const adminToken = await createAdminToken();
+    const { withdrawal } = await createWithdrawalScenario();
+    // Create a driver token (non-admin)
+    const db = getDb();
+    const [nonAdmin] = await db
+      .insert(users)
+      .values({ phone: '+5492616666000', role: 'driver' })
+      .returning({ id: users.id });
+    const nonAdminToken = createTestToken(nonAdmin.id);
+
+    const { status } = await request('GET', '/api/admin/withdrawals/pending', undefined, nonAdminToken);
+    expect(status).toBe(403);
+  });
+
+  test('GET /withdrawals/pending lists processing withdrawals', async () => {
+    const adminToken = await createAdminToken();
+    const { withdrawal } = await createWithdrawalScenario('processing');
+
+    const { status, data } = await request('GET', '/api/admin/withdrawals/pending', undefined, adminToken);
+
+    expect(status).toBe(200);
+    expect(data).toBeArray();
+    expect(data.length).toBe(1);
+    expect(data[0].id).toBe(withdrawal.id);
+    expect(data[0].amount).toBe(1500.75);
+    expect(data[0].status).toBe('processing');
+    expect(data[0].driver_name).toBe('Withdrawal Driver');
+    expect(data[0].driver_phone).toBe('+549261777777');
+    expect(data[0].account_number).toBe('0000003100088888888888');
+    expect(data[0].mp_withdrawal_id).toBe('mp_withdrawal_123');
+    expect(data[0].created_at).toBeString();
+  });
+
+  test('GET /withdrawals/pending status filter works', async () => {
+    const adminToken = await createAdminToken();
+    await createWithdrawalScenario('processing', 'a');
+    await createWithdrawalScenario('completed', 'b');
+
+    const { status, data } = await request(
+      'GET',
+      '/api/admin/withdrawals/pending?status=completed',
+      undefined,
+      adminToken,
+    );
+
+    expect(status).toBe(200);
+    expect(data).toBeArray();
+    expect(data.length).toBe(1);
+    expect(data[0].status).toBe('completed');
+  });
+
+  test('GET /withdrawals/pending date filter works', async () => {
+    const adminToken = await createAdminToken();
+    
+    const db = getDb();
+    const [driverUser] = await db
+      .insert(users)
+      .values({ phone: '+5492618888001', full_name: 'Old Driver', role: 'driver' })
+      .returning({ id: users.id });
+    const [driver] = await db
+      .insert(drivers)
+      .values({ user_id: driverUser.id, status: 'approved', kyc_status: 'approved', admin_review_status: 'approved' })
+      .returning({ id: drivers.id });
+    const [pm] = await db
+      .insert(payoutMethods)
+      .values({ driver_id: driver.id, method_type: 'mercadopago', account_number: '1111' })
+      .returning({ id: payoutMethods.id });
+
+    const oldDate = new Date('2024-01-15');
+    const recentDate = new Date('2025-06-01');
+
+    await db.insert(withdrawals).values({
+      driver_id: driver.id, amount: 100, payout_method_id: pm.id, status: 'completed', created_at: oldDate,
+    });
+    await db.insert(withdrawals).values({
+      driver_id: driver.id, amount: 200, payout_method_id: pm.id, status: 'completed', created_at: recentDate,
+    });
+
+    const { status, data } = await request(
+      'GET',
+      '/api/admin/withdrawals/pending?status=completed&from=2025-01-01&to=2025-12-31',
+      undefined,
+      adminToken,
+    );
+
+    expect(status).toBe(200);
+    expect(data).toBeArray();
+    expect(data.length).toBe(1);
+    expect(data[0].amount).toBe(200);
   });
 });

@@ -56,6 +56,66 @@ export async function notifyAdminsNewDocuments(
   }
 }
 
+export async function notifyAdminWithdrawal(params: {
+  driverId: string;
+  amount: number;
+  withdrawalId: string;
+  accountNumber: string;
+}): Promise<void> {
+  try {
+    const [driver] = await db
+      .select({ fullName: users.full_name })
+      .from(drivers)
+      .innerJoin(users, eq(users.id, drivers.user_id))
+      .where(eq(drivers.id, params.driverId))
+      .limit(1);
+
+    const driverName = driver?.fullName ?? 'Desconocido';
+
+    const adminRows = await db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.role, 'admin'));
+
+    const recipients = new Set([
+      ...adminRows.map((r) => r.email).filter((e): e is string => !!e),
+      ...adminEmailsFromEnv(),
+    ]);
+
+    if (recipients.size === 0) {
+      logger.info('[ADMIN-NOTIFY] No admin recipients configured');
+      return;
+    }
+
+    const lastDigits = params.accountNumber.slice(-4);
+    const maskedAccount = lastDigits.length > 0 ? `••••${lastDigits}` : '••••';
+
+    const formattedAmount = new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+    }).format(params.amount);
+
+    const subject = `Nuevo retiro solicitado: ${formattedAmount}`;
+    const html = `
+      <p>El conductor <strong>${sanitize(driverName)}</strong> ha solicitado un retiro.</p>
+      <table style="border-collapse:collapse;width:100%;max-width:600px">
+        <tr><td style="padding:8px;border:1px solid #ddd"><strong>Conductor</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(driverName)}</td></tr>
+        <tr><td style="padding:8px;border:1px solid #ddd"><strong>ID del Conductor</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(params.driverId)}</td></tr>
+        <tr><td style="padding:8px;border:1px solid #ddd"><strong>Monto</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(formattedAmount)}</td></tr>
+        <tr><td style="padding:8px;border:1px solid #ddd"><strong>ID del Retiro</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(params.withdrawalId)}</td></tr>
+        <tr><td style="padding:8px;border:1px solid #ddd"><strong>Cuenta destino</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(maskedAccount)}</td></tr>
+        <tr><td style="padding:8px;border:1px solid #ddd"><strong>Fecha</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(new Date().toLocaleString('es-AR'))}</td></tr>
+      </table>
+    `;
+
+    for (const email of recipients) {
+      await sendEmail(email, subject, html);
+    }
+  } catch (err) {
+    logger.error('[ADMIN-NOTIFY] Failed to send withdrawal notification', (err as Error).message);
+  }
+}
+
 export async function notifyDriverApproved(driverEmail: string, driverName: string): Promise<void> {
   try {
     const subject = 'Tus documentos fueron aprobados';
