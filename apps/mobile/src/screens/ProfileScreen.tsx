@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from 'expo-router';
 import type React from 'react';
@@ -84,12 +85,20 @@ function docsStatusLabel(docs: DriverDocument[]): string {
   return 'Pendiente';
 }
 
-function docsStatusIcon(docs: DriverDocument[]): string {
-  if (docs.length === 0) return '➕';
-  if (docs.some((d) => d.status === 'rejected')) return '❌';
-  if (docs.every((d) => d.status === 'approved' || !!d.verified_at)) return '✅';
-  if (docs.some((d) => d.status === 'pending_review')) return '⏳';
-  return '⏳';
+function docsStatusIcon(docs: DriverDocument[]): React.JSX.Element {
+  if (docs.length === 0) {
+    return <Ionicons name="add-circle-outline" size={18} color={theme.colors.mediumGray} />;
+  }
+  if (docs.some((d) => d.status === 'rejected')) {
+    return <Ionicons name="close-circle-outline" size={18} color={theme.colors.dangerRed} />;
+  }
+  if (docs.every((d) => d.status === 'approved' || !!d.verified_at)) {
+    return <Ionicons name="checkmark-circle-outline" size={18} color={theme.colors.turquoise} />;
+  }
+  if (docs.some((d) => d.status === 'pending_review')) {
+    return <Ionicons name="time-outline" size={18} color={theme.colors.amber} />;
+  }
+  return <Ionicons name="time-outline" size={18} color={theme.colors.amber} />;
 }
 
 function isRealUrl(url: string | null): url is string {
@@ -329,7 +338,7 @@ export const ProfileScreen: React.FC = () => {
             );
             return (
               <View key={managed.docType} style={styles.docRow}>
-                <Text style={styles.docIcon}>{docsStatusIcon(docsFor)}</Text>
+                {docsStatusIcon(docsFor)}
                 <View style={styles.docInfo}>
                   <Text style={styles.docName}>{managed.label}</Text>
                   <Text style={styles.docStatus}>{docsStatusLabel(docsFor)}</Text>
@@ -534,9 +543,6 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.lightGray,
-  },
-  docIcon: {
-    fontSize: 18,
   },
   docInfo: {
     flex: 1,
