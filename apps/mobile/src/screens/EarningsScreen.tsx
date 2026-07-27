@@ -291,9 +291,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
   },
   totalLabel: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.deepBlue,
+    ...theme.fontStyles.label,
   },
   totalAmount: {
     fontSize: 36,

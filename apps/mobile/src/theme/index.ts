@@ -49,6 +49,15 @@ export const theme = {
     screenWidth: 375,
     tabBarHeight: 68,
   },
+  fontStyles: {
+    label: {
+      fontSize: 12,
+      fontWeight: '500' as const,
+      color: '#8A93A0',
+      textTransform: 'uppercase' as const,
+      letterSpacing: 1,
+    },
+  },
 };
 
 export type Theme = typeof theme;

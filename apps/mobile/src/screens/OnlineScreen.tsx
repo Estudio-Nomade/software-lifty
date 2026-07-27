@@ -328,11 +328,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
   },
   earningsLabel: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.medium,
-    color: theme.colors.mediumGray,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    ...theme.fontStyles.label,
   },
   earningsAmount: {
     fontSize: theme.fontSize['4xl'],
