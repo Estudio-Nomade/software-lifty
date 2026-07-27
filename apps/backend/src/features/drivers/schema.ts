@@ -44,3 +44,9 @@ export const reuploadDocBody = t.Object({
 export const setDistrictBody = t.Object({
   district_id: t.String(),
 });
+
+export const heartbeatBody = t.Object({
+  lat: t.Optional(t.Number()),
+  lng: t.Optional(t.Number()),
+  heading: t.Optional(t.Number()),
+});
