@@ -3,8 +3,10 @@ import { useQuery } from '@tanstack/react-query';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { apiClient } from '../api/client';
+import { z } from 'zod';
+import { apiClient, getValidated } from '../api/client';
 import type { EarningsDaily } from '../api/types';
+import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
 import { MapView } from '../components/MapView';
 import { Navbar } from '../components/Navbar';
@@ -48,6 +50,17 @@ export const ActiveScreen: React.FC = () => {
   const disconnectedRef = useRef(false);
   const signOut = useSignOut();
   useLocationWS();
+
+  const profileSchema = z.object({
+    full_name: z.string(),
+    avatar_url: z.string().nullable(),
+  });
+
+  const { data: profile } = useQuery({
+    queryKey: ['driver-profile'],
+    queryFn: () => getValidated('/drivers/me', profileSchema),
+    staleTime: 5 * 60 * 1000,
+  });
 
   useEffect(() => {
     const reconcile = async () => {
@@ -231,7 +244,11 @@ export const ActiveScreen: React.FC = () => {
                 activeOpacity={0.7}
                 onPress={() => navigation.navigate('Profile')}
               >
-                <Text style={styles.avatarText}>👤</Text>
+                <Avatar
+                  uri={profile?.avatar_url ?? null}
+                  name={profile?.full_name ?? ''}
+                  size={44}
+                />
               </TouchableOpacity>
             </View>
           }
@@ -319,13 +336,6 @@ const styles = StyleSheet.create({
   avatarButton: {
     width: 44,
     height: 44,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.mediumGray,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 20,
   },
   sheetContent: {
     flex: 1,
