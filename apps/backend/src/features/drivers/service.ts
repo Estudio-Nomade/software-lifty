@@ -21,6 +21,7 @@ export function setStorageForTesting(sp: StorageProvider) {
 }
 import type { AuthUser } from '../../shared/middleware/auth';
 import { notifyAdminNewDriver } from '../admin/notifications';
+import { upsertLocation } from '../location/service';
 
 const VALID_DOC_TYPES: readonly string[] = DOC_TYPES;
 
@@ -224,7 +225,7 @@ export const driversService = {
     };
   },
 
-  async heartbeat(user: AuthUser) {
+  async heartbeat(user: AuthUser, body?: { lat?: number; lng?: number; heading?: number }) {
     const [driver] = await db
       .select({ id: drivers.id })
       .from(drivers)
@@ -237,13 +238,9 @@ export const driversService = {
 
     await db.update(drivers).set({ last_heartbeat: now }).where(eq(drivers.id, driver.id));
 
-    await db
-      .insert(driverLocations)
-      .values({ driver_id: driver.id, lat: 0, lng: 0, updated_at: now })
-      .onConflictDoUpdate({
-        target: driverLocations.driver_id,
-        set: { updated_at: now },
-      });
+    if (body?.lat != null && body?.lng != null) {
+      await upsertLocation(driver.id, body.lat, body.lng, body.heading);
+    }
 
     return { ok: true };
   },
