@@ -184,15 +184,6 @@ export const paymentsService = {
         .returning();
     });
 
-    notifyAdminWithdrawal({
-      driverId,
-      amount,
-      withdrawalId: withdrawal.id,
-      accountNumber: pm.account_number,
-    }).catch((err) =>
-      logger.error('[ADMIN-NOTIFY] Withdrawal notification failed', (err as Error).message),
-    );
-
     let mpResult;
     try {
       mpResult = await createWithdrawal(amount, pm.account_number, undefined, withdrawal.id);
@@ -208,6 +199,13 @@ export const paymentsService = {
       .update(withdrawals)
       .set({ status: mpResult.status, mp_withdrawal_id: mpResult.id })
       .where(eq(withdrawals.id, withdrawal.id));
+
+    notifyAdminWithdrawal({
+      driverId,
+      amount,
+      withdrawalId: withdrawal.id,
+      accountNumber: pm.account_number,
+    });
 
     return {
       withdrawal_id: withdrawal.id,

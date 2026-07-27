@@ -104,6 +104,7 @@ export async function notifyAdminWithdrawal(params: {
         <tr><td style="padding:8px;border:1px solid #ddd"><strong>Monto</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(formattedAmount)}</td></tr>
         <tr><td style="padding:8px;border:1px solid #ddd"><strong>ID del Retiro</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(params.withdrawalId)}</td></tr>
         <tr><td style="padding:8px;border:1px solid #ddd"><strong>Cuenta destino</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(maskedAccount)}</td></tr>
+        <tr><td style="padding:8px;border:1px solid #ddd"><strong>Fecha</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(new Date().toLocaleString('es-AR'))}</td></tr>
       </table>
     `;
 
