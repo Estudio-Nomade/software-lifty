@@ -21,7 +21,15 @@ export const earningsService = {
       .limit(1);
 
     const todayTrips = await db
-      .select()
+      .select({
+        id: trips.id,
+        created_at: trips.created_at,
+        origin_address: trips.origin_address,
+        total_fare: trips.total_fare,
+        platform_fee: trips.platform_fee,
+        driver_earnings: trips.driver_earnings,
+        payment_method: trips.payment_method,
+      })
       .from(trips)
       .where(
         and(
