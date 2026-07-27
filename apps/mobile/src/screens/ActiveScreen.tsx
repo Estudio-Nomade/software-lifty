@@ -3,11 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import type { EarningsDaily } from '../api/types';
 import { BottomSheet } from '../components/BottomSheet';
 import { MapView } from '../components/MapView';
+import { Navbar } from '../components/Navbar';
 import { SideMenu } from '../components/SideMenu';
 import { Toggle } from '../components/Toggle';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -33,7 +33,6 @@ const formatOnlineTime = (ms: number): string => {
 };
 
 export const ActiveScreen: React.FC = () => {
-  const insets = useSafeAreaInsets();
   const navigation = useAppNavigation();
   const setOnline = useOnlineStore((s) => s.setOnline);
   const onlineSince = useOnlineStore((s) => s.onlineSince);
@@ -210,30 +209,29 @@ export const ActiveScreen: React.FC = () => {
         heatmapPoints={heatmapPoints}
       />
 
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <TouchableOpacity
-          style={styles.menuButton}
-          activeOpacity={0.7}
-          onPress={() => setMenuVisible(true)}
-        >
-          <Text style={styles.menuIcon}>☰</Text>
-        </TouchableOpacity>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.connectedBadge}
-            activeOpacity={0.7}
-            onPress={() => handleToggle(false)}
-          >
-            <Text style={styles.connectedBadgeText}>Conectado ⏻</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.avatarButton}
-            activeOpacity={0.7}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Text style={styles.avatarText}>👤</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={styles.headerOverlay}>
+        <Navbar
+          showHamburger
+          onHamburgerPress={() => setMenuVisible(true)}
+          rightElement={
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                style={styles.connectedBadge}
+                activeOpacity={0.7}
+                onPress={() => handleToggle(false)}
+              >
+                <Text style={styles.connectedBadgeText}>Conectado ⏻</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.avatarButton}
+                activeOpacity={0.7}
+                onPress={() => navigation.navigate('Profile')}
+              >
+                <Text style={styles.avatarText}>👤</Text>
+              </TouchableOpacity>
+            </View>
+          }
+        />
       </View>
 
       <BottomSheet snapPoints={[COLLAPSED_HEIGHT, EXPANDED_HEIGHT]} onSnapChange={handleSnapChange}>
@@ -291,29 +289,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.white,
   },
-  header: {
+  headerOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: theme.colors.deepBlue,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.sm,
     zIndex: 10,
-  },
-  menuButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuIcon: {
-    color: theme.colors.white,
-    fontSize: theme.fontSize.xl,
-    fontWeight: theme.fontWeight.bold,
   },
   headerRight: {
     flexDirection: 'row',

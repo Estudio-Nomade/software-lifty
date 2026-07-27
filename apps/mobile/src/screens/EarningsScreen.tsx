@@ -4,16 +4,21 @@ import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 
 import { apiClient } from '../api/client';
 import type { EarningsDaily } from '../api/types';
 import { Card } from '../components/Card';
+import { Navbar } from '../components/Navbar';
+import { SideMenu } from '../components/SideMenu';
 import { TabBar, type TabKey } from '../components/TabBar';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useSignOut } from '../hooks/useAuth';
 import { useOnlineStore } from '../store/onlineStore';
 import { theme } from '../theme';
 
 export const EarningsScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const signOut = useSignOut();
   const isOnline = useOnlineStore((s) => s.isOnline);
   const [activeTab, setActiveTab] = React.useState<TabKey>('earnings');
+  const [menuVisible, setMenuVisible] = React.useState(false);
 
   const {
     data: earnings,
@@ -36,6 +41,44 @@ export const EarningsScreen: React.FC = () => {
     if (tab === 'profile') navigation.navigate('Profile');
   };
 
+  const menuItems = React.useMemo(
+    () => [
+      {
+        label: 'Inicio',
+        icon: '🏠',
+        onPress: () => navigation.navigate(isOnline ? 'Active' : 'Online'),
+      },
+      {
+        label: 'Ganancias',
+        icon: '💰',
+        onPress: () => {},
+      },
+      {
+        label: 'Metodo de cobro',
+        icon: '💳',
+        onPress: () => navigation.navigate('PaymentMethod'),
+      },
+      {
+        label: 'Perfil',
+        icon: '👤',
+        onPress: () => navigation.navigate('Profile'),
+      },
+      {
+        label: 'Historial de viajes',
+        icon: '📋',
+        onPress: () => navigation.navigate('TripHistory'),
+      },
+      {
+        label: 'Cerrar sesion',
+        icon: '🚪',
+        onPress: () => signOut.mutate(),
+        danger: true,
+        dividerTop: true,
+      },
+    ],
+    [navigation, signOut, isOnline],
+  );
+
   const formatCurrency = (amount: number) =>
     `$${amount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -54,11 +97,7 @@ export const EarningsScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-      <View style={styles.header}>
-        <View style={{ width: 24 }} />
-        <Text style={styles.headerTitle}>Cobros</Text>
-        <View style={{ width: 24 }} />
-      </View>
+      <Navbar title="Cobros" showHamburger onHamburgerPress={() => setMenuVisible(true)} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading ? (
@@ -230,6 +269,7 @@ export const EarningsScreen: React.FC = () => {
       </ScrollView>
 
       <TabBar activeTab={activeTab} onTabPress={handleTabPress} />
+      <SideMenu visible={menuVisible} onClose={() => setMenuVisible(false)} menuItems={menuItems} />
     </View>
   );
 };
@@ -239,19 +279,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.lightGray,
     gap: theme.spacing.md,
-  },
-  header: {
-    height: 56,
-    backgroundColor: theme.colors.deepBlue,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.md,
-  },
-  headerTitle: {
-    color: theme.colors.white,
-    fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
   },
   content: {
     alignItems: 'center',

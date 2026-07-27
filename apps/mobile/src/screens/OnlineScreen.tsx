@@ -2,12 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient, getValidated } from '../api/client';
 import { driverStatusSchema, earningsDailySchema } from '../api/types';
 import type { EarningsDaily } from '../api/types';
 import { Card } from '../components/Card';
 import { MapView } from '../components/MapView';
+import { Navbar } from '../components/Navbar';
 import { SideMenu } from '../components/SideMenu';
 import { TabBar, type TabKey } from '../components/TabBar';
 import { Toggle } from '../components/Toggle';
@@ -20,7 +20,6 @@ import { useOnlineStore } from '../store/onlineStore';
 import { theme } from '../theme';
 
 export const OnlineScreen: React.FC = () => {
-  const insets = useSafeAreaInsets();
   const navigation = useAppNavigation();
   const isOnline = useOnlineStore((s) => s.isOnline);
   const setOnline = useOnlineStore((s) => s.setOnline);
@@ -215,24 +214,7 @@ export const OnlineScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <TouchableOpacity
-          style={styles.menuButton}
-          activeOpacity={0.7}
-          onPress={() => setMenuVisible(true)}
-        >
-          <Text style={styles.menuIcon}>☰</Text>
-        </TouchableOpacity>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.avatarButton}
-            activeOpacity={0.7}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Text style={styles.avatarText}>👤</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <Navbar showHamburger onHamburgerPress={() => setMenuVisible(true)} showAvatar />
 
       <View style={styles.main}>
         <View style={styles.toggleSection}>
@@ -271,41 +253,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.lightGray,
-  },
-  header: {
-    backgroundColor: theme.colors.deepBlue,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.sm,
-  },
-  menuButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuIcon: {
-    color: theme.colors.white,
-    fontSize: theme.fontSize.xl,
-    fontWeight: theme.fontWeight.bold,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-  },
-  avatarButton: {
-    width: 44,
-    height: 44,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.mediumGray,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 20,
   },
   main: {
     flex: 1,

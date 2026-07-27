@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from 'expo-router';
 import type React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +22,8 @@ import { type DriverDocument, documentSchema } from '../api/types';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
+import { Navbar } from '../components/Navbar';
+import { SideMenu } from '../components/SideMenu';
 import { TabBar, type TabKey } from '../components/TabBar';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
@@ -109,6 +111,7 @@ export const ProfileScreen: React.FC = () => {
   const [editPhone, setEditPhone] = useState('');
   const [editPhotoUri, setEditPhotoUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -145,6 +148,44 @@ export const ProfileScreen: React.FC = () => {
   const handleSignOut = () => {
     signOut.mutate();
   };
+
+  const menuItems = useMemo(
+    () => [
+      {
+        label: 'Inicio',
+        icon: '🏠',
+        onPress: () => navigation.navigate(isOnline ? 'Active' : 'Online'),
+      },
+      {
+        label: 'Ganancias',
+        icon: '💰',
+        onPress: () => navigation.navigate('Earnings'),
+      },
+      {
+        label: 'Metodo de cobro',
+        icon: '💳',
+        onPress: () => navigation.navigate('PaymentMethod'),
+      },
+      {
+        label: 'Perfil',
+        icon: '👤',
+        onPress: () => {},
+      },
+      {
+        label: 'Historial de viajes',
+        icon: '📋',
+        onPress: () => navigation.navigate('TripHistory'),
+      },
+      {
+        label: 'Cerrar sesion',
+        icon: '🚪',
+        onPress: () => signOut.mutate(),
+        danger: true,
+        dividerTop: true,
+      },
+    ],
+    [navigation, signOut, isOnline],
+  );
 
   const openEdit = () => {
     if (!profile) return;
@@ -204,9 +245,7 @@ export const ProfileScreen: React.FC = () => {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Perfil</Text>
-        </View>
+        <Navbar title="Perfil" showHamburger onHamburgerPress={() => setMenuVisible(true)} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.turquoise} />
         </View>
@@ -225,9 +264,7 @@ export const ProfileScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Perfil</Text>
-      </View>
+      <Navbar title="Perfil" showHamburger onHamburgerPress={() => setMenuVisible(true)} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Card style={styles.profileCard} padding={theme.spacing.lg}>
@@ -386,6 +423,7 @@ export const ProfileScreen: React.FC = () => {
       </Modal>
 
       <TabBar activeTab={activeTab} onTabPress={handleTabPress} />
+      <SideMenu visible={menuVisible} onClose={() => setMenuVisible(false)} menuItems={menuItems} />
     </View>
   );
 };
@@ -394,17 +432,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.lightGray,
-  },
-  header: {
-    height: 56,
-    backgroundColor: theme.colors.deepBlue,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    color: theme.colors.white,
-    fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
   },
   loadingContainer: {
     flex: 1,
