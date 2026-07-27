@@ -124,12 +124,22 @@ export const tripSchema = z.object({
   verification_code: z.string().length(4).nullable(),
 });
 
+export const earningsTripSchema = z.object({
+  id: z.string(),
+  created_at: z.string(),
+  origin_address: z.string().nullable(),
+  total_fare: z.number().nullable(),
+  platform_fee: z.number().nullable(),
+  driver_earnings: z.number().nullable(),
+  payment_method: z.string().nullable(),
+});
+
 export const earningsDailySchema = z.object({
   total: z.number(),
   cash: z.number(),
   transfer: z.number(),
   trip_count: z.number(),
-  trips: z.array(tripSchema).optional(),
+  trips: z.array(earningsTripSchema).optional(),
   yesterday: z.number().optional(),
   week: z.number().optional(),
   platform_debt: z.number().optional(),
