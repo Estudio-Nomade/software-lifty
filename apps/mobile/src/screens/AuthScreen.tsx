@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   StatusBar,
@@ -153,11 +154,11 @@ export const AuthScreen: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.content}>
-          <View style={styles.logoCircle}>
-            <View style={styles.logoInner}>
-              <Text style={styles.logoLetter}>L</Text>
-            </View>
-          </View>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.wordmark}>Lifty</Text>
 
           {step === 'method' && (
@@ -272,26 +273,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     gap: theme.spacing.md,
   },
-  logoCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.turquoise,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoInner: {
-    width: 80,
-    height: 80,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoLetter: {
-    fontSize: theme.fontSize['3xl'],
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.turquoise,
+  logo: {
+    width: 120,
+    height: 142,
   },
   wordmark: {
     fontSize: theme.fontSize['3xl'],
