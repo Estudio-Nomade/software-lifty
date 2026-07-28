@@ -7,6 +7,8 @@ export const theme = {
     white: '#FFFFFF',
     dangerRed: '#FF6B6B',
     amber: '#FFB020',
+    success: '#34C759',
+    warning: '#FFB020',
   },
   fontFamily: {
     regular: 'Nunito_400Regular',
@@ -56,13 +58,54 @@ export const theme = {
     screenWidth: 375,
     tabBarHeight: 68,
   },
+  shadows: {
+    card: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    button: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.04,
+      shadowRadius: 5,
+      elevation: 1,
+    },
+  },
   fontStyles: {
+    heading: {
+      fontSize: 32,
+      fontWeight: '700' as const,
+      color: '#0F2A44',
+    },
+    subheading: {
+      fontSize: 20,
+      fontWeight: '600' as const,
+      color: '#0F2A44',
+    },
+    body: {
+      fontSize: 16,
+      fontWeight: '400' as const,
+      color: '#0F2A44',
+    },
     label: {
       fontSize: 12,
       fontWeight: '500' as const,
       color: '#8A93A0',
       textTransform: 'uppercase' as const,
       letterSpacing: 1,
+    },
+    caption: {
+      fontSize: 12,
+      fontWeight: '400' as const,
+      color: '#8A93A0',
+    },
+    amount: {
+      fontSize: 40,
+      fontWeight: '700' as const,
+      color: '#0F2A44',
     },
   },
 };
