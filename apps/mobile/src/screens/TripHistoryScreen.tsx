@@ -23,7 +23,7 @@ import { theme } from '../theme';
 const LIMIT = 20;
 
 const STATUS_MAP: Record<TripStatus, { label: string; color: string }> = {
-  completed: { label: 'Completado', color: '#4CAF50' },
+  completed: { label: 'Completado', color: theme.colors.turquoise },
   rated: { label: 'Calificado', color: theme.colors.turquoise },
   in_trip: { label: 'En viaje', color: theme.colors.deepBlue },
   en_route: { label: 'En ruta', color: theme.colors.deepBlue },
