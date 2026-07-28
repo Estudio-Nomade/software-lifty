@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, BackHandler, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Animated, BackHandler, StatusBar, StyleSheet, View } from 'react-native';
 import { apiClient, getValidated } from '../api/client';
 import { driverStatusSchema } from '../api/types';
 import { Button } from '../components/Button';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';

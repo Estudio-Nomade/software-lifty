@@ -8,7 +8,12 @@ export const theme = {
     dangerRed: '#FF6B6B',
     amber: '#FFB020',
   },
-  fontFamily: 'Inter',
+  fontFamily: {
+    regular: 'Nunito_400Regular',
+    medium: 'Nunito_500Medium',
+    semibold: 'Nunito_600SemiBold',
+    bold: 'Nunito_700Bold',
+  },
   fontSize: {
     xs: 12,
     sm: 14,

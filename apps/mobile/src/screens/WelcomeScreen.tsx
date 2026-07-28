@@ -1,7 +1,8 @@
 import type React from 'react';
-import { StatusBar, StyleSheet, Text, View } from 'react-native';
+import { StatusBar, StyleSheet, View } from 'react-native';
 import { Button } from '../components/Button';
 import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
+import { Text } from '../components/ui/Text';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useAuthStore } from '../store/authStore';

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import React from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { apiClient } from '../api/client';
 import type { EarningsDaily } from '../api/types';
 import { Card } from '../components/Card';
@@ -9,6 +9,7 @@ import { Navbar } from '../components/Navbar';
 import { SideMenu } from '../components/SideMenu';
 import { TabBar, type TabKey } from '../components/TabBar';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useOnlineStore } from '../store/onlineStore';

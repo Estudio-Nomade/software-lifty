@@ -8,12 +8,12 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
+import { Text } from '../components/ui/Text';
 import { theme } from '../theme';
 import { compressImage } from '../utils/image';
 import type { DocBase, DocSide } from '../utils/upload';

@@ -1,17 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Linking,
-  Platform,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Linking, Platform, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { apiClient } from '../api/client';
 import { AlternativeRoutePill } from '../components/AlternativeRoutePill';
 import { Button } from '../components/Button';
 import { MapView } from '../components/MapView';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
 import type { ManeuverStep } from '../hooks/useManeuverInstructions';

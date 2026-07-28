@@ -1,15 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type React from 'react';
 import { useState } from 'react';
-import {
-  Alert,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { apiClient } from '../api/client';
 import type { PaymentMethod } from '../api/types';
 import { Button } from '../components/Button';
@@ -17,6 +9,7 @@ import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { Navbar } from '../components/Navbar';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { theme } from '../theme';
 

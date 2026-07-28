@@ -1,9 +1,10 @@
 import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../../theme';
+import { Text } from '../ui/Text';
 
 export const ConnectivityBanner: React.FC = () => {
   const [isOffline, setIsOffline] = useState(false);

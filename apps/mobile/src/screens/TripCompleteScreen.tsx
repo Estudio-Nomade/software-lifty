@@ -6,7 +6,6 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
   TextInput,
   TouchableOpacity,
   View,
@@ -16,6 +15,7 @@ import { reportTags } from '../api/types';
 import { Button } from '../components/Button';
 import { StarRating } from '../components/StarRating';
 import { TabBar, type TabKey } from '../components/TabBar';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useOnlineStore } from '../store/onlineStore';
 import { useTripStore } from '../store/tripStore';

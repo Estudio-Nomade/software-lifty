@@ -2,13 +2,13 @@ import type React from 'react';
 import {
   type StyleProp,
   StyleSheet,
-  Text,
   TextInput,
   type TextInputProps,
   View,
   type ViewStyle,
 } from 'react-native';
 import { theme } from '../theme';
+import { Text } from './ui/Text';
 
 interface InputProps extends TextInputProps {
   label?: string;
