@@ -1,5 +1,5 @@
 import type React from 'react';
-import { StatusBar, StyleSheet, View } from 'react-native';
+import { Image, StatusBar, StyleSheet, View } from 'react-native';
 import { Button } from '../components/Button';
 import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
 import { Text } from '../components/ui/Text';
@@ -29,11 +29,7 @@ export const WelcomeScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-      <View style={styles.logoCircle}>
-        <View style={styles.logoInner}>
-          <Text style={styles.logoLetter}>L</Text>
-        </View>
-      </View>
+      <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
       <Text style={styles.wordmark}>Lifty</Text>
       <Text style={styles.tagline}>Conduci, gana en serio</Text>
       <Button
@@ -69,26 +65,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     gap: theme.spacing.lg,
   },
-  logoCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.turquoise,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoInner: {
-    width: 80,
-    height: 80,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoLetter: {
-    fontSize: theme.fontSize['3xl'],
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.turquoise,
+  logo: {
+    width: 120,
+    height: 142,
   },
   wordmark: {
     fontSize: theme.fontSize['3xl'],
