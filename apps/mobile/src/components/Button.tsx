@@ -19,6 +19,7 @@ interface ButtonProps {
   outlineColor?: string;
   disabled?: boolean;
   loading?: boolean;
+  borderRadius?: number;
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
 }
@@ -38,7 +39,7 @@ const variantStyles: Record<ButtonVariant, { container: ViewStyle; text: TextSty
     container: {
       backgroundColor: 'transparent',
       height: theme.dimensions.buttonHeight,
-      borderRadius: theme.radius.buttonRadius,
+      borderRadius: theme.radius.pill,
       borderWidth: 1.5,
       borderColor: theme.colors.mediumGray,
     },
@@ -74,7 +75,7 @@ const variantStyles: Record<ButtonVariant, { container: ViewStyle; text: TextSty
     container: {
       backgroundColor: 'transparent',
       height: theme.dimensions.buttonHeight,
-      borderRadius: theme.radius.buttonRadius,
+      borderRadius: theme.radius.pill,
       borderWidth: 1.5,
       borderColor: theme.colors.turquoise,
     },
@@ -90,6 +91,7 @@ export const Button: React.FC<ButtonProps> = ({
   onPress,
   variant = 'primary',
   outlineColor,
+  borderRadius,
   disabled = false,
   loading = false,
   style,
@@ -108,6 +110,7 @@ export const Button: React.FC<ButtonProps> = ({
         styles.container,
         variantStyle.container,
         disabled && styles.disabled,
+        borderRadius !== undefined && { borderRadius },
         outlineOverride && { borderColor: outlineOverride.borderColor },
         style,
       ]}
