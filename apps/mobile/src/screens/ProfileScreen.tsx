@@ -12,7 +12,6 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -26,6 +25,7 @@ import { Input } from '../components/Input';
 import { Navbar } from '../components/Navbar';
 import { SideMenu } from '../components/SideMenu';
 import { TabBar, type TabKey } from '../components/TabBar';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useOnlineStore } from '../store/onlineStore';

@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { apiClient } from '../api/client';
 import type { Trip } from '../api/types';
 import { Avatar } from '../components/Avatar';
@@ -8,6 +8,7 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { MapView } from '../components/MapView';
 import { RatingStars } from '../components/RatingStars';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { stopTracking } from '../lib/location';
 import { useLocationStore } from '../store/locationStore';

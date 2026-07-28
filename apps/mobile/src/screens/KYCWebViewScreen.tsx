@@ -1,11 +1,12 @@
 import { useLocalSearchParams } from 'expo-router';
 import type React from 'react';
 import { useState } from 'react';
-import { ActivityIndicator, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StatusBar, StyleSheet, View } from 'react-native';
 import WebView from 'react-native-webview/lib/WebView';
 import type { WebViewErrorEvent, WebViewNavigation } from 'react-native-webview/lib/WebViewTypes';
 import { apiClient } from '../api/client';
 import { Navbar } from '../components/Navbar';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';

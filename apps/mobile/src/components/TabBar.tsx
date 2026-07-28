@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import type React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../theme';
+import { Text } from './ui/Text';
 
 export type TabKey = 'home' | 'earnings' | 'trips' | 'profile';
 

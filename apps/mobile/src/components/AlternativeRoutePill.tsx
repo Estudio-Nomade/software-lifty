@@ -1,5 +1,6 @@
 import { theme } from '@/theme';
-import { StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, TouchableOpacity } from 'react-native';
+import { Text } from './ui/Text';
 
 interface AlternativeRoutePillProps {
   primaryTime: number;

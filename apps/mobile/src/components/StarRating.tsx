@@ -1,6 +1,7 @@
 import type React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { theme } from '../theme';
+import { Text } from './ui/Text';
 
 interface StarRatingProps {
   rating: number;

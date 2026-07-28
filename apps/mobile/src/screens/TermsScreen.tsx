@@ -1,8 +1,9 @@
 import type React from 'react';
 import { useState } from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { resolvePostAuthRoute } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';

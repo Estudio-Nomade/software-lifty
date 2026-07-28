@@ -1,11 +1,12 @@
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { apiClient } from '../api/client';
 import type { DriverStatus } from '../api/types';
 import { driverStatusSchema } from '../api/types';
 import { Button } from '../components/Button';
 import { OTPInput } from '../components/OTPInput';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useVerifyEmail } from '../hooks/useAuth';
 import { routeForDriverStatus } from '../lib/postAuthRouting';

@@ -5,7 +5,6 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
   TextInput,
   TouchableOpacity,
   View,
@@ -15,6 +14,7 @@ import { Button } from '../components/Button';
 import { ChatBubble } from '../components/ChatBubble';
 import { LiftyWatermark } from '../components/LiftyWatermark';
 import { OTPInput } from '../components/OTPInput';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { sendMessage, subscribeToTripChannel } from '../lib/realtime';
 import { useAuthStore } from '../store/authStore';

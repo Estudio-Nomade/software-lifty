@@ -7,7 +7,6 @@ import {
   Platform,
   StatusBar,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -17,6 +16,7 @@ import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { MapView } from '../components/MapView';
 import { RatingStars } from '../components/RatingStars';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
 import type { ManeuverStep } from '../hooks/useManeuverInstructions';

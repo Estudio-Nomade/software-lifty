@@ -1,10 +1,11 @@
 import { useLocalSearchParams } from 'expo-router';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { apiClient } from '../api/client';
 import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { theme } from '../theme';
 

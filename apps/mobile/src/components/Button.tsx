@@ -3,12 +3,12 @@ import {
   ActivityIndicator,
   type StyleProp,
   StyleSheet,
-  Text,
   type TextStyle,
   TouchableOpacity,
   type ViewStyle,
 } from 'react-native';
 import { theme } from '../theme';
+import { Text } from './ui/Text';
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'cta' | 'outline';
 

@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import type React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { theme } from '../theme';
 import { Avatar } from './Avatar';
+import { Text } from './ui/Text';
 
 interface NavbarProps {
   title?: string;

@@ -4,13 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
   type ViewStyle,
 } from 'react-native';
 import WebView from 'react-native-webview/lib/WebView';
 import type { WebViewMessageEvent } from 'react-native-webview/lib/WebViewTypes';
+import { Text } from './ui/Text';
 
 const WebViewComponent = WebView as any;
 

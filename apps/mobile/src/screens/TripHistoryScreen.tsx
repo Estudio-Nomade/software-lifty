@@ -6,7 +6,6 @@ import {
   FlatList,
   StatusBar,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -16,6 +15,7 @@ import { Card } from '../components/Card';
 import { Navbar } from '../components/Navbar';
 import { TabBar, type TabKey } from '../components/TabBar';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
+import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useOnlineStore } from '../store/onlineStore';
 import { theme } from '../theme';
