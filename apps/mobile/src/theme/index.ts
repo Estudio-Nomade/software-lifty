@@ -40,6 +40,7 @@ export const theme = {
     xl: 20,
     full: 9999,
     inputRadius: 8,
+    pill: 24,
     buttonRadius: 12,
   },
   dimensions: {
