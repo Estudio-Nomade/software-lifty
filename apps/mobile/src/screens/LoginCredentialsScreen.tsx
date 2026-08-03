@@ -42,10 +42,11 @@ export const LoginCredentialsScreen: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const setDriverStatus = useAuthStore((s) => s.setDriverStatus);
 
   const login = useLogin();
-  const { sendEmailOtp, verifyEmailOtp, resendEmailOtp } = useAuth();
+  const { sendEmailOtp, verifyEmailOtp, resendEmailOtp, signInWithGoogle } = useAuth();
 
   const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
   const termsAccepted = useAuthStore((s) => s.termsAccepted);
@@ -77,6 +78,21 @@ export const LoginCredentialsScreen: React.FC = () => {
       navigation.navigate('Terms');
     }
   }, [navigation, termsAccepted]);
+
+  const handleGoogle = useCallback(async () => {
+    if (googleLoading) return;
+    setError(null);
+    setGoogleLoading(true);
+    try {
+      const session = await signInWithGoogle();
+      if (!session) return;
+      await finishAuth();
+    } catch (err) {
+      setError(getFriendlyAuthError(err));
+    } finally {
+      setGoogleLoading(false);
+    }
+  }, [googleLoading, signInWithGoogle, finishAuth]);
 
   const handleLogin = async () => {
     setError(null);
@@ -275,6 +291,14 @@ export const LoginCredentialsScreen: React.FC = () => {
           disabled={isDisabled}
           style={styles.button}
         />
+        <View style={styles.gapMd} />
+        <Button
+          title={googleLoading ? '' : 'CONTINUAR CON GOOGLE'}
+          onPress={handleGoogle}
+          loading={googleLoading}
+          style={[styles.button, styles.googleButton]}
+          textStyle={styles.googleButtonText}
+        />
         {error !== null && <Text style={styles.errorText}>{error}</Text>}
         <View style={styles.gapMd} />
         <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
@@ -347,6 +371,13 @@ const styles = StyleSheet.create({
   },
   button: {
     width: 327,
+  },
+  googleButton: {
+    backgroundColor: theme.colors.deepBlue,
+  },
+  googleButtonText: {
+    color: theme.colors.white,
+    fontSize: 16,
   },
   errorText: {
     fontSize: theme.fontSize.sm,

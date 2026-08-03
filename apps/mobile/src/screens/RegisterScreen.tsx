@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import type React from 'react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -18,13 +18,15 @@ import { Text } from '../components/ui/Text';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useResendCode, useSignUp, useVerifyEmail } from '../hooks/useAuth';
+import { getFriendlyAuthError } from '../lib/authErrors';
+import { resolvePostAuthRoute } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
 export const RegisterScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const setDriverStatus = useAuthStore((s) => s.setDriverStatus);
-  const { loading } = useAuth();
+  const { loading, signInWithGoogle } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,10 +36,33 @@ export const RegisterScreen: React.FC = () => {
   const [info, setInfo] = useState<string | null>(null);
   const [step, setStep] = useState<'form' | 'verify'>('form');
   const [verificationCode, setVerificationCode] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const signUp = useSignUp();
   const verifyEmail = useVerifyEmail();
   const resendCode = useResendCode();
+
+  const handleGoogle = useCallback(async () => {
+    if (googleLoading) return;
+    setError(null);
+    setGoogleLoading(true);
+    try {
+      const session = await signInWithGoogle();
+      if (!session) return;
+      const route = await resolvePostAuthRoute();
+      if (route.blockedMessage) {
+        setError(route.blockedMessage);
+        return;
+      }
+      if (route.screen) {
+        navigation.replace(route.screen);
+      }
+    } catch (err) {
+      setError(getFriendlyAuthError(err));
+    } finally {
+      setGoogleLoading(false);
+    }
+  }, [googleLoading, signInWithGoogle, navigation]);
 
   const passwordMatch =
     password.length > 0 && confirmPassword.length > 0 && password === confirmPassword;
@@ -230,6 +255,14 @@ export const RegisterScreen: React.FC = () => {
             disabled={!email.trim() || !password || !confirmPassword || signUp.isPending}
             style={styles.button}
           />
+          <View style={{ height: 8 }} />
+          <Button
+            title={googleLoading ? '' : 'CONTINUAR CON GOOGLE'}
+            onPress={handleGoogle}
+            loading={googleLoading}
+            style={[styles.button, styles.googleButton]}
+            textStyle={styles.googleButtonText}
+          />
           {error !== null && <Text style={styles.errorText}>{error}</Text>}
           <TouchableOpacity onPress={() => navigation.navigate('LoginCredentials')}>
             <Text style={styles.loginLink}>Ya tenes cuenta? Inicia sesion</Text>
@@ -311,6 +344,13 @@ const styles = StyleSheet.create({
   button: {
     marginTop: theme.spacing.sm,
     width: 327,
+  },
+  googleButton: {
+    backgroundColor: theme.colors.deepBlue,
+  },
+  googleButtonText: {
+    color: theme.colors.white,
+    fontSize: 16,
   },
   errorText: {
     fontSize: theme.fontSize.sm,

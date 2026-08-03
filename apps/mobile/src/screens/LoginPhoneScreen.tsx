@@ -5,6 +5,7 @@
 import type React from 'react';
 import { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -68,11 +69,11 @@ export const LoginPhoneScreen: React.FC = () => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.logoCircle}>
-            <View style={styles.logoInner}>
-              <Text style={styles.logoLetter}>L</Text>
-            </View>
-          </View>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.wordmark}>Lifty</Text>
           <Text style={styles.title}>Ingresa tu telefono</Text>
           <Text style={styles.subtitle}>Te enviaremos un codigo de verificacion por SMS</Text>
@@ -117,26 +118,9 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.xl,
     gap: theme.spacing.md,
   },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.turquoise,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoInner: {
-    width: 64,
-    height: 64,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoLetter: {
-    fontSize: theme.fontSize['3xl'],
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.turquoise,
+  logo: {
+    width: 120,
+    height: 142,
   },
   wordmark: {
     fontSize: theme.fontSize['3xl'],
