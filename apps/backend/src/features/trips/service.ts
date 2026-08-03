@@ -3,6 +3,7 @@ import { db } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
 import { drivers, ratings, tripEvents, trips, users } from '../../shared/db/schema';
 import { AppError, BadRequestError, NotFoundError } from '../../shared/lib/errors';
+import { geocode } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { getPayment } from '../../shared/lib/mercado-pago';
 import { calculateFare, calculatePlatformFee } from '../../shared/lib/pricing';
@@ -154,6 +155,27 @@ export const tripService = {
       duration_minutes: data.duration_minutes,
     });
 
+    let originAddress = data.origin_address || null;
+    let destAddress = data.dest_address || null;
+
+    try {
+      const result = await geocode({ lat: data.origin_lat, lng: data.origin_lng });
+      if (result.formatted_address && !result.formatted_address.startsWith('Ubicación (')) {
+        originAddress = result.formatted_address;
+      }
+    } catch {
+      logger.warn('[createTrip] failed to geocode origin');
+    }
+
+    try {
+      const result = await geocode({ lat: data.dest_lat, lng: data.dest_lng });
+      if (result.formatted_address && !result.formatted_address.startsWith('Ubicación (')) {
+        destAddress = result.formatted_address;
+      }
+    } catch {
+      logger.warn('[createTrip] failed to geocode destination');
+    }
+
     const [trip] = await db
       .insert(trips)
       .values({
@@ -163,8 +185,8 @@ export const tripService = {
         origin_lng: data.origin_lng,
         dest_lat: data.dest_lat,
         dest_lng: data.dest_lng,
-        origin_address: data.origin_address ?? null,
-        dest_address: data.dest_address ?? null,
+        origin_address: originAddress,
+        dest_address: destAddress,
         distance_km: data.distance_km,
         duration_minutes: data.duration_minutes,
         base_fare: fare.base_fare,
@@ -183,7 +205,7 @@ export const tripService = {
 
     sendPushToUser(user.id, {
       title: 'Nuevo viaje',
-      body: `Viaje solicitado de ${data.origin_address ?? 'origen'} a ${data.dest_address ?? 'destino'} — $${fare.total}`,
+      body: `Viaje solicitado de ${trip.origin_address ?? 'origen'} a ${trip.dest_address ?? 'destino'} — $${fare.total}`,
       data: { trip_id: trip.id, type: 'trip:request' },
     });
 
