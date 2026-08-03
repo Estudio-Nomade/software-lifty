@@ -10,6 +10,7 @@ import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
 import type { ManeuverStep } from '../hooks/useManeuverInstructions';
 import { startTracking, stopTracking } from '../lib/location';
 import { decodePolyline } from '../lib/polyline';
+import { subscribeToTripChannel } from '../lib/realtime';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
@@ -31,6 +32,7 @@ export const TripInProgressScreen: React.FC = () => {
   const [altDistKm, setAltDistKm] = useState<number | null>(null);
   const [altSteps, setAltSteps] = useState<ManeuverStep[]>([]);
   const [activeRoute, setActiveRoute] = useState<'primary' | 'alternative'>('primary');
+  const [driverCoords, setDriverCoords] = useState<[number, number] | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchDirections = useCallback(async () => {
@@ -75,6 +77,16 @@ export const TripInProgressScreen: React.FC = () => {
       stopTracking();
     };
   }, []);
+
+  useEffect(() => {
+    if (!trip?.id) return;
+    const unsub = subscribeToTripChannel(trip.id, {
+      onDriverLocation: (loc) => {
+        setDriverCoords([loc.lng, loc.lat]);
+      },
+    });
+    return unsub;
+  }, [trip?.id]);
 
   useEffect(() => {
     fetchDirections();
@@ -140,6 +152,18 @@ export const TripInProgressScreen: React.FC = () => {
       <View style={styles.mapArea}>
         <MapView
           followUserLocation
+          markers={
+            driverCoords
+              ? [
+                  {
+                    id: 'driver-location',
+                    coordinate: driverCoords,
+                    title: 'Conductor',
+                    color: '#3182CE',
+                  },
+                ]
+              : undefined
+          }
           routeLine={activeCoords.length > 0 ? activeCoords : undefined}
           alternativeRouteLine={altCoords.length > 0 ? altCoords : undefined}
         />

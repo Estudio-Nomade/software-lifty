@@ -23,6 +23,7 @@ import type { ManeuverStep } from '../hooks/useManeuverInstructions';
 import { haversineDistance } from '../lib/geo';
 import { startTracking, stopTracking } from '../lib/location';
 import { decodePolyline } from '../lib/polyline';
+import { subscribeToTripChannel } from '../lib/realtime';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
@@ -47,6 +48,7 @@ export const NavigationScreen: React.FC = () => {
   const [altDistKm, setAltDistKm] = useState<number | null>(null);
   const [altSteps, setAltSteps] = useState<ManeuverStep[]>([]);
   const [activeRoute, setActiveRoute] = useState<'primary' | 'alternative'>('primary');
+  const [driverCoords, setDriverCoords] = useState<[number, number] | null>(null);
 
   const isPrimary = activeRoute === 'primary';
   const activeSteps = isPrimary ? steps : altSteps;
@@ -63,6 +65,16 @@ export const NavigationScreen: React.FC = () => {
       stopTracking();
     };
   }, []);
+
+  useEffect(() => {
+    if (!trip?.id) return;
+    const unsub = subscribeToTripChannel(trip.id, {
+      onDriverLocation: (loc) => {
+        setDriverCoords([loc.lng, loc.lat]);
+      },
+    });
+    return unsub;
+  }, [trip?.id]);
 
   useEffect(() => {
     if (!trip || tripStatus !== 'accepted' || enRouteSent.current) return;
@@ -192,6 +204,16 @@ export const NavigationScreen: React.FC = () => {
               title: 'Pasajero',
               color: theme.colors.dangerRed,
             },
+            ...(driverCoords
+              ? [
+                  {
+                    id: 'driver-location',
+                    coordinate: driverCoords,
+                    title: 'Conductor',
+                    color: '#3182CE',
+                  },
+                ]
+              : []),
           ]}
           routeLine={activeCoords.length > 0 ? activeCoords : undefined}
           alternativeRouteLine={altCoords.length > 0 ? altCoords : undefined}

@@ -30,6 +30,13 @@ export function subscribeToTripChannel(
     onTripStarted?: () => void;
     onTripCompleted?: () => void;
     onTripCancelled?: () => void;
+    onDriverLocation?: (location: {
+      lat: number;
+      lng: number;
+      heading?: number;
+      driver_id: string;
+      timestamp: string;
+    }) => void;
   },
 ): () => void {
   const channel = supabase.channel(`trip:${tripId}`);
@@ -67,6 +74,12 @@ export function subscribeToTripChannel(
   if (callbacks.onTripCancelled) {
     channel.on('broadcast', { event: 'trip:cancelled' }, () => {
       callbacks.onTripCancelled?.();
+    });
+  }
+
+  if (callbacks.onDriverLocation) {
+    channel.on('broadcast', { event: 'driver:location' }, ({ payload }) => {
+      callbacks.onDriverLocation?.(payload);
     });
   }
 
