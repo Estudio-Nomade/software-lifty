@@ -196,6 +196,7 @@ export const NavigationScreen: React.FC = () => {
               title: 'Pasajero',
               color: theme.colors.dangerRed,
             },
+<<<<<<< HEAD
             ...(locationLat != null && locationLng != null
               ? [
                   {
@@ -206,6 +207,8 @@ export const NavigationScreen: React.FC = () => {
                   },
                 ]
               : []),
+=======
+>>>>>>> origin/main
             ...(driverCoords
               ? [
                   {
