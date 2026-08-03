@@ -1,5 +1,7 @@
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://lifty:lifty@localhost:5433/lifty_test';
+process.env.SUPABASE_URL = 'http://localhost:54321';
+process.env.SUPABASE_SECRET_KEY = 'test-secret-key';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { createApp } from '../../index';
@@ -14,6 +16,7 @@ let port: number;
 async function truncateTables() {
   const d = getDb();
   await d.delete(driverLocations);
+  await d.delete(trips);
   await d.delete(drivers);
   await d.delete(users);
 }
@@ -116,6 +119,115 @@ async function wsSendRaw(message: string, ws: WebSocket): Promise<void> {
 
 import { eq } from 'drizzle-orm';
 import { findNearbyOnlineDrivers } from './service';
+import { getDriverActiveTrip, invalidateTripCache } from '../../shared/lib/trip-utils';
+import { trips } from '../../shared/db/schema';
+
+describe('getDriverActiveTrip', () => {
+  test('returns null when driver has no trips', async () => {
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({ phone: '+5492619999999', full_name: 'Test', role: 'driver' })
+      .returning({ id: users.id });
+    const [driver] = await db
+      .insert(drivers)
+      .values({ user_id: user.id, status: 'approved' })
+      .returning({ id: drivers.id });
+
+    invalidateTripCache(driver.id);
+    const result = await getDriverActiveTrip(driver.id);
+    expect(result).toBeNull();
+  });
+
+  test('returns trip when driver has active trip', async () => {
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({ phone: '+5492618888888', full_name: 'Test', role: 'driver' })
+      .returning({ id: users.id });
+    const [driver] = await db
+      .insert(drivers)
+      .values({ user_id: user.id, status: 'approved' })
+      .returning({ id: drivers.id });
+    const [trip] = await db
+      .insert(trips)
+      .values({
+        driver_id: driver.id,
+        status: 'accepted',
+        origin_lat: -32.89,
+        origin_lng: -68.84,
+        dest_lat: -32.90,
+        dest_lng: -68.85,
+      })
+      .returning({ id: trips.id });
+
+    invalidateTripCache(driver.id);
+    const result = await getDriverActiveTrip(driver.id);
+    expect(result).not.toBeNull();
+    expect(result!.id).toBe(trip.id);
+  });
+
+  test('returns null for terminal trip statuses', async () => {
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({ phone: '+5492617777777', full_name: 'Test', role: 'driver' })
+      .returning({ id: users.id });
+    const [driver] = await db
+      .insert(drivers)
+      .values({ user_id: user.id, status: 'approved' })
+      .returning({ id: drivers.id });
+    await db.insert(trips).values({
+      driver_id: driver.id,
+      status: 'completed',
+      origin_lat: -32.89,
+      origin_lng: -68.84,
+      dest_lat: -32.90,
+      dest_lng: -68.85,
+    });
+
+    invalidateTripCache(driver.id);
+    const result = await getDriverActiveTrip(driver.id);
+    expect(result).toBeNull();
+  });
+
+  test('caches result and invalidates on request', async () => {
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({ phone: '+5492616666666', full_name: 'Test', role: 'driver' })
+      .returning({ id: users.id });
+    const [driver] = await db
+      .insert(drivers)
+      .values({ user_id: user.id, status: 'approved' })
+      .returning({ id: drivers.id });
+    const [trip] = await db
+      .insert(trips)
+      .values({
+        driver_id: driver.id,
+        status: 'accepted',
+        origin_lat: -32.89,
+        origin_lng: -68.84,
+        dest_lat: -32.90,
+        dest_lng: -68.85,
+      })
+      .returning({ id: trips.id });
+
+    invalidateTripCache(driver.id);
+    const result1 = await getDriverActiveTrip(driver.id);
+    expect(result1!.id).toBe(trip.id);
+
+    const result2 = await getDriverActiveTrip(driver.id);
+    expect(result2!.id).toBe(trip.id);
+
+    invalidateTripCache(driver.id);
+
+    await db.update(trips).set({ status: 'completed' }).where(eq(trips.id, trip.id));
+
+    const result3 = await getDriverActiveTrip(driver.id);
+    expect(result3).toBeNull();
+  });
+});
 
 beforeAll(() => {
   app = createApp();
@@ -424,4 +536,83 @@ describe('findNearbyOnlineDrivers', () => {
     const nearby = await findNearbyOnlineDrivers(-32.89, -68.84, 5);
     expect(nearby.length).toBe(2);
   });
+});
+
+describe('Broadcast on location update', () => {
+  test('WS broadcast is called when driver has active trip', async () => {
+    const phone = '+5492615555555';
+    const { token, driverId } = await registerAndCreateDriver(phone, 'testPass123');
+    const db = getDb();
+
+    await db.insert(trips).values({
+      driver_id: driverId,
+      status: 'accepted',
+      origin_lat: -32.89,
+      origin_lng: -68.84,
+      dest_lat: -32.90,
+      dest_lng: -68.85,
+    });
+
+    invalidateTripCache(driverId);
+
+    const fetchCalls: any[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = ((url: string, init: any) => {
+      fetchCalls.push({ url, body: JSON.parse(init.body) });
+      return Promise.resolve(new Response(null, { status: 200 }));
+    }) as any;
+
+    try {
+      const { ws, open } = await wsConnect(port, token);
+      expect(open).toBe(true);
+
+      await wsSendAndWait({ lat: -32.89, lng: -68.84, heading: 180 }, ws, driverId);
+      ws.close();
+      await new Promise((r) => setTimeout(r, 500));
+
+      const broadcastCall = fetchCalls.find(
+        (c) => c.url.includes('/realtime/v1/api/broadcast'),
+      );
+      expect(broadcastCall).toBeDefined();
+      const msg = broadcastCall.body.messages[0];
+      expect(msg.topic).toMatch(/^trip:/);
+      expect(msg.event).toBe('driver:location');
+      expect(msg.payload.lat).toBe(-32.89);
+      expect(msg.payload.lng).toBe(-68.84);
+      expect(msg.payload.heading).toBe(180);
+      expect(msg.payload.driver_id).toBe(driverId);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  }, { timeout: 15000 });
+
+  test('WS does not broadcast when driver has no active trip', async () => {
+    const phone = '+5492614444444';
+    const { token, driverId } = await registerAndCreateDriver(phone, 'testPass123');
+
+    invalidateTripCache(driverId);
+
+    const fetchCalls: any[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = ((url: string, init: any) => {
+      fetchCalls.push({ url, body: init?.body ? JSON.parse(init.body) : null });
+      return Promise.resolve(new Response(null, { status: 200 }));
+    }) as any;
+
+    try {
+      const { ws, open } = await wsConnect(port, token);
+      expect(open).toBe(true);
+
+      await wsSendAndWait({ lat: -32.89, lng: -68.84, heading: 180 }, ws, driverId);
+      ws.close();
+      await new Promise((r) => setTimeout(r, 500));
+
+      const broadcastCalls = fetchCalls.filter(
+        (c) => c.url?.includes('/realtime/v1/api/broadcast'),
+      );
+      expect(broadcastCalls.length).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  }, { timeout: 15000 });
 });

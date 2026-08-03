@@ -2,8 +2,10 @@ import { eq } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 import { db } from '../../shared/db/client';
 import { users } from '../../shared/db/schema';
+import { broadcastTripLocation } from '../../shared/lib/broadcast';
 import { safeCall } from '../../shared/lib/route-utils';
 import { getSupabaseClient } from '../../shared/lib/supabase';
+import { getDriverActiveTrip, invalidateTripCache } from '../../shared/lib/trip-utils';
 import { authGuard } from '../../shared/middleware/require-auth';
 import { locationUpdateBody } from './schema';
 import { getDriverIdByUserId, markDriverOffline, upsertLocation } from './service';
@@ -85,10 +87,21 @@ export const locationWsPlugin = new Elysia().ws('/ws/location', {
     }
 
     await upsertLocation(driverId, data.lat, data.lng, data.heading);
+
+    const activeTrip = await getDriverActiveTrip(driverId);
+    if (activeTrip) {
+      broadcastTripLocation(activeTrip.id, {
+        lat: data.lat,
+        lng: data.lng,
+        heading: data.heading,
+        driver_id: driverId,
+      });
+    }
   },
   async close(ws) {
     const driverId = (ws.data as any).driverId as string | undefined;
     if (driverId) {
+      invalidateTripCache(driverId);
       await markDriverOffline(driverId);
     }
   },
