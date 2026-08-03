@@ -99,12 +99,20 @@ export const WaitingPassengerScreen: React.FC = () => {
     setVerifying(true);
     setVerificationError('');
     try {
+      if (__DEV__) {
+        console.log('[startTrip] POST', {
+          url: `/trips/${activeTripId}/start`,
+          code: verificationCode,
+          codeLen: verificationCode.length,
+          codeChars: verificationCode.split('').map((c: string) => c.charCodeAt(0)),
+        });
+      }
       await apiClient.post(`/trips/${activeTripId}/start`, { verification_code: verificationCode });
       setShowVerificationModal(false);
       setTripStatus('in_trip');
       navigation.navigate('TripInProgress');
     } catch (err: any) {
-      const message = err?.response?.data?.error?.message ?? 'No se pudo iniciar el viaje.';
+      const message = err instanceof Error ? err.message : 'No se pudo iniciar el viaje.';
       setVerificationError(message);
     } finally {
       setVerifying(false);

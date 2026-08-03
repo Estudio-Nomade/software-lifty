@@ -58,7 +58,7 @@ export const WithdrawScreen: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['earnings-daily'] });
     },
     onError: (err: any) => {
-      const message = err?.response?.data?.error?.message ?? err?.message ?? 'Error al retirar';
+      const message = err instanceof Error ? err.message : 'Error al retirar';
       Alert.alert('Error', message);
     },
   });

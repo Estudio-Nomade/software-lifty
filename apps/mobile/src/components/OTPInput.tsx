@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useRef } from 'react';
-import { TextInput as RNTextInput, StyleSheet, View } from 'react-native';
+import { Platform, TextInput as RNTextInput, StyleSheet, View } from 'react-native';
 import { theme } from '../theme';
 
 interface OTPInputProps {
@@ -13,12 +13,13 @@ export const OTPInput: React.FC<OTPInputProps> = ({ length = 4, value, onChange 
   const refs = useRef<RNTextInput[]>([]);
 
   const handleChange = (text: string, index: number) => {
+    const char = text.slice(-1);
     const newValue = value.split('');
-    newValue[index] = text;
+    newValue[index] = char;
     const joined = newValue.join('').slice(0, length);
     onChange(joined);
 
-    if (text && index < length - 1) {
+    if (char && index < length - 1) {
       refs.current[index + 1]?.focus();
     }
   };
@@ -41,9 +42,14 @@ export const OTPInput: React.FC<OTPInputProps> = ({ length = 4, value, onChange 
             value={value[index] || ''}
             onChangeText={(text) => handleChange(text, index)}
             onKeyPress={(e) => handleKeyPress(e, index)}
-            keyboardType="number-pad"
+            keyboardType={Platform.select({
+              ios: 'number-pad' as const,
+              default: 'numeric' as const,
+            })}
             maxLength={1}
             selectTextOnFocus
+            autoComplete="off"
+            importantForAutofill="no"
           />
         </View>
       ))}

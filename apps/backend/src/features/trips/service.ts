@@ -257,6 +257,14 @@ export const tripService = {
 
     if (!trip[0]) throw new NotFoundError('Trip not found');
     if (trip[0].verification_code !== verificationCode) {
+      console.error('=== START TRIP CODE MISMATCH ===');
+      console.error('DB code:', JSON.stringify(trip[0].verification_code));
+      console.error('DB code type:', typeof trip[0].verification_code);
+      console.error('DB code len:', trip[0].verification_code?.length);
+      console.error('Input code:', JSON.stringify(verificationCode));
+      console.error('Input code type:', typeof verificationCode);
+      console.error('Input code len:', verificationCode.length);
+      console.error('Strict equal:', trip[0].verification_code === verificationCode);
       throw new BadRequestError('El código de verificación no coincide');
     }
 

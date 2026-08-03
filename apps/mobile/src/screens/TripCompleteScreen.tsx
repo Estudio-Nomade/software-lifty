@@ -81,8 +81,9 @@ export const TripCompleteScreen: React.FC = () => {
     try {
       await apiClient.put(`/trips/${activeTripId}/collect`, { payment_method: 'cash' });
       setStep('rate');
-    } catch {
-      Alert.alert('Error', 'No se pudo registrar el cobro.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'No se pudo registrar el cobro.';
+      Alert.alert('Error', message);
     } finally {
       setCollecting(false);
     }
@@ -94,8 +95,9 @@ export const TripCompleteScreen: React.FC = () => {
     try {
       await apiClient.put(`/trips/${activeTripId}/collect`, { payment_method: 'mercadopago' });
       setStep('rate');
-    } catch {
-      Alert.alert('Error', 'No se pudo registrar el cobro.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'No se pudo registrar el cobro.';
+      Alert.alert('Error', message);
     } finally {
       setCollectingMP(false);
     }
@@ -110,8 +112,9 @@ export const TripCompleteScreen: React.FC = () => {
       if (comment.trim()) body.comment = comment.trim();
       await apiClient.post(`/ratings/trips/${activeTripId}`, body);
       goOnline();
-    } catch {
-      Alert.alert('Error', 'No se pudo enviar la calificación.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'No se pudo enviar la calificación.';
+      Alert.alert('Error', message);
     } finally {
       setSubmitting(false);
     }

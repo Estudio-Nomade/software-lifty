@@ -122,8 +122,9 @@ export const IncomingRequestScreen: React.FC = () => {
   const handleAccept = async () => {
     if (!trip) return;
     try {
-      await apiClient.post(`/trips/${trip.id}/accept`);
-      setActiveTrip({ ...trip, status: 'accepted' });
+      const response = await apiClient.post(`/trips/${trip.id}/accept`);
+      const acceptedTrip = response.data ?? response;
+      setActiveTrip(acceptedTrip);
       setAccepted(true);
       navigation.navigate('Navigation');
     } catch {}
