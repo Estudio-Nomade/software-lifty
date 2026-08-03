@@ -108,7 +108,6 @@ export function useLogin() {
 }
 
 export function useSignOut() {
-  const clearAuth = useAuthStore((s) => s.clearAuth);
   const token = useAuthStore((s) => s.token);
   const queryClient = useQueryClient();
 
@@ -124,7 +123,6 @@ export function useSignOut() {
       await supabase.auth.signOut();
     },
     onSuccess: () => {
-      clearAuth();
       queryClient.clear();
     },
   });

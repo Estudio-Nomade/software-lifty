@@ -118,7 +118,6 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        await supabase.auth.signOut();
         useAuthStore.getState().clearAuth();
         return Promise.reject(refreshError);
       } finally {

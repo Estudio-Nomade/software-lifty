@@ -5,13 +5,13 @@ import {
   LayoutAnimation,
   Linking,
   Platform,
+  ScrollView,
   StatusBar,
   StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { apiClient } from '../api/client';
-import { AlternativeRoutePill } from '../components/AlternativeRoutePill';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { MapView } from '../components/MapView';
@@ -182,14 +182,6 @@ export const NavigationScreen: React.FC = () => {
   const activeEta = isPrimaryNav ? etaMinutes : altEtaMinutes;
   const activeDist = isPrimaryNav ? distKm : altDistKm;
   const altCoords = isPrimaryNav ? altRouteCoords : routeCoords;
-  const pillPrimaryTime = isPrimaryNav ? etaMinutes : altEtaMinutes;
-  const pillAltTime = isPrimaryNav ? altEtaMinutes : etaMinutes;
-
-  const handleToggleRoute = () => {
-    setActiveRoute((prev) => (prev === 'primary' ? 'alternative' : 'primary'));
-  };
-
-  const showPill = altRouteCoords.length > 0 && pillPrimaryTime !== null && pillAltTime !== null;
 
   return (
     <View style={styles.container}>
@@ -204,6 +196,16 @@ export const NavigationScreen: React.FC = () => {
               title: 'Pasajero',
               color: theme.colors.dangerRed,
             },
+            ...(locationLat != null && locationLng != null
+              ? [
+                  {
+                    id: 'my-location',
+                    coordinate: [locationLng, locationLat] as [number, number],
+                    title: 'Mi ubicación',
+                    color: '#1BBFAE',
+                  },
+                ]
+              : []),
             ...(driverCoords
               ? [
                   {
@@ -219,13 +221,6 @@ export const NavigationScreen: React.FC = () => {
           alternativeRouteLine={altCoords.length > 0 ? altCoords : undefined}
         />
       </View>
-      {showPill && (
-        <AlternativeRoutePill
-          primaryTime={pillPrimaryTime}
-          altTime={pillAltTime}
-          onToggle={handleToggleRoute}
-        />
-      )}
       {trip?.passenger_name ? (
         <View style={styles.passengerCard}>
           <TouchableOpacity
@@ -253,61 +248,67 @@ export const NavigationScreen: React.FC = () => {
         </View>
       ) : null}
       <View style={styles.bottomCard}>
-        <Text style={styles.label}>Rumbo al pasajero</Text>
-        <Text style={styles.address}>{trip?.origin_address ?? 'Origen'}</Text>
-        {trip?.pickup_instructions ? (
-          <View style={styles.instructionsPill}>
-            <Text style={styles.instructionsLabel}>📝</Text>
-            <Text style={styles.instructionsText}>{trip.pickup_instructions}</Text>
+        <ScrollView
+          style={styles.bottomCardContent}
+          contentContainerStyle={{ gap: theme.spacing.sm }}
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.label}>Rumbo al pasajero</Text>
+          <Text style={styles.address}>{trip?.origin_address ?? 'Origen'}</Text>
+          {trip?.pickup_instructions ? (
+            <View style={styles.instructionsPill}>
+              <Text style={styles.instructionsLabel}>📝</Text>
+              <Text style={styles.instructionsText}>{trip.pickup_instructions}</Text>
+            </View>
+          ) : null}
+          {activeEta !== null && activeDist !== null ? (
+            <Text style={styles.eta}>
+              {Math.round(activeEta)} min · {activeDist} km
+            </Text>
+          ) : null}
+          {instruction ? <Text style={styles.instruction}>{instruction}</Text> : null}
+          <View style={styles.commsButtons}>
+            <Button
+              title="📞 Llamar"
+              variant="secondary"
+              onPress={callPassenger}
+              disabled={!trip?.passenger_phone}
+              style={styles.commsButton}
+              textStyle={styles.commsButtonText}
+            />
+            <Button
+              title="💬 Chat"
+              variant="secondary"
+              onPress={() => navigation.navigate('Chat')}
+              style={styles.commsButton}
+              textStyle={styles.commsButtonText}
+            />
           </View>
-        ) : null}
-        {activeEta !== null && activeDist !== null ? (
-          <Text style={styles.eta}>
-            {Math.round(activeEta)} min · {activeDist} km
-          </Text>
-        ) : null}
-        {instruction ? <Text style={styles.instruction}>{instruction}</Text> : null}
-        <View style={styles.commsButtons}>
+          <View style={styles.navButtons}>
+            <Button
+              title="Abrir en Waze"
+              variant="secondary"
+              onPress={openWaze}
+              style={styles.navButton}
+              textStyle={styles.navButtonText}
+            />
+            <Button
+              title="Abrir en Maps"
+              variant="secondary"
+              onPress={openMaps}
+              style={styles.navButton}
+              textStyle={styles.navButtonText}
+            />
+          </View>
+          {nearPassenger && <Text style={styles.nearPassengerText}>Estas cerca del pasajero</Text>}
           <Button
-            title="📞 Llamar"
-            variant="secondary"
-            onPress={callPassenger}
-            disabled={!trip?.passenger_phone}
-            style={styles.commsButton}
-            textStyle={styles.commsButtonText}
+            title="LLEGUE"
+            onPress={handleArrive}
+            loading={loading}
+            variant={nearPassenger ? 'cta' : 'primary'}
+            style={styles.arrivedButton}
           />
-          <Button
-            title="💬 Chat"
-            variant="secondary"
-            onPress={() => navigation.navigate('Chat')}
-            style={styles.commsButton}
-            textStyle={styles.commsButtonText}
-          />
-        </View>
-        <View style={styles.navButtons}>
-          <Button
-            title="Abrir en Waze"
-            variant="secondary"
-            onPress={openWaze}
-            style={styles.navButton}
-            textStyle={styles.navButtonText}
-          />
-          <Button
-            title="Abrir en Maps"
-            variant="secondary"
-            onPress={openMaps}
-            style={styles.navButton}
-            textStyle={styles.navButtonText}
-          />
-        </View>
-        {nearPassenger && <Text style={styles.nearPassengerText}>Estas cerca del pasajero</Text>}
-        <Button
-          title="LLEGUE"
-          onPress={handleArrive}
-          loading={loading}
-          variant={nearPassenger ? 'cta' : 'primary'}
-          style={styles.arrivedButton}
-        />
+        </ScrollView>
       </View>
     </View>
   );
@@ -319,22 +320,23 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.white,
   },
   mapArea: {
-    height: 528,
+    flex: 1,
     backgroundColor: theme.colors.lightGray,
   },
   bottomCard: {
-    flex: 1,
     backgroundColor: theme.colors.white,
     borderTopLeftRadius: theme.radius.lg,
     borderTopRightRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-    paddingTop: theme.spacing.lg,
-    gap: theme.spacing.sm,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 8,
+  },
+  bottomCardContent: {
+    padding: theme.spacing.md,
+    paddingTop: theme.spacing.lg,
+    gap: theme.spacing.sm,
   },
   label: {
     fontSize: theme.fontSize.xs,
