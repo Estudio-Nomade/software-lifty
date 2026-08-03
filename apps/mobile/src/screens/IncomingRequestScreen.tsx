@@ -16,7 +16,7 @@ import { useOnlineStore } from '../store/onlineStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
-const RESPONSE_SECONDS = 8;
+const RESPONSE_SECONDS = 20;
 
 const formatCurrency = (value: number | null | undefined) =>
   value == null ? '—' : `$${value.toLocaleString('es-AR')}`;
@@ -30,6 +30,7 @@ export const IncomingRequestScreen: React.FC = () => {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [seconds, setSeconds] = useState(RESPONSE_SECONDS);
   const [accepted, setAccepted] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const timedOut = useRef(false);
   const lat = useLocationStore((s) => s.lat);
@@ -44,6 +45,9 @@ export const IncomingRequestScreen: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
+    let retries = 0;
+    const maxRetries = 3;
+
     const loadTrip = async () => {
       try {
         const response = await apiClient.get('/trips/active');
@@ -52,11 +56,19 @@ export const IncomingRequestScreen: React.FC = () => {
         if (active && active.status === 'request_received') {
           setTrip(active);
           setActiveTrip(active);
+          setLoading(false);
         } else {
           navigation.navigate('Online');
         }
       } catch {
-        if (!cancelled) navigation.navigate('Online');
+        if (cancelled) return;
+        retries++;
+        if (retries < maxRetries) {
+          setTimeout(loadTrip, 2000);
+        } else {
+          setLoading(false);
+          navigation.navigate('Online');
+        }
       }
     };
     loadTrip();
@@ -139,7 +151,9 @@ export const IncomingRequestScreen: React.FC = () => {
         <Text style={styles.newRequest}>Nueva solicitud</Text>
 
         <View style={styles.timerCircle}>
-          <Text style={styles.timerText}>{accepted ? '✓' : `0:0${seconds}`}</Text>
+          <Text style={styles.timerText}>
+            {accepted ? '✓' : `0:${String(seconds).padStart(2, '0')}`}
+          </Text>
         </View>
 
         <Card style={styles.routeCard}>
@@ -177,7 +191,14 @@ export const IncomingRequestScreen: React.FC = () => {
           <Text style={styles.acceptedText}>Viaje aceptado!</Text>
         ) : (
           <>
-            <Button title="ACEPTAR" variant="cta" onPress={handleAccept} style={styles.button} />
+            <Button
+              title="ACEPTAR"
+              variant="cta"
+              onPress={handleAccept}
+              disabled={!trip}
+              loading={loading}
+              style={styles.button}
+            />
             <TouchableOpacity onPress={handleReject}>
               <Text style={styles.rejectLink}>Rechazar</Text>
             </TouchableOpacity>
