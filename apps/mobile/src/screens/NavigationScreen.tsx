@@ -1,3 +1,4 @@
+import * as Location from 'expo-location';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -49,6 +50,7 @@ export const NavigationScreen: React.FC = () => {
   const [altSteps, setAltSteps] = useState<ManeuverStep[]>([]);
   const [activeRoute, setActiveRoute] = useState<'primary' | 'alternative'>('primary');
   const [driverCoords, setDriverCoords] = useState<[number, number] | null>(null);
+  const [displayAddress, setDisplayAddress] = useState<string | null>(null);
 
   const isPrimary = activeRoute === 'primary';
   const activeSteps = isPrimary ? steps : altSteps;
@@ -65,6 +67,22 @@ export const NavigationScreen: React.FC = () => {
       stopTracking();
     };
   }, []);
+
+  useEffect(() => {
+    if (!trip) return;
+    let cancelled = false;
+    Location.reverseGeocodeAsync({ latitude: trip.origin_lat, longitude: trip.origin_lng })
+      .then((results) => {
+        if (cancelled || !results.length) return;
+        const r = results[0];
+        const parts = [r.name || r.street, r.district, r.city].filter(Boolean).join(', ');
+        if (parts) setDisplayAddress(parts);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [trip?.id]);
 
   useEffect(() => {
     if (!trip?.id) return;
@@ -254,7 +272,7 @@ export const NavigationScreen: React.FC = () => {
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.label}>Rumbo al pasajero</Text>
-          <Text style={styles.address}>{trip?.origin_address ?? 'Origen'}</Text>
+          <Text style={styles.address}>{displayAddress ?? trip?.origin_address ?? 'Origen'}</Text>
           {trip?.pickup_instructions ? (
             <View style={styles.instructionsPill}>
               <Text style={styles.instructionsLabel}>📝</Text>

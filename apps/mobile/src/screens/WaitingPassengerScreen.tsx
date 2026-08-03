@@ -1,7 +1,10 @@
+import * as Location from 'expo-location';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -35,6 +38,7 @@ export const WaitingPassengerScreen: React.FC = () => {
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationError, setVerificationError] = useState('');
   const [verifying, setVerifying] = useState(false);
+  const [displayAddress, setDisplayAddress] = useState<string | null>(null);
   const chatScrollRef = useRef<ScrollView>(null);
 
   const activeTripId = useTripStore((s) => s.activeTripId);
@@ -42,6 +46,22 @@ export const WaitingPassengerScreen: React.FC = () => {
   const clearTrip = useTripStore((s) => s.clearTrip);
   const trip = useTripStore((s) => s.trip);
   const driverId = useAuthStore((s) => s.driverId);
+
+  useEffect(() => {
+    if (!trip) return;
+    let cancelled = false;
+    Location.reverseGeocodeAsync({ latitude: trip.origin_lat, longitude: trip.origin_lng })
+      .then((results) => {
+        if (cancelled || !results.length) return;
+        const r = results[0];
+        const parts = [r.name || r.street, r.district, r.city].filter(Boolean).join(', ');
+        if (parts) setDisplayAddress(parts);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [trip?.id]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -127,7 +147,11 @@ export const WaitingPassengerScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+    >
       <StatusBar barStyle="dark-content" />
       {showModal && (
         <View style={styles.modalOverlay}>
@@ -208,7 +232,7 @@ export const WaitingPassengerScreen: React.FC = () => {
       <Text style={styles.totalWait}>5:00</Text>
 
       <Text style={styles.waitingFor}>Esperando al pasajero</Text>
-      <Text style={styles.address}>en {trip?.origin_address ?? 'Origen'}</Text>
+      <Text style={styles.address}>en {displayAddress ?? trip?.origin_address ?? 'Origen'}</Text>
 
       {trip?.pickup_instructions ? (
         <View style={styles.instructionsCard}>
@@ -253,7 +277,7 @@ export const WaitingPassengerScreen: React.FC = () => {
           {hasTimeLeft ? 'Cancelar viaje' : 'Cancelar con compensacion'}
         </Text>
       </TouchableOpacity>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
