@@ -39,6 +39,8 @@ interface MapViewProps {
   userIcon?: 'car' | 'moto' | 'camioneta' | 'person' | null;
   style?: ViewStyle;
   onError?: () => void;
+  onMoveEnd?: (center: { lat: number; lng: number }) => void;
+  recenterKey?: number;
 }
 
 const DEFAULT_CENTER: [number, number] = [-59.1332, -37.3217];
@@ -414,6 +416,11 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
           clearAlternativeRoute();
         }
         break;
+      case 'recenter':
+        if (msg.lat != null && msg.lng != null) {
+          map.flyTo({ center: [msg.lng, msg.lat], zoom: 15, duration: 600 });
+        }
+        break;
     }
   });
 
@@ -440,6 +447,8 @@ export const MapView: React.FC<MapViewProps> = ({
   userIcon,
   style,
   onError,
+  onMoveEnd,
+  recenterKey,
 }) => {
   const mapHtml = generateMapHtml({
     turquoise: theme.colors.turquoise,
@@ -554,12 +563,27 @@ export const MapView: React.FC<MapViewProps> = ({
     );
   }, [heatmapPoints, isLoaded]);
 
+  useEffect(() => {
+    if (!isLoaded || !webViewRef.current || recenterKey == null) return;
+
+    webViewRef.current.postMessage(
+      JSON.stringify({
+        type: 'recenter',
+        lat: userLocation?.[1] ?? null,
+        lng: userLocation?.[0] ?? null,
+      }),
+    );
+  }, [recenterKey, userLocation, isLoaded]);
+
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
       try {
         const data = JSON.parse(event.nativeEvent.data);
         switch (data.type) {
           case 'moved':
+            if (data.center && onMoveEnd) {
+              onMoveEnd(data.center);
+            }
             break;
           case 'markerClick':
             break;
@@ -572,7 +596,7 @@ export const MapView: React.FC<MapViewProps> = ({
         }
       } catch {}
     },
-    [onError],
+    [onError, onMoveEnd],
   );
 
   if (hasError) {

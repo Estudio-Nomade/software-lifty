@@ -406,6 +406,11 @@ export function generateMapHtml(colors: { turquoise: string; lightGray: string; 
           clearAlternativeRoute();
         }
         break;
+      case 'recenter':
+        if (msg.lat != null && msg.lng != null) {
+          map.flyTo({ center: [msg.lng, msg.lat], zoom: 15, duration: 600 });
+        }
+        break;
     }
   });
 
