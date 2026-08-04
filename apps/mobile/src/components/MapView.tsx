@@ -40,7 +40,7 @@ interface MapViewProps {
   onError?: () => void;
 }
 
-const DEFAULT_CENTER: [number, number] = [-65.1833, -31.9333];
+const DEFAULT_CENTER: [number, number] = [-59.1332, -37.3217];
 const DEFAULT_ZOOM = 15;
 
 function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: string }) {
@@ -95,7 +95,7 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
 <body>
 <div id="map"></div>
 <script>
-  var DEFAULT_CENTER = [-65.1833, -31.9333];
+  var DEFAULT_CENTER = [-59.1332, -37.3217];
   var DEFAULT_ZOOM = 15;
 
   var map = new maplibregl.Map({
@@ -490,7 +490,7 @@ export const MapView: React.FC<MapViewProps> = ({
         coordinates: routeLine,
       }),
     );
-  }, [isLoaded]);
+  }, [isLoaded, routeLine]);
 
   useEffect(() => {
     if (!isLoaded || !webViewRef.current) return;
