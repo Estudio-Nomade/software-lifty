@@ -189,36 +189,45 @@ export const WaitingPassengerScreen: React.FC = () => {
       )}
 
       {showVerificationModal && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modal}>
-            <Text style={styles.modalTitle}>Código de verificación</Text>
-            <Text style={styles.modalText}>Pedile al pasajero el código de 4 dígitos</Text>
-            <OTPInput
-              length={4}
-              value={verificationCode}
-              onChange={(val) => {
-                setVerificationCode(val);
-                if (verificationError) setVerificationError('');
-              }}
-            />
-            {verificationError ? (
-              <Text style={styles.verificationError}>{verificationError}</Text>
-            ) : null}
-            <Button
-              title="CONFIRMAR"
-              variant="cta"
-              onPress={handleVerifyAndStart}
-              loading={verifying}
-              disabled={verificationCode.length !== 4}
-              style={styles.modalButton}
-            />
-            <Button
-              title="CANCELAR"
-              onPress={() => setShowVerificationModal(false)}
-              style={styles.modalButton}
-            />
-          </View>
-        </View>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScrollView
+            contentContainerStyle={styles.modalScrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.modal}>
+              <Text style={styles.modalTitle}>Código de verificación</Text>
+              <Text style={styles.modalText}>Pedile al pasajero el código de 4 dígitos</Text>
+              <OTPInput
+                length={4}
+                value={verificationCode}
+                onChange={(val) => {
+                  setVerificationCode(val);
+                  if (verificationError) setVerificationError('');
+                }}
+              />
+              {verificationError ? (
+                <Text style={styles.verificationError}>{verificationError}</Text>
+              ) : null}
+              <Button
+                title="CONFIRMAR"
+                variant="cta"
+                onPress={handleVerifyAndStart}
+                loading={verifying}
+                disabled={verificationCode.length !== 4}
+                style={styles.modalButton}
+              />
+              <Button
+                title="CANCELAR"
+                onPress={() => setShowVerificationModal(false)}
+                style={styles.modalButton}
+              />
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       )}
 
       {__DEV__ && (
@@ -412,6 +421,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modal: {
     width: 310,
