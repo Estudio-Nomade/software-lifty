@@ -20,7 +20,6 @@ import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
 import { stopTracking } from '../lib/location';
 import { useLocationStore } from '../store/locationStore';
 import { useOnlineStore } from '../store/onlineStore';
-import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
 export const OnlineScreen: React.FC = () => {
@@ -34,7 +33,6 @@ export const OnlineScreen: React.FC = () => {
   const signOut = useSignOut();
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
-  const vehicleIcon = useVehicleStore((s) => s.iconType);
 
   const profileSchema = z.object({
     full_name: z.string(),
@@ -51,12 +49,6 @@ export const OnlineScreen: React.FC = () => {
     queryFn: () => getValidated('/drivers/me', profileSchema),
     staleTime: 5 * 60 * 1000,
   });
-
-  useEffect(() => {
-    if (profile?.vehicle?.vehicle_type) {
-      useVehicleStore.getState().setVehicleType(profile.vehicle.vehicle_type);
-    }
-  }, [profile]);
 
   const {
     data: earnings,
@@ -279,7 +271,6 @@ export const OnlineScreen: React.FC = () => {
               userLocation={
                 locationLat != null && locationLng != null ? [locationLng, locationLat] : null
               }
-              userIcon={vehicleIcon}
               heatmapPoints={heatmapPoints}
             />
           </View>
