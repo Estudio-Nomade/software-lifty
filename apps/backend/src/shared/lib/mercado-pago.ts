@@ -25,6 +25,10 @@ export interface MockOverrides {
 
 const mockOverrides: MockOverrides = {};
 
+export function getMockOverrides(): Readonly<MockOverrides> {
+  return mockOverrides;
+}
+
 export function setMockOverrides(overrides: MockOverrides | null): void {
   if (overrides === null) {
     mockOverrides.getPayment = undefined;
