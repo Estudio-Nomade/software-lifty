@@ -59,7 +59,7 @@ export const NavigationScreen: React.FC = () => {
 
   const pickupCoord: [number, number] = trip
     ? [trip.origin_lng, trip.origin_lat]
-    : [-65.1833, -31.9333];
+    : [-59.1332, -37.3217];
 
   useEffect(() => {
     startTracking();
