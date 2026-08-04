@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
 import type React from 'react';
@@ -38,6 +39,18 @@ const formatOnlineTime = (ms: number): string => {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 };
 
+const havDistance = (a: { lat: number; lng: number }, b: { lat: number; lng: number }): number => {
+  const R = 6_371_000;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLng = Math.sin(dLng / 2);
+  const aa =
+    sinDLat * sinDLat +
+    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * sinDLng * sinDLng;
+  return R * 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
+};
+
 export const ActiveScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const isOnline = useOnlineStore((s) => s.isOnline);
@@ -50,6 +63,8 @@ export const ActiveScreen: React.FC = () => {
   const [menuVisible, setMenuVisible] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [onlineTime, setOnlineTime] = useState(0);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [recenterKey, setRecenterKey] = useState(0);
   const signedOutRef = useRef(false);
   const signOut = useSignOut();
   const locationLat = useLocationStore((s) => s.lat);
@@ -159,6 +174,14 @@ export const ActiveScreen: React.FC = () => {
     }
   }, [setOnline]);
 
+  const handleMapMove = useCallback((center: { lat: number; lng: number }) => {
+    setMapCenter(center);
+  }, []);
+
+  const handleRecenter = useCallback(() => {
+    setRecenterKey((k) => k + 1);
+  }, []);
+
   const handleToggle = useCallback(
     async (newValue: boolean) => {
       if (newValue) {
@@ -235,6 +258,11 @@ export const ActiveScreen: React.FC = () => {
     [navigation, signOut, handleToggle, isOnline],
   );
 
+  const isOffCenter =
+    mapCenter && locationLat != null && locationLng != null
+      ? havDistance(mapCenter, { lat: locationLat, lng: locationLng }) > 10
+      : false;
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
@@ -246,7 +274,19 @@ export const ActiveScreen: React.FC = () => {
           locationLat != null && locationLng != null ? [locationLng, locationLat] : null
         }
         heatmapPoints={heatmapPoints}
+        onMoveEnd={handleMapMove}
+        recenterKey={recenterKey}
       />
+
+      {isOffCenter && (
+        <TouchableOpacity
+          style={styles.recenterButton}
+          onPress={handleRecenter}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="locate-outline" size={24} color={theme.colors.turquoise} />
+        </TouchableOpacity>
+      )}
 
       <View style={styles.headerOverlay}>
         <Navbar
@@ -517,5 +557,22 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.medium,
+  },
+  recenterButton: {
+    position: 'absolute',
+    bottom: 200,
+    right: theme.spacing.md,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: theme.colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
 });
