@@ -38,8 +38,19 @@ export const ratingsService = {
         throw new AppError('Trip is not in completed status', 400, 'BAD_REQUEST');
       }
 
+      await tx
+        .update(trips)
+        .set({ status: 'rated', updated_at: new Date() })
+        .where(eq(trips.id, tripId));
+
+      await tx.insert(tripEvents).values({
+        trip_id: tripId,
+        from_status: 'completed',
+        to_status: 'rated',
+      });
+
       if (!trip.passenger_id) {
-        throw new AppError('Trip has no passenger', 400, 'BAD_REQUEST');
+        return { rating_id: null, message: 'Trip completed (no passenger to rate)' };
       }
 
       const [rating] = await tx
@@ -53,17 +64,6 @@ export const ratingsService = {
           comment: body.comment ?? null,
         })
         .returning({ id: ratings.id });
-
-      await tx
-        .update(trips)
-        .set({ status: 'rated', updated_at: new Date() })
-        .where(eq(trips.id, tripId));
-
-      await tx.insert(tripEvents).values({
-        trip_id: tripId,
-        from_status: 'completed',
-        to_status: 'rated',
-      });
 
       const [rateeDriver] = await tx
         .select({ id: drivers.id })

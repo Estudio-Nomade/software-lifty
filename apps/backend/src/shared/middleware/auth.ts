@@ -33,17 +33,21 @@ async function getTestUserFromToken(token: string): Promise<AuthUser | null> {
 }
 
 function realGetUser(token: string): Promise<AuthUser | null> {
-  if (process.env.NODE_ENV === 'test') {
-    return getTestUserFromToken(token);
-  }
+  const isDevOrTest = process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
 
   const supabase = getSupabaseClient();
   if (!supabase) {
+    if (isDevOrTest) {
+      return getTestUserFromToken(token);
+    }
     logger.warn('[AUTH] Supabase client not configured, rejecting all requests');
     return Promise.resolve(null);
   }
   return supabase.auth.getUser(token).then(({ data, error }) => {
-    if (error || !data.user) return null;
+    if (error || !data.user) {
+      if (isDevOrTest) return getTestUserFromToken(token);
+      return null;
+    }
     return findOrCreateUser(data.user);
   });
 }
