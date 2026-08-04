@@ -20,6 +20,7 @@ import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
 import { stopTracking } from '../lib/location';
 import { useLocationStore } from '../store/locationStore';
 import { useOnlineStore } from '../store/onlineStore';
+import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
 export const OnlineScreen: React.FC = () => {
@@ -49,6 +50,12 @@ export const OnlineScreen: React.FC = () => {
     queryFn: () => getValidated('/drivers/me', profileSchema),
     staleTime: 5 * 60 * 1000,
   });
+
+  useEffect(() => {
+    if (profile?.vehicle?.vehicle_type) {
+      useVehicleStore.getState().setVehicleType(profile.vehicle.vehicle_type);
+    }
+  }, [profile?.vehicle?.vehicle_type]);
 
   const {
     data: earnings,

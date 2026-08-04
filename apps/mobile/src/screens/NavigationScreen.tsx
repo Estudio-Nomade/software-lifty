@@ -27,6 +27,7 @@ import { decodePolyline } from '../lib/polyline';
 import { subscribeToTripChannel } from '../lib/realtime';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
+import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
 export const NavigationScreen: React.FC = () => {
@@ -38,6 +39,7 @@ export const NavigationScreen: React.FC = () => {
   const setTripStatus = useTripStore((s) => s.setTripStatus);
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
+  const iconType = useVehicleStore((s) => s.iconType);
   const enRouteSent = useRef(false);
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
@@ -212,7 +214,7 @@ export const NavigationScreen: React.FC = () => {
               id: 'pickup',
               coordinate: pickupCoord,
               title: 'Pasajero',
-              color: theme.colors.dangerRed,
+              icon: 'person',
             },
             ...(locationLat != null && locationLng != null
               ? [
@@ -220,7 +222,7 @@ export const NavigationScreen: React.FC = () => {
                     id: 'my-location',
                     coordinate: [locationLng, locationLat] as [number, number],
                     title: 'Mi ubicación',
-                    color: '#1BBFAE',
+                    icon: iconType ?? 'car',
                   },
                 ]
               : []),
@@ -230,7 +232,7 @@ export const NavigationScreen: React.FC = () => {
                     id: 'driver-location',
                     coordinate: driverCoords,
                     title: 'Conductor',
-                    color: '#3182CE',
+                    icon: iconType ?? 'car',
                   },
                 ]
               : []),

@@ -22,6 +22,7 @@ import { subscribeToDriverChannel } from '../lib/realtime';
 import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
+import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -70,6 +71,12 @@ export const ActiveScreen: React.FC = () => {
     queryFn: () => getValidated('/drivers/me', profileSchema),
     staleTime: 5 * 60 * 1000,
   });
+
+  useEffect(() => {
+    if (profile?.vehicle?.vehicle_type) {
+      useVehicleStore.getState().setVehicleType(profile.vehicle.vehicle_type);
+    }
+  }, [profile?.vehicle?.vehicle_type]);
 
   useEffect(() => {
     if (!isOnline) return;

@@ -19,6 +19,7 @@ interface MarkerData {
   coordinate: [number, number];
   title?: string;
   color?: string;
+  icon?: 'car' | 'moto' | 'camioneta' | 'person';
 }
 
 interface HeatmapPoint {
@@ -56,6 +57,7 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script type="module" src="https://unpkg.com/ionicons@7.4.0/dist/ionicons/ionicons.esm.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body, #map { width: 100%; height: 100%; overflow: hidden; }
@@ -74,6 +76,22 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
     border-radius: 50%;
     animation: pulse 2s infinite;
   }
+  .marker-icon {
+    width: 36px; height: 36px;
+    background: white;
+    border: 2px solid #FFFFFF;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .marker-icon ion-icon {
+    font-size: 24px;
+    color: ${colors.turquoise};
+  }
   .user-marker {
     width: 44px; height: 44px;
     background: white;
@@ -82,9 +100,12 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 24px;
-    line-height: 1;
     box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    overflow: hidden;
+  }
+  .user-marker ion-icon {
+    font-size: 28px;
+    color: ${colors.turquoise};
   }
   @keyframes pulse {
     0% { transform: scale(0.5); opacity: 0.8; }
@@ -117,10 +138,10 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
   var hasPerformedInitialCenter = false;
 
   var USER_ICONS = {
-    car: '\uD83D\uDE97',
-    moto: '\uD83C\uDFCD\uFE0F',
-    camioneta: '\uD83D\uDE99',
-    person: '\uD83E\uDDCD',
+    car: 'car-outline',
+    moto: 'bicycle-outline',
+    camioneta: 'car-sport-outline',
+    person: 'person-outline',
   };
 
   function setView(center, zoom) {
@@ -131,10 +152,16 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
     markers.forEach(function (m) { m.remove(); });
     markers = [];
     newMarkers.forEach(function (mk) {
-      var color = mk.color || '${colors.turquoise}';
       var el = document.createElement('div');
-      el.className = 'marker-dot';
-      el.style.background = color;
+      if (mk.icon) {
+        var iconEmoji = USER_ICONS[mk.icon] || USER_ICONS['car'];
+        el.className = 'marker-icon';
+        el.innerHTML = '<ion-icon name="' + iconEmoji + '"></ion-icon>';
+      } else {
+        var color = mk.color || '${colors.turquoise}';
+        el.className = 'marker-dot';
+        el.style.background = color;
+      }
       el.addEventListener('click', function () {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'markerClick',
@@ -238,7 +265,7 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
 
       var el = document.createElement('div');
       el.className = 'user-marker';
-      el.textContent = icon;
+      el.innerHTML = '<ion-icon name="' + icon + '"></ion-icon>';
       userMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
       userIconType = iconType;
     } else {

@@ -13,6 +13,7 @@ import { decodePolyline } from '../lib/polyline';
 import { subscribeToTripChannel } from '../lib/realtime';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
+import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
 export const TripInProgressScreen: React.FC = () => {
@@ -21,6 +22,7 @@ export const TripInProgressScreen: React.FC = () => {
   const setTripStatus = useTripStore((s) => s.setTripStatus);
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
+  const iconType = useVehicleStore((s) => s.iconType);
   const [completing, setCompleting] = React.useState(false);
   const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
@@ -159,7 +161,7 @@ export const TripInProgressScreen: React.FC = () => {
                     id: 'driver-location',
                     coordinate: driverCoords,
                     title: 'Conductor',
-                    color: '#3182CE',
+                    icon: iconType ?? 'car',
                   },
                 ]
               : undefined
