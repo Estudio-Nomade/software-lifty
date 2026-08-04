@@ -301,7 +301,7 @@ describe('Driver Profile', () => {
       .limit(1);
     expect(beforeDriver[0]?.last_heartbeat).toBeNull();
 
-    const { status } = await request('PUT', '/api/drivers/me/heartbeat', undefined, token);
+    const { status } = await request('PUT', '/api/drivers/me/heartbeat', {}, token);
 
     expect(status).toBe(200);
 
@@ -315,14 +315,14 @@ describe('Driver Profile', () => {
   });
 
   test('PUT /me/heartbeat without auth returns 401', async () => {
-    const { status, data } = await request('PUT', '/api/drivers/me/heartbeat');
+    const { status, data } = await request('PUT', '/api/drivers/me/heartbeat', {});
     expect(status).toBe(401);
     expect(data.error).toBe('Unauthorized');
   });
 
   test('PUT /me/heartbeat without driver row returns error', async () => {
     const { token } = await registerAndGetToken(phone, password);
-    const { status, data } = await request('PUT', '/api/drivers/me/heartbeat', undefined, token);
+    const { status, data } = await request('PUT', '/api/drivers/me/heartbeat', {}, token);
     expect(status).toBe(404);
     expect(data.error.message).toContain('Onboarding');
   });
@@ -365,7 +365,7 @@ describe('Driver Profile', () => {
       .set({ status: 'approved', is_online: true })
       .where(eq(drivers.id, driverId));
 
-    const { status } = await request('PUT', '/api/drivers/me/heartbeat', undefined, token);
+    const { status } = await request('PUT', '/api/drivers/me/heartbeat', {}, token);
 
     expect(status).toBe(200);
 

@@ -1,32 +1,16 @@
-import { theme } from '@/theme';
-import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-  type ViewStyle,
-} from 'react-native';
-import WebView from 'react-native-webview/lib/WebView';
-import type { WebViewMessageEvent } from 'react-native-webview/lib/WebViewTypes';
-import { Text } from './ui/Text';
-
-const WebViewComponent = WebView as any;
-
-interface MarkerData {
+export interface MarkerData {
   id: string;
   coordinate: [number, number];
   title?: string;
   color?: string;
 }
 
-interface HeatmapPoint {
+export interface HeatmapPoint {
   coordinate: [number, number];
   weight: number;
 }
 
-interface MapViewProps {
+export interface MapViewProps {
   centerCoordinate?: [number, number];
   zoom?: number;
   markers?: MarkerData[];
@@ -36,14 +20,14 @@ interface MapViewProps {
   followUserLocation?: boolean;
   userLocation?: [number, number] | null;
   userIcon?: 'car' | 'moto' | 'camioneta' | 'person' | null;
-  style?: ViewStyle;
+  style?: import('react-native').ViewStyle;
   onError?: () => void;
 }
 
-const DEFAULT_CENTER: [number, number] = [-65.1833, -31.9333];
-const DEFAULT_ZOOM = 15;
+export const DEFAULT_CENTER: [number, number] = [-65.1833, -31.9333];
+export const DEFAULT_ZOOM = 15;
 
-function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: string }) {
+export function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: string }) {
   const r = Number.parseInt(colors.turquoise.slice(1, 3), 16);
   const g = Number.parseInt(colors.turquoise.slice(3, 5), 16);
   const b = Number.parseInt(colors.turquoise.slice(5, 7), 16);
@@ -98,6 +82,14 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
   var DEFAULT_CENTER = [-65.1833, -31.9333];
   var DEFAULT_ZOOM = 15;
 
+  function postToHost(msg) {
+    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+      window.ReactNativeWebView.postMessage(msg);
+    } else if (window.parent && window.parent !== window) {
+      window.parent.postMessage(msg, '*');
+    }
+  }
+
   var map = new maplibregl.Map({
     container: 'map',
     style: 'https://tiles.openfreemap.org/styles/liberty',
@@ -136,7 +128,7 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
       el.className = 'marker-dot';
       el.style.background = color;
       el.addEventListener('click', function () {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
+        postToHost(JSON.stringify({
           type: 'markerClick',
           id: mk.id,
         }));
@@ -314,12 +306,12 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
       applyRoute(pendingRoute);
       pendingRoute = null;
     }
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ready' }));
+    postToHost(JSON.stringify({ type: 'ready' }));
   });
 
   map.on('moveend', function () {
     var c = map.getCenter();
-    window.ReactNativeWebView.postMessage(JSON.stringify({
+    postToHost(JSON.stringify({
       type: 'moved',
       center: { lng: c.lng, lat: c.lat },
       zoom: map.getZoom(),
@@ -327,7 +319,7 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
   });
 
   map.on('error', function (e) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({
+    postToHost(JSON.stringify({
       type: 'error',
       message: (e && e.error && e.error.message) || 'Map error',
     }));
@@ -391,7 +383,7 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
   });
 
   window.addEventListener('error', function (e) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({
+    postToHost(JSON.stringify({
       type: 'error',
       message: e.message || 'Unknown error',
     }));
@@ -400,240 +392,3 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
 </body>
 </html>`;
 }
-
-export const MapView: React.FC<MapViewProps> = ({
-  centerCoordinate = DEFAULT_CENTER,
-  zoom = DEFAULT_ZOOM,
-  markers = [],
-  routeLine,
-  alternativeRouteLine,
-  heatmapPoints,
-  followUserLocation = false,
-  userLocation,
-  userIcon,
-  style,
-  onError,
-}) => {
-  const mapHtml = generateMapHtml({
-    turquoise: theme.colors.turquoise,
-    lightGray: theme.colors.lightGray,
-    amber: theme.colors.amber,
-  });
-
-  const webViewRef = useRef<any>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const retryKey = useRef(0);
-
-  const handleRetry = useCallback(() => {
-    setHasError(false);
-    setIsLoaded(false);
-    retryKey.current += 1;
-  }, []);
-
-  const handleWebViewError = useCallback(() => {
-    setHasError(true);
-    onError?.();
-  }, [onError]);
-
-  useEffect(() => {
-    if (!isLoaded || !webViewRef.current) return;
-
-    webViewRef.current.postMessage(
-      JSON.stringify({
-        type: 'init',
-        center: centerCoordinate,
-        zoom: zoom,
-      }),
-    );
-  }, [centerCoordinate, zoom, isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded || !webViewRef.current) return;
-
-    webViewRef.current.postMessage(
-      JSON.stringify({
-        type: 'markers',
-        markers: markers,
-      }),
-    );
-  }, [markers, isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded || !webViewRef.current) return;
-
-    webViewRef.current.postMessage(
-      JSON.stringify({
-        type: 'route',
-        coordinates: routeLine || [],
-      }),
-    );
-  }, [routeLine, isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded || !webViewRef.current) return;
-
-    webViewRef.current.postMessage(
-      JSON.stringify({
-        type: 'alternativeRoute',
-        coordinates: alternativeRouteLine || [],
-      }),
-    );
-  }, [alternativeRouteLine, isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded || !webViewRef.current || !routeLine || routeLine.length < 2) return;
-
-    webViewRef.current.postMessage(
-      JSON.stringify({
-        type: 'fitRoute',
-        coordinates: routeLine,
-      }),
-    );
-  }, [isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded || !webViewRef.current) return;
-
-    webViewRef.current.postMessage(
-      JSON.stringify({
-        type: 'followUser',
-        enabled: followUserLocation,
-      }),
-    );
-  }, [followUserLocation, isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded || !webViewRef.current) return;
-
-    webViewRef.current.postMessage(
-      JSON.stringify({
-        type: 'userLocation',
-        lat: userLocation?.[1] ?? null,
-        lng: userLocation?.[0] ?? null,
-        icon: userIcon || null,
-      }),
-    );
-  }, [userLocation, userIcon, isLoaded]);
-
-  useEffect(() => {
-    if (!isLoaded || !webViewRef.current) return;
-
-    webViewRef.current.postMessage(
-      JSON.stringify({
-        type: 'heatmap',
-        points: heatmapPoints || [],
-      }),
-    );
-  }, [heatmapPoints, isLoaded]);
-
-  const handleMessage = useCallback(
-    (event: WebViewMessageEvent) => {
-      try {
-        const data = JSON.parse(event.nativeEvent.data);
-        switch (data.type) {
-          case 'moved':
-            break;
-          case 'markerClick':
-            break;
-          case 'ready':
-            break;
-          case 'error':
-            setHasError(true);
-            onError?.();
-            break;
-        }
-      } catch {}
-    },
-    [onError],
-  );
-
-  if (hasError) {
-    return (
-      <View style={[styles.container, styles.errorContainer, style]}>
-        <Text style={styles.errorText}>No se pudo cargar el mapa</Text>
-        <TouchableOpacity onPress={handleRetry} style={styles.retryButton}>
-          <Text style={styles.retryText}>Reintentar</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.container, style]}>
-      <WebViewComponent
-        key={retryKey.current}
-        ref={webViewRef}
-        source={{ html: mapHtml }}
-        style={styles.webview}
-        onLoadEnd={() => setIsLoaded(true)}
-        onError={handleWebViewError}
-        onMessage={handleMessage}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        geolocationEnabled={true}
-        startInLoadingState={true}
-        renderLoading={() => (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.turquoise} />
-          </View>
-        )}
-        scrollEnabled={false}
-        bounces={false}
-        overScrollMode="never"
-      />
-      {!isLoaded && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={theme.colors.turquoise} />
-        </View>
-      )}
-    </View>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  webview: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  loadingContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
-  },
-  loadingOverlay: {
-    ...(StyleSheet.absoluteFill as object),
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
-  },
-  errorContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
-    gap: theme.spacing.md,
-  },
-  errorText: {
-    fontSize: theme.fontSize.md,
-    color: theme.colors.mediumGray,
-  },
-  retryButton: {
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.radius.buttonRadius,
-    backgroundColor: theme.colors.turquoise,
-  },
-  retryText: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.white,
-  },
-});

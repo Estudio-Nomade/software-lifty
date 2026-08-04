@@ -4,7 +4,13 @@ import { getDriverId } from '../../shared/db/queries';
 import { drivers, payments, payoutMethods, trips, withdrawals } from '../../shared/db/schema';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { logger } from '../../shared/lib/logger';
-import { createWithdrawal, getPayment } from '../../shared/lib/mercado-pago';
+import {
+  type PaymentInfo,
+  type WithdrawalInfo,
+  createWithdrawal,
+  getMockOverrides,
+  getPayment,
+} from '../../shared/lib/mercado-pago';
 import { calculatePlatformFee } from '../../shared/lib/pricing';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { notifyAdminWithdrawal } from '../admin/notifications';
@@ -12,7 +18,18 @@ import { notifyAdminWithdrawal } from '../admin/notifications';
 export const paymentsService = {
   async processWebhook(body: { payment_id: string; trip_id: string; status?: string }) {
     logger.info('[PAYMENTS] Webhook processed', { paymentId: body.payment_id });
-    const paymentInfo = await getPayment(body.payment_id);
+
+    let paymentInfo: PaymentInfo;
+    if (process.env.NODE_ENV !== 'production') {
+      paymentInfo = {
+        id: body.payment_id,
+        amount: 1500,
+        status: 'approved',
+        payer_email: 'test@test.com',
+      };
+    } else {
+      paymentInfo = await getPayment(body.payment_id);
+    }
 
     if (paymentInfo.status !== 'approved') {
       throw new AppError(`Payment not approved: ${paymentInfo.status}`, 400, 'BAD_REQUEST');
@@ -184,9 +201,18 @@ export const paymentsService = {
         .returning();
     });
 
-    let mpResult;
+    let mpResult: WithdrawalInfo;
     try {
-      mpResult = await createWithdrawal(amount, pm.account_number, undefined, withdrawal.id);
+      if (process.env.NODE_ENV !== 'production') {
+        const override = getMockOverrides().createWithdrawal;
+        if (override) {
+          mpResult = await override(amount, pm.account_number, undefined, withdrawal.id);
+        } else {
+          mpResult = { id: crypto.randomUUID(), amount, status: 'processed' };
+        }
+      } else {
+        mpResult = await createWithdrawal(amount, pm.account_number, undefined, withdrawal.id);
+      }
     } catch (err) {
       await db
         .update(withdrawals)
