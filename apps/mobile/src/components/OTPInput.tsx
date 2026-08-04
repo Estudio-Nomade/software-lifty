@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useRef } from 'react';
-import { Platform, TextInput as RNTextInput, StyleSheet, View } from 'react-native';
+import { TextInput as RNTextInput, StyleSheet, View } from 'react-native';
 import { theme } from '../theme';
 
 interface OTPInputProps {
@@ -42,11 +42,10 @@ export const OTPInput: React.FC<OTPInputProps> = ({ length = 4, value, onChange 
             value={value[index] || ''}
             onChangeText={(text) => handleChange(text, index)}
             onKeyPress={(e) => handleKeyPress(e, index)}
-            keyboardType={Platform.select({
-              ios: 'number-pad' as const,
-              default: 'numeric' as const,
-            })}
+            keyboardType="number-pad"
+            inputMode="numeric"
             maxLength={1}
+            blurOnSubmit={false}
             selectTextOnFocus
             autoComplete="off"
             importantForAutofill="no"
