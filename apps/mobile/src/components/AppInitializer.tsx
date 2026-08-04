@@ -5,6 +5,7 @@ import { InteractionManager, Platform } from 'react-native';
 import { apiClient } from '../api/client';
 import { driverStatusSchema } from '../api/types';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { getCurrentPosition } from '../lib/location';
 import {
   handleNotificationResponse,
   registerForPush,
@@ -52,6 +53,14 @@ function SessionRestore() {
       }
     };
     restore();
+  }, []);
+
+  return null;
+}
+
+function LocationInit() {
+  useEffect(() => {
+    getCurrentPosition();
   }, []);
 
   return null;
@@ -156,6 +165,7 @@ export function AppInitializer() {
     <>
       <AuthRedirectWatcher />
       <SessionRestore />
+      <LocationInit />
       <ActiveTripRecovery />
       <NotificationSetup />
     </>

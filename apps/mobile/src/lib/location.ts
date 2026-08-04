@@ -40,6 +40,22 @@ export async function stopTracking(): Promise<void> {
   }
 }
 
+export async function getCurrentPosition(): Promise<void> {
+  try {
+    const { granted } = await Location.requestForegroundPermissionsAsync();
+    if (!granted) return;
+
+    const pos = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High,
+    });
+    useLocationStore
+      .getState()
+      .setLocation(pos.coords.latitude, pos.coords.longitude, pos.coords.heading);
+  } catch (error) {
+    console.error('getCurrentPosition failed:', error);
+  }
+}
+
 export async function hasPermissions(): Promise<boolean> {
   try {
     const { status } = await Location.getForegroundPermissionsAsync();
