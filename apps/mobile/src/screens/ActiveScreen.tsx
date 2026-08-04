@@ -22,10 +22,11 @@ import { subscribeToDriverChannel } from '../lib/realtime';
 import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
+import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const COLLAPSED_HEIGHT = 100;
+const COLLAPSED_HEIGHT = 180;
 const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.45;
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -39,6 +40,7 @@ const formatOnlineTime = (ms: number): string => {
 
 export const ActiveScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const isOnline = useOnlineStore((s) => s.isOnline);
   const setOnline = useOnlineStore((s) => s.setOnline);
   const onlineSince = useOnlineStore((s) => s.onlineSince);
   const setOnlineSince = useOnlineStore((s) => s.setOnlineSince);
@@ -48,13 +50,21 @@ export const ActiveScreen: React.FC = () => {
   const [menuVisible, setMenuVisible] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [onlineTime, setOnlineTime] = useState(0);
-  const disconnectedRef = useRef(false);
+  const signedOutRef = useRef(false);
   const signOut = useSignOut();
+  const locationLat = useLocationStore((s) => s.lat);
+  const locationLng = useLocationStore((s) => s.lng);
+  const vehicleIcon = useVehicleStore((s) => s.iconType);
   useLocationWS();
 
   const profileSchema = z.object({
     full_name: z.string(),
     avatar_url: z.string().nullable(),
+    vehicle: z
+      .object({
+        vehicle_type: z.string(),
+      })
+      .nullable(),
   });
 
   const { data: profile } = useQuery({
@@ -64,28 +74,14 @@ export const ActiveScreen: React.FC = () => {
   });
 
   useEffect(() => {
-    const reconcile = async () => {
-      if (onlineSince) return;
-      try {
-        const stored = await AsyncStorage.getItem(ONLINE_SINCE_KEY);
-        if (stored) {
-          const ts = Number(stored);
-          if (!Number.isNaN(ts)) {
-            setOnlineSince(ts);
-            useOnlineStore.setState({ isOnline: true });
-          }
-        } else {
-          const now = Date.now();
-          setOnlineSince(now);
-          useOnlineStore.setState({ isOnline: true });
-          AsyncStorage.setItem(ONLINE_SINCE_KEY, String(now)).catch(() => {});
-        }
-      } catch {}
-    };
-    reconcile();
-  }, []);
+    if (profile?.vehicle?.vehicle_type) {
+      useVehicleStore.getState().setVehicleType(profile.vehicle.vehicle_type);
+    }
+  }, [profile]);
 
   useEffect(() => {
+    if (!isOnline) return;
+
     const heartbeatInterval = setInterval(() => {
       const { lat, lng, heading } = useLocationStore.getState();
       apiClient.put('/drivers/me/heartbeat', { lat, lng, heading }).catch(() => {});
@@ -95,16 +91,14 @@ export const ActiveScreen: React.FC = () => {
     startTracking();
 
     return () => {
-      if (!disconnectedRef.current) {
-        clearInterval(heartbeatInterval);
-        useOnlineStore.getState().setHeartbeatRef(null);
-        stopTracking();
-      }
+      clearInterval(heartbeatInterval);
+      useOnlineStore.getState().setHeartbeatRef(null);
+      stopTracking();
     };
-  }, []);
+  }, [isOnline]);
 
   useEffect(() => {
-    if (!driverId) return;
+    if (!driverId || !isOnline) return;
 
     const unsubscribe = subscribeToDriverChannel(driverId, () => {
       navigation.navigate('IncomingRequest');
@@ -123,7 +117,7 @@ export const ActiveScreen: React.FC = () => {
       unsubscribe();
       clearInterval(pollInterval);
     };
-  }, [driverId, navigation]);
+  }, [driverId, isOnline, navigation]);
 
   useEffect(() => {
     if (!onlineSince) return;
@@ -134,30 +128,52 @@ export const ActiveScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [onlineSince]);
 
+  const connect = useCallback(async () => {
+    setToggleError(null);
+    try {
+      await apiClient.put('/drivers/me/online', { is_online: true });
+      const now = Date.now();
+      setOnlineSince(now);
+      useOnlineStore.setState({ isOnline: true });
+      AsyncStorage.setItem(ONLINE_SINCE_KEY, String(now)).catch(() => {});
+      setOnline(true);
+    } catch (err: unknown) {
+      setToggleError(err instanceof Error ? err.message : 'Error al conectar');
+    }
+  }, [setOnline, setOnlineSince]);
+
+  const disconnect = useCallback(async () => {
+    setToggleError(null);
+    try {
+      await apiClient.put('/drivers/me/online', { is_online: false });
+
+      const ref = useOnlineStore.getState().heartbeatIntervalRef;
+      if (ref) clearInterval(ref);
+      useOnlineStore.getState().setHeartbeatRef(null);
+
+      stopTracking();
+      setOnline(false);
+      useOnlineStore.setState({ isOnline: false });
+      AsyncStorage.removeItem(ONLINE_SINCE_KEY).catch(() => {});
+    } catch (err: unknown) {
+      setToggleError(err instanceof Error ? err.message : 'Error al desconectar');
+    }
+  }, [setOnline]);
+
   const handleToggle = useCallback(
     async (newValue: boolean) => {
-      if (newValue) return;
-
-      setToggleError(null);
-
-      try {
-        await apiClient.put('/drivers/me/online', { is_online: false });
-        setOnline(false);
-        disconnectedRef.current = true;
-
-        const ref = useOnlineStore.getState().heartbeatIntervalRef;
-        if (ref) clearInterval(ref);
-        useOnlineStore.getState().setHeartbeatRef(null);
-
-        stopTracking();
-
-        navigation.replace('Online');
-      } catch (err: unknown) {
-        setToggleError(err instanceof Error ? err.message : 'Error al cambiar estado');
+      if (newValue) {
+        await connect();
+      } else {
+        await disconnect();
       }
     },
-    [setOnline, navigation],
+    [connect, disconnect],
   );
+
+  const goBackToHome = useCallback(() => {
+    navigation.replace('Online');
+  }, [navigation]);
 
   const { data: earnings } = useQuery<EarningsDaily>({
     queryKey: ['earnings-daily'],
@@ -166,7 +182,7 @@ export const ActiveScreen: React.FC = () => {
       return response.data.data ?? response.data;
     },
     refetchInterval: 60_000,
-    enabled: sheetExpanded,
+    enabled: sheetExpanded && isOnline,
   });
 
   const handleSnapChange = useCallback((index: number) => {
@@ -178,7 +194,7 @@ export const ActiveScreen: React.FC = () => {
       {
         label: 'Inicio',
         icon: 'home-outline' as const,
-        onPress: () => {},
+        onPress: () => navigation.navigate('Online'),
       },
       {
         label: 'Ganancias',
@@ -200,12 +216,16 @@ export const ActiveScreen: React.FC = () => {
         icon: 'document-text-outline' as const,
         onPress: () => navigation.navigate('TripHistory'),
       },
-      {
-        label: 'Desconectarse',
-        icon: 'power-outline' as const,
-        onPress: () => handleToggle(false),
-        dividerTop: true,
-      },
+      ...(isOnline
+        ? [
+            {
+              label: 'Desconectarse',
+              icon: 'power-outline' as const,
+              onPress: () => handleToggle(false),
+              dividerTop: true,
+            },
+          ]
+        : []),
       {
         label: 'Cerrar sesion',
         icon: 'log-out-outline' as const,
@@ -213,17 +233,20 @@ export const ActiveScreen: React.FC = () => {
         danger: true,
       },
     ],
-    [navigation, signOut, handleToggle],
+    [navigation, signOut, handleToggle, isOnline],
   );
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
 
-      {/* Heatmap hidden naturally when navigating away to IncomingRequest (component unmounts) */}
       <MapView
         style={StyleSheet.absoluteFill as any}
         followUserLocation
+        userLocation={
+          locationLat != null && locationLng != null ? [locationLng, locationLat] : null
+        }
+        userIcon={vehicleIcon}
         heatmapPoints={heatmapPoints}
       />
 
@@ -233,13 +256,15 @@ export const ActiveScreen: React.FC = () => {
           onHamburgerPress={() => setMenuVisible(true)}
           rightElement={
             <View style={styles.headerRight}>
-              <TouchableOpacity
-                style={styles.connectedBadge}
-                activeOpacity={0.7}
-                onPress={() => handleToggle(false)}
-              >
-                <Text style={styles.connectedBadgeText}>Conectado ⏻</Text>
-              </TouchableOpacity>
+              {isOnline && (
+                <TouchableOpacity
+                  style={styles.connectedBadge}
+                  activeOpacity={0.7}
+                  onPress={() => handleToggle(false)}
+                >
+                  <Text style={styles.connectedBadgeText}>Conectado</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.avatarButton}
                 activeOpacity={0.7}
@@ -256,50 +281,73 @@ export const ActiveScreen: React.FC = () => {
         />
       </View>
 
-      <BottomSheet snapPoints={[COLLAPSED_HEIGHT, EXPANDED_HEIGHT]} onSnapChange={handleSnapChange}>
-        <View style={styles.sheetContent}>
-          <View style={styles.toggleRow}>
-            <Text style={styles.statusOnline}>Estas conectado</Text>
-            <Toggle value={true} onToggle={handleToggle} />
+      {isOnline ? (
+        <BottomSheet
+          snapPoints={[COLLAPSED_HEIGHT, EXPANDED_HEIGHT]}
+          onSnapChange={handleSnapChange}
+        >
+          <View style={styles.sheetContent}>
+            <View style={styles.toggleRow}>
+              <Text style={styles.statusOnline}>Estas conectado</Text>
+              <Toggle value={true} onToggle={handleToggle} />
+            </View>
+            <Text style={styles.statusOnlineTime}>{formatOnlineTime(onlineTime)}</Text>
+            {toggleError && <Text style={styles.errorText}>{toggleError}</Text>}
+
+            <View style={styles.metricsContainer}>
+              <Text style={styles.metricsTitle}>Resumen de hoy</Text>
+
+              <View style={styles.metricRow}>
+                <Text style={styles.metricLabel}>Viajes completados</Text>
+                <Text style={styles.metricValue}>{earnings?.trip_count ?? '--'}</Text>
+              </View>
+
+              <View style={styles.metricRow}>
+                <Text style={styles.metricLabel}>Ganancias acumuladas</Text>
+                <Text style={styles.metricValue}>
+                  {earnings ? formatCurrency(earnings.total) : '--'}
+                </Text>
+              </View>
+
+              <View style={styles.metricRow}>
+                <Text style={styles.metricLabel}>Tiempo online</Text>
+                <Text style={styles.metricValue}>{formatOnlineTime(onlineTime)}</Text>
+              </View>
+
+              <View style={styles.metricRow}>
+                <Text style={styles.metricLabel}>Tasa de aceptacion</Text>
+                <Text style={[styles.metricValue, { color: theme.colors.mediumGray }]}>--</Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.earningsButton}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate('Earnings')}
+              >
+                <Text style={styles.earningsButtonText}>Ver ganancias</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <Text style={styles.statusOffline}>Desconectado</Text>
+        </BottomSheet>
+      ) : (
+        <View style={styles.offlineBar}>
+          <View style={styles.offlineBarContent}>
+            <View style={styles.offlineBarText}>
+              <Text style={styles.offlineBarTitle}>Conectate, empeza a viajar</Text>
+              <Text style={styles.offlineBarSubtitle}>Recibi solicitudes de viaje</Text>
+            </View>
+            <Toggle value={false} onToggle={handleToggle} />
+          </View>
           {toggleError && <Text style={styles.errorText}>{toggleError}</Text>}
-
-          <View style={styles.metricsContainer}>
-            <Text style={styles.metricsTitle}>Resumen de hoy</Text>
-
-            <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Viajes completados</Text>
-              <Text style={styles.metricValue}>{earnings?.trip_count ?? '--'}</Text>
-            </View>
-
-            <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Ganancias acumuladas</Text>
-              <Text style={styles.metricValue}>
-                {earnings ? formatCurrency(earnings.total) : '--'}
-              </Text>
-            </View>
-
-            <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Tiempo online</Text>
-              <Text style={styles.metricValue}>{formatOnlineTime(onlineTime)}</Text>
-            </View>
-
-            <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Tasa de aceptacion</Text>
-              <Text style={[styles.metricValue, { color: theme.colors.mediumGray }]}>--</Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.earningsButton}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate('Earnings')}
-            >
-              <Text style={styles.earningsButtonText}>Ver ganancias</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.backHomeButton}
+            activeOpacity={0.8}
+            onPress={goBackToHome}
+          >
+            <Text style={styles.backHomeButtonText}>Volver al inicio</Text>
+          </TouchableOpacity>
         </View>
-      </BottomSheet>
+      )}
 
       <SideMenu visible={menuVisible} onClose={() => setMenuVisible(false)} menuItems={menuItems} />
     </View>
@@ -338,12 +386,60 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
   },
+  ctaTitle: {
+    fontSize: theme.fontSize.lg,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.deepBlue,
+    textAlign: 'center',
+  },
+  ctaSubtitle: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.mediumGray,
+    textAlign: 'center',
+  },
   sheetContent: {
     flex: 1,
     paddingHorizontal: theme.spacing.md,
     paddingBottom: theme.spacing.md,
     alignItems: 'center',
     gap: theme.spacing.xs,
+  },
+  offlineBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: theme.colors.white,
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.lg,
+    paddingBottom: theme.spacing.xl,
+    zIndex: 20,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    gap: theme.spacing.md,
+  },
+  offlineBarContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+  },
+  offlineBarText: {
+    flex: 1,
+    gap: 2,
+  },
+  offlineBarTitle: {
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.deepBlue,
+  },
+  offlineBarSubtitle: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.mediumGray,
   },
   toggleRow: {
     flexDirection: 'row',
@@ -355,8 +451,12 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.turquoise,
   },
+  statusOnlineTime: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.mediumGray,
+  },
   statusOffline: {
-    fontSize: theme.fontSize.sm,
+    fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.mediumGray,
   },
@@ -406,5 +506,18 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.bold,
+  },
+  backHomeButton: {
+    marginTop: theme.spacing.md,
+    backgroundColor: theme.colors.deepBlue,
+    borderRadius: theme.radius.buttonRadius,
+    height: theme.dimensions.buttonHeight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backHomeButtonText: {
+    color: theme.colors.white,
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.medium,
   },
 });
