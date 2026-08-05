@@ -175,7 +175,6 @@ export const ActiveScreen: React.FC = () => {
   }, [setOnline]);
 
   const handleMapMove = useCallback((center: { lat: number; lng: number }) => {
-
     setMapCenter(center);
   }, []);
 
