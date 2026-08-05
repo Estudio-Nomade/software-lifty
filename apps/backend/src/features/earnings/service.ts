@@ -15,7 +15,10 @@ export const earningsService = {
     const driverId = await getDriverId(user);
 
     const [driver] = await db
-      .select({ platform_debt: drivers.platform_debt })
+      .select({
+        platform_debt: drivers.platform_debt,
+        commission_exempt_until: drivers.commission_exempt_until,
+      })
       .from(drivers)
       .where(eq(drivers.id, driverId))
       .limit(1);
@@ -81,6 +84,7 @@ export const earningsService = {
       yesterday: Number(yesterdayResult?.total ?? 0),
       week: Number(weekResult?.total ?? 0),
       platform_debt: Number(driver?.platform_debt ?? 0),
+      commission_exempt_until: driver?.commission_exempt_until ?? null,
     };
   },
 

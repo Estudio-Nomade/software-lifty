@@ -143,6 +143,7 @@ export const earningsDailySchema = z.object({
   yesterday: z.number().optional(),
   week: z.number().optional(),
   platform_debt: z.number().optional(),
+  commission_exempt_until: z.string().nullable().optional(),
 });
 
 export const paymentMethodSchema = z.object({

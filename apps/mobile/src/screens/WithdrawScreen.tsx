@@ -88,8 +88,8 @@ export const WithdrawScreen: React.FC = () => {
         <View style={styles.successContainer}>
           <Text style={styles.successTitle}>Solicitud enviada</Text>
           <Text style={styles.successBody}>
-            Tu retiro de {formatCurrency(parsedAmount)} sera procesado. El admin te entregara el
-            efectivo en el proximo horario de pago.
+            Tu retiro de {formatCurrency(parsedAmount)} sera procesado. Recibiras la transferencia
+            en tu cuenta dentro del proximo horario de pago (lunes a viernes de 18 a 20 hs).
           </Text>
           <Button title="Volver a ganancias" onPress={() => navigation.navigate('Earnings')} />
         </View>
