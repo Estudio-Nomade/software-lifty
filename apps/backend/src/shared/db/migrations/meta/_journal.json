@@ -211,6 +211,13 @@
       "when": 1786200000000,
       "tag": "0028_add_tip_amount",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1786300000000,
+      "tag": "0029_add_commission_exempt",
+      "breakpoints": true
     }
   ]
 }

@@ -88,7 +88,10 @@ export const EarningsScreen: React.FC = () => {
   const tripsRevenueTotal = earnings?.trips?.reduce((sum, t) => sum + (t.total_fare ?? 0), 0) ?? 0;
   const retentionPercent =
     retentionTotal > 0 ? Math.round((retentionTotal / tripsRevenueTotal) * 100) : 0;
-  const savedAmount = Math.round(tripsRevenueTotal * 0.2);
+  const isExempt =
+    earnings?.commission_exempt_until != null
+      ? new Date(earnings.commission_exempt_until) > new Date()
+      : false;
 
   const formatTime = (iso: string) => {
     const date = new Date(iso);
@@ -132,6 +135,45 @@ export const EarningsScreen: React.FC = () => {
               <Text style={styles.cardTitle}>Desglose de hoy</Text>
               <View style={styles.row}>
                 <View style={styles.rowLabelContainer}>
+                  <Ionicons name="person-outline" size={16} color={theme.colors.turquoise} />
+                  <Text style={styles.rowLabel}>Para vos</Text>
+                </View>
+                <Text style={[styles.rowValue, { color: theme.colors.turquoise }]}>
+                  {formatCurrency(earnings.total)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <View style={styles.rowLabelContainer}>
+                  <Ionicons name="business-outline" size={16} color={theme.colors.mediumGray} />
+                  <Text style={styles.rowLabel}>Comision Lifty</Text>
+                </View>
+                <Text
+                  style={[
+                    styles.rowValue,
+                    {
+                      color: retentionTotal > 0 ? theme.colors.dangerRed : theme.colors.mediumGray,
+                    },
+                  ]}
+                >
+                  -{formatCurrency(retentionTotal)}
+                  {retentionTotal > 0 ? ` (${retentionPercent}%)` : ' (0%)'}
+                </Text>
+              </View>
+              {isExempt && (
+                <View style={styles.exemptNotice}>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={16}
+                    color={theme.colors.turquoise}
+                  />
+                  <Text style={styles.exemptNoticeText}>
+                    Comision 0% — Primer mes gratis para nuevos conductores
+                  </Text>
+                </View>
+              )}
+              <View style={styles.divider} />
+              <View style={styles.row}>
+                <View style={styles.rowLabelContainer}>
                   <Ionicons name="cash-outline" size={16} color={theme.colors.mediumGray} />
                   <Text style={styles.rowLabel}>Efectivo</Text>
                 </View>
@@ -142,9 +184,7 @@ export const EarningsScreen: React.FC = () => {
                   <Ionicons name="card-outline" size={16} color={theme.colors.mediumGray} />
                   <Text style={styles.rowLabel}>Transferencia</Text>
                 </View>
-                <Text style={[styles.rowValue, { color: theme.colors.turquoise }]}>
-                  {formatCurrency(earnings.transfer)}
-                </Text>
+                <Text style={styles.rowValue}>{formatCurrency(earnings.transfer)}</Text>
               </View>
               <View style={styles.divider} />
               <View style={styles.row}>
@@ -155,26 +195,6 @@ export const EarningsScreen: React.FC = () => {
                   {formatCurrency(earnings.total)}
                 </Text>
               </View>
-              {retentionTotal > 0 && (
-                <View style={styles.row}>
-                  <Text style={[styles.rowLabel, { color: theme.colors.dangerRed }]}>
-                    Retencion Lifty ({retentionPercent}%)
-                  </Text>
-                  <Text style={[styles.rowValue, { color: theme.colors.dangerRed }]}>
-                    -{formatCurrency(retentionTotal)}
-                  </Text>
-                </View>
-              )}
-              {retentionTotal === 0 && tripsRevenueTotal > 0 && (
-                <View style={styles.row}>
-                  <Text style={[styles.rowLabel, { color: theme.colors.turquoise }]}>
-                    Ahorraste hoy
-                  </Text>
-                  <Text style={[styles.rowValue, { color: theme.colors.turquoise }]}>
-                    +{formatCurrency(savedAmount)}
-                  </Text>
-                </View>
-              )}
               {earnings.platform_debt ? (
                 <View style={styles.row}>
                   <Text style={[styles.rowLabel, { color: theme.colors.dangerRed }]}>
@@ -295,6 +315,16 @@ export const EarningsScreen: React.FC = () => {
             </Card>
           </>
         )}
+        <Card padding={theme.spacing.md}>
+          <View style={styles.paymentScheduleRow}>
+            <Ionicons name="time-outline" size={20} color={theme.colors.turquoise} />
+            <Text style={styles.paymentScheduleText}>
+              Los retiros se procesan de lunes a viernes entre las 18 y 20 hs. Se transfiere el
+              saldo de viajes con Mercado Pago y transferencia. Los cobros en efectivo ya los tenes
+              y se descuentan del saldo a transferir.
+            </Text>
+          </View>
+        </Card>
       </ScrollView>
 
       <TabBar activeTab={activeTab} onTabPress={handleTabPress} />
@@ -432,6 +462,34 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.turquoise,
+  },
+  paymentScheduleRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    alignItems: 'flex-start',
+  },
+  paymentScheduleText: {
+    flex: 1,
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.mediumGray,
+    lineHeight: 20,
+  },
+  exemptNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+    backgroundColor: '#E8FAF8',
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+    marginBottom: theme.spacing.xs,
+  },
+  exemptNoticeText: {
+    flex: 1,
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.turquoise,
+    fontWeight: theme.fontWeight.medium,
+    lineHeight: 18,
   },
   withdrawRow: {
     flexDirection: 'row',
