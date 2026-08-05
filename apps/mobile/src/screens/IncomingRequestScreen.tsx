@@ -183,6 +183,30 @@ export const IncomingRequestScreen: React.FC = () => {
 
         <View style={{ height: theme.spacing.md }} />
 
+        <View style={styles.earningsBreakdown}>
+          {trip && (trip.platform_fee ?? 0) > 0 ? (
+            <>
+              <View style={styles.earningsBreakdownRow}>
+                <Text style={styles.earningsBreakdownLabel}>Total del viaje</Text>
+                <Text style={styles.earningsBreakdownValue}>{formatCurrency(trip.total_fare)}</Text>
+              </View>
+              <View style={styles.earningsBreakdownRow}>
+                <Text style={styles.earningsBreakdownLabel}>
+                  Comision Lifty (
+                  {Math.round(((trip.platform_fee ?? 0) / (trip.total_fare ?? 1)) * 100)}%)
+                </Text>
+                <Text style={styles.earningsBreakdownDeduction}>
+                  -{formatCurrency(trip.platform_fee)}
+                </Text>
+              </View>
+            </>
+          ) : trip && (trip.platform_fee ?? 0) === 0 ? (
+            <View style={styles.promoBadge}>
+              <Text style={styles.promoBadgeText}>Sin comision!</Text>
+            </View>
+          ) : null}
+        </View>
+
         <Text style={styles.earningsLabel}>Ganaras</Text>
         <Text style={styles.earningsAmount}>{formatCurrency(trip?.driver_earnings)}</Text>
 
@@ -279,6 +303,42 @@ const styles = StyleSheet.create({
   },
   earningsAmount: {
     fontSize: theme.fontSize['4xl'],
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.white,
+  },
+  earningsBreakdown: {
+    width: 260,
+    gap: 4,
+    alignItems: 'center',
+  },
+  earningsBreakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  earningsBreakdownLabel: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.white,
+    opacity: 0.7,
+  },
+  earningsBreakdownValue: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.white,
+  },
+  earningsBreakdownDeduction: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.dangerRed,
+  },
+  promoBadge: {
+    backgroundColor: theme.colors.turquoise,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.full,
+  },
+  promoBadgeText: {
+    fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.white,
   },

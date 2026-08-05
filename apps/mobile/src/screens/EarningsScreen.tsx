@@ -85,6 +85,10 @@ export const EarningsScreen: React.FC = () => {
     `$${amount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const retentionTotal = earnings?.trips?.reduce((sum, t) => sum + (t.platform_fee ?? 0), 0) ?? 0;
+  const tripsRevenueTotal = earnings?.trips?.reduce((sum, t) => sum + (t.total_fare ?? 0), 0) ?? 0;
+  const retentionPercent =
+    retentionTotal > 0 ? Math.round((retentionTotal / tripsRevenueTotal) * 100) : 0;
+  const savedAmount = Math.round(tripsRevenueTotal * 0.2);
 
   const formatTime = (iso: string) => {
     const date = new Date(iso);
@@ -154,10 +158,20 @@ export const EarningsScreen: React.FC = () => {
               {retentionTotal > 0 && (
                 <View style={styles.row}>
                   <Text style={[styles.rowLabel, { color: theme.colors.dangerRed }]}>
-                    Retencion Lifty
+                    Retencion Lifty ({retentionPercent}%)
                   </Text>
                   <Text style={[styles.rowValue, { color: theme.colors.dangerRed }]}>
                     -{formatCurrency(retentionTotal)}
+                  </Text>
+                </View>
+              )}
+              {retentionTotal === 0 && tripsRevenueTotal > 0 && (
+                <View style={styles.row}>
+                  <Text style={[styles.rowLabel, { color: theme.colors.turquoise }]}>
+                    Ahorraste hoy
+                  </Text>
+                  <Text style={[styles.rowValue, { color: theme.colors.turquoise }]}>
+                    +{formatCurrency(savedAmount)}
                   </Text>
                 </View>
               )}
@@ -199,27 +213,34 @@ export const EarningsScreen: React.FC = () => {
               <>
                 <Card>
                   <Text style={styles.cardTitle}>Viajes de hoy</Text>
-                  {earnings.trips.map((trip) => (
-                    <View key={trip.id} style={styles.tripRow}>
-                      <View style={styles.tripLeft}>
-                        <Text style={styles.tripTime}>{formatTime(trip.created_at)}</Text>
-                        <Text style={styles.tripOrigin} numberOfLines={1}>
-                          {shortAddress(trip.origin_address ?? '')}
-                        </Text>
+                  {earnings.trips.map((trip) => {
+                    const tripRetentionPercent =
+                      trip.total_fare && trip.total_fare > 0
+                        ? Math.round(((trip.platform_fee ?? 0) / trip.total_fare) * 100)
+                        : 0;
+                    return (
+                      <View key={trip.id} style={styles.tripRow}>
+                        <View style={styles.tripLeft}>
+                          <Text style={styles.tripTime}>{formatTime(trip.created_at)}</Text>
+                          <Text style={styles.tripOrigin} numberOfLines={1}>
+                            {shortAddress(trip.origin_address ?? '')}
+                          </Text>
+                        </View>
+                        <View style={styles.tripRight}>
+                          <Text style={styles.tripAmount}>
+                            {formatCurrency(trip.total_fare ?? 0)}
+                          </Text>
+                          <Text style={styles.tripRetention}>
+                            Retencion ({tripRetentionPercent}%) -
+                            {formatCurrency(trip.platform_fee ?? 0)}
+                          </Text>
+                          <Text style={styles.tripNet}>
+                            Recibis {formatCurrency(trip.driver_earnings ?? 0)}
+                          </Text>
+                        </View>
                       </View>
-                      <View style={styles.tripRight}>
-                        <Text style={styles.tripAmount}>
-                          {formatCurrency(trip.total_fare ?? 0)}
-                        </Text>
-                        <Text style={styles.tripRetention}>
-                          Retencion -{formatCurrency(trip.platform_fee ?? 0)}
-                        </Text>
-                        <Text style={styles.tripNet}>
-                          Recibis {formatCurrency(trip.driver_earnings ?? 0)}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </Card>
                 <TouchableOpacity
                   style={styles.historyLink}

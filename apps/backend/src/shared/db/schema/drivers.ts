@@ -34,6 +34,7 @@ export const drivers = pgTable('drivers', {
   approved_at: timestamp('approved_at'),
   platform_debt: doublePrecision('platform_debt').default(0).notNull(),
   last_heartbeat: timestamp('last_heartbeat', { withTimezone: true }),
+  commission_exempt_until: timestamp('commission_exempt_until'),
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull(),
 });
