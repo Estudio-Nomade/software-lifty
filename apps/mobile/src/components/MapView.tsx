@@ -572,21 +572,14 @@ export const MapView: React.FC<MapViewProps> = ({
 
   useEffect(() => {
     if (!isLoaded || !webViewRef.current || recenterKey == null) return;
-    const loc = userLocationRef.current;
-    console.warn('[MapView] sending recenter', {
-      recenterKey,
-      lat: loc?.[1],
-      lng: loc?.[0],
-    });
-
     webViewRef.current.postMessage(
       JSON.stringify({
         type: 'recenter',
-        lat: loc?.[1] ?? null,
-        lng: loc?.[0] ?? null,
+        lat: userLocation?.[1] ?? null,
+        lng: userLocation?.[0] ?? null,
       }),
     );
-  }, [recenterKey, isLoaded]);
+  }, [recenterKey, userLocation, isLoaded]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {

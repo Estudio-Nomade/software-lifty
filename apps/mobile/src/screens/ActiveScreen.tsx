@@ -175,7 +175,7 @@ export const ActiveScreen: React.FC = () => {
   }, [setOnline]);
 
   const handleMapMove = useCallback((center: { lat: number; lng: number }) => {
-    console.warn('[ActiveScreen] handleMapMove called', center);
+
     setMapCenter(center);
   }, []);
 
@@ -261,11 +261,7 @@ export const ActiveScreen: React.FC = () => {
 
   const isOffCenter =
     mapCenter && locationLat != null && locationLng != null
-      ? (() => {
-          const d = havDistance(mapCenter, { lat: locationLat, lng: locationLng });
-          console.warn('[ActiveScreen] isOffCenter', { d, mapCenter, locationLat, locationLng });
-          return d > 10;
-        })()
+      ? havDistance(mapCenter, { lat: locationLat, lng: locationLng }) > 10
       : false;
 
   return (
@@ -282,6 +278,16 @@ export const ActiveScreen: React.FC = () => {
         onMoveEnd={handleMapMove}
         recenterKey={recenterKey}
       />
+
+      {isOffCenter && (
+        <TouchableOpacity
+          style={styles.recenterButton}
+          onPress={handleRecenter}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="locate-outline" size={24} color={theme.colors.turquoise} />
+        </TouchableOpacity>
+      )}
 
       <View style={styles.headerOverlay}>
         <Navbar
@@ -573,7 +579,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 9999,
+    zIndex: 5,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
