@@ -320,6 +320,13 @@ describe('collectTrip with Mercado Pago', () => {
   test('collect with cash does not call MP', async () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);
+
+    const db = getDb();
+    await db
+      .update(drivers)
+      .set({ commission_exempt_until: null })
+      .where(eq(drivers.id, driverId));
+
     const trip = await createCompletedTrip(token);
 
     const { status, data } = await request(
@@ -333,7 +340,6 @@ describe('collectTrip with Mercado Pago', () => {
     expect(data.is_collected).toBe(true);
     expect(data.payment_method).toBe('cash');
 
-    const db = getDb();
     const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
     expect(driver.platform_debt).toBeGreaterThan(0);
 

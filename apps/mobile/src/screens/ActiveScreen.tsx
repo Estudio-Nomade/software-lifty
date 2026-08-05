@@ -388,6 +388,16 @@ export const ActiveScreen: React.FC = () => {
       )}
 
       <SideMenu visible={menuVisible} onClose={() => setMenuVisible(false)} menuItems={menuItems} />
+
+      {isOffCenter && (
+        <TouchableOpacity
+          style={styles.recenterButton}
+          onPress={handleRecenter}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="locate-outline" size={24} color={theme.colors.turquoise} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };

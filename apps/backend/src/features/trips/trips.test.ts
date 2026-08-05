@@ -361,6 +361,12 @@ describe('Trip State Machine', () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);
 
+    const db = getDb();
+    await db
+      .update(drivers)
+      .set({ commission_exempt_until: null })
+      .where(eq(drivers.id, driverId));
+
     const { data: trip } = await request(
       'POST',
       '/api/trips',
@@ -372,7 +378,6 @@ describe('Trip State Machine', () => {
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/arrived`, undefined, token);
 
-    const db = getDb();
     await db
       .update(trips)
       .set({
@@ -488,7 +493,13 @@ describe('Trip State Machine', () => {
 
   test('13. create trip with fare calculation', async () => {
     const token = await registerAndGetToken(phone, password);
-    await createDriverRow(token);
+    const driverId = await createDriverRow(token);
+
+    const db = getDb();
+    await db
+      .update(drivers)
+      .set({ commission_exempt_until: null })
+      .where(eq(drivers.id, driverId));
 
     const { status, data } = await request(
       'POST',
@@ -520,6 +531,12 @@ describe('Trip State Machine', () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);
 
+    const db = getDb();
+    await db
+      .update(drivers)
+      .set({ commission_exempt_until: null })
+      .where(eq(drivers.id, driverId));
+
     const { data: trip } = await request(
       'POST',
       '/api/trips',
@@ -544,7 +561,6 @@ describe('Trip State Machine', () => {
     expect(data.is_collected).toBe(true);
     expect(data.payment_method).toBe('cash');
 
-    const db = getDb();
     const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
     expect(driver.platform_debt).toBeGreaterThan(0);
   });

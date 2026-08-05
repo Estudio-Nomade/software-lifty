@@ -1,16 +1,27 @@
 import { AppError } from './errors';
 
+type VehicleType = 'car' | 'motorcycle';
+
 const PRICING = {
-  car: { base: 250, perKm: 80, perMinute: 18 },
-  motorcycle: { base: 180, perKm: 55, perMinute: 13 },
+  car: { base: 950, perMinute: 68, minimumFare: 1890 },
+  motorcycle: { base: 650, perMinute: 50, minimumFare: 1690 },
 } as const;
 
-type VehicleType = keyof typeof PRICING;
+function getPerKmRate(vehicle: VehicleType, distanceKm: number): number {
+  if (distanceKm <= 6) {
+    return vehicle === 'car' ? 340 : 255;
+  }
+  if (distanceKm <= 11) {
+    return vehicle === 'car' ? 390 : 300;
+  }
+  return vehicle === 'car' ? 440 : 330;
+}
 
 export interface FareInput {
   vehicle_type: string;
   distance_km: number;
   duration_minutes: number;
+  commission_rate?: number;
 }
 
 export interface FareResult {
@@ -22,8 +33,8 @@ export interface FareResult {
   driver_earnings: number;
 }
 
-export function calculatePlatformFee(total: number): number {
-  return Math.round(total * 0.2 * 100) / 100;
+export function calculatePlatformFee(total: number, commissionRate = 0.2): number {
+  return Math.round(total * commissionRate * 100) / 100;
 }
 
 export function calculateFare(input: FareInput): FareResult {
@@ -37,13 +48,20 @@ export function calculateFare(input: FareInput): FareResult {
     throw new AppError('Duration must be positive', 400, 'BAD_REQUEST');
   }
 
-  const rates = PRICING[input.vehicle_type as VehicleType];
+  const rates = PRICING[input.vehicle_type];
+  const perKm = getPerKmRate(input.vehicle_type, input.distance_km);
+  const commissionRate = input.commission_rate ?? 0.2;
 
   const base_fare = rates.base;
-  const distance_fare = Math.round(input.distance_km * rates.perKm * 100) / 100;
+  const distance_fare = Math.round(input.distance_km * perKm * 100) / 100;
   const time_fare = Math.round(input.duration_minutes * rates.perMinute * 100) / 100;
-  const total = Math.round(base_fare + distance_fare + time_fare);
-  const platform_fee = calculatePlatformFee(total);
+  let total = Math.round(base_fare + distance_fare + time_fare);
+
+  if ('minimumFare' in rates && total < rates.minimumFare) {
+    total = rates.minimumFare;
+  }
+
+  const platform_fee = calculatePlatformFee(total, commissionRate);
   const driver_earnings = total - platform_fee;
 
   return { base_fare, distance_fare, time_fare, total, platform_fee, driver_earnings };

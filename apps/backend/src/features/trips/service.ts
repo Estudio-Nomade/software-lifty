@@ -114,7 +114,19 @@ async function transitionTrip(driverId: string, tripId: string, targetStatus: st
 
     if (actualTarget === 'cancelled_late') {
       const compensationTotal = trip.base_fare ?? 0;
-      const compensationPlatformFee = calculatePlatformFee(compensationTotal);
+
+      const [driverRecord] = await tx
+        .select({ commission_exempt_until: drivers.commission_exempt_until })
+        .from(drivers)
+        .where(eq(drivers.id, driverId))
+        .limit(1);
+
+      const isExempt =
+        driverRecord?.commission_exempt_until != null &&
+        new Date(driverRecord.commission_exempt_until) > new Date();
+      const commissionRate = isExempt ? 0 : 0.2;
+
+      const compensationPlatformFee = calculatePlatformFee(compensationTotal, commissionRate);
       const compensationDriverEarnings = compensationTotal - compensationPlatformFee;
 
       updateData.total_fare = compensationTotal;
@@ -149,10 +161,21 @@ export const tripService = {
   async createTrip(user: AuthUser, data: any) {
     const driverId = await getDriverId(user);
 
+    const [driverRecord] = await db
+      .select({ commission_exempt_until: drivers.commission_exempt_until })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+
+    const isExempt =
+      driverRecord?.commission_exempt_until != null &&
+      new Date(driverRecord.commission_exempt_until) > new Date();
+
     const fare = calculateFare({
       vehicle_type: data.vehicle_type,
       distance_km: data.distance_km,
       duration_minutes: data.duration_minutes,
+      commission_rate: isExempt ? 0 : undefined,
     });
 
     let originAddress = data.origin_address || null;

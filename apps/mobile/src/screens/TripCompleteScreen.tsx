@@ -145,7 +145,16 @@ export const TripCompleteScreen: React.FC = () => {
       <Text style={styles.earnedAmount}>{formatCurrency(tripAmount)}</Text>
 
       <View style={styles.breakdown}>
-        <Text style={styles.breakdownItem}>Comision Lifty: -{formatCurrency(tripCommission)}</Text>
+        <Text style={styles.breakdownItem}>
+          Comision Lifty (
+          {tripCommission === 0 ? '0%' : `${Math.round((tripCommission / tripAmount) * 100)}%`}): -
+          {formatCurrency(tripCommission)}
+        </Text>
+        {tripCommission === 0 && (
+          <View style={styles.promoBadge}>
+            <Text style={styles.promoBadgeText}>Sin comision!</Text>
+          </View>
+        )}
         {tip > 0 ? (
           <Text style={styles.breakdownItemTip}>Propina: +{formatCurrency(tip)}</Text>
         ) : null}
@@ -293,6 +302,18 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
+  },
+  promoBadge: {
+    backgroundColor: theme.colors.turquoise,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.full,
+    marginTop: 4,
+  },
+  promoBadgeText: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.white,
   },
   summaryCard: {
     width: 300,

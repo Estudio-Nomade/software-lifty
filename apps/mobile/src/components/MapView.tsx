@@ -1,6 +1,6 @@
 import { theme } from '@/theme';
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -8,11 +8,9 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
-import WebView from 'react-native-webview/lib/WebView';
+import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview/lib/WebViewTypes';
 import { Text } from './ui/Text';
-
-const WebViewComponent = WebView as any;
 
 interface MarkerData {
   id: string;
@@ -450,11 +448,20 @@ export const MapView: React.FC<MapViewProps> = ({
   onMoveEnd,
   recenterKey,
 }) => {
-  const mapHtml = generateMapHtml({
-    turquoise: theme.colors.turquoise,
-    lightGray: theme.colors.lightGray,
-    amber: theme.colors.amber,
-  });
+  const mapHtml = useMemo(
+    () =>
+      generateMapHtml({
+        turquoise: theme.colors.turquoise,
+        lightGray: theme.colors.lightGray,
+        amber: theme.colors.amber,
+      }),
+    [],
+  );
+
+  const source = useMemo(() => ({ html: mapHtml }), [mapHtml]);
+
+  const userLocationRef = useRef(userLocation);
+  userLocationRef.current = userLocation;
 
   const webViewRef = useRef<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -565,7 +572,6 @@ export const MapView: React.FC<MapViewProps> = ({
 
   useEffect(() => {
     if (!isLoaded || !webViewRef.current || recenterKey == null) return;
-
     webViewRef.current.postMessage(
       JSON.stringify({
         type: 'recenter',
@@ -579,6 +585,12 @@ export const MapView: React.FC<MapViewProps> = ({
     (event: WebViewMessageEvent) => {
       try {
         const data = JSON.parse(event.nativeEvent.data);
+        if (data.type === 'moved') {
+          console.warn('[MapView] moved received', {
+            center: data.center,
+            hasOnMoveEnd: !!onMoveEnd,
+          });
+        }
         switch (data.type) {
           case 'moved':
             if (data.center && onMoveEnd) {
@@ -612,10 +624,10 @@ export const MapView: React.FC<MapViewProps> = ({
 
   return (
     <View style={[styles.container, style]}>
-      <WebViewComponent
+      <WebView
         key={retryKey.current}
         ref={webViewRef}
-        source={{ html: mapHtml }}
+        source={source}
         style={styles.webview}
         onLoadEnd={() => setIsLoaded(true)}
         onError={handleWebViewError}

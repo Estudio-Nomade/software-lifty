@@ -1,0 +1,15 @@
+node_modules/
+.expo/
+.agents/
+dist/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+.env
+.env.*
+!.env.example
+!.env.enc.yml
