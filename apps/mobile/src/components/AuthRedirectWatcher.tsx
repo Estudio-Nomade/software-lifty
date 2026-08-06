@@ -32,6 +32,7 @@ export function AuthRedirectWatcher() {
 
   useEffect(() => {
     if (!sessionRestored) return;
+    if (needsRedirect) return;
     if (!isAuthenticated || !PUBLIC_ROUTES.includes(segments[0] ?? '')) return;
 
     const target = onboardingStep ? STEP_ROUTE[onboardingStep] : undefined;
@@ -42,7 +43,15 @@ export function AuthRedirectWatcher() {
     const screen = target?.screen || fallback.screen || 'OnboardingStep1';
 
     replace(screen);
-  }, [sessionRestored, isAuthenticated, segments, onboardingStep, driverStatus, replace]);
+  }, [
+    sessionRestored,
+    isAuthenticated,
+    segments,
+    onboardingStep,
+    driverStatus,
+    replace,
+    needsRedirect,
+  ]);
 
   return null;
 }
