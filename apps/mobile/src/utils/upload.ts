@@ -4,7 +4,8 @@ export type DocBase =
   | 'drivers_license'
   | 'vehicle_registration'
   | 'vehicle_insurance'
-  | 'background_check';
+  | 'background_check'
+  | 'rndg';
 export type DocSide = 'front' | 'back';
 
 export const DOC_SIDES: Record<DocBase, DocSide[]> = {
@@ -12,6 +13,7 @@ export const DOC_SIDES: Record<DocBase, DocSide[]> = {
   vehicle_registration: ['front', 'back'],
   vehicle_insurance: ['front', 'back'],
   background_check: ['front'],
+  rndg: ['front'],
 };
 
 const DOC_BASE_MAP: Record<DocBase, string> = {
@@ -19,6 +21,7 @@ const DOC_BASE_MAP: Record<DocBase, string> = {
   vehicle_registration: 'registration',
   vehicle_insurance: 'insurance',
   background_check: 'background_check',
+  rndg: 'rndg',
 };
 
 export function toBackendDocType(base: DocBase, side: DocSide): string {

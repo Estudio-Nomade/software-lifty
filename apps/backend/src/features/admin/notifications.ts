@@ -217,6 +217,7 @@ async function gatherDriverData(driverId: string): Promise<{
     registration: 'Cedula del vehiculo',
     insurance: 'Seguro del vehiculo',
     background_check: 'Certificado de antecedentes',
+    rndg: 'Registro Nacional de Datos Geneticos (RNDG)',
   };
 
   return {

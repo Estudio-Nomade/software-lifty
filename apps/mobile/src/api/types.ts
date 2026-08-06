@@ -166,6 +166,7 @@ export const documentSchema = z.object({
     'insurance_back',
     'background_check_front',
     'background_check_back',
+    'rndg_front',
   ]),
   file_url: z.string(),
   status: z.enum(['pending_review', 'approved', 'rejected', 'superseded']).nullable().optional(),

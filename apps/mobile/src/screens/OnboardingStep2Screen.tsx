@@ -31,6 +31,7 @@ const DOCS: { type: DocType; label: string }[] = [
   { type: 'vehicle_registration', label: 'Cedula del vehiculo' },
   { type: 'vehicle_insurance', label: 'Seguro del vehiculo' },
   { type: 'background_check', label: 'Certificado de antecedentes penales' },
+  { type: 'rndg', label: 'Registro Nacional de Datos Geneticos (RNDG)' },
 ];
 
 const SIDE_LABELS: Record<DocSide, string> = { front: 'Frente', back: 'Dorso' };
@@ -68,6 +69,7 @@ export const OnboardingStep2Screen: React.FC = () => {
     vehicle_registration: initialSideState(),
     vehicle_insurance: initialSideState(),
     background_check: initialSideState(),
+    rndg: initialSideState(),
   });
 
   const allUploaded = Object.entries(docs).every(([docType, doc]) =>

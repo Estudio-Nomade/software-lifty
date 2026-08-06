@@ -599,7 +599,7 @@ describe('Document step completeness', () => {
     expect(data.step).toBe('documents');
   });
 
-  test('all 8 distinct doc types move driver to review', async () => {
+  test('all distinct doc types move driver to review', async () => {
     const { token, driverId } = await fullOnboarding(phone, password);
     await getDb().insert(driverDocuments).values(
       DOC_TYPES.map((doc_type) => ({
