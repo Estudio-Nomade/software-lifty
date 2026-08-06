@@ -12,17 +12,24 @@ export function useHeatmapPolling() {
   const lat = useLocationStore((s) => s.lat);
   const lng = useLocationStore((s) => s.lng);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const latRef = useRef(lat);
+  const lngRef = useRef(lng);
+
+  latRef.current = lat;
+  lngRef.current = lng;
 
   useEffect(() => {
     const fetchHeatmap = async () => {
-      if (lat == null || lng == null) return;
+      const _lat = latRef.current;
+      const _lng = lngRef.current;
+      if (_lat == null || _lng == null) return;
       try {
         const res = await apiClient.get('/maps/heatmap', {
           params: {
-            sw_lat: lat - 0.05,
-            sw_lng: lng - 0.05,
-            ne_lat: lat + 0.05,
-            ne_lng: lng + 0.05,
+            sw_lat: _lat - 0.05,
+            sw_lng: _lng - 0.05,
+            ne_lat: _lat + 0.05,
+            ne_lng: _lng + 0.05,
           },
         });
         const features = res.data?.features ?? res.data?.data?.features ?? [];
@@ -43,7 +50,7 @@ export function useHeatmapPolling() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [lat, lng]);
+  }, []);
 
   return heatmapPoints;
 }
