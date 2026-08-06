@@ -13,7 +13,8 @@ import { paymentMethodsRoutes } from './features/payment-methods/routes';
 import { paymentsRoutes } from './features/payments/routes';
 import { ratingsRoutes } from './features/ratings/routes';
 import { sosRoutes } from './features/sos/routes';
-import { tripRoutes } from './features/trips/routes';
+import { tripRoutes, tripWebhookRoute } from './features/trips/routes';
+import { tripService } from './features/trips/service';
 import { getDb, getPool, resetDb } from './shared/db/client';
 import { startStaleDriverCleanup, stopStaleDriverCleanup } from './shared/lib/cleanup';
 import { runReadyChecks } from './shared/lib/health';
@@ -94,6 +95,7 @@ export function createApp(customAuthPlugin?: typeof authPlugin) {
         .use(paymentMethodsRoutes)
         .use(kycRoutes)
         .use(tripRoutes)
+        .use(tripWebhookRoute)
         .use(mapsRoutes)
         .use(paymentsRoutes)
         .use(earningsRoutes)
@@ -224,8 +226,15 @@ if (process.env.NODE_ENV !== 'test') {
 
   startStaleDriverCleanup();
 
+  const offerExpirer = setInterval(() => {
+    tripService.expireStaleOffers().catch((err) => {
+      logger.error('[offerExpirer] Error:', (err as Error).message);
+    });
+  }, 5_000);
+
   process.on('SIGINT', async () => {
     logger.info('Shutting down...');
+    clearInterval(offerExpirer);
     stopStaleDriverCleanup();
     await app.stop();
     resetDb();
@@ -235,6 +244,7 @@ if (process.env.NODE_ENV !== 'test') {
 
   process.on('SIGTERM', async () => {
     logger.info('Shutting down...');
+    clearInterval(offerExpirer);
     stopStaleDriverCleanup();
     await app.stop();
     resetDb();
