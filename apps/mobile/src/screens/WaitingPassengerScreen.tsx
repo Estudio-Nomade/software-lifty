@@ -132,6 +132,21 @@ export const WaitingPassengerScreen: React.FC = () => {
       setTripStatus('in_trip');
       navigation.navigate('TripInProgress');
     } catch (err: any) {
+      const isTokenExpired =
+        err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED';
+      if (isTokenExpired) {
+        setShowVerificationModal(false);
+        Alert.alert('Sesion expirada', 'Tu sesion ha expirado. Inicia sesion nuevamente.', [
+          {
+            text: 'OK',
+            onPress: () => {
+              clearTrip();
+              navigation.replace('Welcome');
+            },
+          },
+        ]);
+        return;
+      }
       const message = err instanceof Error ? err.message : 'No se pudo iniciar el viaje.';
       setVerificationError(message);
     } finally {
@@ -147,7 +162,21 @@ export const WaitingPassengerScreen: React.FC = () => {
       await apiClient.post(`/trips/${activeTripId}/cancel`);
       clearTrip();
       navigation.navigate('Online');
-    } catch {
+    } catch (err: any) {
+      const isTokenExpired =
+        err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED';
+      if (isTokenExpired) {
+        clearTrip();
+        Alert.alert('Sesion expirada', 'Tu sesion ha expirado. Inicia sesion nuevamente.', [
+          {
+            text: 'OK',
+            onPress: () => {
+              navigation.replace('Welcome');
+            },
+          },
+        ]);
+        return;
+      }
       Alert.alert('Error', 'No se pudo cancelar el viaje.');
     } finally {
       setLoading(false);
