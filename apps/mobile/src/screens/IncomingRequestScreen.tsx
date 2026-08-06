@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   spacer: {
-    height: 32,
+    height: 56,
   },
   newRequest: {
     fontSize: theme.fontSize.sm,
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
   },
   routeLine: {
     height: 24,
-    width: 28,
+    width: 64,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 6,

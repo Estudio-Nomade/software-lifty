@@ -190,8 +190,13 @@ export const NavigationScreen: React.FC = () => {
       await apiClient.post(`/trips/${trip.id}/arrived`);
       setTripStatus('waiting');
       navigation.navigate('WaitingPassenger');
-    } catch {
-      Alert.alert('Error', 'No se pudo confirmar la llegada.');
+    } catch (err: any) {
+      if (__DEV__) console.error('[handleArrive] error:', err?.message ?? err);
+      const message =
+        err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED'
+          ? 'Tu sesion expiro. Inicia sesion nuevamente.'
+          : 'No se pudo confirmar la llegada.';
+      Alert.alert('Error', message);
     } finally {
       setLoading(false);
     }
