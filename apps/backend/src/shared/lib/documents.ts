@@ -7,6 +7,7 @@ export const DOC_TYPES = [
   'insurance_back',
   'background_check_front',
   'background_check_back',
+  'rndg_front',
 ] as const;
 
 export type DocType = (typeof DOC_TYPES)[number];

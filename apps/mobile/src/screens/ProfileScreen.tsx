@@ -67,6 +67,7 @@ const DOC_TYPE_TO_UPLOAD: Record<string, string> = {
   insurance_back: 'vehicle_insurance',
   background_check_front: 'background_check',
   background_check_back: 'background_check',
+  rndg_front: 'rndg',
 };
 
 // The documents a driver can manage from the profile.
@@ -75,6 +76,7 @@ const MANAGEABLE_DOCS: { docType: string; label: string }[] = [
   { docType: 'vehicle_registration', label: 'Cedula del vehiculo' },
   { docType: 'vehicle_insurance', label: 'Seguro del vehiculo' },
   { docType: 'background_check', label: 'Certificado de antecedentes penales' },
+  { docType: 'rndg', label: 'Registro Nacional de Datos Geneticos (RNDG)' },
 ];
 
 function docsStatusLabel(docs: DriverDocument[]): string {
