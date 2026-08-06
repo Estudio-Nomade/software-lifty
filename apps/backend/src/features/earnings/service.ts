@@ -1,9 +1,11 @@
-import { and, count, desc, eq, gte, lte, sql, sum } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, lte, sql, sum } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
 import { drivers, payments, payoutMethods, trips, withdrawals } from '../../shared/db/schema';
 import { AppError } from '../../shared/lib/errors';
 import type { AuthUser } from '../../shared/middleware/auth';
+
+const COMPLETED_STATUSES = ['completed', 'rated'] as const;
 
 const today = sql`CURRENT_DATE`;
 const weekStart = sql`date_trunc('week', CURRENT_DATE)`;
@@ -37,7 +39,7 @@ export const earningsService = {
       .where(
         and(
           eq(trips.driver_id, driverId),
-          eq(trips.status, 'completed'),
+          inArray(trips.status, COMPLETED_STATUSES),
           gte(trips.created_at, today),
         ),
       )
@@ -58,7 +60,7 @@ export const earningsService = {
       .where(
         and(
           eq(trips.driver_id, driverId),
-          eq(trips.status, 'completed'),
+          inArray(trips.status, COMPLETED_STATUSES),
           gte(trips.created_at, yesterdayDate),
           lte(trips.created_at, sql`CURRENT_DATE - INTERVAL '1 millisecond'`),
         ),
@@ -70,7 +72,7 @@ export const earningsService = {
       .where(
         and(
           eq(trips.driver_id, driverId),
-          eq(trips.status, 'completed'),
+          inArray(trips.status, COMPLETED_STATUSES),
           gte(trips.created_at, weekStart),
         ),
       );
@@ -242,14 +244,14 @@ export const earningsService = {
     const [tripStats] = await db
       .select({
         total: count(),
-        completed: sql<number>`count(*) filter (where ${trips.status} = 'completed')::int`,
+        completed: sql<number>`count(*) filter (where ${inArray(trips.status, COMPLETED_STATUSES)})::int`,
       })
       .from(trips)
       .where(eq(trips.driver_id, driverId));
 
     const [tvfStats] = await db
       .select({
-        completed: sql<number>`count(*) filter (where ${trips.status} = 'completed')::int`,
+        completed: sql<number>`count(*) filter (where ${inArray(trips.status, COMPLETED_STATUSES)})::int`,
         cancelled_early: sql<number>`count(*) filter (where ${trips.status} = 'cancelled_early')::int`,
       })
       .from(trips)

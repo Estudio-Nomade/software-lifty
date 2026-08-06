@@ -16,7 +16,7 @@ import { useOnlineStore } from '../store/onlineStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
-const RESPONSE_SECONDS = 20;
+const RESPONSE_SECONDS = 60;
 
 const formatCurrency = (value: number | null | undefined) =>
   value == null ? '—' : `$${value.toLocaleString('es-AR')}`;
@@ -57,8 +57,10 @@ export const IncomingRequestScreen: React.FC = () => {
           setTrip(active);
           setActiveTrip(active);
           setLoading(false);
+        } else if (active) {
+          navigation.goBack();
         } else {
-          navigation.navigate('Online');
+          navigation.goBack();
         }
       } catch {
         if (cancelled) return;
@@ -67,7 +69,7 @@ export const IncomingRequestScreen: React.FC = () => {
           setTimeout(loadTrip, 2000);
         } else {
           setLoading(false);
-          navigation.navigate('Online');
+          navigation.goBack();
         }
       }
     };
