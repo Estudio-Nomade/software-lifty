@@ -17,7 +17,23 @@ export type AuthStatus = 'no_token' | 'token_expired' | 'token_invalid' | 'authe
 
 type ResolveUser = (token: string) => Promise<AuthUser | null>;
 
+function extractUserIdFromToken(token: string): string | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+      return payload.sub ?? null;
+    }
+    return token;
+  } catch {
+    return token;
+  }
+}
+
 async function getTestUserFromToken(token: string): Promise<AuthUser | null> {
+  const userId = extractUserIdFromToken(token);
+  if (!userId) return null;
+
   const [row] = await db
     .select({
       id: users.id,
@@ -26,7 +42,7 @@ async function getTestUserFromToken(token: string): Promise<AuthUser | null> {
       phone: users.phone,
     })
     .from(users)
-    .where(eq(users.id, token))
+    .where(eq(users.id, userId))
     .limit(1);
 
   return row ?? null;
