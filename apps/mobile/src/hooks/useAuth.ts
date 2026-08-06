@@ -120,10 +120,10 @@ export function useSignOut() {
           /* best-effort */
         }
       }
+      await queryClient.cancelQueries();
+      queryClient.clear();
       await supabase.auth.signOut();
     },
-    onSuccess: () => {
-      queryClient.clear();
-    },
+    onSuccess: () => {},
   });
 }

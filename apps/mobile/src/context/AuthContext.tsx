@@ -125,8 +125,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         /* best-effort: revoking backend tokens must not block local sign-out */
       }
     }
-    await supabase.auth.signOut();
+    await queryClient.cancelQueries();
     queryClient.clear();
+    await supabase.auth.signOut();
   }, []);
 
   const value = useMemo<AuthContextValue>(
