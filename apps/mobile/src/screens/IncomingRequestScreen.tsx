@@ -8,6 +8,7 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { MapView } from '../components/MapView';
 import { RatingStars } from '../components/RatingStars';
+import { SponsorBanner } from '../components/SponsorBanner';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { stopTracking } from '../lib/location';
@@ -250,6 +251,9 @@ export const IncomingRequestScreen: React.FC = () => {
 
         <Text style={styles.earningsLabel}>Ganaras</Text>
         <Text style={styles.earningsAmount}>{formatCurrency(trip?.driver_earnings)}</Text>
+
+        <View style={{ height: theme.spacing.sm }} />
+        <SponsorBanner />
 
         <View style={{ height: theme.spacing.lg }} />
 
