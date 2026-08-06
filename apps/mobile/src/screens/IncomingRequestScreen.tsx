@@ -58,7 +58,25 @@ export const IncomingRequestScreen: React.FC = () => {
           setActiveTrip(active);
           setLoading(false);
         } else if (active) {
-          navigation.goBack();
+          setLoading(false);
+          setActiveTrip(active);
+          switch (active.status) {
+            case 'accepted':
+            case 'en_route':
+              navigation.replace('Navigation');
+              break;
+            case 'waiting':
+              navigation.replace('WaitingPassenger');
+              break;
+            case 'in_trip':
+              navigation.replace('TripInProgress');
+              break;
+            case 'completed':
+              navigation.replace('TripComplete');
+              break;
+            default:
+              navigation.goBack();
+          }
         } else {
           navigation.goBack();
         }
@@ -125,7 +143,7 @@ export const IncomingRequestScreen: React.FC = () => {
     if (!trip) return;
     try {
       const response = await apiClient.post(`/trips/${trip.id}/accept`);
-      const acceptedTrip = response.data ?? response;
+      const acceptedTrip = response.data?.data ?? response.data;
       setActiveTrip(acceptedTrip);
       setAccepted(true);
       navigation.navigate('Navigation');

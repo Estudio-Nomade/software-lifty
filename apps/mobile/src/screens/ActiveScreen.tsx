@@ -126,7 +126,8 @@ export const ActiveScreen: React.FC = () => {
     const pollInterval = setInterval(async () => {
       try {
         const { data } = await apiClient.get('/trips/active');
-        if (!navigated && data && data.status === 'request_received') {
+        const trip = data?.data ?? data;
+        if (!navigated && trip && trip.status === 'request_received') {
           navigated = true;
           navigation.navigate('IncomingRequest');
         }
