@@ -154,8 +154,26 @@ export const TripInProgressScreen: React.FC = () => {
       <View style={styles.mapArea}>
         <MapView
           followUserLocation
-          markers={
-            driverCoords
+          markers={[
+            {
+              id: 'destination',
+              coordinate: trip
+                ? [trip.dest_lng, trip.dest_lat]
+                : ([-59.1332, -37.3217] as [number, number]),
+              title: 'Destino',
+              icon: 'person',
+            },
+            ...(locationLat != null && locationLng != null
+              ? [
+                  {
+                    id: 'my-location',
+                    coordinate: [locationLng, locationLat] as [number, number],
+                    title: 'Mi ubicación',
+                    icon: iconType ?? 'car',
+                  },
+                ]
+              : []),
+            ...(driverCoords
               ? [
                   {
                     id: 'driver-location',
@@ -164,8 +182,8 @@ export const TripInProgressScreen: React.FC = () => {
                     icon: iconType ?? 'car',
                   },
                 ]
-              : undefined
-          }
+              : []),
+          ]}
           routeLine={activeCoords.length > 0 ? activeCoords : undefined}
           alternativeRouteLine={altCoords.length > 0 ? altCoords : undefined}
         />

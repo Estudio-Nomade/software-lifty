@@ -1,4 +1,5 @@
 import { useRouter, useSegments } from 'expo-router';
+import { useCallback } from 'react';
 
 const SCREEN_TO_ROUTE = {
   Welcome: '/',
@@ -65,27 +66,33 @@ export function useAppNavigation() {
   const router = useRouter();
   const segments = useSegments();
 
-  const push = (screen: string, params?: Record<string, string>) => {
-    const route = SCREEN_TO_ROUTE[screen as ScreenName];
-    if (!route) return;
-    if (params && Object.keys(params).length > 0) {
-      router.push({ pathname: route, params });
-    } else {
-      router.push(route);
-    }
-  };
+  const push = useCallback(
+    (screen: string, params?: Record<string, string>) => {
+      const route = SCREEN_TO_ROUTE[screen as ScreenName];
+      if (!route) return;
+      if (params && Object.keys(params).length > 0) {
+        router.push({ pathname: route, params });
+      } else {
+        router.push(route);
+      }
+    },
+    [router],
+  );
 
-  const replace = (screen: string, params?: Record<string, string>) => {
-    const route = SCREEN_TO_ROUTE[screen as ScreenName];
-    if (!route) return;
-    if (params && Object.keys(params).length > 0) {
-      router.replace({ pathname: route, params });
-    } else {
-      router.replace(route);
-    }
-  };
+  const replace = useCallback(
+    (screen: string, params?: Record<string, string>) => {
+      const route = SCREEN_TO_ROUTE[screen as ScreenName];
+      if (!route) return;
+      if (params && Object.keys(params).length > 0) {
+        router.replace({ pathname: route, params });
+      } else {
+        router.replace(route);
+      }
+    },
+    [router],
+  );
 
-  const goBack = () => {
+  const goBack = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
       return;
@@ -98,7 +105,7 @@ export function useAppNavigation() {
     } else {
       console.log('[nav] goBack blocked: nothing to go back to');
     }
-  };
+  }, [router, segments, replace]);
 
   return {
     navigate: push,

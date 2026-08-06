@@ -114,14 +114,20 @@ export const ActiveScreen: React.FC = () => {
   useEffect(() => {
     if (!driverId || !isOnline) return;
 
+    let navigated = false;
+
     const unsubscribe = subscribeToDriverChannel(driverId, () => {
-      navigation.navigate('IncomingRequest');
+      if (!navigated) {
+        navigated = true;
+        navigation.navigate('IncomingRequest');
+      }
     });
 
     const pollInterval = setInterval(async () => {
       try {
         const { data } = await apiClient.get('/trips/active');
-        if (data && data.status === 'request_received') {
+        if (!navigated && data && data.status === 'request_received') {
+          navigated = true;
           navigation.navigate('IncomingRequest');
         }
       } catch {}

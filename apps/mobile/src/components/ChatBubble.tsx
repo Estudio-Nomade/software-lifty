@@ -24,6 +24,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.md,
     paddingVertical: 10,
     paddingHorizontal: 12,
+    marginBottom: theme.spacing.sm,
   },
   driverBubble: {
     backgroundColor: theme.colors.deepBlue,
