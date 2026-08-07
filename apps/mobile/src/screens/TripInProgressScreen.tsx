@@ -27,7 +27,6 @@ import { theme } from '../theme';
 export const TripInProgressScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const trip = useTripStore((s) => s.trip);
-  const setTripStatus = useTripStore((s) => s.setTripStatus);
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
   const iconType = useVehicleStore((s) => s.iconType);
@@ -115,7 +114,10 @@ export const TripInProgressScreen: React.FC = () => {
     try {
       const response = await apiClient.post(`/trips/${trip.id}/complete`);
       const tripData = response.data?.data ?? response.data;
-      setTripStatus('completed');
+      const storeTrip = useTripStore.getState().trip;
+      if (storeTrip) {
+        useTripStore.getState().setActiveTrip({ ...storeTrip, ...tripData });
+      }
       navigation.navigate('TripComplete', {
         amount: String(tripData?.total_fare ?? 2500),
         commission: String(tripData?.platform_fee ?? 500),
@@ -124,7 +126,10 @@ export const TripInProgressScreen: React.FC = () => {
       });
     } catch (err: any) {
       const isTokenExpired =
-        err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED';
+        err?.code === 'TOKEN_REQUIRED' ||
+        err?.code === 'TOKEN_EXPIRED' ||
+        err?.error?.code === 'TOKEN_REQUIRED' ||
+        err?.error?.code === 'TOKEN_EXPIRED';
       if (isTokenExpired) {
         Alert.alert('Sesion expirada', 'Tu sesion ha expirado. Inicia sesion nuevamente.', [
           {
