@@ -9,6 +9,14 @@ const PUBLIC_ROUTES = ['', 'register', 'forgot-password'];
 
 const AUTH_FLOW_ROUTES = ['login-credentials', 'terms', 'register', 'forgot-password', 'auth'];
 
+const TRIP_ROUTES = [
+  'incoming-request',
+  'navigation',
+  'waiting-passenger',
+  'trip-in-progress',
+  'trip-complete',
+];
+
 export function AuthRedirectWatcher() {
   const needsRedirect = useAuthStore((s) => s.needsRedirect);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -24,7 +32,11 @@ export function AuthRedirectWatcher() {
     if (needsRedirect) {
       resetRedirect();
       const current = segments[0] ?? '';
-      if (current !== undefined && !AUTH_FLOW_ROUTES.includes(current)) {
+      if (
+        current !== undefined &&
+        !AUTH_FLOW_ROUTES.includes(current) &&
+        !TRIP_ROUTES.includes(current)
+      ) {
         router.replace('/');
       }
     }

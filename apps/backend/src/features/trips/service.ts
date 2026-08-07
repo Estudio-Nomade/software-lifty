@@ -11,6 +11,8 @@ import { sendPushToUser } from '../../shared/lib/push';
 import type { AuthUser } from '../../shared/middleware/auth';
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
+  pending: ['offered'],
+  offered: ['accepted', 'rejected', 'expired'],
   request_received: ['accepted', 'rejected', 'cancelled'],
   accepted: ['en_route', 'cancelled'],
   en_route: ['waiting', 'cancelled'],
@@ -54,6 +56,7 @@ function broadcastTripRequest(driverId: string, trip: any) {
 const TERMINAL_STATUSES = [
   'completed',
   'rejected',
+  'expired',
   'cancelled',
   'cancelled_early',
   'cancelled_late',
@@ -158,6 +161,232 @@ async function transitionTrip(driverId: string, tripId: string, targetStatus: st
 }
 
 export const tripService = {
+  async createPendingTrip(data: {
+    driver_id: string;
+    passenger_id?: string;
+    origin_lat: number;
+    origin_lng: number;
+    dest_lat: number;
+    dest_lng: number;
+    origin_address?: string;
+    dest_address?: string;
+    pickup_instructions?: string;
+    distance_km: number;
+    duration_minutes: number;
+    vehicle_type: string;
+  }) {
+    const [driverRecord] = await db
+      .select({ commission_exempt_until: drivers.commission_exempt_until })
+      .from(drivers)
+      .where(eq(drivers.id, data.driver_id))
+      .limit(1);
+
+    const isExempt =
+      driverRecord?.commission_exempt_until != null &&
+      new Date(driverRecord.commission_exempt_until) > new Date();
+
+    const fare = calculateFare({
+      vehicle_type: data.vehicle_type,
+      distance_km: data.distance_km,
+      duration_minutes: data.duration_minutes,
+      commission_rate: isExempt ? 0 : undefined,
+    });
+
+    let originAddress = data.origin_address || null;
+    let destAddress = data.dest_address || null;
+
+    try {
+      const result = await geocode({ lat: data.origin_lat, lng: data.origin_lng });
+      if (result.formatted_address && !result.formatted_address.startsWith('Ubicación (')) {
+        originAddress = result.formatted_address;
+      }
+    } catch {
+      logger.warn('[createPendingTrip] failed to geocode origin');
+    }
+
+    try {
+      const result = await geocode({ lat: data.dest_lat, lng: data.dest_lng });
+      if (result.formatted_address && !result.formatted_address.startsWith('Ubicación (')) {
+        destAddress = result.formatted_address;
+      }
+    } catch {
+      logger.warn('[createPendingTrip] failed to geocode destination');
+    }
+
+    const [trip] = await db
+      .insert(trips)
+      .values({
+        driver_id: data.driver_id,
+        passenger_id: data.passenger_id ?? null,
+        origin_lat: data.origin_lat,
+        origin_lng: data.origin_lng,
+        dest_lat: data.dest_lat,
+        dest_lng: data.dest_lng,
+        origin_address: originAddress,
+        dest_address: destAddress,
+        pickup_instructions: data.pickup_instructions ?? null,
+        distance_km: data.distance_km,
+        duration_minutes: data.duration_minutes,
+        base_fare: fare.base_fare,
+        distance_fare: fare.distance_fare,
+        time_fare: fare.time_fare,
+        total_fare: fare.total,
+        platform_fee: fare.platform_fee,
+        driver_earnings: fare.driver_earnings,
+        status: 'pending',
+      })
+      .returning();
+
+    await recordEvent(trip.id, null, 'pending');
+
+    return trip;
+  },
+
+  async offerTrip(tripId: string) {
+    return db.transaction(async (tx) => {
+      const [trip] = await tx.select().from(trips).where(eq(trips.id, tripId)).limit(1);
+      if (!trip) throw new NotFoundError('Trip not found');
+      if (trip.status !== 'pending') {
+        throw new AppError(
+          `Trip is not pending, current status: ${trip.status}`,
+          400,
+          'BAD_REQUEST',
+        );
+      }
+
+      const expiresAt = new Date(Date.now() + 15_000);
+      await tx
+        .update(trips)
+        .set({ status: 'offered', expires_at: expiresAt, updated_at: new Date() })
+        .where(eq(trips.id, tripId));
+
+      await recordEvent(tripId, 'pending', 'offered', tx);
+
+      const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
+
+      broadcastTripRequest(trip.driver_id, updated);
+
+      const [driverUser] = await tx
+        .select({ user_id: drivers.user_id })
+        .from(drivers)
+        .where(eq(drivers.id, trip.driver_id))
+        .limit(1);
+
+      if (driverUser?.user_id) {
+        sendPushToUser(driverUser.user_id, {
+          title: 'Nuevo viaje',
+          body: `Viaje solicitado de ${updated.origin_address ?? 'origen'} a ${updated.dest_address ?? 'destino'} — $${updated.total_fare}`,
+          data: { trip_id: tripId, type: 'trip:request' },
+        });
+      }
+
+      return updated;
+    });
+  },
+
+  async respondToTrip(user: AuthUser, tripId: string, action: 'accept' | 'reject') {
+    const driverId = await getDriverId(user);
+
+    return db.transaction(async (tx) => {
+      const trip = await findTrip(driverId, tripId, tx);
+
+      if (trip.status !== 'offered' && trip.status !== 'request_received') {
+        throw new AppError(
+          `Trip cannot be responded in status: ${trip.status}`,
+          400,
+          'BAD_REQUEST',
+        );
+      }
+
+      if (trip.status === 'offered' && trip.expires_at && new Date(trip.expires_at) < new Date()) {
+        await tx
+          .update(trips)
+          .set({ status: 'expired', updated_at: new Date() })
+          .where(eq(trips.id, tripId));
+
+        await recordEvent(tripId, trip.status, 'expired', tx);
+
+        throw new AppError('La oferta de viaje ha expirado', 400, 'OFFER_EXPIRED');
+      }
+
+      if (action === 'accept') {
+        const verificationCode = Math.floor(1000 + Math.random() * 9000).toString();
+
+        await tx
+          .update(trips)
+          .set({
+            status: 'accepted',
+            verification_code: verificationCode,
+            expires_at: null,
+            updated_at: new Date(),
+          })
+          .where(eq(trips.id, tripId));
+
+        await recordEvent(tripId, trip.status, 'accepted', tx);
+
+        const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
+
+        if (trip.passenger_id) {
+          sendPushToUser(trip.passenger_id, {
+            title: 'Tu conductor aceptó el viaje',
+            body: `Código de verificación: ${verificationCode}`,
+            data: {
+              type: 'trip:verification',
+              trip_id: tripId,
+              verification_code: verificationCode,
+            },
+          });
+        }
+
+        return updated;
+      }
+
+      await tx
+        .update(trips)
+        .set({ status: 'rejected', expires_at: null, updated_at: new Date() })
+        .where(eq(trips.id, tripId));
+
+      await recordEvent(tripId, trip.status, 'rejected', tx);
+
+      const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
+      return updated;
+    });
+  },
+
+  async expireStaleOffers() {
+    const staleOffers = await db
+      .select()
+      .from(trips)
+      .where(
+        and(
+          eq(trips.status, 'offered'),
+          sql`${trips.expires_at} IS NOT NULL`,
+          sql`${trips.expires_at} < NOW()`,
+        ),
+      );
+
+    for (const trip of staleOffers) {
+      try {
+        await db.transaction(async (tx) => {
+          await tx
+            .update(trips)
+            .set({ status: 'expired', updated_at: new Date() })
+            .where(eq(trips.id, trip.id));
+
+          await recordEvent(trip.id, 'offered', 'expired', tx);
+        });
+        logger.info('[expireStaleOffers] Expired trip', { tripId: trip.id });
+      } catch (err) {
+        logger.error('[expireStaleOffers] Failed to expire trip', {
+          tripId: trip.id,
+          error: (err as Error).message,
+        });
+      }
+    }
+
+    return staleOffers.length;
+  },
+
   async createTrip(user: AuthUser, data: any) {
     const driverId = await getDriverId(user);
 

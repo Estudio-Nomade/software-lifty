@@ -26,3 +26,22 @@ export const collectBody = t.Object({
 export const startTripBody = t.Object({
   verification_code: t.String({ minLength: 4, maxLength: 4 }),
 });
+
+export const webhookTripRequestBody = t.Object({
+  driver_id: t.String(),
+  passenger_id: t.Optional(t.String()),
+  origin_lat: t.Number(),
+  origin_lng: t.Number(),
+  dest_lat: t.Number(),
+  dest_lng: t.Number(),
+  origin_address: t.Optional(t.String()),
+  dest_address: t.Optional(t.String()),
+  pickup_instructions: t.Optional(t.String()),
+  distance_km: t.Number(),
+  duration_minutes: t.Number(),
+  vehicle_type: t.String(),
+});
+
+export const respondBody = t.Object({
+  action: t.Union([t.Literal('accept'), t.Literal('reject')]),
+});

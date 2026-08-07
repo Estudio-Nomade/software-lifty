@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { apiClient } from '../api/client';
 import type { Trip } from '../api/types';
 import { Avatar } from '../components/Avatar';
@@ -8,6 +8,7 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { MapView } from '../components/MapView';
 import { RatingStars } from '../components/RatingStars';
+import { SponsorBanner } from '../components/SponsorBanner';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { stopTracking } from '../lib/location';
@@ -58,7 +59,25 @@ export const IncomingRequestScreen: React.FC = () => {
           setActiveTrip(active);
           setLoading(false);
         } else if (active) {
-          navigation.goBack();
+          setLoading(false);
+          setActiveTrip(active);
+          switch (active.status) {
+            case 'accepted':
+            case 'en_route':
+              navigation.replace('Navigation');
+              break;
+            case 'waiting':
+              navigation.replace('WaitingPassenger');
+              break;
+            case 'in_trip':
+              navigation.replace('TripInProgress');
+              break;
+            case 'completed':
+              navigation.replace('TripComplete');
+              break;
+            default:
+              navigation.goBack();
+          }
         } else {
           navigation.goBack();
         }
@@ -125,11 +144,32 @@ export const IncomingRequestScreen: React.FC = () => {
     if (!trip) return;
     try {
       const response = await apiClient.post(`/trips/${trip.id}/accept`);
-      const acceptedTrip = response.data ?? response;
+      const acceptedTrip = { ...trip, ...(response.data?.data ?? response.data) };
       setActiveTrip(acceptedTrip);
       setAccepted(true);
       navigation.navigate('Navigation');
-    } catch {}
+    } catch (err: any) {
+      if (__DEV__) console.error('[handleAccept] error:', err?.message ?? err);
+      const isTokenExpired =
+        err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED';
+      Alert.alert(
+        'Error',
+        isTokenExpired
+          ? 'Tu sesion expiro. Inicia sesion nuevamente.'
+          : 'No se pudo aceptar el viaje.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              if (isTokenExpired) {
+                useTripStore.getState().clearTrip();
+                navigation.replace('Welcome');
+              }
+            },
+          },
+        ],
+      );
+    }
   };
 
   const handleReject = async () => {
@@ -211,6 +251,9 @@ export const IncomingRequestScreen: React.FC = () => {
 
         <Text style={styles.earningsLabel}>Ganaras</Text>
         <Text style={styles.earningsAmount}>{formatCurrency(trip?.driver_earnings)}</Text>
+
+        <View style={{ height: theme.spacing.sm }} />
+        <SponsorBanner />
 
         <View style={{ height: theme.spacing.lg }} />
 

@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, Platform, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  Linking,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { apiClient } from '../api/client';
 import { AlternativeRoutePill } from '../components/AlternativeRoutePill';
 import { Button } from '../components/Button';
@@ -114,7 +122,22 @@ export const TripInProgressScreen: React.FC = () => {
         driverEarnings: String(tripData?.driver_earnings ?? 2000),
         tipAmount: String(tripData?.tip_amount ?? 0),
       });
-    } catch {
+    } catch (err: any) {
+      const isTokenExpired =
+        err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED';
+      if (isTokenExpired) {
+        Alert.alert('Sesion expirada', 'Tu sesion ha expirado. Inicia sesion nuevamente.', [
+          {
+            text: 'OK',
+            onPress: () => {
+              useTripStore.getState().clearTrip();
+              navigation.replace('Welcome');
+            },
+          },
+        ]);
+        setCompleting(false);
+        return;
+      }
       navigation.navigate('TripComplete');
     } finally {
       setCompleting(false);

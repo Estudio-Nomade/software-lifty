@@ -1,7 +1,14 @@
 import { Elysia } from 'elysia';
 import { rateLimit } from '../../shared/middleware/ratelimit';
 import { authGuard } from '../../shared/middleware/require-auth';
-import { collectBody, createTripBody, startTripBody, tripIdParams } from './schema';
+import {
+  collectBody,
+  createTripBody,
+  respondBody,
+  startTripBody,
+  tripIdParams,
+  webhookTripRequestBody,
+} from './schema';
 import { tripService } from './service';
 
 import { safeCall } from '../../shared/lib/route-utils';
@@ -117,4 +124,30 @@ export const tripRoutes = new Elysia({ prefix: '/trips' })
         set,
       ),
     { params: tripIdParams, body: collectBody, requireAuth: true },
+  )
+  .post(
+    '/:id/respond',
+    ({ user, params, body, set }) =>
+      safeCall(() => tripService.respondToTrip(user, params.id, body.action), set),
+    { params: tripIdParams, body: respondBody, requireAuth: true },
   );
+
+export const tripWebhookRoute = new Elysia({ prefix: '/trips' }).post(
+  '/webhook/trip-request',
+  async ({ body, set, request }) => {
+    const apiKey = request.headers.get('X-API-Key') || '';
+    const expectedKey = process.env.DISPATCH_API_KEY;
+
+    if (!expectedKey || apiKey !== expectedKey) {
+      set.status = 401;
+      return { error: 'Unauthorized' };
+    }
+
+    return safeCall(async () => {
+      const trip = await tripService.createPendingTrip(body);
+      await tripService.offerTrip(trip.id);
+      return trip;
+    }, set);
+  },
+  { body: webhookTripRequestBody },
+);

@@ -192,11 +192,22 @@ export const NavigationScreen: React.FC = () => {
       navigation.navigate('WaitingPassenger');
     } catch (err: any) {
       if (__DEV__) console.error('[handleArrive] error:', err?.message ?? err);
-      const message =
-        err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED'
-          ? 'Tu sesion expiro. Inicia sesion nuevamente.'
-          : 'No se pudo confirmar la llegada.';
-      Alert.alert('Error', message);
+      const isTokenExpired =
+        err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED';
+      const message = isTokenExpired
+        ? 'Tu sesion expiro. Inicia sesion nuevamente.'
+        : 'No se pudo confirmar la llegada.';
+      Alert.alert('Error', message, [
+        {
+          text: 'OK',
+          onPress: () => {
+            if (isTokenExpired) {
+              useTripStore.getState().clearTrip();
+              navigation.replace('Welcome');
+            }
+          },
+        },
+      ]);
     } finally {
       setLoading(false);
     }
