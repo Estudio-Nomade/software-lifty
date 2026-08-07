@@ -53,21 +53,12 @@ export const earningsService = {
       .filter((t) => t.payment_method === 'mercadopago')
       .reduce((sum, t) => sum + (Number(t.driver_earnings) || 0), 0);
 
-    const yesterdayDate = sql`CURRENT_DATE - INTERVAL '1 day'`;
-    const [yesterdayResult] = await db
-      .select({ total: sum(trips.driver_earnings) })
-      .from(trips)
-      .where(
-        and(
-          eq(trips.driver_id, driverId),
-          inArray(trips.status, COMPLETED_STATUSES),
-          gte(trips.created_at, yesterdayDate),
-          lte(trips.created_at, sql`CURRENT_DATE - INTERVAL '1 millisecond'`),
-        ),
-      );
-
     const [weekResult] = await db
-      .select({ total: sum(trips.driver_earnings) })
+      .select({
+        total: sum(trips.driver_earnings),
+        platform_fee: sum(trips.platform_fee),
+        total_fare: sum(trips.total_fare),
+      })
       .from(trips)
       .where(
         and(
@@ -83,8 +74,9 @@ export const earningsService = {
       transfer,
       trip_count: todayTrips.length,
       trips: todayTrips,
-      yesterday: Number(yesterdayResult?.total ?? 0),
       week: Number(weekResult?.total ?? 0),
+      week_platform_fee: Number(weekResult?.platform_fee ?? 0),
+      week_total_fare: Number(weekResult?.total_fare ?? 0),
       platform_debt: Number(driver?.platform_debt ?? 0),
       commission_exempt_until: driver?.commission_exempt_until ?? null,
     };
