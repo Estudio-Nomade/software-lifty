@@ -93,6 +93,11 @@ export const EarningsScreen: React.FC = () => {
       ? new Date(earnings.commission_exempt_until) > new Date()
       : false;
 
+  const weekRetention = earnings?.week_platform_fee ?? 0;
+  const weekFare = earnings?.week_total_fare ?? 0;
+  const weekRetentionPercent =
+    weekRetention > 0 && weekFare > 0 ? Math.round((weekRetention / weekFare) * 100) : 0;
+
   const formatTime = (iso: string) => {
     const date = new Date(iso);
     return date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
@@ -133,45 +138,7 @@ export const EarningsScreen: React.FC = () => {
 
             <Card>
               <Text style={styles.cardTitle}>Desglose de hoy</Text>
-              <View style={styles.row}>
-                <View style={styles.rowLabelContainer}>
-                  <Ionicons name="person-outline" size={16} color={theme.colors.turquoise} />
-                  <Text style={styles.rowLabel}>Para vos</Text>
-                </View>
-                <Text style={[styles.rowValue, { color: theme.colors.turquoise }]}>
-                  {formatCurrency(earnings.total)}
-                </Text>
-              </View>
-              <View style={styles.row}>
-                <View style={styles.rowLabelContainer}>
-                  <Ionicons name="business-outline" size={16} color={theme.colors.mediumGray} />
-                  <Text style={styles.rowLabel}>Comision Lifty</Text>
-                </View>
-                <Text
-                  style={[
-                    styles.rowValue,
-                    {
-                      color: retentionTotal > 0 ? theme.colors.dangerRed : theme.colors.mediumGray,
-                    },
-                  ]}
-                >
-                  -{formatCurrency(retentionTotal)}
-                  {retentionTotal > 0 ? ` (${retentionPercent}%)` : ' (0%)'}
-                </Text>
-              </View>
-              {isExempt && (
-                <View style={styles.exemptNotice}>
-                  <Ionicons
-                    name="checkmark-circle-outline"
-                    size={16}
-                    color={theme.colors.turquoise}
-                  />
-                  <Text style={styles.exemptNoticeText}>
-                    Comision 0% — Primer mes gratis para nuevos conductores
-                  </Text>
-                </View>
-              )}
-              <View style={styles.divider} />
+
               <View style={styles.row}>
                 <View style={styles.rowLabelContainer}>
                   <Ionicons name="cash-outline" size={16} color={theme.colors.mediumGray} />
@@ -219,13 +186,71 @@ export const EarningsScreen: React.FC = () => {
 
             <Card>
               <Text style={styles.cardTitle}>Tus ganancias</Text>
-              <View style={styles.earningRow}>
-                <Text style={styles.earningLabel}>Ayer</Text>
-                <Text style={styles.earningAmount}>{formatCurrency(earnings.yesterday ?? 0)}</Text>
+              <View style={styles.row}>
+                <View style={styles.rowLabelContainer}>
+                  <Ionicons name="person-outline" size={16} color={theme.colors.turquoise} />
+                  <Text style={styles.rowLabel}>Para vos</Text>
+                </View>
+                <Text style={[styles.rowValue, { color: theme.colors.turquoise }]}>
+                  {formatCurrency(earnings.total)}
+                </Text>
               </View>
-              <View style={styles.earningRow}>
-                <Text style={styles.earningLabel}>Esta semana</Text>
-                <Text style={styles.earningAmount}>{formatCurrency(earnings.week ?? 0)}</Text>
+              <View style={styles.row}>
+                <View style={styles.rowLabelContainer}>
+                  <Ionicons name="business-outline" size={16} color={theme.colors.mediumGray} />
+                  <Text style={styles.rowLabel}>Comision Lifty</Text>
+                </View>
+                <Text
+                  style={[
+                    styles.rowValue,
+                    {
+                      color: retentionTotal > 0 ? theme.colors.dangerRed : theme.colors.mediumGray,
+                    },
+                  ]}
+                >
+                  -{formatCurrency(retentionTotal)}
+                  {retentionTotal > 0 ? ` (${retentionPercent}%)` : ' (0%)'}
+                </Text>
+              </View>
+              {isExempt && (
+                <View style={styles.exemptNotice}>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={16}
+                    color={theme.colors.turquoise}
+                  />
+                  <Text style={styles.exemptNoticeText}>
+                    Comision 0% — Primer mes gratis para nuevos conductores
+                  </Text>
+                </View>
+              )}
+              <View style={styles.divider} />
+              <Text style={styles.sectionLabel}>Esta semana</Text>
+              <View style={styles.row}>
+                <View style={styles.rowLabelContainer}>
+                  <Ionicons name="person-outline" size={16} color={theme.colors.turquoise} />
+                  <Text style={styles.rowLabel}>Para vos</Text>
+                </View>
+                <Text style={[styles.rowValue, { color: theme.colors.turquoise }]}>
+                  {formatCurrency(earnings.week ?? 0)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <View style={styles.rowLabelContainer}>
+                  <Ionicons name="business-outline" size={16} color={theme.colors.mediumGray} />
+                  <Text style={styles.rowLabel}>Comision Lifty</Text>
+                </View>
+                <Text
+                  style={[
+                    styles.rowValue,
+                    {
+                      color: weekRetention > 0 ? theme.colors.dangerRed : theme.colors.mediumGray,
+                    },
+                  ]}
+                >
+                  -{formatCurrency(weekRetention)}
+                  {weekRetention > 0 ? ` (${weekRetentionPercent}%)` : ' (0%)'}
+                </Text>
               </View>
             </Card>
 
@@ -293,13 +318,71 @@ export const EarningsScreen: React.FC = () => {
 
             <Card>
               <Text style={styles.cardTitle}>Tus ganancias</Text>
-              <View style={styles.earningRow}>
-                <Text style={styles.earningLabel}>Ayer</Text>
-                <Text style={styles.earningAmount}>{formatCurrency(earnings?.yesterday ?? 0)}</Text>
+              <View style={styles.row}>
+                <View style={styles.rowLabelContainer}>
+                  <Ionicons name="person-outline" size={16} color={theme.colors.turquoise} />
+                  <Text style={styles.rowLabel}>Para vos</Text>
+                </View>
+                <Text style={[styles.rowValue, { color: theme.colors.turquoise }]}>
+                  {formatCurrency(earnings?.total ?? 0)}
+                </Text>
               </View>
-              <View style={styles.earningRow}>
-                <Text style={styles.earningLabel}>Esta semana</Text>
-                <Text style={styles.earningAmount}>{formatCurrency(earnings?.week ?? 0)}</Text>
+              <View style={styles.row}>
+                <View style={styles.rowLabelContainer}>
+                  <Ionicons name="business-outline" size={16} color={theme.colors.mediumGray} />
+                  <Text style={styles.rowLabel}>Comision Lifty</Text>
+                </View>
+                <Text
+                  style={[
+                    styles.rowValue,
+                    {
+                      color: retentionTotal > 0 ? theme.colors.dangerRed : theme.colors.mediumGray,
+                    },
+                  ]}
+                >
+                  -{formatCurrency(retentionTotal)}
+                  {retentionTotal > 0 ? ` (${retentionPercent}%)` : ' (0%)'}
+                </Text>
+              </View>
+              {isExempt && (
+                <View style={styles.exemptNotice}>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={16}
+                    color={theme.colors.turquoise}
+                  />
+                  <Text style={styles.exemptNoticeText}>
+                    Comision 0% — Primer mes gratis para nuevos conductores
+                  </Text>
+                </View>
+              )}
+              <View style={styles.divider} />
+              <Text style={styles.sectionLabel}>Esta semana</Text>
+              <View style={styles.row}>
+                <View style={styles.rowLabelContainer}>
+                  <Ionicons name="person-outline" size={16} color={theme.colors.turquoise} />
+                  <Text style={styles.rowLabel}>Para vos</Text>
+                </View>
+                <Text style={[styles.rowValue, { color: theme.colors.turquoise }]}>
+                  {formatCurrency(earnings?.week ?? 0)}
+                </Text>
+              </View>
+              <View style={styles.row}>
+                <View style={styles.rowLabelContainer}>
+                  <Ionicons name="business-outline" size={16} color={theme.colors.mediumGray} />
+                  <Text style={styles.rowLabel}>Comision Lifty</Text>
+                </View>
+                <Text
+                  style={[
+                    styles.rowValue,
+                    {
+                      color: weekRetention > 0 ? theme.colors.dangerRed : theme.colors.mediumGray,
+                    },
+                  ]}
+                >
+                  -{formatCurrency(weekRetention)}
+                  {weekRetention > 0 ? ` (${weekRetentionPercent}%)` : ' (0%)'}
+                </Text>
               </View>
             </Card>
 
@@ -367,6 +450,13 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
     marginBottom: theme.spacing.sm,
+  },
+  sectionLabel: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.mediumGray,
+    marginTop: theme.spacing.xs,
+    marginBottom: theme.spacing.xs,
   },
   row: {
     flexDirection: 'row',
