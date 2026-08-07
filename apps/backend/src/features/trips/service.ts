@@ -388,6 +388,17 @@ export const tripService = {
   },
 
   async createTrip(user: AuthUser, data: any) {
+    logger.info('[createTrip] coordinates received', {
+      origin_lat: data.origin_lat,
+      origin_lng: data.origin_lng,
+      dest_lat: data.dest_lat,
+      dest_lng: data.dest_lng,
+      vehicle_type: data.vehicle_type,
+      distance_km: data.distance_km,
+      duration_minutes: data.duration_minutes,
+      origin_address: data.origin_address,
+      dest_address: data.dest_address,
+    });
     const driverId = await getDriverId(user);
 
     const [driverRecord] = await db

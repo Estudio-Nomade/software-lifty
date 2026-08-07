@@ -177,15 +177,27 @@ export const TripInProgressScreen: React.FC = () => {
       <View style={styles.mapArea}>
         <MapView
           followUserLocation
+          centerCoordinate={
+            trip
+              ? [trip.dest_lng, trip.dest_lat]
+              : locationLat != null && locationLng != null
+                ? [locationLng, locationLat]
+                : [0, 0]
+          }
+          userLocation={
+            locationLat != null && locationLng != null ? [locationLng, locationLat] : null
+          }
           markers={[
-            {
-              id: 'destination',
-              coordinate: trip
-                ? [trip.dest_lng, trip.dest_lat]
-                : ([-59.1332, -37.3217] as [number, number]),
-              title: 'Destino',
-              icon: 'person',
-            },
+            ...(trip
+              ? [
+                  {
+                    id: 'destination',
+                    coordinate: [trip.dest_lng, trip.dest_lat] as [number, number],
+                    title: 'Destino',
+                    icon: 'person' as const,
+                  },
+                ]
+              : []),
             ...(locationLat != null && locationLng != null
               ? [
                   {

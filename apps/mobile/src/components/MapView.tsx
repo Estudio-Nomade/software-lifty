@@ -26,7 +26,7 @@ interface HeatmapPoint {
 }
 
 interface MapViewProps {
-  centerCoordinate?: [number, number];
+  centerCoordinate: [number, number];
   zoom?: number;
   markers?: MarkerData[];
   routeLine?: Array<[number, number]>;
@@ -41,7 +41,6 @@ interface MapViewProps {
   recenterKey?: number;
 }
 
-const DEFAULT_CENTER: [number, number] = [-59.1332, -37.3217];
 const DEFAULT_ZOOM = 15;
 
 function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: string }) {
@@ -116,7 +115,7 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
 <body>
 <div id="map"></div>
 <script>
-  var DEFAULT_CENTER = [-59.1332, -37.3217];
+  var DEFAULT_CENTER = [0, 0];
   var DEFAULT_ZOOM = 15;
 
   var map = new maplibregl.Map({
@@ -370,7 +369,7 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
 
     switch (msg.type) {
       case 'init':
-        setView(msg.center || DEFAULT_CENTER, msg.zoom || DEFAULT_ZOOM);
+        setView(msg.center, msg.zoom || DEFAULT_ZOOM);
         break;
       case 'markers':
         updateMarkers(msg.markers || []);
@@ -434,7 +433,7 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
 }
 
 export const MapView: React.FC<MapViewProps> = ({
-  centerCoordinate = DEFAULT_CENTER,
+  centerCoordinate,
   zoom = DEFAULT_ZOOM,
   markers = [],
   routeLine,
@@ -463,6 +462,9 @@ export const MapView: React.FC<MapViewProps> = ({
   const userLocationRef = useRef(userLocation);
   userLocationRef.current = userLocation;
 
+  const initCenterRef = useRef(centerCoordinate);
+  initCenterRef.current = centerCoordinate;
+
   const webViewRef = useRef<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -485,11 +487,11 @@ export const MapView: React.FC<MapViewProps> = ({
     webViewRef.current.postMessage(
       JSON.stringify({
         type: 'init',
-        center: centerCoordinate,
+        center: initCenterRef.current,
         zoom: zoom,
       }),
     );
-  }, [centerCoordinate, zoom, isLoaded]);
+  }, [isLoaded]);
 
   useEffect(() => {
     if (!isLoaded || !webViewRef.current) return;

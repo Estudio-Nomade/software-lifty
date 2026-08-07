@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { z } from 'zod';
 import { apiClient, getValidated } from '../api/client';
 import { driverStatusSchema, earningsDailySchema } from '../api/types';
@@ -273,13 +273,19 @@ export const OnlineScreen: React.FC = () => {
           onPress={() => navigation.navigate('Active')}
         >
           <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            <MapView
-              followUserLocation
-              userLocation={
-                locationLat != null && locationLng != null ? [locationLng, locationLat] : null
-              }
-              heatmapPoints={heatmapPoints}
-            />
+            {locationLat != null && locationLng != null ? (
+              <MapView
+                followUserLocation
+                centerCoordinate={[locationLng, locationLat]}
+                userLocation={[locationLng, locationLat]}
+                heatmapPoints={heatmapPoints}
+              />
+            ) : (
+              <View style={styles.mapLoading}>
+                <ActivityIndicator size="large" color={theme.colors.turquoise} />
+                <Text style={styles.mapLoadingText}>Obteniendo ubicación...</Text>
+              </View>
+            )}
           </View>
         </TouchableOpacity>
 
@@ -420,5 +426,17 @@ const styles = StyleSheet.create({
   },
   spacer: {
     flex: 1,
+  },
+  mapLoading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.colors.lightGray,
+    borderRadius: theme.radius.lg,
+    gap: theme.spacing.md,
+  },
+  mapLoadingText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.mediumGray,
   },
 });

@@ -59,9 +59,7 @@ export const NavigationScreen: React.FC = () => {
 
   const { instruction } = useManeuverInstructions(activeSteps, locationLat, locationLng);
 
-  const pickupCoord: [number, number] = trip
-    ? [trip.origin_lng, trip.origin_lat]
-    : [-59.1332, -37.3217];
+  const pickupCoord: [number, number] | null = trip ? [trip.origin_lng, trip.origin_lat] : null;
 
   useEffect(() => {
     startTracking();
@@ -225,13 +223,27 @@ export const NavigationScreen: React.FC = () => {
       <View style={styles.mapArea}>
         <MapView
           followUserLocation
+          centerCoordinate={
+            trip
+              ? [trip.origin_lng, trip.origin_lat]
+              : locationLat != null && locationLng != null
+                ? [locationLng, locationLat]
+                : [0, 0]
+          }
+          userLocation={
+            locationLat != null && locationLng != null ? [locationLng, locationLat] : null
+          }
           markers={[
-            {
-              id: 'pickup',
-              coordinate: pickupCoord,
-              title: 'Pasajero',
-              icon: 'person',
-            },
+            ...(pickupCoord
+              ? [
+                  {
+                    id: 'pickup',
+                    coordinate: pickupCoord,
+                    title: 'Pasajero',
+                    icon: 'person' as const,
+                  },
+                ]
+              : []),
             ...(locationLat != null && locationLng != null
               ? [
                   {

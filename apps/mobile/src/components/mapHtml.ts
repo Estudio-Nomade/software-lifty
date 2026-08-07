@@ -12,7 +12,7 @@ export interface HeatmapPoint {
 }
 
 export interface MapViewProps {
-  centerCoordinate?: [number, number];
+  centerCoordinate: [number, number];
   zoom?: number;
   markers?: MarkerData[];
   routeLine?: Array<[number, number]>;
@@ -25,7 +25,6 @@ export interface MapViewProps {
   onError?: () => void;
 }
 
-export const DEFAULT_CENTER: [number, number] = [-65.1833, -31.9333];
 export const DEFAULT_ZOOM = 15;
 
 export function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: string }) {
@@ -100,7 +99,7 @@ export function generateMapHtml(colors: { turquoise: string; lightGray: string; 
 <body>
 <div id="map"></div>
 <script>
-  var DEFAULT_CENTER = [-65.1833, -31.9333];
+  var DEFAULT_CENTER = [0, 0];
   var DEFAULT_ZOOM = 15;
 
   function postToHost(msg) {
@@ -362,7 +361,7 @@ export function generateMapHtml(colors: { turquoise: string; lightGray: string; 
 
     switch (msg.type) {
       case 'init':
-        setView(msg.center || DEFAULT_CENTER, msg.zoom || DEFAULT_ZOOM);
+        setView(msg.center, msg.zoom || DEFAULT_ZOOM);
         break;
       case 'markers':
         updateMarkers(msg.markers || []);

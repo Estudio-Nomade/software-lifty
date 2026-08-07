@@ -2,14 +2,14 @@ import { theme } from '@/theme';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { DEFAULT_CENTER, DEFAULT_ZOOM, type MapViewProps, generateMapHtml } from './mapHtml';
+import { DEFAULT_ZOOM, type MapViewProps, generateMapHtml } from './mapHtml';
 import { Text } from './ui/Text';
 
 declare const document: any;
 declare const window: any;
 
 export const MapView: React.FC<MapViewProps> = ({
-  centerCoordinate = DEFAULT_CENTER,
+  centerCoordinate,
   zoom = DEFAULT_ZOOM,
   markers = [],
   routeLine,
@@ -33,6 +33,8 @@ export const MapView: React.FC<MapViewProps> = ({
 
   const containerRef = useRef<any>(null);
   const iframeRef = useRef<any>(null);
+  const initCenterRef = useRef(centerCoordinate);
+  initCenterRef.current = centerCoordinate;
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const retryKey = useRef(0);
@@ -118,8 +120,8 @@ export const MapView: React.FC<MapViewProps> = ({
 
   useEffect(() => {
     if (!isLoaded) return;
-    sendMessage({ type: 'init', center: centerCoordinate, zoom });
-  }, [centerCoordinate, zoom, isLoaded, sendMessage]);
+    sendMessage({ type: 'init', center: initCenterRef.current, zoom });
+  }, [isLoaded, sendMessage]);
 
   useEffect(() => {
     if (!isLoaded) return;
