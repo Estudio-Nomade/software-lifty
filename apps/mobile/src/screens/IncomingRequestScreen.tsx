@@ -54,7 +54,7 @@ export const IncomingRequestScreen: React.FC = () => {
         const response = await apiClient.get('/trips/active');
         const active = (response.data?.data ?? response.data) as Trip | null;
         if (cancelled) return;
-        if (active && active.status === 'request_received') {
+        if (active && (active.status === 'request_received' || active.status === 'offered')) {
           setTrip(active);
           setActiveTrip(active);
           setLoading(false);

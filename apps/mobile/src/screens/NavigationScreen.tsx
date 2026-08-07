@@ -36,7 +36,6 @@ export const NavigationScreen: React.FC = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const trip = useTripStore((s) => s.trip);
   const tripStatus = useTripStore((s) => s.tripStatus);
-  const setTripStatus = useTripStore((s) => s.setTripStatus);
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
   const iconType = useVehicleStore((s) => s.iconType);
@@ -53,6 +52,9 @@ export const NavigationScreen: React.FC = () => {
   const [activeRoute, setActiveRoute] = useState<'primary' | 'alternative'>('primary');
   const [driverCoords, setDriverCoords] = useState<[number, number] | null>(null);
   const [displayAddress, setDisplayAddress] = useState<string | null>(null);
+  const [enRouteStatus, setEnRouteStatus] = useState<'pending' | 'success' | 'error'>(
+    tripStatus === 'accepted' ? 'pending' : 'success',
+  );
 
   const isPrimary = activeRoute === 'primary';
   const activeSteps = isPrimary ? steps : altSteps;
@@ -99,9 +101,15 @@ export const NavigationScreen: React.FC = () => {
     enRouteSent.current = true;
     apiClient
       .post(`/trips/${trip.id}/en-route`)
-      .then(() => setTripStatus('en_route'))
-      .catch(() => {});
-  }, [trip, tripStatus, setTripStatus]);
+      .then((res) => {
+        const storeTrip = useTripStore.getState().trip;
+        if (storeTrip) {
+          useTripStore.getState().setActiveTrip({ ...storeTrip, ...res.data });
+        }
+        setEnRouteStatus('success');
+      })
+      .catch(() => setEnRouteStatus('error'));
+  }, [trip, tripStatus]);
 
   const lastFetchRef = useRef(0);
 
@@ -185,13 +193,19 @@ export const NavigationScreen: React.FC = () => {
     if (!trip) return;
     setLoading(true);
     try {
-      await apiClient.post(`/trips/${trip.id}/arrived`);
-      setTripStatus('waiting');
+      const res = await apiClient.post(`/trips/${trip.id}/arrived`);
+      const storeTrip = useTripStore.getState().trip;
+      if (storeTrip) {
+        useTripStore.getState().setActiveTrip({ ...storeTrip, ...res.data });
+      }
       navigation.navigate('WaitingPassenger');
     } catch (err: any) {
       if (__DEV__) console.error('[handleArrive] error:', err?.message ?? err);
       const isTokenExpired =
-        err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED';
+        err?.code === 'TOKEN_REQUIRED' ||
+        err?.code === 'TOKEN_EXPIRED' ||
+        err?.error?.code === 'TOKEN_REQUIRED' ||
+        err?.error?.code === 'TOKEN_EXPIRED';
       const message = isTokenExpired
         ? 'Tu sesion expiro. Inicia sesion nuevamente.'
         : 'No se pudo confirmar la llegada.';
@@ -208,6 +222,21 @@ export const NavigationScreen: React.FC = () => {
       ]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRetryEnRoute = async () => {
+    if (!trip) return;
+    setEnRouteStatus('pending');
+    try {
+      const res = await apiClient.post(`/trips/${trip.id}/en-route`);
+      const storeTrip = useTripStore.getState().trip;
+      if (storeTrip) {
+        useTripStore.getState().setActiveTrip({ ...storeTrip, ...res.data });
+      }
+      setEnRouteStatus('success');
+    } catch {
+      setEnRouteStatus('error');
     }
   };
 
@@ -348,14 +377,42 @@ export const NavigationScreen: React.FC = () => {
               textStyle={styles.navButtonText}
             />
           </View>
-          {nearPassenger && <Text style={styles.nearPassengerText}>Estas cerca del pasajero</Text>}
-          <Button
-            title="LLEGUE"
-            onPress={handleArrive}
-            loading={loading}
-            variant={nearPassenger ? 'cta' : 'primary'}
-            style={styles.arrivedButton}
-          />
+          {enRouteStatus === 'pending' ? (
+            <>
+              <Text style={styles.enRouteStatusText}>Preparando navegacion...</Text>
+              <Button
+                title="LLEGUE"
+                onPress={() => {}}
+                loading={true}
+                disabled={true}
+                variant="primary"
+                style={styles.arrivedButton}
+              />
+            </>
+          ) : enRouteStatus === 'error' ? (
+            <>
+              <Text style={styles.enRouteErrorText}>Error al conectar con el servidor</Text>
+              <Button
+                title="Reintentar"
+                onPress={handleRetryEnRoute}
+                variant="danger"
+                style={styles.arrivedButton}
+              />
+            </>
+          ) : (
+            <>
+              {nearPassenger && (
+                <Text style={styles.nearPassengerText}>Estas cerca del pasajero</Text>
+              )}
+              <Button
+                title="LLEGUE"
+                onPress={handleArrive}
+                loading={loading}
+                variant={nearPassenger ? 'cta' : 'primary'}
+                style={styles.arrivedButton}
+              />
+            </>
+          )}
         </ScrollView>
       </View>
     </View>
@@ -459,6 +516,18 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.turquoise,
+    textAlign: 'center',
+  },
+  enRouteStatusText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.mediumGray,
+    textAlign: 'center',
+  },
+  enRouteErrorText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.dangerRed,
     textAlign: 'center',
   },
   passengerCard: {

@@ -134,7 +134,11 @@ export const ActiveScreen: React.FC = () => {
       try {
         const { data } = await apiClient.get('/trips/active');
         const trip = data?.data ?? data;
-        if (!navigated && trip && trip.status === 'request_received') {
+        if (
+          !navigated &&
+          trip &&
+          (trip.status === 'request_received' || trip.status === 'offered')
+        ) {
           navigated = true;
           navigation.navigate('IncomingRequest');
         }

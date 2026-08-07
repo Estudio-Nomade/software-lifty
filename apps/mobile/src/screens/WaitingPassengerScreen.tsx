@@ -42,7 +42,6 @@ export const WaitingPassengerScreen: React.FC = () => {
   const chatScrollRef = useRef<ScrollView>(null);
 
   const activeTripId = useTripStore((s) => s.activeTripId);
-  const setTripStatus = useTripStore((s) => s.setTripStatus);
   const clearTrip = useTripStore((s) => s.clearTrip);
   const trip = useTripStore((s) => s.trip);
   const driverId = useAuthStore((s) => s.driverId);
@@ -127,13 +126,21 @@ export const WaitingPassengerScreen: React.FC = () => {
           codeChars: verificationCode.split('').map((c: string) => c.charCodeAt(0)),
         });
       }
-      await apiClient.post(`/trips/${activeTripId}/start`, { verification_code: verificationCode });
+      const res = await apiClient.post(`/trips/${activeTripId}/start`, {
+        verification_code: verificationCode,
+      });
       setShowVerificationModal(false);
-      setTripStatus('in_trip');
+      const storeTrip = useTripStore.getState().trip;
+      if (storeTrip) {
+        useTripStore.getState().setActiveTrip({ ...storeTrip, ...res.data });
+      }
       navigation.navigate('TripInProgress');
     } catch (err: any) {
       const isTokenExpired =
-        err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED';
+        err?.code === 'TOKEN_REQUIRED' ||
+        err?.code === 'TOKEN_EXPIRED' ||
+        err?.error?.code === 'TOKEN_REQUIRED' ||
+        err?.error?.code === 'TOKEN_EXPIRED';
       if (isTokenExpired) {
         setShowVerificationModal(false);
         Alert.alert('Sesion expirada', 'Tu sesion ha expirado. Inicia sesion nuevamente.', [
@@ -164,7 +171,10 @@ export const WaitingPassengerScreen: React.FC = () => {
       navigation.navigate('Online');
     } catch (err: any) {
       const isTokenExpired =
-        err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED';
+        err?.code === 'TOKEN_REQUIRED' ||
+        err?.code === 'TOKEN_EXPIRED' ||
+        err?.error?.code === 'TOKEN_REQUIRED' ||
+        err?.error?.code === 'TOKEN_EXPIRED';
       if (isTokenExpired) {
         clearTrip();
         Alert.alert('Sesion expirada', 'Tu sesion ha expirado. Inicia sesion nuevamente.', [

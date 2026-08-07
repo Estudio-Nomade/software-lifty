@@ -30,6 +30,8 @@ const STATUS_MAP: Record<TripStatus, { label: string; color: string }> = {
   waiting: { label: 'Esperando', color: theme.colors.deepBlue },
   accepted: { label: 'Aceptado', color: theme.colors.amber },
   request_received: { label: 'Pendiente', color: theme.colors.mediumGray },
+  offered: { label: 'Pendiente', color: theme.colors.mediumGray },
+  expired: { label: 'Expirado', color: theme.colors.mediumGray },
   cancelled: { label: 'Cancelado', color: theme.colors.dangerRed },
   cancelled_early: { label: 'Cancelado', color: theme.colors.dangerRed },
   cancelled_late: { label: 'Cancelado', color: theme.colors.dangerRed },

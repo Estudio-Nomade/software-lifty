@@ -86,6 +86,8 @@ export const tripStatusSchema = z.enum([
   'in_trip',
   'completed',
   'rejected',
+  'offered',
+  'expired',
   'cancelled',
   'cancelled_early',
   'cancelled_late',
