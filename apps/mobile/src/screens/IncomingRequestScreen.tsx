@@ -188,7 +188,12 @@ export const IncomingRequestScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <MapView style={StyleSheet.absoluteFill as any} followUserLocation />
+      <MapView
+        style={StyleSheet.absoluteFill as any}
+        followUserLocation
+        centerCoordinate={lat != null && lng != null ? [lng, lat] : [0, 0]}
+        userLocation={lat != null && lng != null ? [lng, lat] : null}
+      />
       <View style={styles.overlay}>
         <View style={styles.spacer} />
         <Text style={styles.newRequest}>Nueva solicitud</Text>

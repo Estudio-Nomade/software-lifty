@@ -3,7 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Dimensions,
+  StatusBar,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { z } from 'zod';
 import { apiClient, getValidated } from '../api/client';
 import type { EarningsDaily } from '../api/types';
@@ -274,25 +281,33 @@ export const ActiveScreen: React.FC = () => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
 
-      <MapView
-        style={StyleSheet.absoluteFill as any}
-        followUserLocation
-        userLocation={
-          locationLat != null && locationLng != null ? [locationLng, locationLat] : null
-        }
-        heatmapPoints={heatmapPoints}
-        onMoveEnd={handleMapMove}
-        recenterKey={recenterKey}
-      />
+      {locationLat != null && locationLng != null ? (
+        <>
+          <MapView
+            style={StyleSheet.absoluteFill as any}
+            followUserLocation
+            centerCoordinate={[locationLng, locationLat]}
+            userLocation={[locationLng, locationLat]}
+            heatmapPoints={heatmapPoints}
+            onMoveEnd={handleMapMove}
+            recenterKey={recenterKey}
+          />
 
-      {isOffCenter && (
-        <TouchableOpacity
-          style={styles.recenterButton}
-          onPress={handleRecenter}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="locate-outline" size={24} color={theme.colors.turquoise} />
-        </TouchableOpacity>
+          {isOffCenter && (
+            <TouchableOpacity
+              style={styles.recenterButton}
+              onPress={handleRecenter}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="locate-outline" size={24} color={theme.colors.turquoise} />
+            </TouchableOpacity>
+          )}
+        </>
+      ) : (
+        <View style={styles.mapLoading}>
+          <ActivityIndicator size="large" color={theme.colors.turquoise} />
+          <Text style={styles.mapLoadingText}>Obteniendo ubicación...</Text>
+        </View>
       )}
 
       <View style={styles.headerOverlay}>
@@ -591,5 +606,16 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
+  },
+  mapLoading: {
+    ...(StyleSheet.absoluteFill as object),
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: theme.colors.lightGray,
+    gap: theme.spacing.md,
+  },
+  mapLoadingText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.mediumGray,
   },
 });
