@@ -254,7 +254,7 @@ export const tripService = {
         );
       }
 
-      const expiresAt = new Date(Date.now() + 15_000);
+      const expiresAt = new Date(Date.now() + 20_000);
       await tx
         .update(trips)
         .set({ status: 'offered', expires_at: expiresAt, updated_at: new Date() })

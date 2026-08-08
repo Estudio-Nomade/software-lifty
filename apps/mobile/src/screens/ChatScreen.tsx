@@ -11,8 +11,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { ChatBackground } from '../components/ChatBackground';
 import { ChatBubble } from '../components/ChatBubble';
-import { LiftyWatermark } from '../components/LiftyWatermark';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { sendMessage, subscribeToTripChannel } from '../lib/realtime';
@@ -89,7 +89,7 @@ export const ChatScreen: React.FC = () => {
         keyboardVerticalOffset={0}
       >
         <View style={styles.chatArea}>
-          <LiftyWatermark size={90} opacity={0.06} />
+          <ChatBackground dotOpacity={0.05} dotSize={2.5} />
           <ScrollView
             ref={chatScrollRef}
             style={styles.chatScroll}
