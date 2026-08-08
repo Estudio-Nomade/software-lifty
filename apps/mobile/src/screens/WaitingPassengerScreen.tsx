@@ -14,8 +14,8 @@ import {
 } from 'react-native';
 import { apiClient } from '../api/client';
 import { Button } from '../components/Button';
+import { ChatBackground } from '../components/ChatBackground';
 import { ChatBubble } from '../components/ChatBubble';
-import { LiftyWatermark } from '../components/LiftyWatermark';
 import { OTPInput } from '../components/OTPInput';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -298,7 +298,7 @@ export const WaitingPassengerScreen: React.FC = () => {
       ) : null}
 
       <View style={styles.chatArea}>
-        <LiftyWatermark />
+        <ChatBackground />
         <ScrollView
           ref={chatScrollRef}
           style={styles.chatScroll}

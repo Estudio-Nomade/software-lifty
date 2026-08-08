@@ -18,7 +18,6 @@ import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
 import type { ManeuverStep } from '../hooks/useManeuverInstructions';
 import { startTracking, stopTracking } from '../lib/location';
 import { decodePolyline } from '../lib/polyline';
-import { subscribeToTripChannel } from '../lib/realtime';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -41,7 +40,6 @@ export const TripInProgressScreen: React.FC = () => {
   const [altDistKm, setAltDistKm] = useState<number | null>(null);
   const [altSteps, setAltSteps] = useState<ManeuverStep[]>([]);
   const [activeRoute, setActiveRoute] = useState<'primary' | 'alternative'>('primary');
-  const [driverCoords, setDriverCoords] = useState<[number, number] | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchDirections = useCallback(async () => {
@@ -86,16 +84,6 @@ export const TripInProgressScreen: React.FC = () => {
       stopTracking();
     };
   }, []);
-
-  useEffect(() => {
-    if (!trip?.id) return;
-    const unsub = subscribeToTripChannel(trip.id, {
-      onDriverLocation: (loc) => {
-        setDriverCoords([loc.lng, loc.lat]);
-      },
-    });
-    return unsub;
-  }, [trip?.id]);
 
   useEffect(() => {
     fetchDirections();
@@ -209,16 +197,6 @@ export const TripInProgressScreen: React.FC = () => {
                     id: 'my-location',
                     coordinate: [locationLng, locationLat] as [number, number],
                     title: 'Mi ubicación',
-                    icon: iconType ?? 'car',
-                  },
-                ]
-              : []),
-            ...(driverCoords
-              ? [
-                  {
-                    id: 'driver-location',
-                    coordinate: driverCoords,
-                    title: 'Conductor',
                     icon: iconType ?? 'car',
                   },
                 ]

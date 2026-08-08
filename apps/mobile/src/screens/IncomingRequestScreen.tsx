@@ -17,7 +17,7 @@ import { useOnlineStore } from '../store/onlineStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
-const RESPONSE_SECONDS = 60;
+const RESPONSE_SECONDS = 20;
 
 const formatCurrency = (value: number | null | undefined) =>
   value == null ? '—' : `$${value.toLocaleString('es-AR')}`;
@@ -141,13 +141,14 @@ export const IncomingRequestScreen: React.FC = () => {
   }, [trip, lat, lng]);
 
   const handleAccept = async () => {
-    if (!trip) return;
+    if (!trip || loading) return;
+    setLoading(true);
     try {
       const response = await apiClient.post(`/trips/${trip.id}/accept`);
       const acceptedTrip = { ...trip, ...(response.data?.data ?? response.data) };
       setActiveTrip(acceptedTrip);
       setAccepted(true);
-      navigation.navigate('Navigation');
+      navigation.replace('Navigation');
     } catch (err: any) {
       if (__DEV__) console.error('[handleAccept] error:', err?.message ?? err);
       const isTokenExpired =
@@ -169,6 +170,8 @@ export const IncomingRequestScreen: React.FC = () => {
           },
         ],
       );
+    } finally {
+      setLoading(false);
     }
   };
 

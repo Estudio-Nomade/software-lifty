@@ -24,7 +24,6 @@ import type { ManeuverStep } from '../hooks/useManeuverInstructions';
 import { haversineDistance } from '../lib/geo';
 import { startTracking, stopTracking } from '../lib/location';
 import { decodePolyline } from '../lib/polyline';
-import { subscribeToTripChannel } from '../lib/realtime';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -50,7 +49,6 @@ export const NavigationScreen: React.FC = () => {
   const [altDistKm, setAltDistKm] = useState<number | null>(null);
   const [altSteps, setAltSteps] = useState<ManeuverStep[]>([]);
   const [activeRoute, setActiveRoute] = useState<'primary' | 'alternative'>('primary');
-  const [driverCoords, setDriverCoords] = useState<[number, number] | null>(null);
   const [displayAddress, setDisplayAddress] = useState<string | null>(null);
   const [enRouteStatus, setEnRouteStatus] = useState<'pending' | 'success' | 'error'>(
     tripStatus === 'accepted' ? 'pending' : 'success',
@@ -84,16 +82,6 @@ export const NavigationScreen: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [trip?.id]);
-
-  useEffect(() => {
-    if (!trip?.id) return;
-    const unsub = subscribeToTripChannel(trip.id, {
-      onDriverLocation: (loc) => {
-        setDriverCoords([loc.lng, loc.lat]);
-      },
-    });
-    return unsub;
   }, [trip?.id]);
 
   useEffect(() => {
@@ -279,16 +267,6 @@ export const NavigationScreen: React.FC = () => {
                     id: 'my-location',
                     coordinate: [locationLng, locationLat] as [number, number],
                     title: 'Mi ubicación',
-                    icon: iconType ?? 'car',
-                  },
-                ]
-              : []),
-            ...(driverCoords
-              ? [
-                  {
-                    id: 'driver-location',
-                    coordinate: driverCoords,
-                    title: 'Conductor',
                     icon: iconType ?? 'car',
                   },
                 ]
