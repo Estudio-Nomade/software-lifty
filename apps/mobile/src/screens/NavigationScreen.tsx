@@ -49,6 +49,7 @@ export const NavigationScreen: React.FC = () => {
   const [altDistKm, setAltDistKm] = useState<number | null>(null);
   const [altSteps, setAltSteps] = useState<ManeuverStep[]>([]);
   const [activeRoute, setActiveRoute] = useState<'primary' | 'alternative'>('primary');
+  const [recenterKey, setRecenterKey] = useState(0);
   const [displayAddress, setDisplayAddress] = useState<string | null>(null);
   const [enRouteStatus, setEnRouteStatus] = useState<'pending' | 'success' | 'error'>(
     tripStatus === 'accepted' ? 'pending' : 'success',
@@ -228,6 +229,10 @@ export const NavigationScreen: React.FC = () => {
     }
   };
 
+  const handleRecenter = () => {
+    setRecenterKey((k) => k + 1);
+  };
+
   const isPrimaryNav = activeRoute === 'primary';
   const activeCoords = isPrimaryNav ? routeCoords : altRouteCoords;
   const activeEta = isPrimaryNav ? etaMinutes : altEtaMinutes;
@@ -240,6 +245,7 @@ export const NavigationScreen: React.FC = () => {
       <View style={styles.mapArea}>
         <MapView
           followUserLocation
+          recenterKey={recenterKey}
           centerCoordinate={
             trip
               ? [trip.origin_lng, trip.origin_lat]
@@ -276,6 +282,9 @@ export const NavigationScreen: React.FC = () => {
           alternativeRouteLine={altCoords.length > 0 ? altCoords : undefined}
         />
       </View>
+      <TouchableOpacity style={styles.recenterButton} onPress={handleRecenter}>
+        <Text style={styles.recenterButtonText}>⟳</Text>
+      </TouchableOpacity>
       {trip?.passenger_name ? (
         <View style={styles.passengerCard}>
           <TouchableOpacity
@@ -546,5 +555,26 @@ const styles = StyleSheet.create({
   passengerPhone: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
+  },
+  recenterButton: {
+    position: 'absolute',
+    top: theme.spacing.md,
+    right: theme.spacing.md,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 10,
+  },
+  recenterButtonText: {
+    fontSize: 20,
+    color: theme.colors.deepBlue,
   },
 });

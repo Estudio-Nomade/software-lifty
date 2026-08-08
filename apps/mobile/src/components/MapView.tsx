@@ -469,6 +469,8 @@ export const MapView: React.FC<MapViewProps> = ({
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const retryKey = useRef(0);
+  const [userManuallyMoved, setUserManuallyMoved] = useState(false);
+  const programmaticMoveRef = useRef(false);
 
   const handleRetry = useCallback(() => {
     setHasError(false);
@@ -484,6 +486,7 @@ export const MapView: React.FC<MapViewProps> = ({
   useEffect(() => {
     if (!isLoaded || !webViewRef.current) return;
 
+    programmaticMoveRef.current = true;
     webViewRef.current.postMessage(
       JSON.stringify({
         type: 'init',
@@ -528,14 +531,16 @@ export const MapView: React.FC<MapViewProps> = ({
 
   useEffect(() => {
     if (!isLoaded || !webViewRef.current || !routeLine || routeLine.length < 2) return;
+    if (userManuallyMoved) return;
 
+    programmaticMoveRef.current = true;
     webViewRef.current.postMessage(
       JSON.stringify({
         type: 'fitRoute',
         coordinates: routeLine,
       }),
     );
-  }, [isLoaded, routeLine]);
+  }, [isLoaded, routeLine, userManuallyMoved]);
 
   useEffect(() => {
     if (!isLoaded || !webViewRef.current) return;
@@ -575,6 +580,8 @@ export const MapView: React.FC<MapViewProps> = ({
   useEffect(() => {
     if (!isLoaded || !webViewRef.current || recenterKey == null) return;
     const loc = userLocationRef.current;
+    setUserManuallyMoved(false);
+    programmaticMoveRef.current = true;
     webViewRef.current.postMessage(
       JSON.stringify({
         type: 'recenter',
@@ -596,6 +603,12 @@ export const MapView: React.FC<MapViewProps> = ({
         }
         switch (data.type) {
           case 'moved':
+            if (programmaticMoveRef.current) {
+              programmaticMoveRef.current = false;
+              setUserManuallyMoved(false);
+            } else {
+              setUserManuallyMoved(true);
+            }
             if (data.center && onMoveEnd) {
               onMoveEnd(data.center);
             }
