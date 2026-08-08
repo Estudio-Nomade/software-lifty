@@ -9,7 +9,6 @@ import {
   View,
 } from 'react-native';
 import { apiClient } from '../api/client';
-import { AlternativeRoutePill } from '../components/AlternativeRoutePill';
 import { Button } from '../components/Button';
 import { MapView } from '../components/MapView';
 import { Text } from '../components/ui/Text';
@@ -36,11 +35,8 @@ export const TripInProgressScreen: React.FC = () => {
   const totalDistKmRef = useRef<number | null>(trip?.distance_km ?? null);
   const [steps, setSteps] = useState<ManeuverStep[]>([]);
   const [altRouteCoords, setAltRouteCoords] = useState<[number, number][]>([]);
-  const [altEtaMinutes, setAltEtaMinutes] = useState<number | null>(null);
-  const [altDistKm, setAltDistKm] = useState<number | null>(null);
-  const [altSteps, setAltSteps] = useState<ManeuverStep[]>([]);
-  const [activeRoute, setActiveRoute] = useState<'primary' | 'alternative'>('primary');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [recenterKey, setRecenterKey] = useState(0);
 
   const fetchDirections = useCallback(async () => {
     if (!locationLat || !locationLng || !trip) return;
@@ -63,15 +59,9 @@ export const TripInProgressScreen: React.FC = () => {
 
       if (data.alternatives?.length) {
         const alt = data.alternatives[0];
-        setAltEtaMinutes(alt.duration_minutes);
-        setAltDistKm(alt.distance_km);
         setAltRouteCoords(decodePolyline(alt.polyline));
-        setAltSteps(alt.steps ?? []);
       } else {
         setAltRouteCoords([]);
-        setAltEtaMinutes(null);
-        setAltDistKm(null);
-        setAltSteps([]);
       }
     } catch (err) {
       if (__DEV__) console.warn('[TripInProgress] fetchDirections failed:', err);
@@ -137,32 +127,21 @@ export const TripInProgressScreen: React.FC = () => {
     }
   };
 
-  const isPrimary = activeRoute === 'primary';
-  const activeCoords = isPrimary ? routeCoords : altRouteCoords;
-  const activeEta = isPrimary ? etaMinutes : altEtaMinutes;
-  const activeDist = isPrimary ? distKm : altDistKm;
-  const activeSteps = isPrimary ? steps : altSteps;
-  const altCoords = isPrimary ? altRouteCoords : routeCoords;
-  const pillPrimaryTime = isPrimary ? etaMinutes : altEtaMinutes;
-  const pillAltTime = isPrimary ? altEtaMinutes : etaMinutes;
-
-  const handleToggleRoute = () => {
-    setActiveRoute((prev) => (prev === 'primary' ? 'alternative' : 'primary'));
+  const handleRecenter = () => {
+    setRecenterKey((k) => k + 1);
   };
 
-  const showPill = altRouteCoords.length > 0 && pillPrimaryTime !== null && pillAltTime !== null;
-
   const progress =
-    totalDistKmRef.current && activeDist !== null
+    totalDistKmRef.current && distKm !== null
       ? Math.min(
           100,
-          Math.max(0, ((totalDistKmRef.current - activeDist) / totalDistKmRef.current) * 100),
+          Math.max(0, ((totalDistKmRef.current - distKm) / totalDistKmRef.current) * 100),
         )
       : trip?.distance_km
         ? 0
         : 55;
 
-  const { instruction } = useManeuverInstructions(activeSteps, locationLat, locationLng);
+  const { instruction } = useManeuverInstructions(steps, locationLat, locationLng);
 
   return (
     <View style={styles.container}>
@@ -170,6 +149,7 @@ export const TripInProgressScreen: React.FC = () => {
       <View style={styles.mapArea}>
         <MapView
           followUserLocation
+          recenterKey={recenterKey}
           centerCoordinate={
             trip
               ? [trip.dest_lng, trip.dest_lat]
@@ -202,23 +182,19 @@ export const TripInProgressScreen: React.FC = () => {
                 ]
               : []),
           ]}
-          routeLine={activeCoords.length > 0 ? activeCoords : undefined}
-          alternativeRouteLine={altCoords.length > 0 ? altCoords : undefined}
+          routeLine={routeCoords.length > 0 ? routeCoords : undefined}
+          alternativeRouteLine={altRouteCoords.length > 0 ? altRouteCoords : undefined}
         />
       </View>
-      {showPill && (
-        <AlternativeRoutePill
-          primaryTime={pillPrimaryTime}
-          altTime={pillAltTime}
-          onToggle={handleToggleRoute}
-        />
-      )}
+      <TouchableOpacity style={styles.recenterButton} onPress={handleRecenter}>
+        <Text style={styles.recenterButtonText}>⟳</Text>
+      </TouchableOpacity>
       <View style={styles.bottomCard}>
         <Text style={styles.label}>En viaje</Text>
         <Text style={styles.destination}>{trip?.dest_address ?? 'Destino'}</Text>
-        {activeEta !== null && activeDist !== null ? (
+        {etaMinutes !== null && distKm !== null ? (
           <Text style={styles.eta}>
-            ~{Math.round(activeEta)} min · {activeDist} km
+            ~{Math.round(etaMinutes)} min · {distKm} km
           </Text>
         ) : null}
         {instruction ? <Text style={styles.instruction}>{instruction}</Text> : null}
@@ -321,5 +297,26 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.mediumGray,
     textAlign: 'center',
+  },
+  recenterButton: {
+    position: 'absolute',
+    top: theme.spacing.md,
+    right: theme.spacing.md,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+    zIndex: 10,
+  },
+  recenterButtonText: {
+    fontSize: 20,
+    color: theme.colors.deepBlue,
   },
 });

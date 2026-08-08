@@ -28,6 +28,7 @@ type Step = 'collect' | 'rate';
 export const TripCompleteScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const activeTripId = useTripStore((s) => s.activeTripId);
+  const trip = useTripStore((s) => s.trip);
   const clearTrip = useTripStore((s) => s.clearTrip);
   const [activeTab, setActiveTab] = React.useState<TabKey>('home');
   const [step, setStep] = React.useState<Step>('collect');
@@ -164,8 +165,14 @@ export const TripCompleteScreen: React.FC = () => {
       </View>
 
       <View style={styles.summaryCard}>
-        <Text style={styles.summaryDestination}>Terminal de Omnibus</Text>
-        <Text style={styles.summaryInfo}>5 min · 3.2 km</Text>
+        <Text style={styles.summaryDestination}>
+          {trip?.dest_address ?? trip?.origin_address ?? 'Destino'}
+        </Text>
+        <Text style={styles.summaryInfo}>
+          {trip?.duration_minutes != null ? `${Math.round(trip.duration_minutes)} min` : ''}
+          {trip?.duration_minutes != null && trip?.distance_km != null ? ' · ' : ''}
+          {trip?.distance_km != null ? `${trip.distance_km} km` : ''}
+        </Text>
       </View>
 
       <Button
