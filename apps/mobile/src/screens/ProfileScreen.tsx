@@ -268,6 +268,15 @@ export const ProfileScreen: React.FC = () => {
   const sinceYear = profile?.created_at ? new Date(profile.created_at).getFullYear() : null;
   const yearsActive = sinceYear ? new Date().getFullYear() - sinceYear : 0;
 
+  const formatTier = (value: number, tiers: number[]): string => {
+    const hit = tiers.filter((t) => value >= t).pop();
+    return hit != null ? `${hit}+` : String(value);
+  };
+
+  const tripsDisplay = formatTier(profile?.total_trips ?? 0, [100, 500, 1000, 5000, 10000]);
+  const yearsDisplay = formatTier(yearsActive, [1, 3, 5, 10]);
+  const yearsLabel = yearsActive >= 1 ? 'Año' : 'Años';
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
@@ -281,18 +290,21 @@ export const ProfileScreen: React.FC = () => {
           <Text style={styles.name}>{profile?.full_name || 'Sin nombre'}</Text>
           <View style={styles.stats}>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{profile?.total_trips ?? 0}</Text>
+              <Text style={styles.statValue}>{tripsDisplay}</Text>
               <Text style={styles.statLabel}>Viajes</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>
-                {profile?.rating_avg ? profile.rating_avg.toFixed(1) : '-'}
-              </Text>
-              <Text style={styles.statLabel}>Rating</Text>
+              <View style={styles.ratingRow}>
+                <Text style={styles.statValue}>
+                  {profile?.rating_avg ? profile.rating_avg.toFixed(1) : '-'}
+                </Text>
+                <Ionicons name="star" size={14} color={theme.colors.amber} />
+              </View>
+              <Text style={styles.statLabel}>Calificación</Text>
             </View>
             <View style={styles.stat}>
-              <Text style={styles.statValue}>{yearsActive}</Text>
-              <Text style={styles.statLabel}>Años</Text>
+              <Text style={styles.statValue}>{yearsDisplay}</Text>
+              <Text style={styles.statLabel}>{yearsLabel}</Text>
             </View>
           </View>
           <Button title="EDITAR PERFIL" variant="outline" onPress={openEdit} />
@@ -481,6 +493,11 @@ const styles = StyleSheet.create({
   stat: {
     alignItems: 'center',
     gap: 4,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
   },
   statValue: {
     fontSize: theme.fontSize.lg,
