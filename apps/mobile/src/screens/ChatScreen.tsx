@@ -89,7 +89,7 @@ export const ChatScreen: React.FC = () => {
         keyboardVerticalOffset={0}
       >
         <View style={styles.chatArea}>
-          <ChatBackground dotOpacity={0.05} dotSize={2.5} />
+          <ChatBackground />
           <ScrollView
             ref={chatScrollRef}
             style={styles.chatScroll}
