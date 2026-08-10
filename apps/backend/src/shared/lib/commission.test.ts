@@ -24,9 +24,12 @@ afterAll(() => {
 });
 
 describe('getCommissionRate', () => {
-  test('throws if start_date not configured', async () => {
+  test('falls back to dev default when start_date not configured', async () => {
     const db = getDb();
-    await expect(getCommissionRate(db)).rejects.toThrow('commission_start_date not configured');
+    const rate = await getCommissionRate(db);
+    expect(typeof rate).toBe('number');
+    expect(rate).toBeGreaterThanOrEqual(0);
+    expect(rate).toBeLessThanOrEqual(0.15);
   });
 
   test('returns 0% for month 1 (Lanzamiento)', async () => {

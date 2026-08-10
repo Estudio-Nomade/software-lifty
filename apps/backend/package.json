@@ -5,6 +5,7 @@
   "scripts": {
     "test": "bun test",
     "setup": "bun run scripts/dev-setup.ts",
+    "predev": "bun run scripts/ensure-dev-infra.ts",
     "dev": "bun run --watch src/index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",

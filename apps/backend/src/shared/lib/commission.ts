@@ -38,7 +38,20 @@ export async function getCommissionConfig(
 ): Promise<CommissionConfig> {
   const dateStr = await getConfig(db, 'commission_start_date');
   if (!dateStr) {
-    throw new Error('commission_start_date not configured');
+    const devStartDate = new Date('2026-10-01T00:00:00Z');
+    const devMonth = Math.max(1, differenceInCalendarMonths(now, devStartDate) + 1);
+    const [devPhase] = await db
+      .select()
+      .from(commissionPhases)
+      .where(
+        and(
+          lte(commissionPhases.month_start, devMonth),
+          sql`(${commissionPhases.month_end} IS NULL OR ${commissionPhases.month_end} >= ${devMonth})`,
+        ),
+      )
+      .limit(1);
+    if (!devPhase) throw new Error('No commission phase found');
+    return { phase: devPhase.name, currentMonth: devMonth, rate: devPhase.base_rate };
   }
 
   const startDate = new Date(`${dateStr}T00:00:00Z`);

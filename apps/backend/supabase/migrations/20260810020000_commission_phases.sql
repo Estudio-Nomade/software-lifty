@@ -24,4 +24,8 @@ VALUES
   ('Estabilización', 3, 6, 0.10, NULL, NULL),
   ('Crecimiento', 7, NULL, 0.10, 0.007, 0.15);
 
+INSERT INTO "platform_config" ("key", "value")
+VALUES ('commission_start_date', '2026-10-01')
+ON CONFLICT ("key") DO NOTHING;
+
 ALTER TABLE "drivers" DROP COLUMN IF EXISTS "commission_exempt_until";
