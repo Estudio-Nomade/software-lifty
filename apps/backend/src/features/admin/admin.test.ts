@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
-import { driverDocuments, drivers, payoutMethods, users, vehicles, withdrawals } from '../../shared/db/schema';
+import { commissionPhases, driverDocuments, drivers, payoutMethods, platformConfig, users, vehicles, withdrawals } from '../../shared/db/schema';
 import { DOC_TYPES } from '../../shared/lib/documents';
 import { notifyAdminWithdrawal } from './notifications';
 import { createTestToken } from '../../shared/testing/utils';
@@ -104,6 +104,16 @@ beforeAll(() => {
 
 beforeEach(async () => {
   await truncateTables();
+  const db = getDb();
+  await db.delete(commissionPhases);
+  await db.delete(platformConfig);
+  await db.insert(commissionPhases).values([
+    { name: 'Lanzamiento', month_start: 1, month_end: 1, base_rate: 0.00 },
+    { name: 'Medición', month_start: 2, month_end: 2, base_rate: 0.05 },
+    { name: 'Estabilización', month_start: 3, month_end: 6, base_rate: 0.10 },
+    { name: 'Crecimiento', month_start: 7, month_end: null, base_rate: 0.10, monthly_increment: 0.007, cap_rate: 0.15 },
+  ]);
+  await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
 });
 
 afterAll(async () => {
@@ -386,5 +396,47 @@ describe('Admin', () => {
     expect(data).toBeArray();
     expect(data.length).toBe(1);
     expect(data[0].amount).toBe(200);
+  });
+
+  test('GET /admin/commission/phases requires admin', async () => {
+    const db = getDb();
+    const [driverUser] = await db
+      .insert(users)
+      .values({ phone: '+5492618888000', role: 'driver' })
+      .returning({ id: users.id });
+    const driverToken = createTestToken(driverUser.id);
+
+    const res = await request('GET', '/api/admin/commission/phases', undefined, driverToken);
+    expect(res.status).toBe(403);
+  });
+
+  test('GET /admin/commission/phases returns phases', async () => {
+    const adminToken = await createAdminToken();
+    const res = await request('GET', '/api/admin/commission/phases', undefined, adminToken);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.data)).toBe(true);
+    expect(res.data.length).toBeGreaterThanOrEqual(4);
+  });
+
+  test('PUT /admin/commission/phases/:id updates a phase', async () => {
+    const adminToken = await createAdminToken();
+    const listRes = await request('GET', '/api/admin/commission/phases', undefined, adminToken);
+    const phaseId = listRes.data[0].id;
+    const res = await request('PUT', `/api/admin/commission/phases/${phaseId}`, { base_rate: 0.02 }, adminToken);
+    expect(res.status).toBe(200);
+    expect(res.data.base_rate).toBe(0.02);
+  });
+
+  test('PUT /admin/commission/start-date sets date', async () => {
+    const adminToken = await createAdminToken();
+    const res = await request('PUT', '/api/admin/commission/start-date', { value: '2026-01-01' }, adminToken);
+    expect(res.status).toBe(200);
+  });
+
+  test('GET /admin/commission/current returns phase info', async () => {
+    const adminToken = await createAdminToken();
+    await request('PUT', '/api/admin/commission/start-date', { value: '2026-01-01' }, adminToken);
+    const res = await request('GET', '/api/admin/commission/current', undefined, adminToken);
+    expect(res.status).toBe(200);
   });
 });

@@ -5,9 +5,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
 import {
+  commissionPhases,
   drivers,
   payments,
   payoutMethods,
+  platformConfig,
   tripEvents,
   trips,
   users,
@@ -25,6 +27,8 @@ async function truncateTables() {
   await db.delete(trips);
   await db.delete(drivers);
   await db.delete(users);
+  await db.delete(commissionPhases);
+  await db.delete(platformConfig);
 }
 
 async function request(
@@ -114,6 +118,14 @@ beforeAll(() => {
 
 beforeEach(async () => {
   await truncateTables();
+  const db = getDb();
+  await db.insert(commissionPhases).values([
+    { name: 'Lanzamiento', month_start: 1, month_end: 1, base_rate: 0.00 },
+    { name: 'Medición', month_start: 2, month_end: 2, base_rate: 0.05 },
+    { name: 'Estabilización', month_start: 3, month_end: 6, base_rate: 0.10 },
+    { name: 'Crecimiento', month_start: 7, month_end: null, base_rate: 0.10, monthly_increment: 0.007, cap_rate: 0.15 },
+  ]);
+  await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-01-01' });
 });
 
 afterAll(async () => {
