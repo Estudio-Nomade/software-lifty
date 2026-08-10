@@ -86,6 +86,7 @@ async function findTrip(driverId: string, tripId: string, tx = db) {
 }
 
 async function transitionTrip(driverId: string, tripId: string, targetStatus: string) {
+  const commissionRate = await getCommissionRate(getDb());
   return db.transaction(async (tx) => {
     const trip = await findTrip(driverId, tripId, tx);
 
@@ -120,8 +121,6 @@ async function transitionTrip(driverId: string, tripId: string, targetStatus: st
 
     if (actualTarget === 'cancelled_late') {
       const compensationTotal = trip.base_fare ?? 0;
-
-      const commissionRate = await getCommissionRate(tx);
 
       const compensationPlatformFee = calculatePlatformFee(compensationTotal, commissionRate);
       const compensationDriverEarnings = compensationTotal - compensationPlatformFee;
