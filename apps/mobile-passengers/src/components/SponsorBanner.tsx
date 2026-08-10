@@ -25,9 +25,9 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(27, 191, 174, 0.08)',
+    backgroundColor: 'rgba(0, 194, 179, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(27, 191, 174, 0.25)',
+    borderColor: 'rgba(0, 194, 179, 0.25)',
     borderRadius: theme.radius.md,
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
@@ -47,6 +47,6 @@ const styles = StyleSheet.create({
   sponsor: {
     fontSize: theme.fontSize.sm,
     fontWeight: '700',
-    color: theme.colors.turquoise,
+    color: theme.colors.primary,
   },
 });

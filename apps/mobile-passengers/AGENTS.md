@@ -607,20 +607,19 @@ export const useRequestRide = () => {
 
 ## Sistema de Diseno
 
-### Colores (Mantener consistencia con Conductor)
+### Colores (Alineados con `apps/mobile-passengers/design/App-pasajeros.pen`)
 
 ```typescript
 // src/theme/index.ts
 export const colors = {
-  turquoise: '#1BBFAE',
-  deepBlue: '#0F2A44',
-  lightGray: '#EDF1F5',
-  mediumGray: '#8A93A0',
+  primary: '#00C2B3',   // teal de marca
+  deepBlue: '#0D2B45',  // navy — navbar, texto principal
+  lightGray: '#F1F4F6', // bg secundario
+  mediumGray: '#A8B1BA', // texto muted
   white: '#FFFFFF',
-  dangerRed: '#FF6B6B',
-  amber: '#FFB020',
-  success: '#34C759',
-  warning: '#FFB020',
+  black: '#000000',
+  dangerRed: '#E53935', // errores, SOS
+  amber: '#FFB020',     // promo, warning
 } as const;
 ```
 
@@ -629,7 +628,7 @@ export const colors = {
 ```typescript
 // src/theme/index.ts
 export const typography = {
-  fontFamily: 'Nunito',
+  fontFamily: 'Inter',
   sizes: {
     xs: 12,
     sm: 14,
@@ -654,10 +653,10 @@ export const typography = {
 
 ```typescript
 // Variantes de Button:
-// - primary: bg turquoise, text white
-// - secondary: border turquoise, text turquoise
+// - primary: bg primary, text white
+// - secondary: border primary, text primary
 // - danger: bg dangerRed, text white
-// - cta: bg turquoise, text white, height 56px
+// - cta: bg primary, text white, height 52px
 ```
 
 ## Integraciones Externas
