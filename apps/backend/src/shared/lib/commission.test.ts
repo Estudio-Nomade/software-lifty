@@ -1,8 +1,7 @@
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://lifty:lifty@localhost:5433/lifty_test';
 
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { eq } from 'drizzle-orm';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { getDb, resetDb } from '../db/client';
 import { commissionPhases, platformConfig } from '../db/schema';
 import { getCommissionRate, getCommissionConfig } from './commission';

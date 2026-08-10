@@ -1,9 +1,9 @@
-import { and, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, eq, lte, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { commissionPhases, platformConfig } from '../db/schema';
 
 export interface CommissionConfig {
-  phase: string | null;
+  phase: string;
   currentMonth: number;
   rate: number;
 }
