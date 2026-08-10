@@ -22,7 +22,10 @@ const RESPONSE_SECONDS = 20;
 const formatCurrency = (value: number | null | undefined) =>
   value == null ? '—' : `$${value.toLocaleString('es-AR')}`;
 
-const formatDistance = (value: number | null | undefined) => (value == null ? '' : `${value} km`);
+const formatDistance = (value: number | null | undefined) => {
+  if (value == null) return '';
+  return value < 1 ? `${Math.round(value * 1000)} m` : `${value} km`;
+};
 
 export const IncomingRequestScreen: React.FC = () => {
   const navigation = useAppNavigation();
@@ -34,6 +37,7 @@ export const IncomingRequestScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const timedOut = useRef(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lat = useLocationStore((s) => s.lat);
   const lng = useLocationStore((s) => s.lng);
 
@@ -44,10 +48,35 @@ export const IncomingRequestScreen: React.FC = () => {
     stopTracking();
   };
 
+  const handleActiveTrip = (active: Trip | null) => {
+    if (!active) {
+      setLoading(false);
+      navigation.goBack();
+      return;
+    }
+    setActiveTrip(active);
+    switch (active.status) {
+      case 'accepted':
+      case 'en_route':
+        navigation.replace('Navigation');
+        break;
+      case 'waiting':
+        navigation.replace('WaitingPassenger');
+        break;
+      case 'in_trip':
+        navigation.replace('TripInProgress');
+        break;
+      case 'completed':
+        navigation.replace('TripComplete');
+        break;
+      default:
+        navigation.goBack();
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     let retries = 0;
-    const maxRetries = 3;
 
     const loadTrip = async () => {
       try {
@@ -58,33 +87,23 @@ export const IncomingRequestScreen: React.FC = () => {
           setTrip(active);
           setActiveTrip(active);
           setLoading(false);
+          retries = 0;
         } else if (active) {
           setLoading(false);
-          setActiveTrip(active);
-          switch (active.status) {
-            case 'accepted':
-            case 'en_route':
-              navigation.replace('Navigation');
-              break;
-            case 'waiting':
-              navigation.replace('WaitingPassenger');
-              break;
-            case 'in_trip':
-              navigation.replace('TripInProgress');
-              break;
-            case 'completed':
-              navigation.replace('TripComplete');
-              break;
-            default:
-              navigation.goBack();
-          }
+          handleActiveTrip(active);
         } else {
-          navigation.goBack();
+          retries++;
+          if (retries < 12) {
+            setTimeout(loadTrip, 2000);
+          } else {
+            setLoading(false);
+            navigation.goBack();
+          }
         }
       } catch {
         if (cancelled) return;
         retries++;
-        if (retries < maxRetries) {
+        if (retries < 12) {
           setTimeout(loadTrip, 2000);
         } else {
           setLoading(false);
@@ -122,6 +141,28 @@ export const IncomingRequestScreen: React.FC = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, [seconds, accepted, trip]);
+
+  useEffect(() => {
+    if (!trip?.id || accepted || timedOut.current) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const response = await apiClient.get('/trips/active');
+        const active = (response.data?.data ?? response.data) as Trip | null;
+        if (!active || (active.status !== 'request_received' && active.status !== 'offered')) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          if (active) {
+            handleActiveTrip(active);
+          } else {
+            navigation.goBack();
+          }
+        }
+      } catch {}
+    }, 3000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip?.id, accepted]);
 
   useEffect(() => {
     if (!trip || lat == null || lng == null) return;

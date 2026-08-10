@@ -80,6 +80,7 @@ export const districtDetailSchema = districtSchema.extend({
 
 export const tripStatusSchema = z.enum([
   'request_received',
+  'offered',
   'accepted',
   'en_route',
   'waiting',

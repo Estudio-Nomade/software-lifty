@@ -326,9 +326,19 @@ export const NavigationScreen: React.FC = () => {
             </View>
           ) : null}
           {activeEta !== null && activeDist !== null ? (
-            <Text style={styles.eta}>
-              {Math.round(activeEta)} min · {activeDist} km
-            </Text>
+            <View style={styles.etaContainer}>
+              <View style={styles.etaBox}>
+                <Text style={styles.etaValue}>{Math.round(activeEta)}</Text>
+                <Text style={styles.etaUnit}>min</Text>
+              </View>
+              <View style={styles.etaDivider} />
+              <View style={styles.etaBox}>
+                <Text style={styles.etaValue}>
+                  {activeDist < 1 ? Math.round(activeDist * 1000) : activeDist}
+                </Text>
+                <Text style={styles.etaUnit}>{activeDist < 1 ? 'm' : 'km'}</Text>
+              </View>
+            </View>
           ) : null}
           {instruction ? <Text style={styles.instruction}>{instruction}</Text> : null}
           <View style={styles.commsButtons}>
@@ -440,10 +450,37 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
   },
-  eta: {
-    fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.medium,
+  etaContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.md,
+    backgroundColor: theme.colors.lightGray,
+    borderRadius: theme.radius.md,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.xs,
+  },
+  etaBox: {
+    alignItems: 'center',
+    minWidth: 72,
+  },
+  etaValue: {
+    fontSize: theme.fontSize['2xl'],
+    fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
+  },
+  etaUnit: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.mediumGray,
+    marginTop: -2,
+  },
+  etaDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: theme.colors.mediumGray,
+    opacity: 0.3,
   },
   instruction: {
     fontSize: theme.fontSize.md,

@@ -62,8 +62,9 @@ export const TermsScreen: React.FC = () => {
 
         <Text style={styles.heading}>3. Comision</Text>
         <Text style={styles.body}>
-          Lifty cobra una comision del 10% sobre cada viaje completado. Esta comision se descuenta
-          automaticamente al finalizar cada viaje.
+          Lifty aplica una comision variable sobre cada viaje completado, comenzando en 0% el primer
+          mes de lanzamiento y aumentando progresivamente hasta un maximo del 15%. La comision se
+          descuenta automaticamente al finalizar cada viaje.
         </Text>
 
         <Text style={styles.heading}>4. Cancelaciones</Text>
