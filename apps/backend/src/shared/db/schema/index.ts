@@ -13,3 +13,5 @@ export { sosEvents } from './sos-events';
 export { pushTokens } from './push-tokens';
 export { districts } from './districts';
 export { fuelPriceLog } from './fuel-price-log';
+export { commissionPhases } from './commission-phases';
+export { platformConfig } from './platform-config';
