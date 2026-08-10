@@ -3,10 +3,11 @@ import { db } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
 import { drivers, ratings, tripEvents, trips, users } from '../../shared/db/schema';
 import { AppError, BadRequestError, NotFoundError } from '../../shared/lib/errors';
+import { calculateFare } from '../../shared/lib/fuel-pricing';
 import { geocode } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { getPayment } from '../../shared/lib/mercado-pago';
-import { calculateFare, calculatePlatformFee } from '../../shared/lib/pricing';
+import { calculatePlatformFee } from '../../shared/lib/pricing';
 import { sendPushToUser } from '../../shared/lib/push';
 import type { AuthUser } from '../../shared/middleware/auth';
 
@@ -185,7 +186,7 @@ export const tripService = {
       driverRecord?.commission_exempt_until != null &&
       new Date(driverRecord.commission_exempt_until) > new Date();
 
-    const fare = calculateFare({
+    const fare = await calculateFare({
       vehicle_type: data.vehicle_type,
       distance_km: data.distance_km,
       duration_minutes: data.duration_minutes,
@@ -411,7 +412,7 @@ export const tripService = {
       driverRecord?.commission_exempt_until != null &&
       new Date(driverRecord.commission_exempt_until) > new Date();
 
-    const fare = calculateFare({
+    const fare = await calculateFare({
       vehicle_type: data.vehicle_type,
       distance_km: data.distance_km,
       duration_minutes: data.duration_minutes,
