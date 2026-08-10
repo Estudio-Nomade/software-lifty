@@ -47,8 +47,8 @@ export const theme = {
     full: 999,
   },
   dimensions: {
-    buttonHeight: 48,
-    buttonCTAHeight: 52,
+    buttonHeight: 52,
+    buttonCTAHeight: 56,
     inputHeight: 48,
     navbarHeight: 56,
     statusBarHeight: 44,
