@@ -272,19 +272,11 @@ export const driversService = {
     if (existing) {
       driverId = existing.id;
     } else {
-      const [driverCount] = await db.select({ count: count() }).from(drivers);
-
-      const isFirstTen = driverCount && driverCount.count < 10;
-      const commissionExemptUntil = isFirstTen
-        ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        : null;
-
       const [newDriver] = await db
         .insert(drivers)
         .values({
           user_id: user.id,
           status: 'step1',
-          commission_exempt_until: commissionExemptUntil,
         })
         .returning({ id: drivers.id });
 
