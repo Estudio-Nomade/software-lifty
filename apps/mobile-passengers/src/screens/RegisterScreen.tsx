@@ -1,3 +1,4 @@
+import { useRegistrationDraftStore } from '@/store/registrationDraftStore';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -17,6 +18,7 @@ import { theme } from '../theme';
 export function RegisterScreen() {
   const { goBack } = useAppNavigation();
   const router = useRouter();
+  const setFullName = useRegistrationDraftStore((s) => s.setFullName);
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
   const [accepted, setAccepted] = useState(false);
@@ -25,18 +27,15 @@ export function RegisterScreen() {
 
   const isValid = name.trim().length > 0 && surname.trim().length > 0 && accepted;
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!isValid) {
       setError('Completá nombre y apellido y aceptá los términos.');
       return;
     }
     setError(null);
     setLoading(true);
-    try {
-      router.push({ pathname: '/login-phone', params: { fullName: `${name} ${surname}` } });
-    } finally {
-      setLoading(false);
-    }
+    setFullName(`${name} ${surname}`);
+    router.push('/login-phone');
   };
 
   return (

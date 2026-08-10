@@ -23,12 +23,10 @@ export function WelcomeScreen() {
         <Button variant="primary" onPress={() => navigate('LoginPhone')}>
           📱 Ingresar con celular
         </Button>
-        <Button variant="secondary" onPress={() => navigate('LoginCredentials')}>
-          ✉️ Ingresar con email
-        </Button>
-        <Button variant="primary" onPress={() => navigate('Register')}>
+        <Button variant="secondary" onPress={() => navigate('Register')}>
           Crear cuenta
         </Button>
+        <Text style={styles.soonTag}>📧 Ingresar con email — próximamente</Text>
         <Text style={styles.termsLink} onPress={() => navigate('Terms')}>
           Términos y condiciones
         </Text>
@@ -89,5 +87,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: theme.spacing.md,
     fontFamily: theme.fontFamily.regular,
+  },
+  soonTag: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.mediumGray,
+    textAlign: 'center',
+    fontFamily: theme.fontFamily.regular,
+    marginTop: theme.spacing.sm,
   },
 });

@@ -1,3 +1,4 @@
+import { useRegistrationDraftStore } from '@/store/registrationDraftStore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, View } from 'react-native';
@@ -34,6 +35,18 @@ export function LoginOTPScreen() {
         type: 'sms',
       });
       if (authError) throw authError;
+
+      const draftFullName = useRegistrationDraftStore.getState().fullName;
+      if (draftFullName) {
+        try {
+          await supabase.auth.updateUser({ data: { full_name: draftFullName } });
+        } catch {
+          // name update is non-blocking; user is already authenticated
+        } finally {
+          useRegistrationDraftStore.getState().clear();
+        }
+      }
+
       router.replace('/home');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Código inválido.');
