@@ -16,7 +16,8 @@ function getApiUrl(): string {
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
     const host = hostUri.split(':')[0];
-    if (host && !host.includes('ngrok')) return `http://${host}:${port}/api`;
+    if (host && !host.includes('ngrok') && !host.includes('exp.direct'))
+      return `http://${host}:${port}/api`;
   }
 
   return `http://localhost:${port}/api`;

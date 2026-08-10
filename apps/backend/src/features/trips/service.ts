@@ -6,7 +6,7 @@ import { drivers, ratings, tripEvents, trips, users } from '../../shared/db/sche
 import { getCommissionRate } from '../../shared/lib/commission';
 import { AppError, BadRequestError, NotFoundError } from '../../shared/lib/errors';
 import { calculateFare } from '../../shared/lib/fuel-pricing';
-import { geocode } from '../../shared/lib/geo';
+import { geocode, haversineDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { getPayment } from '../../shared/lib/mercado-pago';
 import { calculatePlatformFee } from '../../shared/lib/pricing';
@@ -503,8 +503,25 @@ export const tripService = {
     return transitionTrip(driverId, tripId, 'en_route');
   },
 
-  async arrivedTrip(user: AuthUser, tripId: string) {
+  async arrivedTrip(user: AuthUser, tripId: string, body: { lat: number; lng: number }) {
     const driverId = await getDriverId(user);
+
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(and(eq(trips.id, tripId), eq(trips.driver_id, driverId)))
+      .limit(1);
+    if (!trip) throw new NotFoundError('Trip not found');
+
+    const distance = haversineDistance(body.lat, body.lng, trip.origin_lat, trip.origin_lng);
+    if (distance > 0.05) {
+      throw new AppError(
+        'Debes estar a menos de 50 metros del pasajero para confirmar la llegada',
+        400,
+        'TOO_FAR_FROM_PICKUP',
+      );
+    }
+
     return transitionTrip(driverId, tripId, 'waiting');
   },
 

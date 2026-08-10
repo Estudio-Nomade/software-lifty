@@ -432,7 +432,7 @@ describe('Trips', () => {
     expect(a.data.status).toBe('accepted');
     const er = await req('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
     expect(er.status).toBe(200);
-    const ar = await req('POST', `/api/trips/${trip.id}/arrived`, undefined, token);
+    const ar = await req('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
     expect(ar.status).toBe(200);
     expect(ar.data.status).toBe('waiting');
   });

@@ -168,13 +168,13 @@ export async function geocode(params: {
       const reverseUrl = new URL(`${PHOTON_URL}/reverse`);
       reverseUrl.searchParams.set('lat', String(params.lat));
       reverseUrl.searchParams.set('lon', String(params.lng));
-      reverseUrl.searchParams.set('lang', 'es');
+      reverseUrl.searchParams.set('lang', 'default');
       url = reverseUrl.toString();
     } else if (params.address) {
       const forwardUrl = new URL(`${PHOTON_URL}/api/`);
       forwardUrl.searchParams.set('q', params.address);
       forwardUrl.searchParams.set('limit', '1');
-      forwardUrl.searchParams.set('lang', 'es');
+      forwardUrl.searchParams.set('lang', 'default');
       url = forwardUrl.toString();
     } else {
       return { lat: -34.6037, lng: -58.3816, formatted_address: 'Buenos Aires, Argentina' };

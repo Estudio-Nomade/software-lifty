@@ -42,6 +42,11 @@ export const webhookTripRequestBody = t.Object({
   vehicle_type: t.String(),
 });
 
+export const arrivedBody = t.Object({
+  lat: t.Number(),
+  lng: t.Number(),
+});
+
 export const respondBody = t.Object({
   action: t.Union([t.Literal('accept'), t.Literal('reject')]),
 });

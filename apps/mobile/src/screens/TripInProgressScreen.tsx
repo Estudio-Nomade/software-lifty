@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Linking,
@@ -13,10 +13,9 @@ import { Button } from '../components/Button';
 import { MapView } from '../components/MapView';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useDynamicRouting } from '../hooks/useDynamicRouting';
 import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
-import type { ManeuverStep } from '../hooks/useManeuverInstructions';
 import { startTracking, stopTracking } from '../lib/location';
-import { decodePolyline } from '../lib/polyline';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -29,44 +28,20 @@ export const TripInProgressScreen: React.FC = () => {
   const locationLng = useLocationStore((s) => s.lng);
   const iconType = useVehicleStore((s) => s.iconType);
   const [completing, setCompleting] = React.useState(false);
-  const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
-  const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
-  const [distKm, setDistKm] = useState<number | null>(null);
-  const totalDistKmRef = useRef<number | null>(trip?.distance_km ?? null);
-  const [steps, setSteps] = useState<ManeuverStep[]>([]);
-  const [altRouteCoords, setAltRouteCoords] = useState<[number, number][]>([]);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [recenterKey, setRecenterKey] = useState(0);
 
-  const fetchDirections = useCallback(async () => {
-    if (!locationLat || !locationLng || !trip) return;
-    try {
-      const res = await apiClient.get('/maps/directions', {
-        params: {
-          origin_lat: locationLat,
-          origin_lng: locationLng,
-          dest_lat: trip.dest_lat,
-          dest_lng: trip.dest_lng,
-        },
-      });
-      const data = res.data?.data ?? res.data;
-      setEtaMinutes(data.duration_minutes);
-      setDistKm(data.distance_km);
-      if (!totalDistKmRef.current && data.distance_km) totalDistKmRef.current = data.distance_km;
-      const coords = decodePolyline(data.polyline);
-      setRouteCoords(coords);
-      setSteps(data.steps ?? []);
+  const { routeCoords, etaMinutes, distKm, steps, altRouteCoords } = useDynamicRouting(
+    trip?.dest_lat ?? null,
+    trip?.dest_lng ?? null,
+  );
 
-      if (data.alternatives?.length) {
-        const alt = data.alternatives[0];
-        setAltRouteCoords(decodePolyline(alt.polyline));
-      } else {
-        setAltRouteCoords([]);
-      }
-    } catch (err) {
-      if (__DEV__) console.warn('[TripInProgress] fetchDirections failed:', err);
+  const totalDistKmRef = useRef<number | null>(trip?.distance_km ?? null);
+
+  useEffect(() => {
+    if (!totalDistKmRef.current && distKm !== null) {
+      totalDistKmRef.current = distKm;
     }
-  }, [locationLat, locationLng, trip]);
+  }, [distKm]);
 
   useEffect(() => {
     startTracking();
@@ -74,17 +49,6 @@ export const TripInProgressScreen: React.FC = () => {
       stopTracking();
     };
   }, []);
-
-  useEffect(() => {
-    fetchDirections();
-  }, [fetchDirections]);
-
-  useEffect(() => {
-    intervalRef.current = setInterval(fetchDirections, 10000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [fetchDirections]);
 
   const handleCompleteTrip = async () => {
     if (!trip?.id) return;
