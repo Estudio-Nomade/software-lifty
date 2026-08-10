@@ -1,6 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { driverLocations, drivers } from '../../shared/db/schema';
+import { type FareResult, calculateFare } from '../../shared/lib/fuel-pricing';
 import {
   type DirectionsResult,
   type DistanceMatrixResult,
@@ -11,7 +12,6 @@ import {
   distanceMatrix as geoDistanceMatrix,
   geocode as geoGeocode,
 } from '../../shared/lib/geo';
-import { type FareResult, calculateFare } from '../../shared/lib/pricing';
 import { type HeatmapBounds, type HeatmapPoint, computeHeatmap } from './heatmap-service';
 
 export interface FareEstimateResult extends FareResult {
@@ -51,7 +51,7 @@ export const mapsService = {
       dest_lng,
     );
 
-    const fare = calculateFare({
+    const fare = await calculateFare({
       vehicle_type,
       distance_km: matrix.distance_km,
       duration_minutes: matrix.duration_minutes,
