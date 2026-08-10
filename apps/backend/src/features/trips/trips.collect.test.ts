@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from 'b
 import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
-import { drivers, tripEvents, trips, users } from '../../shared/db/schema';
+import { commissionPhases, drivers, platformConfig, tripEvents, trips, users } from '../../shared/db/schema';
 import { createTestAuthPlugin, createTestToken } from '../../shared/testing/utils';
 
 let app: any;
@@ -18,6 +18,8 @@ async function truncateTables() {
   await db.delete(trips);
   await db.delete(drivers);
   await db.delete(users);
+  await db.delete(commissionPhases);
+  await db.delete(platformConfig);
 }
 
 async function request(method: string, path: string, body?: object, token?: string) {
@@ -102,6 +104,14 @@ describe('collectTrip with Mercado Pago', () => {
   beforeEach(async () => {
     testId++;
     await truncateTables();
+    const db = getDb();
+    await db.insert(commissionPhases).values([
+      { name: 'Lanzamiento', month_start: 1, month_end: 1, base_rate: 0.00 },
+      { name: 'Medición', month_start: 2, month_end: 2, base_rate: 0.05 },
+      { name: 'Estabilización', month_start: 3, month_end: 6, base_rate: 0.10 },
+      { name: 'Crecimiento', month_start: 7, month_end: null, base_rate: 0.10, monthly_increment: 0.007, cap_rate: 0.15 },
+    ]);
+    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-01-01' });
     getPaymentMock.mockReset();
   });
 
@@ -321,12 +331,6 @@ describe('collectTrip with Mercado Pago', () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);
 
-    const db = getDb();
-    await db
-      .update(drivers)
-      .set({ commission_exempt_until: null })
-      .where(eq(drivers.id, driverId));
-
     const trip = await createCompletedTrip(token);
 
     const { status, data } = await request(
@@ -340,6 +344,7 @@ describe('collectTrip with Mercado Pago', () => {
     expect(data.is_collected).toBe(true);
     expect(data.payment_method).toBe('cash');
 
+    const db = getDb();
     const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
     expect(driver.platform_debt).toBeGreaterThan(0);
 

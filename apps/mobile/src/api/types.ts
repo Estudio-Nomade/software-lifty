@@ -147,7 +147,6 @@ export const earningsDailySchema = z.object({
   week_platform_fee: z.number().optional(),
   week_total_fare: z.number().optional(),
   platform_debt: z.number().optional(),
-  commission_exempt_until: z.string().nullable().optional(),
 });
 
 export const paymentMethodSchema = z.object({

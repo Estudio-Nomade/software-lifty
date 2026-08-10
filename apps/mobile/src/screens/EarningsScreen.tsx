@@ -88,10 +88,7 @@ export const EarningsScreen: React.FC = () => {
   const tripsRevenueTotal = earnings?.trips?.reduce((sum, t) => sum + (t.total_fare ?? 0), 0) ?? 0;
   const retentionPercent =
     retentionTotal > 0 ? Math.round((retentionTotal / tripsRevenueTotal) * 100) : 0;
-  const isExempt =
-    earnings?.commission_exempt_until != null
-      ? new Date(earnings.commission_exempt_until) > new Date()
-      : false;
+  const isExempt = retentionPercent === 0;
 
   const weekRetention = earnings?.week_platform_fee ?? 0;
   const weekFare = earnings?.week_total_fare ?? 0;

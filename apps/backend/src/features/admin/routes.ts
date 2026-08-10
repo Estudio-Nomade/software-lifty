@@ -3,7 +3,13 @@ import { safeCall } from '../../shared/lib/route-utils';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { authGuard } from '../../shared/middleware/require-auth';
 import { approveDriver } from './approve';
-import { driverIdParams, reviewBody, withdrawalsQuery } from './schema';
+import {
+  driverIdParams,
+  reviewBody,
+  updatePhaseSchema,
+  updateStartDateSchema,
+  withdrawalsQuery,
+} from './schema';
 import { adminService } from './service';
 
 export const adminApproveRoute = new Elysia().get('/admin/approve', async ({ query, set }) => {
@@ -68,4 +74,44 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
       return safeCall(() => adminService.listPendingWithdrawals(query), set);
     },
     { query: withdrawalsQuery, requireAuth: true },
+  )
+  .get(
+    '/commission/phases',
+    ({ user, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminService.listCommissionPhases(), set);
+    },
+    { requireAuth: true },
+  )
+  .put(
+    '/commission/phases/:id',
+    ({ user, params, body, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminService.updateCommissionPhase(params.id, body), set);
+    },
+    { body: updatePhaseSchema, requireAuth: true },
+  )
+  .get(
+    '/commission/start-date',
+    ({ user, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminService.getCommissionStartDate(), set);
+    },
+    { requireAuth: true },
+  )
+  .put(
+    '/commission/start-date',
+    ({ user, body, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminService.updateCommissionStartDate(body.value), set);
+    },
+    { body: updateStartDateSchema, requireAuth: true },
+  )
+  .get(
+    '/commission/current',
+    ({ user, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminService.getCurrentCommission(), set);
+    },
+    { requireAuth: true },
   );

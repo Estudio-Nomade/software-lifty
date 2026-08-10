@@ -1,1 +1,1 @@
-ALTER TABLE trips ADD COLUMN expires_at timestamp;
+ALTER TABLE trips ADD COLUMN IF NOT EXISTS expires_at timestamp;

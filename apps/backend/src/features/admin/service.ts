@@ -1,13 +1,16 @@
 import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import {
+  commissionPhases,
   driverDocuments,
   drivers,
   payoutMethods,
+  platformConfig,
   users,
   vehicles,
   withdrawals,
 } from '../../shared/db/schema';
+import { getCommissionConfig } from '../../shared/lib/commission';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { notifyDriverApproved, notifyDriverRejected } from './notifications';
@@ -186,5 +189,55 @@ export const adminService = {
       .orderBy(withdrawals.created_at);
 
     return rows;
+  },
+
+  async listCommissionPhases() {
+    return db.select().from(commissionPhases).orderBy(commissionPhases.month_start);
+  },
+
+  async updateCommissionPhase(id: string, data: Record<string, any>) {
+    const [existing] = await db
+      .select()
+      .from(commissionPhases)
+      .where(eq(commissionPhases.id, id))
+      .limit(1);
+
+    if (!existing) throw new NotFoundError('Commission phase not found');
+
+    const [updated] = await db
+      .update(commissionPhases)
+      .set({ ...data, updated_at: new Date() })
+      .where(eq(commissionPhases.id, id))
+      .returning();
+
+    return updated;
+  },
+
+  async getCommissionStartDate() {
+    const [row] = await db
+      .select({ value: platformConfig.value })
+      .from(platformConfig)
+      .where(eq(platformConfig.key, 'commission_start_date'))
+      .limit(1);
+
+    if (!row) throw new NotFoundError('commission_start_date not configured');
+
+    return { start_date: row.value };
+  },
+
+  async updateCommissionStartDate(value: string) {
+    await db
+      .insert(platformConfig)
+      .values({ key: 'commission_start_date', value })
+      .onConflictDoUpdate({
+        target: platformConfig.key,
+        set: { value, updated_at: new Date() },
+      });
+
+    return { start_date: value };
+  },
+
+  async getCurrentCommission() {
+    return getCommissionConfig(db);
   },
 };

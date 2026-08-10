@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
-import { drivers, ratings, tripEvents, trips, users } from '../../shared/db/schema';
+import { commissionPhases, drivers, platformConfig, ratings, tripEvents, trips, users } from '../../shared/db/schema';
 import { createTestAuthPlugin, createTestToken } from '../../shared/testing/utils';
 
 let app: any;
@@ -18,6 +18,8 @@ async function truncateTables() {
   await db.delete(trips);
   await db.delete(drivers);
   await db.delete(users);
+  await db.delete(commissionPhases);
+  await db.delete(platformConfig);
 }
 
 async function request(method: string, path: string, body?: object, token?: string) {
@@ -59,6 +61,14 @@ beforeAll(() => {
 beforeEach(async () => {
   testId++;
   await truncateTables();
+  const db = getDb();
+  await db.insert(commissionPhases).values([
+    { name: 'Lanzamiento', month_start: 1, month_end: 1, base_rate: 0.00 },
+    { name: 'Medición', month_start: 2, month_end: 2, base_rate: 0.05 },
+    { name: 'Estabilización', month_start: 3, month_end: 6, base_rate: 0.10 },
+    { name: 'Crecimiento', month_start: 7, month_end: null, base_rate: 0.10, monthly_increment: 0.007, cap_rate: 0.15 },
+  ]);
+  await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-01-01' });
 });
 
 afterAll(async () => {
@@ -361,12 +371,6 @@ describe('Trip State Machine', () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);
 
-    const db = getDb();
-    await db
-      .update(drivers)
-      .set({ commission_exempt_until: null })
-      .where(eq(drivers.id, driverId));
-
     const { data: trip } = await request(
       'POST',
       '/api/trips',
@@ -378,6 +382,7 @@ describe('Trip State Machine', () => {
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/arrived`, undefined, token);
 
+    const db = getDb();
     await db
       .update(trips)
       .set({
@@ -493,13 +498,7 @@ describe('Trip State Machine', () => {
 
   test('13. create trip with fare calculation', async () => {
     const token = await registerAndGetToken(phone, password);
-    const driverId = await createDriverRow(token);
-
-    const db = getDb();
-    await db
-      .update(drivers)
-      .set({ commission_exempt_until: null })
-      .where(eq(drivers.id, driverId));
+    await createDriverRow(token);
 
     const { status, data } = await request(
       'POST',
@@ -531,12 +530,6 @@ describe('Trip State Machine', () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);
 
-    const db = getDb();
-    await db
-      .update(drivers)
-      .set({ commission_exempt_until: null })
-      .where(eq(drivers.id, driverId));
-
     const { data: trip } = await request(
       'POST',
       '/api/trips',
@@ -561,6 +554,7 @@ describe('Trip State Machine', () => {
     expect(data.is_collected).toBe(true);
     expect(data.payment_method).toBe('cash');
 
+    const db = getDb();
     const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
     expect(driver.platform_debt).toBeGreaterThan(0);
   });

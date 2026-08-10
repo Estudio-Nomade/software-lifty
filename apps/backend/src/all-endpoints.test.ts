@@ -10,7 +10,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { eq } from 'drizzle-orm';
 import { createApp } from './index';
 import { getDb, resetDb } from './shared/db/client';
-import { districts, drivers, users } from './shared/db/schema';
+import { commissionPhases, districts, drivers, platformConfig, users } from './shared/db/schema';
 import { getRedis } from './shared/lib/redis';
 import { createTestToken } from './shared/testing/utils';
 
@@ -30,6 +30,8 @@ async function truncateAll() {
   await db.execute('DELETE FROM payout_methods');
   await db.execute('DELETE FROM drivers');
   await db.execute('DELETE FROM users');
+  await db.execute('DELETE FROM commission_phases');
+  await db.execute('DELETE FROM platform_config');
 
   // Clear rate-limit Redis keys so per-IP counters reset between tests
   const redis = getRedis();
@@ -110,6 +112,14 @@ beforeAll(() => {
 });
 beforeEach(async () => {
   await truncateAll();
+  const db = getDb();
+  await db.insert(commissionPhases).values([
+    { name: 'Lanzamiento', month_start: 1, month_end: 1, base_rate: 0.00 },
+    { name: 'Medición', month_start: 2, month_end: 2, base_rate: 0.05 },
+    { name: 'Estabilización', month_start: 3, month_end: 6, base_rate: 0.10 },
+    { name: 'Crecimiento', month_start: 7, month_end: null, base_rate: 0.10, monthly_increment: 0.007, cap_rate: 0.15 },
+  ]);
+  await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-01-01' });
 });
 afterAll(async () => {
   await truncateAll();

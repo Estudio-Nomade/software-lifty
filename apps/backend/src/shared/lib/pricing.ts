@@ -21,7 +21,7 @@ export interface FareInput {
   vehicle_type: string;
   distance_km: number;
   duration_minutes: number;
-  commission_rate?: number;
+  commission_rate?: number; // 0.2 default when not provided (used by tests / explicit callers)
 }
 
 export interface FareResult {
@@ -33,6 +33,7 @@ export interface FareResult {
   driver_earnings: number;
 }
 
+// Keep as-is for backward compat — callers now pass explicit rate from getCommissionRate()
 export function calculatePlatformFee(total: number, commissionRate = 0.2): number {
   return Math.round(total * commissionRate * 100) / 100;
 }
@@ -50,7 +51,7 @@ export function calculateFare(input: FareInput): FareResult {
 
   const rates = PRICING[input.vehicle_type];
   const perKm = getPerKmRate(input.vehicle_type, input.distance_km);
-  const commissionRate = input.commission_rate ?? 0.2;
+  const commissionRate = input.commission_rate ?? 0.2; // caller passes explicit rate or uses default
 
   const base_fare = rates.base;
   const distance_fare = Math.round(input.distance_km * perKm * 100) / 100;

@@ -19,7 +19,6 @@ export const earningsService = {
     const [driver] = await db
       .select({
         platform_debt: drivers.platform_debt,
-        commission_exempt_until: drivers.commission_exempt_until,
       })
       .from(drivers)
       .where(eq(drivers.id, driverId))
@@ -78,7 +77,6 @@ export const earningsService = {
       week_platform_fee: Number(weekResult?.platform_fee ?? 0),
       week_total_fare: Number(weekResult?.total_fare ?? 0),
       platform_debt: Number(driver?.platform_debt ?? 0),
-      commission_exempt_until: driver?.commission_exempt_until ?? null,
     };
   },
 

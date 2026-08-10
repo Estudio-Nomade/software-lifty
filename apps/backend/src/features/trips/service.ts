@@ -1,7 +1,9 @@
 import { and, desc, eq, getTableColumns, inArray, not, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
+import { getDb } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
 import { drivers, ratings, tripEvents, trips, users } from '../../shared/db/schema';
+import { getCommissionRate } from '../../shared/lib/commission';
 import { AppError, BadRequestError, NotFoundError } from '../../shared/lib/errors';
 import { calculateFare } from '../../shared/lib/fuel-pricing';
 import { geocode } from '../../shared/lib/geo';
@@ -84,6 +86,7 @@ async function findTrip(driverId: string, tripId: string, tx = db) {
 }
 
 async function transitionTrip(driverId: string, tripId: string, targetStatus: string) {
+  const commissionRate = await getCommissionRate(getDb());
   return db.transaction(async (tx) => {
     const trip = await findTrip(driverId, tripId, tx);
 
@@ -118,17 +121,6 @@ async function transitionTrip(driverId: string, tripId: string, targetStatus: st
 
     if (actualTarget === 'cancelled_late') {
       const compensationTotal = trip.base_fare ?? 0;
-
-      const [driverRecord] = await tx
-        .select({ commission_exempt_until: drivers.commission_exempt_until })
-        .from(drivers)
-        .where(eq(drivers.id, driverId))
-        .limit(1);
-
-      const isExempt =
-        driverRecord?.commission_exempt_until != null &&
-        new Date(driverRecord.commission_exempt_until) > new Date();
-      const commissionRate = isExempt ? 0 : 0.2;
 
       const compensationPlatformFee = calculatePlatformFee(compensationTotal, commissionRate);
       const compensationDriverEarnings = compensationTotal - compensationPlatformFee;
@@ -176,21 +168,13 @@ export const tripService = {
     duration_minutes: number;
     vehicle_type: string;
   }) {
-    const [driverRecord] = await db
-      .select({ commission_exempt_until: drivers.commission_exempt_until })
-      .from(drivers)
-      .where(eq(drivers.id, data.driver_id))
-      .limit(1);
-
-    const isExempt =
-      driverRecord?.commission_exempt_until != null &&
-      new Date(driverRecord.commission_exempt_until) > new Date();
+    const commissionRate = await getCommissionRate(getDb());
 
     const fare = await calculateFare({
       vehicle_type: data.vehicle_type,
       distance_km: data.distance_km,
       duration_minutes: data.duration_minutes,
-      commission_rate: isExempt ? 0 : undefined,
+      commission_rate: commissionRate,
     });
 
     let originAddress = data.origin_address || null;
@@ -402,21 +386,13 @@ export const tripService = {
     });
     const driverId = await getDriverId(user);
 
-    const [driverRecord] = await db
-      .select({ commission_exempt_until: drivers.commission_exempt_until })
-      .from(drivers)
-      .where(eq(drivers.id, driverId))
-      .limit(1);
-
-    const isExempt =
-      driverRecord?.commission_exempt_until != null &&
-      new Date(driverRecord.commission_exempt_until) > new Date();
+    const commissionRate = await getCommissionRate(getDb());
 
     const fare = await calculateFare({
       vehicle_type: data.vehicle_type,
       distance_km: data.distance_km,
       duration_minutes: data.duration_minutes,
-      commission_rate: isExempt ? 0 : undefined,
+      commission_rate: commissionRate,
     });
 
     let originAddress = data.origin_address || null;

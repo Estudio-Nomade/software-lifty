@@ -1,1 +1,1 @@
-ALTER TABLE "trips" ADD COLUMN "pickup_instructions" varchar(256);
+ALTER TABLE "trips" ADD COLUMN IF NOT EXISTS "pickup_instructions" varchar(256);
