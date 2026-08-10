@@ -216,7 +216,7 @@ describe('Trip State Machine', () => {
     const { status, data } = await request(
       'POST',
       `/api/trips/${trip.id}/arrived`,
-      undefined,
+      { lat: -31.9, lng: -65.0 },
       token,
     );
 
@@ -244,7 +244,7 @@ describe('Trip State Machine', () => {
     const code = accepted.verification_code;
 
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
-    await request('POST', `/api/trips/${trip.id}/arrived`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
 
     const { status, data } = await request('POST', `/api/trips/${trip.id}/start`, { verification_code: code }, token);
 
@@ -273,7 +273,7 @@ describe('Trip State Machine', () => {
     expect(accepted.verification_code).toBeTruthy();
 
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
-    await request('POST', `/api/trips/${trip.id}/arrived`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
 
     const { status, data } = await request('POST', `/api/trips/${trip.id}/start`, { verification_code: '9999' }, token);
 
@@ -294,7 +294,7 @@ describe('Trip State Machine', () => {
 
     await request('POST', `/api/trips/${trip.id}/accept`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
-    await request('POST', `/api/trips/${trip.id}/arrived`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
 
     const res = await app.handle(new Request(`http://localhost/api/trips/${trip.id}/start`, {
       method: 'POST',
@@ -318,7 +318,7 @@ describe('Trip State Machine', () => {
 
     const { data: accepted } = await request('POST', `/api/trips/${trip.id}/accept`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
-    await request('POST', `/api/trips/${trip.id}/arrived`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
     await request('POST', `/api/trips/${trip.id}/start`, { verification_code: accepted.verification_code }, token);
 
     const { status, data } = await request(
@@ -351,7 +351,7 @@ describe('Trip State Machine', () => {
 
     await request('POST', `/api/trips/${trip.id}/accept`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
-    await request('POST', `/api/trips/${trip.id}/arrived`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
 
     const db = getDb();
     await db.update(trips).set({ waiting_since: new Date() }).where(eq(trips.id, trip.id));
@@ -380,7 +380,7 @@ describe('Trip State Machine', () => {
 
     await request('POST', `/api/trips/${trip.id}/accept`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
-    await request('POST', `/api/trips/${trip.id}/arrived`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
 
     const db = getDb();
     await db
@@ -539,7 +539,7 @@ describe('Trip State Machine', () => {
 
     const { data: accepted } = await request('POST', `/api/trips/${trip.id}/accept`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
-    await request('POST', `/api/trips/${trip.id}/arrived`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
     await request('POST', `/api/trips/${trip.id}/start`, { verification_code: accepted.verification_code }, token);
     await request('POST', `/api/trips/${trip.id}/complete`, undefined, token);
 
@@ -572,7 +572,7 @@ describe('Trip State Machine', () => {
 
     const { data: accepted } = await request('POST', `/api/trips/${trip.id}/accept`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
-    await request('POST', `/api/trips/${trip.id}/arrived`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
     await request('POST', `/api/trips/${trip.id}/start`, { verification_code: accepted.verification_code }, token);
     await request('POST', `/api/trips/${trip.id}/complete`, undefined, token);
 
@@ -605,7 +605,7 @@ describe('Trip State Machine', () => {
 
     const { data: accepted } = await request('POST', `/api/trips/${trip.id}/accept`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
-    await request('POST', `/api/trips/${trip.id}/arrived`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
     await request('POST', `/api/trips/${trip.id}/start`, { verification_code: accepted.verification_code }, token);
     await request('POST', `/api/trips/${trip.id}/complete`, undefined, token);
 
@@ -737,7 +737,7 @@ describe('Trip State Machine', () => {
     const acceptData = await acceptRes.json();
     const enRouteRes = await apiRequest('POST', `/api/trips/${tripId}/en-route`);
     expect(enRouteRes.status).toBe(200);
-    const arrivedRes = await apiRequest('POST', `/api/trips/${tripId}/arrived`);
+    const arrivedRes = await apiRequest('POST', `/api/trips/${tripId}/arrived`, { lat: -31.9, lng: -65.0 });
     expect(arrivedRes.status).toBe(200);
     const startRes = await apiRequest('POST', `/api/trips/${tripId}/start`, { verification_code: acceptData.verification_code });
     expect(startRes.status).toBe(200);

@@ -72,7 +72,7 @@ async function createCompletedTrip(token: string) {
 
   const { data: accepted } = await request('POST', `/api/trips/${trip.id}/accept`, undefined, token);
   await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
-  await request('POST', `/api/trips/${trip.id}/arrived`, undefined, token);
+  await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
   await request('POST', `/api/trips/${trip.id}/start`, { verification_code: accepted.verification_code }, token);
   await request('POST', `/api/trips/${trip.id}/complete`, undefined, token);
 

@@ -19,11 +19,10 @@ import { MapView } from '../components/MapView';
 import { RatingStars } from '../components/RatingStars';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useDynamicRouting } from '../hooks/useDynamicRouting';
 import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
-import type { ManeuverStep } from '../hooks/useManeuverInstructions';
 import { haversineDistance } from '../lib/geo';
 import { startTracking, stopTracking } from '../lib/location';
-import { decodePolyline } from '../lib/polyline';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -39,21 +38,25 @@ export const NavigationScreen: React.FC = () => {
   const locationLng = useLocationStore((s) => s.lng);
   const iconType = useVehicleStore((s) => s.iconType);
   const enRouteSent = useRef(false);
-  const [routeCoords, setRouteCoords] = useState<[number, number][]>([]);
-  const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
-  const [distKm, setDistKm] = useState<number | null>(null);
+  const enRouteResolvedRef = useRef(false);
   const [nearPassenger, setNearPassenger] = useState(false);
-  const [steps, setSteps] = useState<ManeuverStep[]>([]);
-  const [altRouteCoords, setAltRouteCoords] = useState<[number, number][]>([]);
-  const [altEtaMinutes, setAltEtaMinutes] = useState<number | null>(null);
-  const [altDistKm, setAltDistKm] = useState<number | null>(null);
-  const [altSteps, setAltSteps] = useState<ManeuverStep[]>([]);
   const [activeRoute, setActiveRoute] = useState<'primary' | 'alternative'>('primary');
   const [recenterKey, setRecenterKey] = useState(0);
   const [displayAddress, setDisplayAddress] = useState<string | null>(null);
   const [enRouteStatus, setEnRouteStatus] = useState<'pending' | 'success' | 'error'>(
     tripStatus === 'accepted' ? 'pending' : 'success',
   );
+
+  const {
+    routeCoords,
+    etaMinutes,
+    distKm,
+    steps,
+    altRouteCoords,
+    altEtaMinutes,
+    altDistKm,
+    altSteps,
+  } = useDynamicRouting(trip?.origin_lat ?? null, trip?.origin_lng ?? null);
 
   const isPrimary = activeRoute === 'primary';
   const activeSteps = isPrimary ? steps : altSteps;
@@ -91,59 +94,26 @@ export const NavigationScreen: React.FC = () => {
     apiClient
       .post(`/trips/${trip.id}/en-route`)
       .then((res) => {
+        if (enRouteResolvedRef.current) return;
+        enRouteResolvedRef.current = true;
         const storeTrip = useTripStore.getState().trip;
         if (storeTrip) {
           useTripStore.getState().setActiveTrip({ ...storeTrip, ...res.data });
         }
         setEnRouteStatus('success');
       })
-      .catch(() => setEnRouteStatus('error'));
+      .catch(() => {
+        if (enRouteResolvedRef.current) return;
+        enRouteResolvedRef.current = true;
+        setEnRouteStatus('error');
+      });
   }, [trip, tripStatus]);
-
-  const lastFetchRef = useRef(0);
 
   useEffect(() => {
     if (!locationLat || !locationLng || !trip) return;
     const distance = haversineDistance(locationLat, locationLng, trip.origin_lat, trip.origin_lng);
     setNearPassenger(distance < 0.05);
   }, [locationLat, locationLng, trip]);
-
-  useEffect(() => {
-    if (!locationLat || !locationLng || !trip) return;
-    const now = Date.now();
-    if (now - lastFetchRef.current < 10000) return;
-    lastFetchRef.current = now;
-    fetchDirections(locationLat, locationLng, trip.origin_lat, trip.origin_lng);
-  }, [locationLat, locationLng, trip]);
-
-  const fetchDirections = async (lat: number, lng: number, destLat: number, destLng: number) => {
-    try {
-      const res = await apiClient.get('/maps/directions', {
-        params: { origin_lat: lat, origin_lng: lng, dest_lat: destLat, dest_lng: destLng },
-      });
-      const data = res.data?.data ?? res.data;
-      setEtaMinutes(data.duration_minutes);
-      setDistKm(data.distance_km);
-      const coords = decodePolyline(data.polyline);
-      setRouteCoords(coords);
-      setSteps(data.steps ?? []);
-
-      if (data.alternatives?.length) {
-        const alt = data.alternatives[0];
-        setAltEtaMinutes(alt.duration_minutes);
-        setAltDistKm(alt.distance_km);
-        setAltRouteCoords(decodePolyline(alt.polyline));
-        setAltSteps(alt.steps ?? []);
-      } else {
-        setAltRouteCoords([]);
-        setAltEtaMinutes(null);
-        setAltDistKm(null);
-        setAltSteps([]);
-      }
-    } catch (err) {
-      if (__DEV__) console.warn('[Navigation] fetchDirections failed:', err);
-    }
-  };
 
   const openWaze = () => {
     const dest = trip;
@@ -180,9 +150,16 @@ export const NavigationScreen: React.FC = () => {
 
   const handleArrive = async () => {
     if (!trip) return;
+    if (!locationLat || !locationLng) {
+      Alert.alert('Error', 'No se pudo obtener tu ubicacion.');
+      return;
+    }
     setLoading(true);
     try {
-      const res = await apiClient.post(`/trips/${trip.id}/arrived`);
+      const res = await apiClient.post(`/trips/${trip.id}/arrived`, {
+        lat: locationLat,
+        lng: locationLng,
+      });
       const storeTrip = useTripStore.getState().trip;
       if (storeTrip) {
         useTripStore.getState().setActiveTrip({ ...storeTrip, ...res.data });
@@ -195,9 +172,12 @@ export const NavigationScreen: React.FC = () => {
         err?.code === 'TOKEN_EXPIRED' ||
         err?.error?.code === 'TOKEN_REQUIRED' ||
         err?.error?.code === 'TOKEN_EXPIRED';
-      const message = isTokenExpired
-        ? 'Tu sesion expiro. Inicia sesion nuevamente.'
-        : 'No se pudo confirmar la llegada.';
+      const errorMsg =
+        err?.error?.code === 'TOO_FAR_FROM_PICKUP'
+          ? (err?.error?.message ??
+            'Debes estar a menos de 50 metros del pasajero para confirmar la llegada')
+          : (err?.error?.message ?? 'No se pudo confirmar la llegada.');
+      const message = isTokenExpired ? 'Tu sesion expiro. Inicia sesion nuevamente.' : errorMsg;
       Alert.alert('Error', message, [
         {
           text: 'OK',
@@ -405,6 +385,7 @@ export const NavigationScreen: React.FC = () => {
                 title="LLEGUE"
                 onPress={handleArrive}
                 loading={loading}
+                disabled={!nearPassenger}
                 variant={nearPassenger ? 'cta' : 'primary'}
                 style={styles.arrivedButton}
               />
