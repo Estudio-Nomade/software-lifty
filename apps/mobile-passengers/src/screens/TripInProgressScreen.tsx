@@ -5,7 +5,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 export function TripInProgressScreen() {
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color={theme.colors.turquoise} />
+      <ActivityIndicator size="large" color={theme.colors.primary} />
       <View style={styles.content}>
         <Text style={styles.title}>Tu conductor viene en camino</Text>
         <Text style={styles.subtitle}>Espera en el punto de recogida</Text>
