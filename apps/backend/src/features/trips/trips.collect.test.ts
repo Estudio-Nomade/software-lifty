@@ -74,7 +74,7 @@ async function createCompletedTrip(token: string) {
   await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
   await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
   await request('POST', `/api/trips/${trip.id}/start`, { verification_code: accepted.verification_code }, token);
-  await request('POST', `/api/trips/${trip.id}/complete`, undefined, token);
+  await request('POST', `/api/trips/${trip.id}/complete`, { lat: -31.88, lng: -65.02 }, token);
 
   return trip;
 }

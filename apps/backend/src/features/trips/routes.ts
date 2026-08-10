@@ -4,6 +4,7 @@ import { authGuard } from '../../shared/middleware/require-auth';
 import {
   arrivedBody,
   collectBody,
+  completeBody,
   createTripBody,
   respondBody,
   startTripBody,
@@ -71,8 +72,9 @@ const completeRoute = new Elysia()
   .use(completeRateLimit)
   .post(
     '/:id/complete',
-    ({ user, params, set }) => safeCall(() => tripService.completeTrip(user, params.id), set),
-    { params: tripIdParams, requireAuth: true },
+    ({ user, params, body, set }) =>
+      safeCall(() => tripService.completeTrip(user, params.id, body), set),
+    { params: tripIdParams, body: completeBody, requireAuth: true },
   );
 
 export const tripRoutes = new Elysia({ prefix: '/trips' })

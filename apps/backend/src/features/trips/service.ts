@@ -550,10 +550,26 @@ export const tripService = {
     return transitionTrip(driverId, tripId, 'in_trip');
   },
 
-  async completeTrip(user: AuthUser, tripId: string) {
+  async completeTrip(user: AuthUser, tripId: string, body: { lat: number; lng: number }) {
     const driverId = await getDriverId(user);
-    const trip = await transitionTrip(driverId, tripId, 'completed');
-    return trip;
+
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(and(eq(trips.id, tripId), eq(trips.driver_id, driverId)))
+      .limit(1);
+    if (!trip) throw new NotFoundError('Trip not found');
+
+    const distance = haversineDistance(body.lat, body.lng, trip.dest_lat, trip.dest_lng);
+    if (distance > 0.05) {
+      throw new AppError(
+        'Debes estar a menos de 50 metros del destino para finalizar el viaje',
+        400,
+        'TOO_FAR_FROM_DESTINATION',
+      );
+    }
+
+    return transitionTrip(driverId, tripId, 'completed');
   },
 
   async cancelTrip(user: AuthUser, tripId: string) {

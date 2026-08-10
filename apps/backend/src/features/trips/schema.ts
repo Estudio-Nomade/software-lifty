@@ -47,6 +47,11 @@ export const arrivedBody = t.Object({
   lng: t.Number(),
 });
 
+export const completeBody = t.Object({
+  lat: t.Number(),
+  lng: t.Number(),
+});
+
 export const respondBody = t.Object({
   action: t.Union([t.Literal('accept'), t.Literal('reject')]),
 });
