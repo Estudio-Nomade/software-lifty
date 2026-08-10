@@ -54,7 +54,10 @@ export const TripInProgressScreen: React.FC = () => {
     if (!trip?.id) return;
     setCompleting(true);
     try {
-      const response = await apiClient.post(`/trips/${trip.id}/complete`);
+      const response = await apiClient.post(`/trips/${trip.id}/complete`, {
+        lat: locationLat,
+        lng: locationLng,
+      });
       const tripData = response.data?.data ?? response.data;
       const storeTrip = useTripStore.getState().trip;
       if (storeTrip) {
@@ -85,7 +88,8 @@ export const TripInProgressScreen: React.FC = () => {
         setCompleting(false);
         return;
       }
-      navigation.navigate('TripComplete');
+      const message = err?.error?.message || err?.message || 'No se pudo finalizar el viaje';
+      Alert.alert('Error', message);
     } finally {
       setCompleting(false);
     }

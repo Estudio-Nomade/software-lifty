@@ -47,10 +47,10 @@ export const TripCompleteScreen: React.FC = () => {
     tipAmount?: string;
   }>();
 
-  const tripAmount = Number(amount) || 2500;
-  const tripCommission = Number(commission) || 500;
-  const tripDriverEarnings = Number(driverEarnings) || 2000;
-  const tip = Number(tipAmount) || 0;
+  const tripAmount = amount != null ? Number(amount) : 2500;
+  const tripCommission = commission != null ? Number(commission) : 0;
+  const tripDriverEarnings = driverEarnings != null ? Number(driverEarnings) : 0;
+  const tip = tipAmount != null ? Number(tipAmount) : 0;
 
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;

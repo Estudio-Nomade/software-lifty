@@ -324,7 +324,7 @@ describe('Trip State Machine', () => {
     const { status, data } = await request(
       'POST',
       `/api/trips/${trip.id}/complete`,
-      undefined,
+      { lat: -31.88, lng: -65.02 },
       token,
     );
 
@@ -541,7 +541,7 @@ describe('Trip State Machine', () => {
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
     await request('POST', `/api/trips/${trip.id}/start`, { verification_code: accepted.verification_code }, token);
-    await request('POST', `/api/trips/${trip.id}/complete`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/complete`, { lat: -31.88, lng: -65.02 }, token);
 
     const { status, data } = await request(
       'PUT',
@@ -574,7 +574,7 @@ describe('Trip State Machine', () => {
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
     await request('POST', `/api/trips/${trip.id}/start`, { verification_code: accepted.verification_code }, token);
-    await request('POST', `/api/trips/${trip.id}/complete`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/complete`, { lat: -31.88, lng: -65.02 }, token);
 
     const { status, data } = await request(
       'PUT',
@@ -607,7 +607,7 @@ describe('Trip State Machine', () => {
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
     await request('POST', `/api/trips/${trip.id}/start`, { verification_code: accepted.verification_code }, token);
-    await request('POST', `/api/trips/${trip.id}/complete`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/complete`, { lat: -31.88, lng: -65.02 }, token);
 
     await request('PUT', `/api/trips/${trip.id}/collect`, { payment_method: 'cash' }, token);
 
@@ -743,7 +743,7 @@ describe('Trip State Machine', () => {
     expect(startRes.status).toBe(200);
 
     const callComplete = async () => {
-      const res = await apiRequest('POST', `/api/trips/${tripId}/complete`);
+      const res = await apiRequest('POST', `/api/trips/${tripId}/complete`, { lat: -31.88, lng: -65.02 });
       return res.status;
     };
 
