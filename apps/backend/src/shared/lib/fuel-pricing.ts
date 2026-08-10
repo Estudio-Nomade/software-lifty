@@ -258,7 +258,7 @@ export async function calculateFare(input: FareInput): Promise<FareResult> {
   }
 
   const config = RATE_CONFIG[vehicleType];
-  const commissionRate = input.commission_rate ?? 0.2;
+  const commissionRate = input.commission_rate ?? 0.2; // dynamic rate passed by caller
 
   let kmCost = 0;
   let remaining = input.distance_km;
