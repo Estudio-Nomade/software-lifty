@@ -1,0 +1,7 @@
+flowchart TD
+    A[Welcome Screen] --> B["Login: Ingresa teléfono"]
+    B --> C["OTP: Ingresa código SMS"]
+    C --> D{¿Usuario nuevo?}
+    D -->|Sí| E["Registrar: Nombre + Aceptar Términos"]
+    D -->|No| F[Home]
+    E --> F

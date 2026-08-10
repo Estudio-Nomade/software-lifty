@@ -1,0 +1,27 @@
+flowchart TD
+    A[Home: Mapa centrado en GPS] --> B["Toca '¿A dónde vas?'"]
+    B --> C[Pantalla: Elegir origen]
+    C --> D{¿Ubicación actual?}
+    D -->|Sí| F[Pantalla: Elegir destino]
+    D -->|No| E[Buscar dirección / mover pin]
+    E --> F
+    
+    F --> G[Autocomplete / buscar en mapa]
+    G --> H[Pantalla: Revisar viaje]
+    
+    H --> I[Muestra: mapa ruta, distancia, tarifa estimada]
+    I --> J["Seleccionar vehículo: Auto o Moto"]
+    J --> K[Opcional: instrucciones de pickup]
+    K --> L["Botón: Confirmar viaje"]
+    
+    L --> M[Pantalla: Buscando conductor]
+    M --> N{¿Timeout 30s?}
+    N -->|Sí| O[Sin conductores disponibles]
+    N -->|No| P[Conductor encontrado]
+    O --> A
+    
+    P --> Q[Muestra: foto, nombre, rating, vehículo, patente]
+    Q --> R{¿Conductor acepta?}
+    R -->|Rechaza| M
+    R -->|Timeout 15s| M
+    R -->|Acepta| S[Pantalla: Código de verificación]

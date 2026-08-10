@@ -1,0 +1,55 @@
+stateDiagram-v2
+    [*] --> idle: App abierta en Home
+
+    idle --> setting_pickup: Toca "¿A dónde vas?"
+    setting_pickup --> setting_dest: Confirma origen
+    setting_dest --> reviewing_fare: Confirma destino
+    reviewing_fare --> idle: Cancelar
+    reviewing_fare --> searching: Confirmar viaje
+
+    searching --> no_drivers: Timeout 30s
+    searching --> driver_found: Conductor disponible
+    driver_found --> searching: Conductor rechaza
+    driver_found --> accepted: Conductor acepta
+
+    accepted --> arriving: Conductor en camino
+    arriving --> arrived: Conductor llegó
+    
+    arrived --> in_trip: Código verificado
+    arrived --> cancelled_late: Conductor cancela tarde
+    
+    in_trip --> completed: Llega a destino
+    in_trip --> sos: Emergencia
+    
+    completed --> paid: Pago realizado
+    paid --> rated: Calificación enviada
+    
+    no_drivers --> idle
+    cancelled_late --> idle
+    sos --> in_trip: Resuelto
+    rated --> idle
+
+    state searching {
+        [*] --> pending_offered: Trip status pending/offered
+    }
+    state accepted {
+        [*] --> trip_accepted: Trip status accepted
+    }
+    state arriving {
+        [*] --> trip_en_route: Trip status en_route
+    }
+    state arrived {
+        [*] --> trip_waiting: Trip status waiting
+    }
+    state in_trip {
+        [*] --> trip_in_trip: Trip status in_trip
+    }
+    state completed {
+        [*] --> trip_completed: Trip status completed
+    }
+    state paid {
+        [*] --> trip_collected: is_collected true
+    }
+    state rated {
+        [*] --> trip_rated: Trip status rated
+    }

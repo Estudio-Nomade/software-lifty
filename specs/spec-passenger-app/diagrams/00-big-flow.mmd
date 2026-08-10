@@ -1,0 +1,113 @@
+flowchart TD
+    %% ============================================================
+    %% LIFTY PASSENGER APP — BIG FLOW UNIFICADO (v2)
+    %% ============================================================
+
+    subgraph AUTH["1. AUTH"]
+        direction TB
+        A1[Welcome] --> A2["Login: Teléfono"]
+        A2 --> A3["OTP: Código SMS"]
+        A3 --> A3err["OTP incorrecto: reintentar"]
+        A3err --> A3
+        A3 --> A4{¿Nuevo?}
+        A4 -->|Sí| A5["Registrar: Nombre + Términos"]
+        A4 -->|No| HOME
+        A5 --> HOME
+    end
+
+    subgraph HOME_SCREEN["2. HOME"]
+        H1["Mapa interactivo"]
+        H2["Tab Bar: Home | Historial | Perfil"]
+        H1err["GPS denegado: ingresar dirección manual"]
+    end
+
+    subgraph REQUEST["3. SOLICITAR VIAJE"]
+        direction TB
+        R1["Elegir origen"] --> R2["Elegir destino"]
+        R2 --> R3["Revisar: ruta + tarifa estimada"]
+        R3 --> R4["Seleccionar vehículo: Auto/Moto"]
+        R4 --> R5["Instrucciones pickup (opc)"]
+        R5 --> R6["CONFIRMAR VIAJE"]
+        R6 --> R7["BUSCANDO CONDUCTOR"]
+        R7 --> R8{¿Timeout 30s?}
+        R8 -->|Sí| R9["Sin conductores"]
+        R8 -->|No| R10["Conductor encontrado"]
+        R10 --> R11{¿Acepta?}
+        R11 -->|Rechaza| R7_next["Buscar siguiente conductor"]
+        R7_next --> R7
+        R11 -->|Timeout 15s| R7_next
+        R11 -->|Acepta| R12["CÓDIGO 4 DÍGITOS"]
+        R7 --> Rcancel["Pasajero cancela búsqueda"]
+    end
+
+    subgraph IN_TRIP["4. EN VIAJE"]
+        direction TB
+        T1["Conductor en camino"] --> T2["Mapa tracking real-time"]
+        T2 --> T3["Conductor llegó"]
+        T3 --> T4["Ingresar código"]
+        T4 --> T4err{"¿Código OK?"}
+        T4err -->|No| T4retry["Reintentar"]
+        T4retry --> T4
+        T4err -->|Sí| T5["VIAJE INICIADO"]
+        T5 --> T6["Tracking ruta + ETA"]
+        T5 --> T7["SOS"]
+        T7 --> T8["Accidente / Emergencia / Riesgo"]
+        T8 --> T8action["Notifica a Lifty + instrucciones"]
+        T6 --> T9["Llegando a destino"]
+        T9 --> T10["VIAJE COMPLETADO"]
+        T3 --> Tcancel["Pasajero cancela (late: penaliza)"]
+        T2 --> Tcancel_early["Pasajero cancela (early: sin penalizar)"]
+    end
+
+    subgraph POST["5. POST-VIAJE"]
+        direction TB
+        P1["Resumen: ruta + tarifa"] --> P2{¿Pago?}
+        P2 -->|Efectivo| P3["Pagar al conductor"]
+        P2 -->|MercadoPago| P4["Checkout MP"]
+        P3 --> Ptip["Propina (opcional)"]
+        P4 --> Ptip
+        Ptip --> P5["CALIFICAR"]
+        P5 --> P6["Estrellas 1-5 + Tags + Comentario"]
+        P6 --> HOME
+        P1 --> Pskip["Saltar calificación"]
+    end
+
+    subgraph HISTORY["6. HISTORIAL"]
+        direction TB
+        Y1["Lista de viajes"] --> Y2["Detalle: mapa + datos"]
+    end
+
+    subgraph PROFILE["7. PERFIL"]
+        direction TB
+        F1["Nombre + Teléfono"] --> F2["Editar / Cerrar sesión"]
+        F2 -->|Logout| A1
+    end
+
+    %% Transiciones principales
+    HOME -->|"¿A dónde vas?"| REQUEST
+    R12 --> IN_TRIP
+    T10 --> POST
+    HOME --> HISTORY
+    HOME --> PROFILE
+    R9 --> HOME
+    Rcancel --> HOME
+    Tcancel --> HOME
+    Tcancel_early --> HOME
+    Pskip --> HOME
+    H1err --> R1
+
+    %% Mapeo backend
+    R6 -...-> BE1["POST /trips/request\n(asigna conductor más cercano)"]
+    R7 -...-> BE2["status: pending → offered"]
+    R11 -...-> BE3["status: accepted"]
+    T1 -...-> BE4["status: en_route"]
+    T3 -...-> BE5["status: waiting"]
+    T5 -...-> BE6["status: in_trip"]
+    T10 -...-> BE7["status: completed"]
+    Ptip -...-> BE8["tip_amount (ya en schema)"]
+    P5 -...-> BE9["POST /ratings → rated"]
+    Tcancel -...-> BE10["status: cancelled_late"]
+    Tcancel_early -...-> BE11["status: cancelled_early"]
+
+    %% Tech Debt
+    TD["TECH DEBT\nRefactor dispatch system:\ndriver_id nullable + cola de conductores\nvs. asignación inmediata actual"]

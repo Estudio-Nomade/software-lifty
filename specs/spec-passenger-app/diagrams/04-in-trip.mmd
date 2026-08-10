@@ -1,0 +1,19 @@
+flowchart TD
+    A["Conductor aceptó — Verificación"] --> B[Pantalla: Conductor en camino]
+    B --> C{Mapa: ubicación conductor en tiempo real}
+    C --> D[ETA al pickup]
+    D --> E["Conductor llegó — notificación"]
+    E --> F["Entregar código / Iniciar viaje"]
+    
+    F --> G[Pantalla: En viaje]
+    G --> H{Mapa: tracking ruta completa}
+    G --> I[ETA a destino]
+    G --> J["Botón SOS (siempre visible)"]
+    
+    J --> K{¿Tipo de emergencia?}
+    K --> L["Accidente"]
+    K --> M["Emergencia médica"]
+    K --> N["Situación de riesgo"]
+    
+    H --> O["Llegando a destino — notificación"]
+    O --> P[Pantalla: Viaje completado]

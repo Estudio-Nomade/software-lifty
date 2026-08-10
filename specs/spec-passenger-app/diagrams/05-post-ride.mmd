@@ -1,0 +1,16 @@
+flowchart TD
+    A[Viaje completado] --> B[Pantalla: Resumen del viaje]
+    B --> C{Ruta, distancia, tiempo, tarifa total}
+    C --> D{¿Método de pago?}
+    
+    D -->|Efectivo| E["Pagar al conductor"]
+    D -->|MercadoPago| F[Checkout MP]
+    
+    E --> G[Pantalla: Calificar]
+    F --> G
+    
+    G --> H[Estrellas 1-5]
+    H --> I["Tags opcionales: 'Buena música', 'Auto limpio', etc."]
+    I --> J[Comentario opcional]
+    J --> K[Enviar calificación]
+    K --> L[Home]

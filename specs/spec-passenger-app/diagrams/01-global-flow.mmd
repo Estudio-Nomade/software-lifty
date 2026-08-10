@@ -1,0 +1,60 @@
+stateDiagram-v2
+    [*] --> auth: Abre app
+
+    state auth {
+        [*] --> welcome
+        welcome --> login_phone
+        login_phone --> login_otp: Envía SMS
+        login_otp --> register_name: Primer login (nuevo)
+        login_otp --> home: Usuario existente
+        register_name --> home
+    }
+
+    state home {
+        [*] --> idle: Mapa con ubicación actual
+        idle --> setting_pickup: Toca "¿A dónde vas?"
+        setting_pickup --> setting_dest: Confirma origen
+        setting_dest --> fare_review: Confirma destino
+        fare_review --> idle: Cancelar
+    }
+
+    home --> searching: Confirma y solicita viaje
+
+    state trip_lifecycle {
+        [*] --> searching: Viaje creado
+        searching --> no_drivers: Timeout sin conductores
+        searching --> driver_found: Conductor recibe oferta
+        driver_found --> searching: Conductor rechaza
+        driver_found --> driver_accepted: Conductor acepta
+        
+        driver_accepted --> driver_arriving: Conductor va al origen
+        driver_arriving --> driver_arrived: Conductor llegó
+        
+        driver_arrived --> in_trip: Entrega código y arranca
+        driver_arrived --> cancelled: Conductor cancela (tardío)
+        
+        in_trip --> completed: Llega a destino
+        in_trip --> sos_triggered: SOS
+        
+        completed --> payment: Elegir método de pago
+        payment --> rated: Calificar
+        rated --> [*]
+        
+        no_drivers --> home: Volver a intentar
+        cancelled --> home: Buscar otro
+    }
+
+    home --> trip_history: Ver historial
+    home --> profile: Ver perfil
+
+    state trip_history {
+        [*] --> history_list
+        history_list --> trip_detail: Toca un viaje
+    }
+
+    state profile {
+        [*] --> profile_view
+        profile_view --> edit_name
+        profile_view --> logout: Cerrar sesión
+        logout --> welcome
+    }
