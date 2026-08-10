@@ -194,7 +194,8 @@ export const TripInProgressScreen: React.FC = () => {
         <Text style={styles.destination}>{trip?.dest_address ?? 'Destino'}</Text>
         {etaMinutes !== null && distKm !== null ? (
           <Text style={styles.eta}>
-            ~{Math.round(etaMinutes)} min · {distKm} km
+            ~{Math.round(etaMinutes)} min ·{' '}
+            {distKm < 1 ? `${Math.round(distKm * 1000)} m` : `${distKm} km`}
           </Text>
         ) : null}
         {instruction ? <Text style={styles.instruction}>{instruction}</Text> : null}
