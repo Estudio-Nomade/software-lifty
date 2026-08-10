@@ -38,6 +38,7 @@ export const NavigationScreen: React.FC = () => {
   const locationLng = useLocationStore((s) => s.lng);
   const iconType = useVehicleStore((s) => s.iconType);
   const enRouteSent = useRef(false);
+  const enRouteResolvedRef = useRef(false);
   const [nearPassenger, setNearPassenger] = useState(false);
   const [activeRoute, setActiveRoute] = useState<'primary' | 'alternative'>('primary');
   const [recenterKey, setRecenterKey] = useState(0);
@@ -93,13 +94,19 @@ export const NavigationScreen: React.FC = () => {
     apiClient
       .post(`/trips/${trip.id}/en-route`)
       .then((res) => {
+        if (enRouteResolvedRef.current) return;
+        enRouteResolvedRef.current = true;
         const storeTrip = useTripStore.getState().trip;
         if (storeTrip) {
           useTripStore.getState().setActiveTrip({ ...storeTrip, ...res.data });
         }
         setEnRouteStatus('success');
       })
-      .catch(() => setEnRouteStatus('error'));
+      .catch(() => {
+        if (enRouteResolvedRef.current) return;
+        enRouteResolvedRef.current = true;
+        setEnRouteStatus('error');
+      });
   }, [trip, tripStatus]);
 
   useEffect(() => {
