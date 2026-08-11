@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
   brand: {
     fontSize: theme.fontSize['4xl'],
     fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
+    color: theme.colors.primary,
     textAlign: 'center',
   },
   title: {
