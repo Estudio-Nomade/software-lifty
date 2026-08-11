@@ -104,6 +104,12 @@ function realGetUser(token: string): Promise<AuthUser | null> {
 }
 
 async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
+  const userPhone =
+    supabaseUser.phone ??
+    ((supabaseUser.user_metadata as Record<string, unknown> | undefined)?.phone as
+      | string
+      | undefined);
+
   const [existing] = await db
     .select({
       id: users.id,
@@ -129,7 +135,7 @@ async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
     .values({
       id: supabaseUser.id,
       email: supabaseUser.email ?? null,
-      phone: (supabaseUser as { phone?: string }).phone ?? null,
+      phone: userPhone ?? null,
       role: 'driver',
     })
     .returning({

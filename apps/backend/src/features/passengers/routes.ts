@@ -1,13 +1,18 @@
-import { Elysia } from 'elysia';
+import { Elysia, t } from 'elysia';
 import { safeCall } from '../../shared/lib/route-utils';
 import { authGuard } from '../../shared/middleware/require-auth';
 import { passengersService } from './service';
 
 export const passengersRoutes = new Elysia({ prefix: '/passenger' })
   .use(authGuard)
-  .post('/register', ({ user, set }) => safeCall(() => passengersService.register(user.id), set), {
-    requireAuth: true,
-  })
+  .post(
+    '/register',
+    ({ user, body, set }) => safeCall(() => passengersService.register(user.id, body?.phone), set),
+    {
+      requireAuth: true,
+      body: t.Optional(t.Object({ phone: t.Optional(t.String()) })),
+    },
+  )
   .get('/profile', ({ user, set }) => safeCall(() => passengersService.getProfile(user), set), {
     requireAuth: true,
   });

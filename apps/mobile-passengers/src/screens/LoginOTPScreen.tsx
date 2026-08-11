@@ -55,7 +55,7 @@ export function LoginOTPScreen() {
         }
       }
 
-      router.replace('/home');
+      router.replace('/location-permissions');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Código inválido.');
       setLoading(false);
