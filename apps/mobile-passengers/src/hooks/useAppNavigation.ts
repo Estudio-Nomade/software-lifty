@@ -12,6 +12,7 @@ const SCREEN_TO_ROUTE = {
   Home: '/home',
   LocationPermissions: '/location-permissions',
   TripRequest: '/trip-request',
+  VehicleSelect: '/vehicle-select',
   TripInProgress: '/trip-in-progress',
   TripComplete: '/trip-complete',
   TripHistory: '/trip-history',
