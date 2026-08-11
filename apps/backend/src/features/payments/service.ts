@@ -45,7 +45,7 @@ export const paymentsService = {
       .where(eq(trips.id, body.trip_id))
       .limit(1);
 
-    if (trip) {
+    if (trip?.driver_id) {
       const [driver] = await db
         .select({ platform_debt: drivers.platform_debt })
         .from(drivers)

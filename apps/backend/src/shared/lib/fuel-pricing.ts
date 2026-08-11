@@ -254,7 +254,10 @@ export async function calculateFare(input: FareInput): Promise<FareResult> {
   const rates = await getEffectiveRates(vehicleType);
 
   if (!rates?.changed) {
-    return calculateStaticFare(input);
+    return calculateStaticFare({
+      ...input,
+      vehicle_type: vehicleType === 'auto' ? 'car' : 'motorcycle',
+    });
   }
 
   const config = RATE_CONFIG[vehicleType];

@@ -29,6 +29,13 @@ const cancelRateLimit = rateLimit({
   windowMs: Number(process.env.TRIP_RATE_LIMIT_WINDOW_MS) || 60_000,
 }).as('scoped');
 
+const claimRateLimit = rateLimit({
+  name: 'rate-limit-trip-claim',
+  keyPrefix: 'ratelimit:trip:claim:ip',
+  max: Number(process.env.TRIP_CLAIM_RATE_LIMIT_MAX) || 5,
+  windowMs: Number(process.env.TRIP_RATE_LIMIT_WINDOW_MS) || 60_000,
+}).as('scoped');
+
 const completeRateLimit = rateLimit({
   name: 'rate-limit-trip-complete',
   keyPrefix: 'ratelimit:trip:complete:ip',
@@ -68,6 +75,14 @@ const cancelRoute = new Elysia()
     { params: tripIdParams, requireAuth: true },
   );
 
+const claimRoute = new Elysia()
+  .use(claimRateLimit)
+  .post(
+    '/:id/claim',
+    ({ user, params, set }) => safeCall(() => tripService.claimTrip(user, params.id), set),
+    { params: tripIdParams, requireAuth: true },
+  );
+
 const completeRoute = new Elysia()
   .use(completeRateLimit)
   .post(
@@ -101,6 +116,7 @@ export const tripRoutes = new Elysia({ prefix: '/trips' })
     { params: tripIdParams, requireAuth: true },
   )
   .use(acceptRoute)
+  .use(claimRoute)
   .post(
     '/:id/reject',
     ({ user, params, set }) => safeCall(() => tripService.rejectTrip(user, params.id), set),
