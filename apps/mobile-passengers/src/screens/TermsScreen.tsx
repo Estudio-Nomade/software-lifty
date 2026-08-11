@@ -3,12 +3,13 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 import { theme } from '../theme';
 
 const TERMS_TEXT = [
   'Lifty es una plataforma de transporte que conecta pasajeros con conductores verificados. Al usar la aplicación, aceptás los siguientes términos y condiciones.',
   '1. Registro y cuenta',
-  'Para usar Lifty necesitás registrarte con un número de celular válido. Sos responsable de mantener la confidencialidad de tu cuenta y de todas las actividades que ocurran bajo tu usuario.',
+  'Para usar Lifty necesitás registrarte con un email válido. Sos responsable de mantener la confidencialidad de tu cuenta y de todas las actividades que ocurran bajo tu usuario.',
   '2. Uso del servicio',
   'Lifty te permite solicitar viajes puntuales dentro de las zonas de cobertura. Nos reservamos el derecho de suspender o cancelar tu cuenta si hacemos un uso indebido del servicio.',
   '3. Pagos yTarifas',
@@ -26,8 +27,20 @@ const TERMS_TEXT = [
 ];
 
 export function TermsScreen() {
-  const { goBack } = useAppNavigation();
+  const { goBack, replace } = useAppNavigation();
+  const fullName = useRegistrationDraftStore((s) => s.fullName);
   const [accepted, setAccepted] = useState(false);
+  const isFromRegistration = (fullName?.length ?? 0) > 0;
+
+  const handleAccept = () => {
+    if (accepted) return;
+    setAccepted(true);
+    if (isFromRegistration) {
+      replace('LoginCredentials');
+    } else {
+      goBack();
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -58,12 +71,10 @@ export function TermsScreen() {
       <View style={styles.footer}>
         <Button
           variant={accepted ? 'secondary' : 'primary'}
-          onPress={() => {
-            setAccepted(true);
-            goBack();
-          }}
+          onPress={handleAccept}
+          loading={accepted}
         >
-          {accepted ? 'Términos aceptados' : 'Aceptar'}
+          {accepted ? 'Redirigiendo...' : 'Aceptar'}
         </Button>
       </View>
     </View>
