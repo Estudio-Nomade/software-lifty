@@ -1,0 +1,1 @@
+ALTER TABLE passenger_profiles ADD COLUMN IF NOT EXISTS phone VARCHAR(20);

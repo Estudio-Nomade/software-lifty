@@ -1,5 +1,5 @@
 {
-  "version": "2.15",
+  "version": "2.17",
   "children": [
     {
       "type": "frame",
@@ -588,23 +588,16 @@
               "name": "LogoMark",
               "width": 96,
               "height": 96,
-              "fill": "$primary",
-              "cornerRadius": 999,
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "../assets/logo.png",
+                "mode": "fit"
+              },
+              "cornerRadius": 16,
               "layout": "vertical",
               "justifyContent": "center",
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "text",
-                  "id": "H93eg",
-                  "name": "LogoLetter",
-                  "fill": "$white",
-                  "content": "L",
-                  "fontFamily": "$font-family",
-                  "fontSize": 64,
-                  "fontWeight": "700"
-                }
-              ]
+              "alignItems": "center"
             },
             {
               "type": "text",

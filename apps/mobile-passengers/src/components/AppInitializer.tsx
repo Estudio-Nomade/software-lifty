@@ -1,6 +1,7 @@
 import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { InteractionManager } from 'react-native';
+import { registerPassenger } from '../api/passenger';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { LoadingOverlay } from './feedback/LoadingOverlay';
@@ -30,6 +31,19 @@ function SessionRestore() {
   return null;
 }
 
+function PassengerProfileRegistrar() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const registeredRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthenticated || registeredRef.current) return;
+    registeredRef.current = true;
+    registerPassenger().catch(() => {});
+  }, [isAuthenticated]);
+
+  return null;
+}
+
 function AuthRedirectWatcher() {
   const needsRedirect = useAuthStore((s) => s.needsRedirect);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -54,7 +68,7 @@ function AuthRedirectWatcher() {
 
     const current = segments[0] ?? '';
     if (PUBLIC_ROUTES.includes(current) || current === '') {
-      router.replace('/home');
+      router.replace('/location-permissions');
     }
   }, [sessionRestored, isAuthenticated, segments, router]);
 
@@ -70,7 +84,7 @@ function ActiveTripRecovery() {
   useEffect(() => {
     if (!sessionRestored || !isAuthenticated || navigatedRef.current) return;
     InteractionManager.runAfterInteractions(() => {
-      router.replace('/home');
+      router.replace('/location-permissions');
     });
   }, [sessionRestored, isAuthenticated, router]);
 
@@ -84,6 +98,7 @@ export function AppInitializer() {
     <>
       <LoadingOverlay visible={!sessionRestored} />
       <SessionRestore />
+      <PassengerProfileRegistrar />
       <AuthRedirectWatcher />
       <ActiveTripRecovery />
     </>
