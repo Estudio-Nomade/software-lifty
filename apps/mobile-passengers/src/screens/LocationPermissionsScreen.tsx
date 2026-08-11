@@ -1,14 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useLocationStore } from '../store/locationStore';
 import { theme } from '../theme';
 
 export function LocationPermissionsScreen() {
-  const { replace, goBack } = useAppNavigation();
+  const { replace } = useAppNavigation();
   const setPermissionGranted = useLocationStore((s) => s.setPermissionGranted);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,12 +41,13 @@ export function LocationPermissionsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.content}>
-        <TouchableOpacity onPress={goBack} style={styles.backButton}>
-          <Text style={styles.backText}>←</Text>
-        </TouchableOpacity>
+    <View style={styles.safe}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+      <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
+        <Ionicons name="arrow-forward" size={24} color={theme.colors.primary} />
+      </TouchableOpacity>
 
+      <View style={styles.content}>
         <Ionicons name="location" size={64} color={theme.colors.primary} />
         <Text style={styles.title}>¿Dónde te encontramos?</Text>
         <Text style={styles.subtitle}>
@@ -70,7 +71,7 @@ export function LocationPermissionsScreen() {
           <Text style={styles.later}>Quizás después</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -79,25 +80,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.deepBlue,
   },
+  skipButton: {
+    position: 'absolute',
+    top: theme.dimensions.statusBarHeight + theme.spacing.md,
+    right: theme.spacing.lg,
+    zIndex: 1,
+    padding: theme.spacing.sm,
+  },
   content: {
     flex: 1,
     paddingHorizontal: theme.spacing.lg,
     justifyContent: 'center',
     alignItems: 'center',
     gap: theme.spacing.md,
-  },
-  backButton: {
-    position: 'absolute',
-    top: theme.dimensions.statusBarHeight + theme.spacing.sm,
-    left: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    paddingRight: theme.spacing.md,
-    zIndex: 1,
-  },
-  backText: {
-    color: theme.colors.primary,
-    fontSize: theme.fontSize.xl,
-    fontFamily: theme.fontFamily.regular,
   },
   title: {
     fontSize: theme.fontSize['3xl'],
