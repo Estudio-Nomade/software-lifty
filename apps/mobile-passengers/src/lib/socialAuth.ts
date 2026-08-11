@@ -1,5 +1,4 @@
 import * as AuthSession from 'expo-auth-session';
-import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from './supabase';
 
@@ -12,8 +11,22 @@ export const authRedirectUri = AuthSession.makeRedirectUri({
   path: 'auth-callback',
 });
 
+function getQueryParams(url: string): { params: Record<string, string>; errorCode: string | null } {
+  const params: Record<string, string> = {};
+  const match = url.match(/[?#](.*)/);
+  if (!match) return { params, errorCode: null };
+
+  const queryString = match[1];
+  queryString.split('&').forEach((pair) => {
+    const [key, value] = pair.split('=');
+    if (key) params[decodeURIComponent(key)] = decodeURIComponent(value ?? '');
+  });
+
+  return { params, errorCode: params.error ?? null };
+}
+
 async function createSessionFromUrl(url: string) {
-  const { params, errorCode } = QueryParams.getQueryParams(url);
+  const { params, errorCode } = getQueryParams(url);
   if (errorCode) throw new Error(errorCode);
 
   const { code, access_token, refresh_token } = params;
