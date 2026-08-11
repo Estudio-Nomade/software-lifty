@@ -43,6 +43,9 @@ export function getFriendlyAuthError(error: unknown): string {
   if (message.includes('provider') || message.includes('oauth')) {
     return 'No se pudo iniciar sesion con ese proveedor. Intenta de nuevo.';
   }
+  if (message.includes('password')) {
+    return 'La contraseña debe tener al menos 6 caracteres.';
+  }
 
   console.error('[getFriendlyAuthError] Unknown error:', raw, '| original:', error);
   return 'No se pudo completar el inicio de sesion. Intenta de nuevo.';
