@@ -69,7 +69,6 @@ export function LoginCredentialsScreen() {
           registerPassenger(phoneTrimmed).catch(() => {});
           replace('LocationPermissions');
         } else if ((data.user?.identities?.length ?? 0) > 0) {
-          registerPassenger(phoneTrimmed).catch(() => {});
           replace('VerifyEmail', { email: email.trim() });
         } else {
           // user already exists (anti-enumeration: Supabase returns null user/session silently)
