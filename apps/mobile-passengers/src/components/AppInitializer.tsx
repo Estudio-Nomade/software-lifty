@@ -68,7 +68,7 @@ function AuthRedirectWatcher() {
 
     const current = segments[0] ?? '';
     if (PUBLIC_ROUTES.includes(current) || current === '') {
-      router.replace('/home');
+      router.replace('/location-permissions');
     }
   }, [sessionRestored, isAuthenticated, segments, router]);
 
@@ -84,7 +84,7 @@ function ActiveTripRecovery() {
   useEffect(() => {
     if (!sessionRestored || !isAuthenticated || navigatedRef.current) return;
     InteractionManager.runAfterInteractions(() => {
-      router.replace('/home');
+      router.replace('/location-permissions');
     });
   }, [sessionRestored, isAuthenticated, router]);
 

@@ -67,7 +67,7 @@ export function LoginCredentialsScreen() {
         if (data.session) {
           // email confirmation disabled — user is logged in directly
           registerPassenger(phoneTrimmed).catch(() => {});
-          replace('Home');
+          replace('LocationPermissions');
         } else if ((data.user?.identities?.length ?? 0) > 0) {
           // email confirmation enabled — user created, needs to verify email
           registerPassenger(phoneTrimmed).catch(() => {});
@@ -90,7 +90,7 @@ export function LoginCredentialsScreen() {
         if (err) throw err;
         if (data.session) {
           registerPassenger().catch(() => {});
-          replace('Home');
+          replace('LocationPermissions');
         }
       }
     } catch (err) {

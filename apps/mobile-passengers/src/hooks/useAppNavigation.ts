@@ -10,6 +10,7 @@ const SCREEN_TO_ROUTE = {
   ForgotPassword: '/forgot-password',
   Terms: '/terms',
   Home: '/home',
+  LocationPermissions: '/location-permissions',
   TripRequest: '/trip-request',
   TripInProgress: '/trip-in-progress',
   TripComplete: '/trip-complete',
