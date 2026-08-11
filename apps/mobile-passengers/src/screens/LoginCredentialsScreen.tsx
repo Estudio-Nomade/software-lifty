@@ -61,20 +61,26 @@ export function LoginCredentialsScreen() {
             data: { full_name: fullName, phone: phoneTrimmed },
           },
         });
+        console.log('[signUp] data:', JSON.stringify(data), 'error:', err?.message ?? null);
         if (err) throw err;
         clearDraft();
         if (data.session) {
+          // email confirmation disabled — user is logged in directly
           registerPassenger(phoneTrimmed).catch(() => {});
           replace('Home');
-        } else if (data.user) {
+        } else if ((data.user?.identities?.length ?? 0) > 0) {
+          // email confirmation enabled — user created, needs to verify email
           registerPassenger(phoneTrimmed).catch(() => {});
           setInfo(
             'Te enviamos un email de verificación. Revisá tu casilla para activar tu cuenta.',
           );
         } else {
+          // user already exists (anti-enumeration: Supabase returns null user/session silently)
+          setLoading(false);
           setError(
             'Este email ya está registrado en Lifty. Iniciá sesión en lugar de crear una cuenta nueva.',
           );
+          return;
         }
       } else {
         const { data, error: err } = await supabase.auth.signInWithPassword({
