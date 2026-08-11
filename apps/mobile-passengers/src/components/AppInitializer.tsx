@@ -80,12 +80,9 @@ function ActiveTripRecovery() {
 export function AppInitializer() {
   const sessionRestored = useAuthStore((s) => s.sessionRestored);
 
-  if (!sessionRestored) {
-    return <LoadingOverlay visible />;
-  }
-
   return (
     <>
+      <LoadingOverlay visible={!sessionRestored} />
       <SessionRestore />
       <AuthRedirectWatcher />
       <ActiveTripRecovery />

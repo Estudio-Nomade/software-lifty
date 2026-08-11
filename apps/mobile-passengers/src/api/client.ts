@@ -1,9 +1,32 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import Constants from 'expo-constants';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 
+function getApiUrl(): string {
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl) return envUrl;
+
+  const port = process.env.EXPO_PUBLIC_API_PORT ?? '3000';
+
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    const host = hostUri.split(':')[0];
+    if (host && !host.includes('ngrok') && !host.includes('exp.direct'))
+      return `http://${host}:${port}/api`;
+  }
+
+  return `http://localhost:${port}/api`;
+}
+
+const API_URL = getApiUrl();
+
+if (__DEV__) {
+  console.log('[API] Backend URL:', API_URL);
+}
+
 const api = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000',
+  baseURL: API_URL,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',

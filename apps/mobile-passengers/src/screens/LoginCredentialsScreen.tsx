@@ -15,33 +15,49 @@ import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { supabase } from '../lib/supabase';
+import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 import { theme } from '../theme';
 
 export function LoginCredentialsScreen() {
   const { goBack, navigate } = useAppNavigation();
   const { signInWithGoogle } = useAuth();
+  const fullName = useRegistrationDraftStore((s) => s.fullName);
+  const clearDraft = useRegistrationDraftStore((s) => s.clear);
+  const isSignUp = (fullName?.length ?? 0) > 0;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [loginLoading, setLoginLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const isDisabled = !email || !password || loginLoading;
+  const isDisabled = !email || !password || loading;
 
-  const handleLogin = async () => {
+  const handleSubmit = async () => {
     setError(null);
-    setLoginLoading(true);
+    setLoading(true);
     try {
-      const { error: err } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-      if (err) throw err;
+      if (isSignUp) {
+        const { error: err } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            data: { full_name: fullName },
+          },
+        });
+        if (err) throw err;
+        clearDraft();
+      } else {
+        const { error: err } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (err) throw err;
+      }
     } catch (err) {
       setError(getFriendlyAuthError(err));
     } finally {
-      setLoginLoading(false);
+      setLoading(false);
     }
   };
 
@@ -71,8 +87,12 @@ export function LoginCredentialsScreen() {
         </View>
 
         <View style={styles.content}>
-          <Text style={styles.title}>Iniciar sesión</Text>
-          <Text style={styles.subtitle}>Ingresá tu email y contraseña</Text>
+          <Text style={styles.title}>{isSignUp ? 'Crear cuenta' : 'Iniciar sesión'}</Text>
+          <Text style={styles.subtitle}>
+            {isSignUp
+              ? 'Elegí tu email y contraseña para crear tu cuenta'
+              : 'Ingresá tu email y contraseña'}
+          </Text>
           <View style={styles.spacer} />
 
           <Input
@@ -104,12 +124,12 @@ export function LoginCredentialsScreen() {
 
           <Button
             variant="primary"
-            onPress={handleLogin}
-            loading={loginLoading}
+            onPress={handleSubmit}
+            loading={loading}
             disabled={isDisabled}
             style={styles.button}
           >
-            INICIAR SESIÓN
+            {isSignUp ? 'CREAR CUENTA' : 'INICIAR SESIÓN'}
           </Button>
           <View style={styles.gap} />
           <Button
@@ -124,9 +144,11 @@ export function LoginCredentialsScreen() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <View style={styles.gap} />
 
-          <TouchableOpacity onPress={() => navigate('ForgotPassword')}>
-            <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
-          </TouchableOpacity>
+          {!isSignUp ? (
+            <TouchableOpacity onPress={() => navigate('ForgotPassword')}>
+              <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
