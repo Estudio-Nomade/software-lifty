@@ -203,6 +203,8 @@ describe('Passenger Trips', () => {
     expect(data.vehicle_brand).toBe('Toyota');
     expect(data.vehicle_plate).toBe('ABC123');
     expect(data.verification_code).toBe('1234');
+    expect(data.driver_lat).toBe(origin.lat);
+    expect(data.driver_lng).toBe(origin.lng);
   });
 
   test('GET /:id returns trip with events', async () => {
@@ -274,5 +276,25 @@ describe('Passenger Trips', () => {
     const { status } = await request('GET', '/api/passenger/trips/active', undefined, token);
 
     expect(status).toBe(403);
+  });
+
+  test('GET /history returns paginated trips', async () => {
+    const token = await createPassengerToken();
+    await createTrip(token);
+    await createTrip(token);
+
+    const { status, data } = await request('GET', '/api/passenger/trips/history?page=1&limit=10', undefined, token);
+
+    expect(status).toBe(200);
+    expect(Array.isArray(data)).toBe(true);
+    expect(data.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('GET /history returns empty for new passenger', async () => {
+    const token = await createPassengerToken();
+    const { status, data } = await request('GET', '/api/passenger/trips/history', undefined, token);
+
+    expect(status).toBe(200);
+    expect(data).toEqual([]);
   });
 });
