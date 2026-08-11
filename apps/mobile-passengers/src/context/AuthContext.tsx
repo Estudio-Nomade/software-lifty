@@ -11,6 +11,7 @@ import {
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { type SocialProvider, signInWithProvider } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../store/authStore';
 
 interface AuthContextValue {
   session: Session | null;
@@ -33,6 +34,13 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function syncStore(session: Session | null) {
+  const store = useAuthStore.getState();
+  if (session?.access_token) {
+    store.setSession(session.access_token, session.user?.id ?? null, session.user?.email ?? null);
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,13 +51,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
       setSession(data.session);
+      syncStore(data.session);
       setLoading(false);
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession);
+      if (nextSession?.access_token) {
+        syncStore(nextSession);
+      } else if (event === 'SIGNED_OUT') {
+        useAuthStore.getState().clearAuth();
+      }
     });
 
     return () => {

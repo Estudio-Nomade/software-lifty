@@ -1,15 +1,15 @@
 import { useAuthStore } from '@/store/authStore';
 
 export function usePassengerAuth() {
-  const session = useAuthStore((s) => s.session);
-  const loading = useAuthStore((s) => s.loading);
-  const signOut = useAuthStore((s) => s.signOut);
+  const token = useAuthStore((s) => s.token);
+  const userId = useAuthStore((s) => s.userId);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const sessionRestored = useAuthStore((s) => s.sessionRestored);
 
   return {
-    session,
-    user: session?.user ?? null,
-    loading,
-    isAuthenticated: !!session,
-    signOut,
+    token,
+    userId,
+    isAuthenticated,
+    loading: !sessionRestored,
   };
 }

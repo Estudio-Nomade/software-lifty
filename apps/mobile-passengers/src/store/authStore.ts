@@ -1,18 +1,57 @@
-import type { Session } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
-interface AuthStore {
-  session: Session | null;
-  loading: boolean;
-  setSession: (session: Session | null) => void;
-  setLoading: (loading: boolean) => void;
-  signOut: () => void;
+interface AuthState {
+  token: string | null;
+  userId: string | null;
+  isAuthenticated: boolean;
+  needsRedirect: boolean;
+  sessionRestored: boolean;
+  email: string | null;
+  setSession: (token: string | null, userId?: string | null, email?: string | null) => void;
+  clearAuth: () => void;
+  resetRedirect: () => void;
+  setSessionRestored: (restored: boolean) => void;
 }
 
-export const useAuthStore = create<AuthStore>((set) => ({
-  session: null,
-  loading: true,
-  setSession: (session) => set({ session }),
-  setLoading: (loading) => set({ loading }),
-  signOut: () => set({ session: null }),
-}));
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      token: null,
+      userId: null,
+      isAuthenticated: false,
+      needsRedirect: false,
+      sessionRestored: false,
+      email: null,
+      setSession: (token, userId, email) =>
+        set((state) => ({
+          token,
+          isAuthenticated: !!token,
+          userId: userId ?? state.userId,
+          email: email ?? state.email,
+        })),
+      clearAuth: () =>
+        set({
+          token: null,
+          userId: null,
+          email: null,
+          isAuthenticated: false,
+          needsRedirect: true,
+          sessionRestored: false,
+        }),
+      resetRedirect: () => set({ needsRedirect: false }),
+      setSessionRestored: (sessionRestored) => set({ sessionRestored }),
+    }),
+    {
+      name: 'lifty-passenger-auth',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        token: state.token,
+        userId: state.userId,
+        email: state.email,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    },
+  ),
+);
