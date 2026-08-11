@@ -22,6 +22,12 @@ const SUGGESTIONS = [
   { icon: 'medkit-outline', name: 'Hospital', desc: 'Hospital Ramón Santamarina' },
 ];
 
+const RECENT_PLACES = [
+  { name: 'Trabajo', address: 'Av. 9 de Julio 1234' },
+  { name: 'Casa', address: 'Av. Corrientes 5678' },
+  { name: 'Gimnasio', address: 'Calle Falsa 742' },
+];
+
 export function HomeScreen() {
   const { navigate } = useAppNavigation();
   const fullName = useAuthStore((s) => s.fullName);
@@ -71,7 +77,7 @@ export function HomeScreen() {
   const handleConfirmDestination = () => {
     if (!destAddress.trim()) return;
     Keyboard.dismiss();
-    navigate('TripRequest', {
+    navigate('VehicleSelect', {
       pickup: pickupAddress,
       destination: destAddress.trim(),
     });
@@ -133,6 +139,26 @@ export function HomeScreen() {
               </View>
             </View>
 
+            <View style={styles.recentSection}>
+              <Text style={styles.recentTitle}>Lugares recientes</Text>
+              {RECENT_PLACES.map((place) => (
+                <TouchableOpacity
+                  key={place.name}
+                  style={styles.recentItem}
+                  onPress={() => setDestAddress(place.address)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.recentIconCircle}>
+                    <Ionicons name="time-outline" size={18} color={theme.colors.deepBlue} />
+                  </View>
+                  <View style={styles.recentTexts}>
+                    <Text style={styles.recentName}>{place.name}</Text>
+                    <Text style={styles.recentAddr}>{place.address}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <TouchableOpacity
               style={[styles.confirmBtn, !destAddress.trim() && styles.confirmBtnDisabled]}
               onPress={handleConfirmDestination}
@@ -182,7 +208,7 @@ export function HomeScreen() {
               <TouchableOpacity
                 key={item.name}
                 style={styles.suggestionItem}
-                onPress={() => navigate('TripRequest')}
+                onPress={() => navigate('VehicleSelect')}
                 activeOpacity={0.7}
               >
                 <View style={styles.suggestionIconCircle}>
@@ -407,6 +433,45 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: theme.colors.lightGray,
     marginHorizontal: 12,
+  },
+  recentSection: {
+    marginTop: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
+    gap: 8,
+  },
+  recentTitle: {
+    fontSize: theme.fontSize.md,
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.white,
+    marginBottom: 4,
+  },
+  recentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+  },
+  recentIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: theme.radius.full,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recentTexts: {
+    flex: 1,
+    gap: 2,
+  },
+  recentName: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.white,
+  },
+  recentAddr: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
   },
   fieldInput: {
     flex: 1,
