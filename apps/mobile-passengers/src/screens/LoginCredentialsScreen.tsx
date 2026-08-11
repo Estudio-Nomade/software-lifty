@@ -28,13 +28,19 @@ export function LoginCredentialsScreen() {
   const isSignUp = (fullName?.length ?? 0) > 0;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const isDisabled = !email || !password || loading;
+  const isDisabled =
+    !email ||
+    !password ||
+    loading ||
+    (isSignUp && (!confirmPassword || password !== confirmPassword));
 
   const handleSubmit = async () => {
     setError(null);
@@ -42,19 +48,26 @@ export function LoginCredentialsScreen() {
     setLoading(true);
     try {
       if (isSignUp) {
+        if (password !== confirmPassword) {
+          setError('Las contraseñas no coinciden.');
+          setLoading(false);
+          return;
+        }
+        const phoneTrimmed = phone.trim() || undefined;
         const { data, error: err } = await supabase.auth.signUp({
           email: email.trim(),
           password,
           options: {
-            data: { full_name: fullName },
+            data: { full_name: fullName, phone: phoneTrimmed },
           },
         });
         if (err) throw err;
         clearDraft();
         if (data.session) {
-          registerPassenger().catch(() => {});
+          registerPassenger(phoneTrimmed).catch(() => {});
           replace('Home');
         } else if (data.user) {
+          registerPassenger(phoneTrimmed).catch(() => {});
           setInfo(
             'Te enviamos un email de verificación. Revisá tu casilla para activar tu cuenta.',
           );
@@ -144,6 +157,30 @@ export function LoginCredentialsScreen() {
             </View>
             <View style={styles.spacer} />
 
+            {isSignUp ? (
+              <>
+                <Input
+                  placeholder="Repetir contraseña"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={!showPassword}
+                  error={
+                    confirmPassword.length > 0 && password !== confirmPassword
+                      ? 'Las contraseñas no coinciden'
+                      : undefined
+                  }
+                />
+                <View style={styles.gap} />
+                <Input
+                  placeholder="Teléfono (ej: +54 11 1234-5678)"
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                />
+                <View style={styles.spacer} />
+              </>
+            ) : null}
+
             <Button
               variant="primary"
               onPress={handleSubmit}
@@ -179,6 +216,8 @@ export function LoginCredentialsScreen() {
                   setInfo(null);
                   setEmail('');
                   setPassword('');
+                  setConfirmPassword('');
+                  setPhone('');
                 }}
               >
                 <Text style={styles.forgotPassword}>¿Ya tenés cuenta? Iniciá sesión</Text>
