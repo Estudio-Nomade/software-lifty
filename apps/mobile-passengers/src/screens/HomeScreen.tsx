@@ -33,6 +33,7 @@ export function HomeScreen() {
   const [destAddress, setDestAddress] = useState('');
 
   useEffect(() => {
+    if (!searchExpanded) return;
     let cancelled = false;
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -55,7 +56,7 @@ export function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [searchExpanded]);
 
   const handleOpenSearch = () => {
     setSearchExpanded(true);
