@@ -41,13 +41,11 @@ export function LocationPermissionsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
+      <View style={styles.content}>
         <TouchableOpacity onPress={goBack} style={styles.backButton}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
-      </View>
 
-      <View style={styles.content}>
         <Text style={styles.icon}>📍</Text>
         <Text style={styles.title}>¿Dónde te encontramos?</Text>
         <Text style={styles.subtitle}>
@@ -80,21 +78,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.deepBlue,
   },
-  header: {
-    height: theme.dimensions.navbarHeight,
-    justifyContent: 'center',
-    paddingHorizontal: theme.spacing.md,
-  },
-  backButton: {
-    paddingVertical: theme.spacing.sm,
-    paddingRight: theme.spacing.md,
-    alignSelf: 'flex-start',
-  },
-  backText: {
-    color: theme.colors.primary,
-    fontSize: theme.fontSize.xl,
-    fontFamily: theme.fontFamily.regular,
-  },
   content: {
     flex: 1,
     paddingHorizontal: theme.spacing.lg,
@@ -102,8 +85,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.md,
   },
+  backButton: {
+    position: 'absolute',
+    top: theme.dimensions.statusBarHeight + theme.spacing.sm,
+    left: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    paddingRight: theme.spacing.md,
+    zIndex: 1,
+  },
+  backText: {
+    color: theme.colors.primary,
+    fontSize: theme.fontSize.xl,
+    fontFamily: theme.fontFamily.regular,
+  },
   icon: {
     fontSize: theme.fontSize['5xl'],
+    color: theme.colors.primary,
     marginBottom: theme.spacing.sm,
   },
   title: {
