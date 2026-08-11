@@ -172,11 +172,12 @@ export function LoginCredentialsScreen() {
                 />
                 <View style={styles.gap} />
                 <Input
-                  placeholder="Teléfono (ej: +54 11 1234-5678)"
+                  placeholder="Teléfono (opcional)"
                   value={phone}
                   onChangeText={setPhone}
                   keyboardType="phone-pad"
                 />
+                <Text style={styles.fieldHint}>Podés completarlo después desde tu perfil</Text>
                 <View style={styles.spacer} />
               </>
             ) : null}
@@ -280,6 +281,13 @@ const styles = StyleSheet.create({
   },
   gap: {
     height: theme.spacing.md,
+  },
+  fieldHint: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.mediumGray,
+    fontFamily: theme.fontFamily.regular,
+    width: 327,
+    marginTop: theme.spacing.xs,
   },
   passwordRow: {
     position: 'relative',

@@ -1,6 +1,7 @@
 import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { InteractionManager } from 'react-native';
+import { registerPassenger } from '../api/passenger';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { LoadingOverlay } from './feedback/LoadingOverlay';
@@ -26,6 +27,19 @@ function SessionRestore() {
     };
     restore();
   }, [setSession, clearAuth, setSessionRestored]);
+
+  return null;
+}
+
+function PassengerProfileRegistrar() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const registeredRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthenticated || registeredRef.current) return;
+    registeredRef.current = true;
+    registerPassenger().catch(() => {});
+  }, [isAuthenticated]);
 
   return null;
 }
@@ -84,6 +98,7 @@ export function AppInitializer() {
     <>
       <LoadingOverlay visible={!sessionRestored} />
       <SessionRestore />
+      <PassengerProfileRegistrar />
       <AuthRedirectWatcher />
       <ActiveTripRecovery />
     </>
