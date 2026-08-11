@@ -1,6 +1,11 @@
 import { api } from './client';
 import type { FareEstimate, PassengerProfile, PlaceSuggestion, Trip } from './types';
 
+export async function registerPassenger(): Promise<PassengerProfile> {
+  const { data } = await api.post<PassengerProfile>('/passenger/register');
+  return data;
+}
+
 export async function getProfile(): Promise<PassengerProfile> {
   const { data } = await api.get<PassengerProfile>('/passenger/profile');
   return data;

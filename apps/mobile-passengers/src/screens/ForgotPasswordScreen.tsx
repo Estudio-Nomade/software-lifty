@@ -3,6 +3,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -48,42 +49,44 @@ export function ForgotPasswordScreen() {
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={goBack} style={styles.backButton}>
-            <Text style={styles.backText}>← Volver</Text>
-          </TouchableOpacity>
-        </View>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Text style={styles.backText}>← Volver</Text>
+            </TouchableOpacity>
+          </View>
 
-        <View style={styles.content}>
-          <Text style={styles.title}>Recuperar contraseña</Text>
-          <Text style={styles.subtitle}>
-            Ingresá tu email y te enviaremos un enlace para restablecerla.
-          </Text>
-          <View style={styles.spacer} />
+          <View style={styles.content}>
+            <Text style={styles.title}>Recuperar contraseña</Text>
+            <Text style={styles.subtitle}>
+              Ingresá tu email y te enviaremos un enlace para restablecerla.
+            </Text>
+            <View style={styles.spacer} />
 
-          <Input
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-          />
-          <View style={styles.spacer} />
+            <Input
+              placeholder="Email"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+            />
+            <View style={styles.spacer} />
 
-          <Button
-            variant="primary"
-            onPress={handleSend}
-            loading={loading}
-            disabled={!email.trim() || loading}
-            style={styles.button}
-          >
-            ENVIAR ENLACE
-          </Button>
+            <Button
+              variant="primary"
+              onPress={handleSend}
+              loading={loading}
+              disabled={!email.trim() || loading}
+              style={styles.button}
+            >
+              ENVIAR ENLACE
+            </Button>
 
-          {info ? <Text style={styles.info}>{info}</Text> : null}
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-        </View>
+            {info ? <Text style={styles.info}>{info}</Text> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -96,6 +99,9 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  scroll: {
+    flexGrow: 1,
   },
   header: {
     height: theme.dimensions.navbarHeight,

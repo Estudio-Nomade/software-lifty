@@ -4,11 +4,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { registerPassenger } from '../api/passenger';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
@@ -50,6 +52,7 @@ export function LoginCredentialsScreen() {
         if (err) throw err;
         clearDraft();
         if (data.session) {
+          registerPassenger().catch(() => {});
           replace('Home');
         } else if (data.user) {
           setInfo(
@@ -63,6 +66,7 @@ export function LoginCredentialsScreen() {
         });
         if (err) throw err;
         if (data.session) {
+          registerPassenger().catch(() => {});
           replace('Home');
         }
       }
@@ -91,79 +95,81 @@ export function LoginCredentialsScreen() {
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={goBack} style={styles.backButton}>
-            <Text style={styles.backText}>← Volver</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.content}>
-          <Text style={styles.title}>{isSignUp ? 'Crear cuenta' : 'Iniciar sesión'}</Text>
-          <Text style={styles.subtitle}>
-            {isSignUp
-              ? 'Elegí tu email y contraseña para crear tu cuenta'
-              : 'Ingresá tu email y contraseña'}
-          </Text>
-          <View style={styles.spacer} />
-
-          <Input
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-          />
-          <View style={styles.gap} />
-          <View style={styles.passwordRow}>
-            <Input
-              placeholder="Contraseña"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-            <TouchableOpacity
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.eyeButton}
-            >
-              <Ionicons
-                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
-                color={theme.colors.mediumGray}
-              />
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <TouchableOpacity onPress={goBack} style={styles.backButton}>
+              <Text style={styles.backText}>← Volver</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.spacer} />
 
-          <Button
-            variant="primary"
-            onPress={handleSubmit}
-            loading={loading}
-            disabled={isDisabled}
-            style={styles.button}
-          >
-            {isSignUp ? 'CREAR CUENTA' : 'INICIAR SESIÓN'}
-          </Button>
-          <View style={styles.gap} />
-          <Button
-            variant="secondary"
-            onPress={handleGoogle}
-            loading={googleLoading}
-            style={styles.button}
-          >
-            CONTINUAR CON GOOGLE
-          </Button>
+          <View style={styles.content}>
+            <Text style={styles.title}>{isSignUp ? 'Crear cuenta' : 'Iniciar sesión'}</Text>
+            <Text style={styles.subtitle}>
+              {isSignUp
+                ? 'Elegí tu email y contraseña para crear tu cuenta'
+                : 'Ingresá tu email y contraseña'}
+            </Text>
+            <View style={styles.spacer} />
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          {info ? <Text style={styles.info}>{info}</Text> : null}
-          <View style={styles.gap} />
+            <Input
+              placeholder="Email"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+            />
+            <View style={styles.gap} />
+            <View style={styles.passwordRow}>
+              <Input
+                placeholder="Contraseña"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={theme.colors.mediumGray}
+                />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.spacer} />
 
-          {!isSignUp ? (
-            <TouchableOpacity onPress={() => navigate('ForgotPassword')}>
-              <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
+            <Button
+              variant="primary"
+              onPress={handleSubmit}
+              loading={loading}
+              disabled={isDisabled}
+              style={styles.button}
+            >
+              {isSignUp ? 'CREAR CUENTA' : 'INICIAR SESIÓN'}
+            </Button>
+            <View style={styles.gap} />
+            <Button
+              variant="secondary"
+              onPress={handleGoogle}
+              loading={googleLoading}
+              style={styles.button}
+            >
+              CONTINUAR CON GOOGLE
+            </Button>
+
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {info ? <Text style={styles.info}>{info}</Text> : null}
+            <View style={styles.gap} />
+
+            {!isSignUp ? (
+              <TouchableOpacity onPress={() => navigate('ForgotPassword')}>
+                <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -176,6 +182,9 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  scroll: {
+    flexGrow: 1,
   },
   header: {
     height: theme.dimensions.navbarHeight,

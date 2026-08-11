@@ -1,6 +1,14 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -41,41 +49,42 @@ export function LoginPhoneScreen() {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <View style={styles.header}>
-          <Text style={styles.close} onPress={goBack}>
-            ✕
-          </Text>
-        </View>
-
-        <View style={styles.body}>
-          <Text style={styles.title}>Ingresa tu celular</Text>
-          <Text style={styles.subtitle}>
-            Te enviaremos un código por SMS para verificar tu número.
-          </Text>
-
-          <View style={styles.row}>
-            <View style={styles.countryCode}>
-              <Text style={styles.flag}>🇦🇷</Text>
-              <Text style={styles.code}>+54</Text>
-            </View>
-            <View style={styles.phoneInput}>
-              <Input
-                placeholder="11 1234 5678"
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                error={error ?? undefined}
-                autoFocus
-              />
-            </View>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <Text style={styles.close} onPress={goBack}>
+              ✕
+            </Text>
           </View>
 
-          <Button variant="primary" onPress={handleSend} loading={loading} disabled={!isValid}>
-            Enviar código
-          </Button>
-        </View>
+          <View style={styles.body}>
+            <Text style={styles.title}>Ingresa tu celular</Text>
+            <Text style={styles.subtitle}>
+              Te enviaremos un código por SMS para verificar tu número.
+            </Text>
+
+            <View style={styles.row}>
+              <View style={styles.countryCode}>
+                <Text style={styles.flag}>🇦🇷</Text>
+                <Text style={styles.code}>+54</Text>
+              </View>
+              <View style={styles.phoneInput}>
+                <Input
+                  placeholder="11 1234 5678"
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  error={error ?? undefined}
+                  autoFocus
+                />
+              </View>
+            </View>
+
+            <Button variant="primary" onPress={handleSend} loading={loading} disabled={!isValid}>
+              Enviar código
+            </Button>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -88,6 +97,9 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  scroll: {
+    flexGrow: 1,
   },
   header: {
     paddingHorizontal: theme.spacing.md,
