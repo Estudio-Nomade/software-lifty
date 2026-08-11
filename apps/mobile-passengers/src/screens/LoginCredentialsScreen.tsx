@@ -123,19 +123,17 @@ export function LoginCredentialsScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <TouchableOpacity onPress={goBack} style={styles.backButton}>
-              <Text style={styles.backText}>← Volver</Text>
+              <Text style={styles.backText}>←</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.content}>
             <Text style={styles.brand}>Lifty</Text>
             <Text style={styles.title}>
-              {isSignUp ? 'Creá tu cuenta' : 'Bienvenido de vuelta!'}
+              {isSignUp ? '¡Crea tu cuenta!' : '¡Bienvenido de vuelta!'}
             </Text>
             <Text style={styles.subtitle}>
-              {isSignUp
-                ? 'Elegí tu email y contraseña para crear tu cuenta'
-                : 'Ingresá tus datos para continuar'}
+              {isSignUp ? 'Empieza a viajar hoy' : 'Ingresá tus datos para continuar'}
             </Text>
             <View style={styles.spacer} />
 
@@ -144,6 +142,8 @@ export function LoginCredentialsScreen() {
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
+              icon="📧"
+              style={styles.inputField}
             />
             <View style={styles.gap} />
             <View style={styles.passwordRow}>
@@ -152,6 +152,8 @@ export function LoginCredentialsScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
+                icon="🔒"
+                style={styles.inputField}
               />
               <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
@@ -164,15 +166,17 @@ export function LoginCredentialsScreen() {
                 />
               </TouchableOpacity>
             </View>
-            <View style={styles.spacer} />
 
             {isSignUp ? (
               <>
+                <View style={styles.gap} />
                 <Input
                   placeholder="Repetir contraseña"
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   secureTextEntry={!showPassword}
+                  icon="🔒"
+                  style={styles.inputField}
                   error={
                     confirmPassword.length > 0 && password !== confirmPassword
                       ? 'Las contraseñas no coinciden'
@@ -185,11 +189,18 @@ export function LoginCredentialsScreen() {
                   value={phone}
                   onChangeText={setPhone}
                   keyboardType="phone-pad"
+                  icon="📱"
+                  style={styles.inputField}
                 />
                 <Text style={styles.fieldHint}>Podés completarlo después desde tu perfil</Text>
-                <View style={styles.spacer} />
               </>
-            ) : null}
+            ) : (
+              <TouchableOpacity onPress={() => navigate('ForgotPassword')}>
+                <Text style={styles.forgotPassword}>¿Olvidaste tu clave?</Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.spacer} />
 
             <Button
               variant="primary"
@@ -200,7 +211,9 @@ export function LoginCredentialsScreen() {
             >
               {isSignUp ? 'CREAR CUENTA' : 'INICIAR SESIÓN'}
             </Button>
-            <View style={styles.gap} />
+
+            <Text style={styles.orDivider}>─── o ───</Text>
+
             <Button
               variant="secondary"
               onPress={handleGoogle}
@@ -212,29 +225,21 @@ export function LoginCredentialsScreen() {
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
             {info ? <Text style={styles.info}>{info}</Text> : null}
-            <View style={styles.gap} />
 
             {!isSignUp ? (
-              <>
-                <TouchableOpacity onPress={() => navigate('ForgotPassword')}>
-                  <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    setError(null);
-                    setInfo(null);
-                    setEmail('');
-                    setPassword('');
-                    setConfirmPassword('');
-                    setPhone('');
-                    navigate('Register');
-                  }}
-                >
-                  <Text style={styles.switchAuth}>
-                    ¿No tenés cuenta? <Text style={styles.switchAuthBold}>Crear cuenta</Text>
-                  </Text>
-                </TouchableOpacity>
-              </>
+              <TouchableOpacity
+                onPress={() => {
+                  setError(null);
+                  setInfo(null);
+                  setEmail('');
+                  setPassword('');
+                  setConfirmPassword('');
+                  setPhone('');
+                  navigate('Register');
+                }}
+              >
+                <Text style={styles.switchAuth}>¿No tienes cuenta? Crear cuenta</Text>
+              </TouchableOpacity>
             ) : (
               <TouchableOpacity
                 onPress={() => {
@@ -247,7 +252,7 @@ export function LoginCredentialsScreen() {
                   setPhone('');
                 }}
               >
-                <Text style={styles.forgotPassword}>¿Ya tenés cuenta? Iniciá sesión</Text>
+                <Text style={styles.switchAuth}>¿Ya tienes cuenta? Iniciar sesión</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -260,7 +265,7 @@ export function LoginCredentialsScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.deepBlue,
   },
   flex: {
     flex: 1,
@@ -270,47 +275,44 @@ const styles = StyleSheet.create({
   },
   header: {
     height: theme.dimensions.navbarHeight,
-    flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: theme.spacing.md,
   },
   backButton: {
     paddingVertical: theme.spacing.sm,
     paddingRight: theme.spacing.md,
+    alignSelf: 'flex-start',
   },
   backText: {
-    color: theme.colors.deepBlue,
-    fontSize: theme.fontSize.md,
-    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.primary,
+    fontSize: theme.fontSize.xl,
+    fontFamily: theme.fontFamily.regular,
   },
   content: {
     flex: 1,
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    alignItems: 'center',
+    justifyContent: 'center',
   },
   brand: {
-    fontSize: theme.fontSize['3xl'],
+    fontSize: theme.fontSize['4xl'],
     fontFamily: theme.fontFamily.bold,
-    color: theme.colors.primary,
-    width: 327,
-    marginBottom: theme.spacing.xs,
+    color: theme.colors.white,
+    textAlign: 'center',
   },
   title: {
-    fontSize: theme.fontSize['2xl'],
+    fontSize: theme.fontSize['3xl'],
     fontFamily: theme.fontFamily.bold,
-    color: theme.colors.deepBlue,
-    width: 327,
+    color: theme.colors.white,
+    marginTop: theme.spacing.sm,
   },
   subtitle: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
     fontFamily: theme.fontFamily.regular,
-    width: 327,
-    marginTop: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
   },
   spacer: {
-    height: theme.spacing.md,
+    height: theme.spacing.lg,
   },
   gap: {
     height: theme.spacing.md,
@@ -319,8 +321,10 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xs,
     color: theme.colors.mediumGray,
     fontFamily: theme.fontFamily.regular,
-    width: 327,
     marginTop: theme.spacing.xs,
+  },
+  inputField: {
+    borderWidth: 0,
   },
   passwordRow: {
     position: 'relative',
@@ -333,14 +337,20 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   button: {
-    width: 327,
+    width: '100%',
+  },
+  orDivider: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.mediumGray,
+    fontFamily: theme.fontFamily.regular,
+    textAlign: 'center',
+    marginVertical: theme.spacing.md,
   },
   error: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
     fontFamily: theme.fontFamily.regular,
     textAlign: 'center',
-    width: 327,
     marginTop: theme.spacing.sm,
   },
   info: {
@@ -348,23 +358,18 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontFamily: theme.fontFamily.regular,
     textAlign: 'center',
-    width: 327,
     marginTop: theme.spacing.sm,
   },
   forgotPassword: {
     fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.medium,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.primary,
   },
   switchAuth: {
     fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
-    color: theme.colors.deepBlue,
-    textAlign: 'center',
-    marginTop: theme.spacing.md,
-  },
-  switchAuthBold: {
-    fontFamily: theme.fontFamily.semibold,
+    fontFamily: theme.fontFamily.bold,
     color: theme.colors.primary,
+    textAlign: 'center',
+    marginTop: theme.spacing.lg,
   },
 });
