@@ -24,7 +24,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   completed: ['rated'],
 };
 
-function broadcastTripRequest(driverId: string, trip: any) {
+export function broadcastTripRequest(driverId: string, trip: any) {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) {
@@ -689,6 +689,61 @@ export const tripService = {
             updated_at: new Date(),
           })
           .where(eq(drivers.id, driverId));
+      }
+
+      return updated;
+    });
+  },
+
+  async claimTrip(user: AuthUser, tripId: string) {
+    const driverId = await getDriverId(user);
+
+    return db.transaction(async (tx) => {
+      const [trip] = await tx
+        .select()
+        .from(trips)
+        .where(eq(trips.id, tripId))
+        .for('update')
+        .limit(1);
+
+      if (!trip) throw new NotFoundError('Trip not found');
+
+      const allowed = ['pending', 'offered'];
+      if (!allowed.includes(trip.status)) {
+        throw new AppError(`Trip cannot be claimed in status: ${trip.status}`, 400, 'BAD_REQUEST');
+      }
+
+      if (trip.driver_id !== null) {
+        throw new AppError('Trip already claimed by another driver', 409, 'CONFLICT');
+      }
+
+      const verificationCode = Math.floor(1000 + Math.random() * 9000).toString();
+
+      await tx
+        .update(trips)
+        .set({
+          driver_id: driverId,
+          status: 'accepted',
+          verification_code: verificationCode,
+          expires_at: null,
+          updated_at: new Date(),
+        })
+        .where(eq(trips.id, tripId));
+
+      await recordEvent(tripId, trip.status, 'accepted', tx);
+
+      const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
+
+      if (trip.passenger_id) {
+        sendPushToUser(trip.passenger_id, {
+          title: 'Tu conductor aceptó el viaje',
+          body: `Código de verificación: ${verificationCode}`,
+          data: {
+            type: 'trip:verification',
+            trip_id: tripId,
+            verification_code: verificationCode,
+          },
+        });
       }
 
       return updated;
