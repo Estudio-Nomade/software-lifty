@@ -1,35 +1,32 @@
-import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { theme } from '../theme';
+
+const logoImg = require('../../assets/logo.png');
 
 export function WelcomeScreen() {
   const { navigate } = useAppNavigation();
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.hero}>
-        <View style={styles.logoMark}>
-          <Text style={styles.logoLetter}>L</Text>
-        </View>
+      <View style={styles.content}>
+        <Image source={logoImg} style={styles.logo} resizeMode="contain" />
         <Text style={styles.brand}>Lifty</Text>
-        <Text style={styles.tagline}>
-          <Text style={styles.taglineWhite}>Movilidad que </Text>
-          <Text style={styles.taglineAccent}>te eleva.</Text>
-        </Text>
-      </View>
-
-      <View style={styles.actions}>
-        <Button variant="primary" onPress={() => navigate('LoginPhone')}>
-          📱 Ingresar con celular
+        <Text style={styles.tagline}>Movilidad que te eleva.</Text>
+        <View style={styles.spacer} />
+        <Button variant="primary" onPress={() => navigate('Register')} style={styles.button}>
+          CREAR CUENTA
         </Button>
-        <Button variant="secondary" onPress={() => navigate('Register')}>
-          Crear cuenta
+        <Button
+          variant="secondary"
+          onPress={() => navigate('LoginCredentials')}
+          style={styles.button}
+        >
+          INICIAR SESIÓN
         </Button>
-        <Text style={styles.soonTag}>📧 Ingresar con email — próximamente</Text>
-        <Text style={styles.termsLink} onPress={() => navigate('Terms')}>
-          Términos y condiciones
-        </Text>
+        <View style={styles.spacerSmall} />
+        <Text style={styles.terms}>Al continuar aceptas los Términos y Condiciones</Text>
       </View>
     </SafeAreaView>
   );
@@ -39,60 +36,41 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.deepBlue,
-    padding: theme.spacing.lg,
-    justifyContent: 'space-between',
   },
-  hero: {
+  content: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
-  logoMark: {
-    width: 96,
-    height: 96,
-    borderRadius: 999,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoLetter: {
-    fontSize: 64,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
-    lineHeight: 70,
+  logo: {
+    width: 120,
+    height: 142,
   },
   brand: {
-    fontSize: 48,
+    fontSize: theme.fontSize['3xl'],
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.white,
   },
   tagline: {
     fontSize: theme.fontSize.md,
-  },
-  taglineWhite: {
-    color: theme.colors.white,
+    color: theme.colors.mediumGray,
     fontFamily: theme.fontFamily.regular,
   },
-  taglineAccent: {
-    color: theme.colors.primary,
-    fontFamily: theme.fontFamily.semibold,
+  spacer: {
+    height: theme.spacing.md,
   },
-  actions: {
-    gap: theme.spacing.sm,
+  spacerSmall: {
+    height: theme.spacing.xs,
   },
-  termsLink: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.primary,
-    textAlign: 'center',
-    marginTop: theme.spacing.md,
-    fontFamily: theme.fontFamily.regular,
+  button: {
+    width: 327,
   },
-  soonTag: {
+  terms: {
     fontSize: theme.fontSize.xs,
     color: theme.colors.mediumGray,
-    textAlign: 'center',
     fontFamily: theme.fontFamily.regular,
-    marginTop: theme.spacing.sm,
+    textAlign: 'center',
   },
 });

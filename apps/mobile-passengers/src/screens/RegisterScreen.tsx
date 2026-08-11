@@ -1,11 +1,11 @@
 import { useRegistrationDraftStore } from '@/store/registrationDraftStore';
-import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -16,8 +16,7 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { theme } from '../theme';
 
 export function RegisterScreen() {
-  const { goBack } = useAppNavigation();
-  const router = useRouter();
+  const { goBack, navigate } = useAppNavigation();
   const setFullName = useRegistrationDraftStore((s) => s.setFullName);
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
@@ -33,14 +32,10 @@ export function RegisterScreen() {
       return;
     }
     setError(null);
-    setLoading(true);
     setFullName(`${name} ${surname}`);
-    router.push('/login-phone');
-    try {
-      router.push({ pathname: '/login-phone', params: { fullName: `${name} ${surname}` } });
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    navigate('Terms');
+    setLoading(false);
   };
 
   return (
@@ -48,43 +43,49 @@ export function RegisterScreen() {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <View style={styles.header}>
-          <Text style={styles.back} onPress={goBack}>
-            ←
-          </Text>
-        </View>
-
-        <View style={styles.body}>
-          <View style={styles.brandBlock}>
-            <Text style={styles.brand}>Lifty</Text>
-            <Text style={styles.title}>¡Crea tu cuenta!</Text>
-            <Text style={styles.subtitle}>Empezá a viajar hoy</Text>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <Text style={styles.back} onPress={goBack}>
+              ←
+            </Text>
           </View>
 
-          <View style={styles.form}>
-            <Input placeholder="Nombre" value={name} onChangeText={setName} autoFocus />
-            <Input placeholder="Apellido" value={surname} onChangeText={setSurname} />
-          </View>
-
-          <Pressable style={styles.termsRow} onPress={() => setAccepted(!accepted)}>
-            <View style={[styles.checkbox, accepted && styles.checkboxChecked]}>
-              {accepted ? <Text style={styles.checkmark}>✓</Text> : null}
+          <View style={styles.body}>
+            <View style={styles.brandBlock}>
+              <Text style={styles.brand}>Lifty</Text>
+              <Text style={styles.title}>¡Creá tu cuenta!</Text>
+              <Text style={styles.subtitle}>Empezá a viajar hoy</Text>
             </View>
-            <Text style={styles.termsText}>Acepto términos y condiciones</Text>
-          </Pressable>
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+            <View style={styles.form}>
+              <Input placeholder="Nombre" value={name} onChangeText={setName} autoFocus />
+              <Input placeholder="Apellido" value={surname} onChangeText={setSurname} />
+            </View>
 
-          <Button variant="primary" onPress={handleSubmit} loading={loading} disabled={!isValid}>
-            Continuar
-          </Button>
+            <Pressable style={styles.termsRow} onPress={() => setAccepted(!accepted)}>
+              <View style={[styles.checkbox, accepted && styles.checkboxChecked]}>
+                {accepted ? <Text style={styles.checkmark}>✓</Text> : null}
+              </View>
+              <Text style={styles.termsText}>
+                Acepto{' '}
+                <Text style={styles.termsLink} onPress={() => navigate('Terms')}>
+                  términos y condiciones
+                </Text>
+              </Text>
+            </Pressable>
 
-          <Text style={styles.loginLink} onPress={() => router.replace('/login-phone')}>
-            ¿Ya tienes cuenta? <Text style={styles.loginLinkBold}>Iniciar sesión</Text>
-          </Text>
-        </View>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+
+            <Button variant="primary" onPress={handleSubmit} loading={loading} disabled={!isValid}>
+              Continuar
+            </Button>
+
+            <Text style={styles.loginLink} onPress={() => navigate('LoginCredentials')}>
+              ¿Ya tenés cuenta? <Text style={styles.loginLinkBold}>Iniciar sesión</Text>
+            </Text>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -97,6 +98,9 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  scroll: {
+    flexGrow: 1,
   },
   header: {
     paddingHorizontal: theme.spacing.md,
@@ -164,6 +168,12 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.white,
     fontFamily: theme.fontFamily.regular,
+    flex: 1,
+  },
+  termsLink: {
+    color: theme.colors.primary,
+    fontFamily: theme.fontFamily.semibold,
+    textDecorationLine: 'underline',
   },
   error: {
     fontSize: theme.fontSize.sm,

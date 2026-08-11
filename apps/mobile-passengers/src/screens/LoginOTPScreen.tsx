@@ -1,7 +1,15 @@
 import { useRegistrationDraftStore } from '@/store/registrationDraftStore';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Button } from '../components/Button';
 import { OTPInput } from '../components/OTPInput';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -71,40 +79,41 @@ export function LoginOTPScreen() {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <View style={styles.header}>
-          <Text style={styles.back} onPress={goBack}>
-            ←
-          </Text>
-        </View>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <Text style={styles.back} onPress={goBack}>
+              ←
+            </Text>
+          </View>
 
-        <View style={styles.body}>
-          <Text style={styles.title}>Verificación</Text>
-          <Text style={styles.subtitle}>
-            Ingresa el código de 6 dígitos que enviamos a{'\n'}
-            <Text style={styles.phone}>{phone}</Text>
-          </Text>
+          <View style={styles.body}>
+            <Text style={styles.title}>Verificación</Text>
+            <Text style={styles.subtitle}>
+              Ingresa el código de 6 dígitos que enviamos a{'\n'}
+              <Text style={styles.phone}>{phone}</Text>
+            </Text>
 
-          <OTPInput value={code} onChange={setCode} autoFocus />
+            <OTPInput value={code} onChange={setCode} autoFocus />
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <Button
-            variant="primary"
-            onPress={handleVerify}
-            loading={loading}
-            disabled={code.length !== 6}
-          >
-            Verificar
-          </Button>
+            <Button
+              variant="primary"
+              onPress={handleVerify}
+              loading={loading}
+              disabled={code.length !== 6}
+            >
+              Verificar
+            </Button>
 
-          <Text style={styles.resend} onPress={handleResend}>
-            {resendCooldown > 0
-              ? `Reenviar en ${resendCooldown}s`
-              : '¿No recibiste el código? Reenviar'}
-          </Text>
-        </View>
+            <Text style={styles.resend} onPress={handleResend}>
+              {resendCooldown > 0
+                ? `Reenviar en ${resendCooldown}s`
+                : '¿No recibiste el código? Reenviar'}
+            </Text>
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -117,6 +126,9 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  scroll: {
+    flexGrow: 1,
   },
   header: {
     paddingHorizontal: theme.spacing.md,

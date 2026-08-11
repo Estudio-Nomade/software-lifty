@@ -2,13 +2,45 @@ import type { User } from '@supabase/supabase-js';
 import { eq } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 import { db } from '../db/client';
-import { users } from '../db/schema';
+import { drivers, passengerProfiles, users } from '../db/schema';
 import { logger } from '../lib/logger';
 import { getSupabaseClient } from '../lib/supabase';
 
+export async function deriveRole(userId: string): Promise<string | null> {
+  const [driver] = await db
+    .select({ id: drivers.user_id })
+    .from(drivers)
+    .where(eq(drivers.user_id, userId))
+    .limit(1);
+
+  let passengerProfileExists = false;
+  try {
+    const [passenger] = await db
+      .select({ id: passengerProfiles.user_id })
+      .from(passengerProfiles)
+      .where(eq(passengerProfiles.user_id, userId))
+      .limit(1);
+    passengerProfileExists = !!passenger;
+  } catch {
+    passengerProfileExists = false;
+  }
+
+  if (driver && passengerProfileExists) return 'both';
+  if (driver) return 'driver';
+  if (passengerProfileExists) return 'passenger';
+
+  const [row] = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  return row?.role ?? null;
+}
+
 export interface AuthUser {
   id: string;
-  role: string;
+  role: string | null;
   email: string | null;
   phone: string | null;
 }
@@ -37,7 +69,6 @@ async function getTestUserFromToken(token: string): Promise<AuthUser | null> {
   const [row] = await db
     .select({
       id: users.id,
-      role: users.role,
       email: users.email,
       phone: users.phone,
     })
@@ -45,7 +76,11 @@ async function getTestUserFromToken(token: string): Promise<AuthUser | null> {
     .where(eq(users.id, userId))
     .limit(1);
 
-  return row ?? null;
+  if (!row) return null;
+
+  const role = await deriveRole(row.id);
+
+  return { id: row.id, role, email: row.email, phone: row.phone };
 }
 
 function realGetUser(token: string): Promise<AuthUser | null> {
@@ -72,7 +107,6 @@ async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
   const [existing] = await db
     .select({
       id: users.id,
-      role: users.role,
       email: users.email,
       phone: users.phone,
     })
@@ -81,9 +115,10 @@ async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
     .limit(1);
 
   if (existing) {
+    const role = await deriveRole(existing.id);
     return {
       id: existing.id,
-      role: existing.role,
+      role,
       email: existing.email,
       phone: existing.phone,
     };
@@ -99,9 +134,9 @@ async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
     })
     .returning({
       id: users.id,
-      role: users.role,
       email: users.email,
       phone: users.phone,
+      role: users.role,
     });
 
   if (!created) return null;
