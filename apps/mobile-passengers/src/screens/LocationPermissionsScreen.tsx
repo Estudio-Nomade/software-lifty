@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -46,7 +47,7 @@ export function LocationPermissionsScreen() {
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
 
-        <Text style={styles.icon}>📍</Text>
+        <Ionicons name="location" size={64} color={theme.colors.primary} />
         <Text style={styles.title}>¿Dónde te encontramos?</Text>
         <Text style={styles.subtitle}>
           Necesitamos tu ubicación para mostrarte el mapa, calcular rutas y conectarte con
@@ -97,11 +98,6 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
     fontSize: theme.fontSize.xl,
     fontFamily: theme.fontFamily.regular,
-  },
-  icon: {
-    fontSize: theme.fontSize['5xl'],
-    color: theme.colors.primary,
-    marginBottom: theme.spacing.sm,
   },
   title: {
     fontSize: theme.fontSize['3xl'],
