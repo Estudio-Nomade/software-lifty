@@ -6,7 +6,16 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { LoadingOverlay } from './feedback/LoadingOverlay';
 
-const PUBLIC_ROUTES = ['', 'register', 'forgot-password', 'auth', 'terms', 'login-credentials'];
+const PUBLIC_ROUTES = [
+  '',
+  'register',
+  'forgot-password',
+  'auth',
+  'terms',
+  'login-credentials',
+  'verify-email',
+  'location-permissions',
+];
 
 function SessionRestore() {
   const setSession = useAuthStore((s) => s.setSession);
@@ -72,7 +81,7 @@ function AuthRedirectWatcher() {
 
     const current = segments[0] ?? '';
     if (PUBLIC_ROUTES.includes(current) || current === '') {
-      router.replace('/location-permissions');
+      router.replace('/home');
     }
   }, [sessionRestored, isAuthenticated, segments, router]);
 
@@ -89,7 +98,7 @@ function ActiveTripRecovery() {
     if (!sessionRestored || !isAuthenticated || navigatedRef.current) return;
     navigatedRef.current = true;
     InteractionManager.runAfterInteractions(() => {
-      router.replace('/location-permissions');
+      router.replace('/home');
     });
   }, [sessionRestored, isAuthenticated, router]);
 
