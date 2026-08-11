@@ -1,14 +1,13 @@
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
-import { Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useLocationStore } from '../store/locationStore';
 import { theme } from '../theme';
 
 export function LocationPermissionsScreen() {
-  const { replace } = useAppNavigation();
-  const permissionGranted = useLocationStore((s) => s.permissionGranted);
+  const { replace, goBack } = useAppNavigation();
   const setPermissionGranted = useLocationStore((s) => s.setPermissionGranted);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,34 +41,35 @@ export function LocationPermissionsScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <View style={styles.content}>
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.title}>Activar ubicación</Text>
-          <Text style={styles.body}>
-            Lifty necesita tu ubicación para mostrarte conductores cerca y calcular la tarifa de tus
-            viajes.
-          </Text>
-          <View style={styles.bullets}>
-            <Text style={styles.bullet}>📍 Viajes más rápidos</Text>
-            <Text style={styles.bullet}>💰 Tarifas precisas</Text>
-            <Text style={styles.bullet}>🗺️ Seguimiento en tiempo real</Text>
-          </View>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={goBack} style={styles.backButton}>
+          <Text style={styles.backText}>←</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.content}>
+        <Text style={styles.icon}>📍</Text>
+        <Text style={styles.title}>¿Dónde te encontramos?</Text>
+        <Text style={styles.subtitle}>
+          Necesitamos tu ubicación para mostrarte el mapa, calcular rutas y conectarte con
+          conductores cercanos.
+        </Text>
+
+        <View style={styles.infoCard}>
+          <Text style={styles.infoItem}>• Encontrar conductores cerca tuyo</Text>
+          <Text style={styles.infoItem}>• Calcular tiempos y tarifas reales</Text>
+          <Text style={styles.infoItem}>• Compartir tu viaje en vivo</Text>
         </View>
 
-        <View style={styles.actions}>
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Button variant="primary" onPress={handleEnable} loading={loading} style={styles.button}>
-            ACTIVAR UBICACIÓN
-          </Button>
-          <Button variant="secondary" onPress={handleSkip} disabled={loading} style={styles.button}>
-            AHORA NO
-          </Button>
-        </View>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        <Button variant="primary" onPress={handleEnable} loading={loading} style={styles.button}>
+          PERMITIR UBICACIÓN
+        </Button>
+
+        <TouchableOpacity onPress={handleSkip} disabled={loading}>
+          <Text style={styles.later}>Quizás después</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -80,48 +80,56 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.deepBlue,
   },
-  container: {
-    flex: 1,
-    padding: theme.spacing.lg,
-    justifyContent: 'space-between',
+  header: {
+    height: theme.dimensions.navbarHeight,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.md,
+  },
+  backButton: {
+    paddingVertical: theme.spacing.sm,
+    paddingRight: theme.spacing.md,
+    alignSelf: 'flex-start',
+  },
+  backText: {
+    color: theme.colors.primary,
+    fontSize: theme.fontSize.xl,
+    fontFamily: theme.fontFamily.regular,
   },
   content: {
     flex: 1,
+    paddingHorizontal: theme.spacing.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
-  logo: {
-    width: 80,
-    height: 80,
-    marginBottom: theme.spacing.md,
+  icon: {
+    fontSize: theme.fontSize['5xl'],
+    marginBottom: theme.spacing.sm,
   },
   title: {
-    fontSize: theme.fontSize['2xl'],
+    fontSize: theme.fontSize['3xl'],
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.white,
     textAlign: 'center',
   },
-  body: {
+  subtitle: {
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
     textAlign: 'center',
     lineHeight: 24,
-    paddingHorizontal: theme.spacing.md,
   },
-  bullets: {
+  infoCard: {
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
     gap: theme.spacing.sm,
   },
-  bullet: {
-    fontSize: theme.fontSize.md,
-    fontFamily: theme.fontFamily.medium,
-    color: theme.colors.primary,
-    textAlign: 'center',
-  },
-  actions: {
-    gap: theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
+  infoItem: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.white,
   },
   error: {
     fontSize: theme.fontSize.sm,
@@ -131,5 +139,12 @@ const styles = StyleSheet.create({
   },
   button: {
     width: '100%',
+  },
+  later: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.primary,
+    textAlign: 'center',
+    marginTop: theme.spacing.sm,
   },
 });
