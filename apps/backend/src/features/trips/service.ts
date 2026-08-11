@@ -12,6 +12,7 @@ import { getPayment } from '../../shared/lib/mercado-pago';
 import { calculatePlatformFee } from '../../shared/lib/pricing';
 import { sendPushToUser } from '../../shared/lib/push';
 import type { AuthUser } from '../../shared/middleware/auth';
+import { broadcastToPassenger } from '../passenger-trips/service';
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   pending: ['offered'],
@@ -492,6 +493,7 @@ export const tripService = {
           body: `Código de verificación: ${verificationCode}`,
           data: { type: 'trip:verification', trip_id: tripId, verification_code: verificationCode },
         });
+        broadcastToPassenger(trip.passenger_id, updated);
       }
 
       return updated;
@@ -505,7 +507,11 @@ export const tripService = {
 
   async enRouteTrip(user: AuthUser, tripId: string) {
     const driverId = await getDriverId(user);
-    return transitionTrip(driverId, tripId, 'en_route');
+    const result = await transitionTrip(driverId, tripId, 'en_route');
+    if (result.passenger_id) {
+      broadcastToPassenger(result.passenger_id, result);
+    }
+    return result;
   },
 
   async arrivedTrip(user: AuthUser, tripId: string, body: { lat: number; lng: number }) {
@@ -527,7 +533,11 @@ export const tripService = {
       );
     }
 
-    return transitionTrip(driverId, tripId, 'waiting');
+    const result = await transitionTrip(driverId, tripId, 'waiting');
+    if (result.passenger_id) {
+      broadcastToPassenger(result.passenger_id, result);
+    }
+    return result;
   },
 
   async startTrip(user: AuthUser, tripId: string, verificationCode: string) {
@@ -552,7 +562,11 @@ export const tripService = {
       throw new BadRequestError('El código de verificación no coincide');
     }
 
-    return transitionTrip(driverId, tripId, 'in_trip');
+    const result = await transitionTrip(driverId, tripId, 'in_trip');
+    if (result.passenger_id) {
+      broadcastToPassenger(result.passenger_id, result);
+    }
+    return result;
   },
 
   async completeTrip(user: AuthUser, tripId: string, body: { lat: number; lng: number }) {
@@ -574,7 +588,11 @@ export const tripService = {
       );
     }
 
-    return transitionTrip(driverId, tripId, 'completed');
+    const result = await transitionTrip(driverId, tripId, 'completed');
+    if (result.passenger_id) {
+      broadcastToPassenger(result.passenger_id, result);
+    }
+    return result;
   },
 
   async cancelTrip(user: AuthUser, tripId: string) {
@@ -744,6 +762,10 @@ export const tripService = {
             verification_code: verificationCode,
           },
         });
+      }
+
+      if (trip.passenger_id) {
+        broadcastToPassenger(trip.passenger_id, updated);
       }
 
       return updated;

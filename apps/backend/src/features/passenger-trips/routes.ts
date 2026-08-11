@@ -32,6 +32,20 @@ export const passengerTripRoutes = new Elysia({ prefix: '/passenger/trips' })
     { requireAuth: true },
   )
   .get(
+    '/history',
+    ({ user, query, set }) =>
+      safeCall(
+        () =>
+          passengerTripService.getTripHistory(
+            user,
+            Number(query.page) || 1,
+            Number(query.limit) || 20,
+          ),
+        set,
+      ),
+    { requireAuth: true },
+  )
+  .get(
     '/:id',
     ({ user, params, set }) =>
       safeCall(() => {

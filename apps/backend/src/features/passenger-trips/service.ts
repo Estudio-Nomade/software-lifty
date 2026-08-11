@@ -1,6 +1,14 @@
 import { and, desc, eq, getTableColumns, inArray, not, sql } from 'drizzle-orm';
 import { db, getDb } from '../../shared/db/client';
-import { drivers, ratings, tripEvents, trips, users, vehicles } from '../../shared/db/schema';
+import {
+  driverLocations,
+  drivers,
+  ratings,
+  tripEvents,
+  trips,
+  users,
+  vehicles,
+} from '../../shared/db/schema';
 import { getCommissionRate } from '../../shared/lib/commission';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { calculateFare } from '../../shared/lib/fuel-pricing';
@@ -125,11 +133,14 @@ export const passengerTripService = {
         vehicle_model: vehicles.model,
         vehicle_color: vehicles.color,
         vehicle_plate: vehicles.plate,
+        driver_lat: driverLocations.lat,
+        driver_lng: driverLocations.lng,
       })
       .from(trips)
       .leftJoin(drivers, eq(trips.driver_id, drivers.id))
       .leftJoin(users, eq(drivers.user_id, users.id))
       .leftJoin(vehicles, eq(drivers.id, vehicles.driver_id))
+      .leftJoin(driverLocations, eq(drivers.id, driverLocations.driver_id))
       .where(and(eq(trips.passenger_id, user.id), not(inArray(trips.status, TERMINAL_STATUSES))))
       .orderBy(desc(trips.created_at))
       .limit(1);
@@ -153,11 +164,14 @@ export const passengerTripService = {
         vehicle_model: vehicles.model,
         vehicle_color: vehicles.color,
         vehicle_plate: vehicles.plate,
+        driver_lat: driverLocations.lat,
+        driver_lng: driverLocations.lng,
       })
       .from(trips)
       .leftJoin(drivers, eq(trips.driver_id, drivers.id))
       .leftJoin(users, eq(drivers.user_id, users.id))
       .leftJoin(vehicles, eq(drivers.id, vehicles.driver_id))
+      .leftJoin(driverLocations, eq(drivers.id, driverLocations.driver_id))
       .where(and(eq(trips.id, tripId), eq(trips.passenger_id, user.id)))
       .limit(1);
 
@@ -219,4 +233,58 @@ export const passengerTripService = {
       return updated;
     });
   },
+
+  async getTripHistory(user: AuthUser, page: number, limit: number) {
+    const offset = (page - 1) * limit;
+    return db
+      .select({
+        ...getTableColumns(trips),
+        driver_name: users.full_name,
+        driver_avatar_url: users.avatar_url,
+        driver_rating: sql`(
+          SELECT ROUND(AVG(r.score)::numeric, 1)::float
+          FROM ${ratings} r
+          WHERE r.ratee_id = ${users.id}
+        )`,
+        vehicle_brand: vehicles.brand,
+        vehicle_model: vehicles.model,
+        vehicle_color: vehicles.color,
+        vehicle_plate: vehicles.plate,
+        driver_lat: driverLocations.lat,
+        driver_lng: driverLocations.lng,
+      })
+      .from(trips)
+      .leftJoin(drivers, eq(trips.driver_id, drivers.id))
+      .leftJoin(users, eq(drivers.user_id, users.id))
+      .leftJoin(vehicles, eq(drivers.id, vehicles.driver_id))
+      .leftJoin(driverLocations, eq(drivers.id, driverLocations.driver_id))
+      .where(eq(trips.passenger_id, user.id))
+      .orderBy(desc(trips.created_at))
+      .limit(limit)
+      .offset(offset);
+  },
 };
+
+export function broadcastToPassenger(passengerId: string, trip: any) {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !key) {
+    logger.warn('[BROADCAST] Missing config for passenger broadcast');
+    return;
+  }
+  const topic = `passenger:${passengerId}`;
+  logger.info('[BROADCAST] Sending to', topic, 'tripId:', trip.id);
+  fetch(`${url}/realtime/v1/api/broadcast`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      messages: [{ topic, event: 'trip:status', payload: trip }],
+    }),
+  })
+    .then((res) => logger.info('[BROADCAST] Passenger broadcast response:', res.status))
+    .catch((err) => logger.error('[BROADCAST] Passenger broadcast error:', (err as Error).message));
+}
