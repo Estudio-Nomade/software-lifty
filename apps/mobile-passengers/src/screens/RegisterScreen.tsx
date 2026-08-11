@@ -31,9 +31,10 @@ export function RegisterScreen() {
       return;
     }
     setError(null);
-    setLoading(true);
     setFullName(`${name} ${surname}`);
+    setLoading(true);
     navigate('Terms');
+    setLoading(false);
   };
 
   return (

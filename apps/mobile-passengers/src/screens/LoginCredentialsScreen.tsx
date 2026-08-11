@@ -19,7 +19,7 @@ import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 import { theme } from '../theme';
 
 export function LoginCredentialsScreen() {
-  const { goBack, navigate } = useAppNavigation();
+  const { goBack, navigate, replace } = useAppNavigation();
   const { signInWithGoogle } = useAuth();
   const fullName = useRegistrationDraftStore((s) => s.fullName);
   const clearDraft = useRegistrationDraftStore((s) => s.clear);
@@ -28,6 +28,7 @@ export function LoginCredentialsScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -35,10 +36,11 @@ export function LoginCredentialsScreen() {
 
   const handleSubmit = async () => {
     setError(null);
+    setInfo(null);
     setLoading(true);
     try {
       if (isSignUp) {
-        const { error: err } = await supabase.auth.signUp({
+        const { data, error: err } = await supabase.auth.signUp({
           email: email.trim(),
           password,
           options: {
@@ -47,12 +49,22 @@ export function LoginCredentialsScreen() {
         });
         if (err) throw err;
         clearDraft();
+        if (data.session) {
+          replace('Home');
+        } else if (data.user) {
+          setInfo(
+            'Te enviamos un email de verificación. Revisá tu casilla para activar tu cuenta.',
+          );
+        }
       } else {
-        const { error: err } = await supabase.auth.signInWithPassword({
+        const { data, error: err } = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
         });
         if (err) throw err;
+        if (data.session) {
+          replace('Home');
+        }
       }
     } catch (err) {
       setError(getFriendlyAuthError(err));
@@ -64,6 +76,7 @@ export function LoginCredentialsScreen() {
   const handleGoogle = async () => {
     if (googleLoading) return;
     setError(null);
+    setInfo(null);
     setGoogleLoading(true);
     try {
       await signInWithGoogle();
@@ -142,6 +155,7 @@ export function LoginCredentialsScreen() {
           </Button>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
+          {info ? <Text style={styles.info}>{info}</Text> : null}
           <View style={styles.gap} />
 
           {!isSignUp ? (
@@ -219,6 +233,14 @@ const styles = StyleSheet.create({
   error: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
+    fontFamily: theme.fontFamily.regular,
+    textAlign: 'center',
+    width: 327,
+    marginTop: theme.spacing.sm,
+  },
+  info: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.primary,
     fontFamily: theme.fontFamily.regular,
     textAlign: 'center',
     width: 327,
