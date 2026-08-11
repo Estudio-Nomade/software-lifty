@@ -135,7 +135,7 @@ async function transitionTrip(driverId: string, tripId: string, targetStatus: st
           platform_debt: sql`${drivers.platform_debt} + ${compensationPlatformFee}`,
           updated_at: new Date(),
         })
-        .where(eq(drivers.id, trip.driver_id));
+        .where(eq(drivers.id, driverId));
     }
 
     await tx.update(trips).set(updateData).where(eq(trips.id, tripId));
@@ -249,12 +249,17 @@ export const tripService = {
 
       const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
 
-      broadcastTripRequest(trip.driver_id, updated);
+      const driverId = trip.driver_id;
+      if (!driverId) {
+        throw new AppError('Trip has no driver assigned', 400, 'BAD_REQUEST');
+      }
+
+      broadcastTripRequest(driverId, updated);
 
       const [driverUser] = await tx
         .select({ user_id: drivers.user_id })
         .from(drivers)
-        .where(eq(drivers.id, trip.driver_id))
+        .where(eq(drivers.id, driverId))
         .limit(1);
 
       if (driverUser?.user_id) {
