@@ -15,33 +15,37 @@ export const passengerTripRoutes = new Elysia({ prefix: '/passenger/trips' })
   .use(authGuard)
   .post(
     '/request',
-    ({ user, body, set }) => {
-      requirePassenger(user);
-      return safeCall(() => passengerTripService.requestTrip(user, body), set);
-    },
+    ({ user, body, set }) =>
+      safeCall(() => {
+        requirePassenger(user);
+        return passengerTripService.requestTrip(user, body);
+      }, set),
     { body: requestTripBody, requireAuth: true },
   )
   .get(
     '/active',
-    ({ user, set }) => {
-      requirePassenger(user);
-      return safeCall(() => passengerTripService.getActiveTrip(user), set);
-    },
+    ({ user, set }) =>
+      safeCall(() => {
+        requirePassenger(user);
+        return passengerTripService.getActiveTrip(user);
+      }, set),
     { requireAuth: true },
   )
   .get(
     '/:id',
-    ({ user, params, set }) => {
-      requirePassenger(user);
-      return safeCall(() => passengerTripService.getTripById(user, params.id), set);
-    },
+    ({ user, params, set }) =>
+      safeCall(() => {
+        requirePassenger(user);
+        return passengerTripService.getTripById(user, params.id);
+      }, set),
     { params: tripIdParams, requireAuth: true },
   )
   .post(
     '/:id/cancel',
-    ({ user, params, set }) => {
-      requirePassenger(user);
-      return safeCall(() => passengerTripService.cancelTrip(user, params.id), set);
-    },
+    ({ user, params, set }) =>
+      safeCall(() => {
+        requirePassenger(user);
+        return passengerTripService.cancelTrip(user, params.id);
+      }, set),
     { params: tripIdParams, requireAuth: true },
   );

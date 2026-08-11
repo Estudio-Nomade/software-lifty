@@ -119,7 +119,7 @@ export const passengerTripService = {
         driver_rating: sql`(
           SELECT ROUND(AVG(r.score)::numeric, 1)::float
           FROM ${ratings} r
-          WHERE r.ratee_id = ${trips.driver_id}
+          WHERE r.ratee_id = ${users.id}
         )`,
         vehicle_brand: vehicles.brand,
         vehicle_model: vehicles.model,
@@ -147,7 +147,7 @@ export const passengerTripService = {
         driver_rating: sql`(
           SELECT ROUND(AVG(r.score)::numeric, 1)::float
           FROM ${ratings} r
-          WHERE r.ratee_id = ${trips.driver_id}
+          WHERE r.ratee_id = ${users.id}
         )`,
         vehicle_brand: vehicles.brand,
         vehicle_model: vehicles.model,
@@ -173,43 +173,50 @@ export const passengerTripService = {
   },
 
   async cancelTrip(user: AuthUser, tripId: string) {
-    const [trip] = await db
-      .select()
-      .from(trips)
-      .where(and(eq(trips.id, tripId), eq(trips.passenger_id, user.id)))
-      .limit(1);
-
-    if (!trip) throw new NotFoundError('Trip not found');
-
-    const allowedStatuses = ['pending', 'offered', 'accepted'];
-    if (!allowedStatuses.includes(trip.status)) {
-      throw new AppError(`Cannot cancel trip in status: ${trip.status}`, 400, 'BAD_REQUEST');
-    }
-
-    await db
-      .update(trips)
-      .set({ status: 'cancelled', updated_at: new Date() })
-      .where(eq(trips.id, tripId));
-
-    await recordEvent(tripId, trip.status, 'cancelled');
-
-    if (trip.driver_id) {
-      const [driver] = await db
-        .select({ userId: drivers.user_id })
-        .from(drivers)
-        .where(eq(drivers.id, trip.driver_id))
+    return db.transaction(async (tx) => {
+      const [trip] = await tx
+        .select()
+        .from(trips)
+        .where(and(eq(trips.id, tripId), eq(trips.passenger_id, user.id)))
+        .for('update')
         .limit(1);
 
-      if (driver?.userId) {
-        sendPushToUser(driver.userId, {
-          title: 'Viaje cancelado',
-          body: 'El pasajero ha cancelado el viaje.',
-          data: { trip_id: tripId, type: 'trip:cancelled' },
-        });
-      }
-    }
+      if (!trip) throw new NotFoundError('Trip not found');
 
-    const [updated] = await db.select().from(trips).where(eq(trips.id, tripId));
-    return updated;
+      const allowedStatuses = ['pending', 'offered', 'accepted'];
+      if (!allowedStatuses.includes(trip.status)) {
+        throw new AppError(`Cannot cancel trip in status: ${trip.status}`, 400, 'BAD_REQUEST');
+      }
+
+      await tx
+        .update(trips)
+        .set({ status: 'cancelled', updated_at: new Date() })
+        .where(eq(trips.id, tripId));
+
+      await tx.insert(tripEvents).values({
+        trip_id: tripId,
+        from_status: trip.status,
+        to_status: 'cancelled',
+      });
+
+      if (trip.driver_id) {
+        const [driver] = await tx
+          .select({ userId: drivers.user_id })
+          .from(drivers)
+          .where(eq(drivers.id, trip.driver_id))
+          .limit(1);
+
+        if (driver?.userId) {
+          sendPushToUser(driver.userId, {
+            title: 'Viaje cancelado',
+            body: 'El pasajero ha cancelado el viaje.',
+            data: { trip_id: tripId, type: 'trip:cancelled' },
+          });
+        }
+      }
+
+      const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
+      return updated;
+    });
   },
 };

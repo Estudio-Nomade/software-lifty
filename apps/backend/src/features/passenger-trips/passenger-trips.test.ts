@@ -169,7 +169,7 @@ describe('Passenger Trips', () => {
       duration_minutes: 12,
     }, token);
 
-    expect(status).toBe(500);
+    expect(status).toBe(403);
   });
 
   test('GET /active returns null when no active trip', async () => {
@@ -273,6 +273,6 @@ describe('Passenger Trips', () => {
 
     const { status } = await request('GET', '/api/passenger/trips/active', undefined, token);
 
-    expect(status).toBe(500);
+    expect(status).toBe(403);
   });
 });
