@@ -36,6 +36,11 @@ export function RegisterScreen() {
     setLoading(true);
     setFullName(`${name} ${surname}`);
     router.push('/login-phone');
+    try {
+      router.push({ pathname: '/login-phone', params: { fullName: `${name} ${surname}` } });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
