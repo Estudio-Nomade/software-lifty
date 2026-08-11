@@ -1,5 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
@@ -19,7 +27,7 @@ export function HomeScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.navbar}>
-        <Text style={styles.brand}>Lifty</Text>
+        <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
         <View style={styles.navActions}>
           <TouchableOpacity style={styles.navBtn}>
             <Ionicons name="notifications-outline" size={22} color={theme.colors.white} />
@@ -151,10 +159,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing.md,
   },
-  brand: {
-    fontSize: theme.fontSize.lg,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
+  logo: {
+    width: 72,
+    height: 28,
   },
   navActions: {
     flexDirection: 'row',
