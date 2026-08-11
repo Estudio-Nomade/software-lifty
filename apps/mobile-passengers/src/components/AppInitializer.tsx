@@ -10,7 +10,6 @@ const PUBLIC_ROUTES = ['', 'register', 'forgot-password', 'auth', 'terms', 'logi
 
 function SessionRestore() {
   const setSession = useAuthStore((s) => s.setSession);
-  const clearAuth = useAuthStore((s) => s.clearAuth);
   const setSessionRestored = useAuthStore((s) => s.setSessionRestored);
 
   useEffect(() => {
@@ -18,7 +17,6 @@ function SessionRestore() {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token ?? null;
       if (!token) {
-        clearAuth();
         setSessionRestored(true);
         return;
       }
@@ -32,7 +30,7 @@ function SessionRestore() {
       setSessionRestored(true);
     };
     restore();
-  }, [setSession, clearAuth, setSessionRestored]);
+  }, [setSession, setSessionRestored]);
 
   return null;
 }

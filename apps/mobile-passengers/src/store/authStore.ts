@@ -38,6 +38,7 @@ export const useAuthStore = create<AuthState>()(
           userId: userId ?? state.userId,
           email: email ?? state.email,
           fullName: fullName ?? state.fullName,
+          needsRedirect: token ? false : state.needsRedirect,
         })),
       clearAuth: () =>
         set({
