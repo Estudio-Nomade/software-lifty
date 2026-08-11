@@ -1,13 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
 export function ProfileScreen() {
   const { goBack, navigate } = useAppNavigation();
+  const { signOut } = useAuth();
   const fullName = useAuthStore((s) => s.fullName);
   const email = useAuthStore((s) => s.email);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await signOut();
+    } catch {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -43,6 +56,18 @@ export function ProfileScreen() {
             <Ionicons name="chevron-forward" size={20} color={theme.colors.mediumGray} />
           </View>
         </View>
+
+        <TouchableOpacity
+          style={styles.logoutBtn}
+          onPress={handleLogout}
+          disabled={loggingOut}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="log-out-outline" size={20} color={theme.colors.dangerRed} />
+          <Text style={styles.logoutText}>
+            {loggingOut ? 'Cerrando sesión...' : 'Cerrar sesión'}
+          </Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -108,5 +133,22 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.deepBlue,
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: theme.spacing.xl,
+    paddingVertical: theme.spacing.md,
+    gap: theme.spacing.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.dangerRed,
+    borderRadius: theme.radius.md,
+    width: '100%',
+  },
+  logoutText: {
+    fontSize: theme.fontSize.md,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.dangerRed,
   },
 });
