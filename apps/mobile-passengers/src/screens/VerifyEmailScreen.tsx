@@ -1,4 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -18,7 +19,6 @@ import { theme } from '../theme';
 
 export function VerifyEmailScreen() {
   const { goBack, replace } = useAppNavigation();
-  const router = useRouter();
   const params = useLocalSearchParams<{ email?: string }>();
   const email = params.email ?? '';
   const [code, setCode] = useState('');
@@ -79,7 +79,7 @@ export function VerifyEmailScreen() {
           </View>
 
           <View style={styles.body}>
-            <Text style={styles.icon}>📧</Text>
+            <Ionicons name="mail-outline" size={48} color={theme.colors.primary} />
             <Text style={styles.title}>¡Casi listo!</Text>
             <Text style={styles.subtitle}>Te enviamos un código a tu email</Text>
             <Text style={styles.email}>{email}</Text>
@@ -137,9 +137,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing.lg,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  icon: {
-    fontSize: theme.fontSize['5xl'],
   },
   title: {
     fontSize: theme.fontSize['2xl'],
