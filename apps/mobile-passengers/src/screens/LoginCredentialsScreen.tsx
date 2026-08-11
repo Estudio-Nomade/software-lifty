@@ -128,11 +128,14 @@ export function LoginCredentialsScreen() {
           </View>
 
           <View style={styles.content}>
-            <Text style={styles.title}>{isSignUp ? 'Crear cuenta' : 'Iniciar sesión'}</Text>
+            <Text style={styles.brand}>Lifty</Text>
+            <Text style={styles.title}>
+              {isSignUp ? 'Creá tu cuenta' : 'Bienvenido de vuelta!'}
+            </Text>
             <Text style={styles.subtitle}>
               {isSignUp
                 ? 'Elegí tu email y contraseña para crear tu cuenta'
-                : 'Ingresá tu email y contraseña'}
+                : 'Ingresá tus datos para continuar'}
             </Text>
             <View style={styles.spacer} />
 
@@ -212,9 +215,26 @@ export function LoginCredentialsScreen() {
             <View style={styles.gap} />
 
             {!isSignUp ? (
-              <TouchableOpacity onPress={() => navigate('ForgotPassword')}>
-                <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity onPress={() => navigate('ForgotPassword')}>
+                  <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    setError(null);
+                    setInfo(null);
+                    setEmail('');
+                    setPassword('');
+                    setConfirmPassword('');
+                    setPhone('');
+                    navigate('Register');
+                  }}
+                >
+                  <Text style={styles.switchAuth}>
+                    ¿No tenés cuenta? <Text style={styles.switchAuthBold}>Crear cuenta</Text>
+                  </Text>
+                </TouchableOpacity>
+              </>
             ) : (
               <TouchableOpacity
                 onPress={() => {
@@ -268,6 +288,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.md,
     alignItems: 'center',
+  },
+  brand: {
+    fontSize: theme.fontSize['3xl'],
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.primary,
+    width: 327,
+    marginBottom: theme.spacing.xs,
   },
   title: {
     fontSize: theme.fontSize['2xl'],
@@ -327,6 +354,17 @@ const styles = StyleSheet.create({
   forgotPassword: {
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.medium,
+    color: theme.colors.primary,
+  },
+  switchAuth: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.deepBlue,
+    textAlign: 'center',
+    marginTop: theme.spacing.md,
+  },
+  switchAuthBold: {
+    fontFamily: theme.fontFamily.semibold,
     color: theme.colors.primary,
   },
 });
