@@ -1,194 +1,152 @@
 ---
-stepsCompleted: []
+stepsCompleted: [step-01-validate-prerequisites, step-02-design-epics, step-03-create-stories]
 inputDocuments:
-  - _bmad-output/specs/spec-unified-user-identity/SPEC.md
-  - _bmad-output/specs/spec-unified-user-identity/data-model.md
-  - _bmad-output/specs/spec-unified-user-identity/implementation-plan.md
-  - _bmad-output/architecture/architecture-software-lifty-2026-08-11/ARCHITECTURE-SPINE.md
+  - _bmad-output/planning-artifacts/passenger-app/prd.md
+  - _bmad-output/planning-artifacts/passenger-app/architecture-spine.md
 ---
 
-# software-lifty - Epic Breakdown: Unified User Identity
+# software-lifty (Passenger Backend) - Epic Breakdown
 
 ## Overview
 
-Este documento descompone el spec de Unified User Identity en epics y stories accionables. El objetivo: permitir que un mismo usuario de Supabase Auth pueda ser conductor Y pasajero, eliminando el cuello de botella del `role` único en la tabla `users`.
+This document provides the epic and story breakdown for the Lifty passenger backend, decomposing requirements from the PRD and Architecture into implementable backend stories. Focus: backend endpoints, services, and infrastructure — not frontend screens.
 
 ## Requirements Inventory
 
 ### Functional Requirements
 
-FR1: La tabla `users` no asigna rol al momento de creación. La identidad existe independientemente del rol.
-FR2: Un pasajero que completa el registro obtiene un `passenger_profiles` row vinculado a su `users.id`.
-FR3: El flujo de registro de conductor existente sigue funcionando sin cambios.
-FR4: Un usuario con ambos perfiles puede usar cualquiera de las dos apps con la misma cuenta.
-FR5: El `role` visible en middleware y endpoints se computa en runtime desde los perfiles existentes.
-FR6: Todo código existente que chequea `user.role` o usa `requireRole` sigue funcionando.
+Only backend-relevant FRs that are NOT yet implemented are listed:
+
+FR7: Fare estimate endpoint — `POST /maps/fare-estimate` — ✅ EXISTS
+FR9: Trip request endpoint — `POST /passenger/trips/request` — ✅ IMPLEMENTED
+FR10: Driver search / active trip polling — `GET /passenger/trips/active` with driver location — ⚠️ PARTIAL (driver location missing)
+FR12: Verification code generation — ✅ EXISTS in claimTrip/acceptTrip
+FR13: Real-time tracking — broadcast driver status changes to passenger — ❌ MISSING
+FR14: Trip cancellation — `POST /passenger/trips/:id/cancel` — ✅ IMPLEMENTED
+FR15: SOS — `POST /sos` — ✅ EXISTS
+FR17: Rating — `POST /ratings/trips/:trip_id` — ✅ EXISTS
+FR18: Payment initiation — `POST /passenger/trips/:id/pay` (MercadoPago checkout) — ❌ MISSING
+FR19: Trip history — `GET /passenger/trips/history` — ❌ MISSING
+FR20: Trip detail — `GET /passenger/trips/:id` — ✅ IMPLEMENTED
+FR21: Profile — `GET /passenger/profile` — ✅ IMPLEMENTED
 
 ### NonFunctional Requirements
 
-NFR1: Los 206+ tests del backend deben pasar sin modificaciones después de los cambios.
-NFR2: Ambas apps comparten el mismo proyecto Supabase — no se crea uno nuevo.
-NFR3: La driver app no requiere cambios de código para seguir funcionando.
+NFR1: Real-time tracking — broadcast driver status to passenger topic on each state change
+NFR2: Payment reliability — MP webhook idempotency, retry on failure
+NFR3: History pagination — cursor/offset-based, max 50 per page
 
 ### Additional Requirements
 
-- Crear tabla `passenger_profiles` con `user_id UNIQUE FK → users.id`
-- Backfill: asegurar que cada `users` row con rol driver tenga su `drivers` row
-- Función `deriveRole(userId)` en `auth.ts` que consulta ambas tablas de perfiles
-- `requireRole(['driver'])` acepta usuarios con role derivado `'driver'` y `'both'`
-- `findOrCreateUser` deja de insertar `role: 'driver'`
-- `GET /auth/me` usa `deriveRole` para poblar el campo `role`
-- `trips.passenger_id` gana FK a `passenger_profiles.user_id` (deferred a fase 2)
-- Columna `users.role` se mantiene como caché denormalizada durante la transición
+From Architecture AD-8 (API client owns HTTP):
+- All passenger endpoints use the same error shape (`safeCall` convention)
+- All endpoints behind `authGuard` with role check
+- Rate limits on state-changing endpoints
+
+From Architecture AD-3 (Supabase owns auth):
+- Passenger identity from JWT `user.id`, mapped to `passenger_profiles` table
+- Backend reads `user.role` for authorization (not a separate passenger token)
+
+From existing codebase patterns:
+- Use `broadcastTripRequest` (exported from trips/service.ts) for realtime
+- Use `sendPushToUser` for push notifications
+- Reuse `calculateFare`, `getCommissionRate`, `geocode` from shared libs
 
 ### UX Design Requirements
 
-No aplica — no hay UX doc para este feature.
+No UX design document exists. Backend decisions driven by PRD user journeys and Pencil design screens.
 
 ### FR Coverage Map
 
-| FR | Cubierto por |
-|----|-------------|
-| FR1 | Epic 1 — Story 1.1, 1.2 |
-| FR2 | Epic 2 — Story 2.1, 2.2 |
-| FR3 | Epic 1 — Story 1.4 (regression) |
-| FR4 | Epic 3 — Story 3.1 |
-| FR5 | Epic 1 — Story 1.2 |
-| FR6 | Epic 1 — Story 1.3, Story 1.4 |
+| FR | Epic | Story |
+|----|------|-------|
+| FR10 (driver location) | Epic 1 | Story 1.1 |
+| FR13 (realtime tracking) | Epic 1 | Story 1.2 |
+| FR19 (trip history) | Epic 1 | Story 1.3 |
 
 ## Epic List
 
-1. **Epic 1: Backend Identity Foundation** — Base de datos y middleware para identidad sin rol fijo
-2. **Epic 2: Passenger Profile Registration** — Registro de pasajero que crea perfil en backend
-3. **Epic 3: Dual-Role Verification** — Validación end-to-end de usuario con ambos roles
+### Epic 1: Passenger Ride Experience — Backend Completion
 
-## Epic 1: Backend Identity Foundation
+The passenger can see the driver's real-time location on the map, receive status updates without polling the server every few seconds, and browse their full trip history with route details, fares, and ratings.
 
-Sentar las bases en el backend para que un usuario no tenga un rol fijo al crearse, y que el rol se derive de los perfiles existentes.
+**FRs covered:** FR10 (partial), FR13, FR19
 
-### Story 1.1: Create passenger_profiles table
+**Stories:**
+- Story 1.1: Driver location in active trip — join `driver_locations` into `GET /passenger/trips/active`
+- Story 1.2: Realtime status push — broadcast to `passenger:<id>` topic on driver state transitions
+- Story 1.3: Trip history — `GET /passenger/trips/history` with pagination
 
-As a backend developer,
-I want a `passenger_profiles` table linked to `users`,
-So that passenger-specific data has a home separate from driver data.
+### Story 1.1: Driver Location in Active Trip Endpoint
 
-**Acceptance Criteria:**
-
-**Given** la base de datos existente con `users` y `drivers`
-**When** ejecuto la migración
-**Then** existe una tabla `passenger_profiles` con columnas `id UUID PK`, `user_id UUID UNIQUE FK → users.id ON DELETE CASCADE`, `created_at`, `updated_at`
-**And** el Drizzle schema está exportado desde `schema/index.ts`
-
-### Story 1.2: Add deriveRole to auth middleware
-
-As a backend developer,
-I want the user's role computed from their profiles at request time,
-So that dual-role users are correctly identified without a static column.
+As a passenger,
+I want `GET /passenger/trips/active` to include the driver's current latitude and longitude,
+So that the app can show the driver's position on the map without a separate API call.
 
 **Acceptance Criteria:**
 
-**Given** un `userId`
-**When** llamo a `deriveRole(userId)`
-**Then** devuelve `null` si no tiene ningún perfil
-**And** devuelve `'driver'` si solo tiene `drivers` row
-**And** devuelve `'passenger'` si solo tiene `passenger_profiles` row
-**And** devuelve `'both'` si tiene ambos
+**Given** a trip with an assigned driver who has a registered location in `driver_locations`,
+**When** I call `GET /passenger/trips/active`,
+**Then** the response includes `driver_lat` and `driver_lng` fields with the driver's last known position.
 
-### Story 1.3: Update findOrCreateUser to not hardcode role
+**Given** a trip with an assigned driver but NO location in `driver_locations`,
+**When** I call `GET /passenger/trips/active`,
+**Then** `driver_lat` and `driver_lng` are `null` (no error).
 
-As a backend developer,
-I want new users created without a hardcoded `role: 'driver'`,
-So that passenger-only users don't get mislabeled.
+**Given** a trip with NO assigned driver (pending search),
+**When** I call `GET /passenger/trips/active`,
+**Then** `driver_lat` and `driver_lng` are `null`.
 
-**Acceptance Criteria:**
+**Implementation:** Add `LEFT JOIN driver_locations` to `getActiveTrip` query in `passenger-trips/service.ts`. Also add it to `getTripById`. Zero new endpoints.
 
-**Given** un usuario nuevo de Supabase Auth sin row en `users`
-**When** `findOrCreateUser` lo crea
-**Then** el INSERT no incluye `role: 'driver'`
-**And** el `AuthUser` devuelto tiene `role` computado vía `deriveRole`
+### Story 1.2: Realtime Status Broadcast to Passenger
 
-**Given** un usuario existente con driver profile
-**When** `findOrCreateUser` lo lee
-**Then** devuelve `role: 'driver'` (derivado, no almacenado)
-
-### Story 1.4: Update requireRole for dual roles
-
-As a backend developer,
-I want `requireRole('driver')` to also accept users with `role: 'both'`,
-So that dual-role users can access driver endpoints without changes.
+As a passenger with an active trip,
+I want to receive real-time updates via Supabase Realtime when the driver changes status,
+So that my app updates instantly without polling every 5 seconds.
 
 **Acceptance Criteria:**
 
-**Given** un usuario con `role: 'both'`
-**When** accede a un endpoint protegido con `requireRole('driver')`
-**Then** el middleware permite el acceso (HTTP 200)
-**And** lo mismo para `requireRole('passenger')`
+**Given** a trip with an assigned driver,
+**When** the driver transitions status (accept → en-route → arrived → start → complete),
+**Then** the backend broadcasts to topic `passenger:<passenger_id>` with the updated trip data and new status.
 
-**Given** todos los tests existentes del backend
-**When** ejecuto `bun test`
-**Then** los 206+ tests pasan sin modificaciones
+**Given** a trip with NO assigned driver (pending),
+**When** no broadcast occurs,
+**Then** no error is logged.
 
----
+**Given** the broadcast infrastructure (Supabase Realtime) is unavailable,
+**When** a status transition happens,
+**Then** the backend logs a warning but does NOT fail the transition (fire-and-forget).
 
-## Epic 2: Passenger Profile Registration
+**Implementation:** Add a `broadcastToPassenger(passengerId, trip)` function in `passenger-trips/service.ts`. Add broadcast calls in `trips/service.ts` after each driver status-changing method (claimTrip, enRouteTrip, arrivedTrip, startTrip, completeTrip). Fire-and-forget via fetch to Supabase Realtime API — identical pattern to existing `broadcastTripRequest`.
 
-Crear el endpoint de registro de pasajero y conectarlo con el flujo de la app mobile.
+### Story 1.3: Trip History Endpoint
 
-### Story 2.1: Create passengers service and POST endpoint
-
-As a backend developer,
-I want a `POST /passenger/register` endpoint,
-So that the mobile app can create a passenger profile after sign-up.
-
-**Acceptance Criteria:**
-
-**Given** un usuario autenticado sin passenger profile
-**When** llama a `POST /passenger/register`
-**Then** se crea un `passenger_profiles` row con su `user_id`
-**And** devuelve HTTP 201 con los datos del perfil
-
-**Given** un usuario que ya tiene passenger profile
-**When** llama a `POST /passenger/register`
-**Then** devuelve HTTP 200 con el perfil existente (idempotente)
-
-### Story 2.2: Wire passenger registration in mobile app
-
-As a passenger user,
-I want my profile created automatically after sign-up,
-So that I can start using the app immediately.
+As a passenger,
+I want `GET /passenger/trips/history` to return my past trips with pagination,
+So that I can browse completed and cancelled trips with route, fare, driver info, and rating.
 
 **Acceptance Criteria:**
 
-**Given** un usuario nuevo que completa Register → Terms → LoginCredentials → signUp
-**When** el signUp es exitoso
-**Then** la app llama a `POST /passenger/register`
-**And** el usuario es redirigido al Home
+**Given** I am authenticated as a passenger with 25 past trips,
+**When** I call `GET /passenger/trips/history?page=1&limit=10`,
+**Then** I receive the first 10 trips ordered by most recent, with `total_fare`, `origin_address`, `dest_address`, `status`, `created_at`, driver name/rating, and vehicle info.
 
-**Given** un usuario existente (ya registrado como driver) que inicia sesión en la passenger app
-**When** `signUp` falla con "User already registered"
-**Then** la app hace `signIn` automáticamente
-**And** muestra "Ya tenés cuenta, iniciando sesión..."
-**And** llama a `POST /passenger/register`
-**And** redirige al Home
+**Given** I call with no params,
+**When** default page=1, limit=20 is applied,
+**Then** I receive up to 20 trips.
 
----
+**Given** I have zero trips,
+**When** I call the endpoint,
+**Then** I receive an empty array and status 200.
 
-## Epic 3: Dual-Role Verification
+**Given** I am a driver calling this endpoint,
+**When** the role check runs,
+**Then** I receive 403 Forbidden.
 
-Validar el flujo completo y asegurar que nada se rompió.
+**Given** a trip has no driver assigned (cancelled before match),
+**When** I view history,
+**Then** driver fields are `null` (LEFT JOIN, no error).
 
-### Story 3.1: End-to-end dual-role test
-
-As a QA engineer,
-I want an automated test that creates a dual-role user,
-So that we have confidence the feature works end-to-end.
-
-**Acceptance Criteria:**
-
-**Given** un email nuevo
-**When** creo un usuario vía driver flow (→ driver profile)
-**And** luego inicio sesión con el mismo email en passenger flow
-**And** completo el registro de pasajero (→ passenger profile)
-**Then** `GET /auth/me` devuelve `role: 'both'`
-**And** el usuario puede acceder a endpoints de driver (`/drivers/me/status`)
-**And** el usuario puede acceder a endpoints de passenger (`/passenger/profile`)
+**Implementation:** Add `getTripHistory(user, page, limit)` to `passenger-trips/service.ts`. `GET /passenger/trips/history` route with `?page` and `?limit` query params. Mirror the existing `tripService.getTripHistory` pattern but filter by `passenger_id`. Return same joined shape as `/active`.
