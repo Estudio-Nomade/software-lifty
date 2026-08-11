@@ -83,6 +83,7 @@ function ActiveTripRecovery() {
 
   useEffect(() => {
     if (!sessionRestored || !isAuthenticated || navigatedRef.current) return;
+    navigatedRef.current = true;
     InteractionManager.runAfterInteractions(() => {
       router.replace('/location-permissions');
     });
