@@ -63,6 +63,14 @@ export const useAuthStore = create<AuthState>()(
         fullName: state.fullName,
         isAuthenticated: state.isAuthenticated,
       }),
+      merge: (persisted: unknown, current: AuthState) => {
+        const p = persisted as Partial<AuthState>;
+        return {
+          ...current,
+          ...p,
+          fullName: current.fullName || p?.fullName || null,
+        };
+      },
     },
   ),
 );
