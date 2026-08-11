@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -43,7 +43,7 @@ export function TermsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.back} onPress={goBack}>
           ←
@@ -77,7 +77,7 @@ export function TermsScreen() {
           {accepted ? 'Redirigiendo...' : 'Aceptar'}
         </Button>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
