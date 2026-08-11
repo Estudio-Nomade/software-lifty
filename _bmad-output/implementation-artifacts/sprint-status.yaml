@@ -1,0 +1,121 @@
+# generated: 2026-08-10
+# last_updated: 2026-08-10
+# project: software-lifty
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+generated: 2026-08-10
+last_updated: 2026-08-10
+project: software-lifty
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # ===== Epic 1: Foundation (Phase 0) — DONE =====
+  epic-1: done
+  1-1-theme-tokens: done
+  1-2-button-component: done
+  1-3-input-component: done
+  1-4-otpinput: done
+  1-5-card: done
+  1-6-auth-context: done
+  1-7-supabase-client: done
+  1-8-api-client: done
+  1-9-ride-location-stores: done
+  epic-1-retrospective: optional
+
+  # ===== Epic 2: Auth (Phase 1) — DONE =====
+  epic-2: done
+  2-1-welcome-screen: done
+  2-2-login-phone: done
+  2-3-login-otp: done
+  2-4-register-screen: done
+  2-5-terms-screen: done
+  2-6-registration-draft: done
+  epic-2-retrospective: optional
+
+  # ===== Epic 3: Home + Map Shell — PENDING =====
+  epic-3: backlog
+  3-1-map-provider: backlog
+  3-2-location-permission: backlog
+  3-3-home-screen-with-bottom-cta: backlog
+  3-4-tabbar-component: backlog
+  3-5-navbar-component: backlog
+  epic-3-retrospective: optional
+
+  # ===== Epic 4: Trip Request — PENDING =====
+  epic-4: backlog
+  4-1-set-pickup: backlog
+  4-2-set-destination: backlog
+  4-3-fare-review: backlog
+  4-4-searching-driver: backlog
+  4-5-trip-request-api: backlog
+  epic-4-retrospective: optional
+
+  # ===== Epic 5: Trip Lifecycle + SOS — PENDING =====
+  epic-5: backlog
+  5-1-driver-found: backlog
+  5-2-verification-code: backlog
+  5-3-driver-enroute: backlog
+  5-4-in-trip: backlog
+  5-5-sos: backlog
+  5-6-cancel-trip: backlog
+  epic-5-retrospective: optional
+
+  # ===== Epic 6: Post-Trip (Rating + Payment) — PENDING =====
+  epic-6: backlog
+  6-1-trip-complete: backlog
+  6-2-rating: backlog
+  6-3-payment-cash: backlog
+  6-4-completion-flow: backlog
+  epic-6-retrospective: optional
+
+  # ===== Epic 7: Trip History + Detail — PENDING =====
+  epic-7: backlog
+  7-1-history-list: backlog
+  7-2-trip-detail: backlog
+  epic-7-retrospective: optional
+
+  # ===== Epic 8: Profile + Sign Out — PENDING =====
+  epic-8: backlog
+  8-1-profile-view: backlog
+  8-2-sign-out: backlog
+  epic-8-retrospective: optional
+
+  # ===== Epic 9: Polish + Tests (Buffer) — PENDING =====
+  epic-9: backlog
+  9-1-component-tests: backlog
+  9-2-hook-tests: backlog
+  9-3-keyboard-polish: backlog
+  9-4-loading-states: backlog
+  9-5-error-boundaries: backlog
+  9-6-i18n-groundwork: backlog
+  epic-9-retrospective: optional
+
+# Action items discovered in retrospectives will be appended here.
+# action_items: []
