@@ -10,6 +10,7 @@ import { kycRoutes } from './features/kyc/routes';
 import { locationHttpPlugin, locationWsPlugin } from './features/location/routes';
 import { mapsRoutes } from './features/maps/routes';
 import { notificationsRoutes } from './features/notifications/routes';
+import { passengerTripRoutes } from './features/passenger-trips/routes';
 import { passengersRoutes } from './features/passengers/routes';
 import { paymentMethodsRoutes } from './features/payment-methods/routes';
 import { paymentsRoutes } from './features/payments/routes';
@@ -109,6 +110,7 @@ export function createApp(customAuthPlugin?: typeof authPlugin) {
         .use(passengersRoutes)
         .use(driversRoutes)
         .use(districtsRoutes)
+        .use(passengerTripRoutes)
         .use(locationHttpPlugin),
     )
     .get('/health', async ({ set }) => {

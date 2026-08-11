@@ -1,0 +1,18 @@
+import { t } from 'elysia';
+
+export const requestTripBody = t.Object({
+  origin_lat: t.Number(),
+  origin_lng: t.Number(),
+  dest_lat: t.Number(),
+  dest_lng: t.Number(),
+  origin_address: t.Optional(t.String()),
+  dest_address: t.Optional(t.String()),
+  pickup_instructions: t.Optional(t.String()),
+  vehicle_type: t.Union([t.Literal('auto'), t.Literal('moto')]),
+  distance_km: t.Number(),
+  duration_minutes: t.Number(),
+});
+
+export const tripIdParams = t.Object({
+  id: t.String(),
+});

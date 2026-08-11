@@ -14,9 +14,7 @@ import { drivers } from './drivers';
 export const trips = pgTable('trips', {
   id: uuid('id').defaultRandom().primaryKey(),
   passenger_id: uuid('passenger_id'),
-  driver_id: uuid('driver_id')
-    .notNull()
-    .references(() => drivers.id),
+  driver_id: uuid('driver_id').references(() => drivers.id),
   status: varchar('status', { length: 30 }).notNull().default('request_received'),
   origin_lat: real('origin_lat').notNull(),
   origin_lng: real('origin_lng').notNull(),

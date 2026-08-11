@@ -37,7 +37,9 @@ export async function cleanupStaleDrivers(): Promise<{
         .from(trips)
         .where(inArray(trips.status, ACTIVE_TRIP_STATUSES));
 
-      const excludedIds = activeTripDriverIds.map((t) => t.driver_id);
+      const excludedIds = activeTripDriverIds
+        .map((t) => t.driver_id)
+        .filter((id): id is string => id !== null);
 
       const conditions = [
         eq(drivers.is_online, true),

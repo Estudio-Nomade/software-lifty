@@ -1,0 +1,1 @@
+ALTER TABLE trips ALTER COLUMN driver_id DROP NOT NULL;
