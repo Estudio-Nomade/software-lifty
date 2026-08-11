@@ -1,5 +1,67 @@
 # AGENTS.md - Lifty Passenger App
 
+## Leyes del Pasajero (no negociables)
+
+> Estas dos leyes rigen TODO el trabajo de la app pasajero. Cumplirlas es requisito; cuestionarlas es escalar.
+
+### Ley 1 — Skills BMAD obligatorias
+
+> Cualquier trabajo de diseño, planeación, documentación o cambios arquitecturales en esta app **debe** usar las skills BMAD instaladas.
+
+**Cuándo invocar BMAD (no opcional):**
+
+- Documentar product requirements → `bmad-prd` o `bmad-product-brief`
+- Crear o actualizar architecture → `bmad-architecture`
+- Documentar codebase o knowledge → `bmad-document-project` / `bmad-generate-project-context`
+- Generar o revisar epics + stories → `bmad-create-epics-and-stories`
+- Planificar sprints → `bmad-sprint-planning`
+- Estado del sprint → `bmad-sprint-status`
+- Crear/validar story individual → `bmad-create-story`
+- Spec técnica → `bmad-spec`
+- Decisiones de UI/UX → `bmad-ux`
+- Reviews de código → `bmad-code-review`
+- Retrospectivas → `bmad-retrospective`
+
+**Cómo invocar:** usar el tool `skill` con el nombre correspondiente. Para routing, `bmad-help` lista todas las disponibles.
+
+**Excepción:** cambios puramente mecánicos (typo fix, formateo, dependency bump menor) no requieren BMAD pero sí commit con conventional commit.
+
+### Ley 2 — Reuso máximo de `apps/mobile` y `apps/backend`
+
+> Antes de escribir código nuevo, **revisar si ya existe** en `apps/mobile` (driver) o `apps/backend`. Si existe, adaptarlo — no duplicarlo.
+
+**Prohibido:**
+
+- ❌ Crear un componente que ya existe en `apps/mobile/src/components/` (Button, Input, OTPInput, Card, Navbar, TabBar, Header, ChatBubble, DriverCard, Toggle).
+- ❌ Definir un endpoint que ya existe en `apps/backend/src/features/<X>/routes.ts`.
+- ❌ Inventar un error format distinto al que produce `apps/backend/src/shared/lib/route-utils.ts` (`safeCall`).
+- ❌ Reimplementar realtime/websocket — usar el canal de Supabase Realtime que ya está en uso en `apps/mobile/src/lib/realtime.ts`.
+- ❌ Crear un theme nuevo o duplicar tokens — usar `src/theme/index.ts` (28 tokens canónicos del `.pen`).
+
+**Permitido sólo con justificación documentada:**
+
+- Reutilizar con adaptación: si el código del driver usa `turquoise`/`Nunito` y el passenger usa `primary`/`Inter`, la adaptación es un find-replace consciente de tokens, no una reescritura.
+- Reescritura: si la API del componente no encaja y la adaptación es > 50% del código, se documenta en el commit por qué se reescribió en vez de adaptar.
+
+**Inventario de reuso (referencia rápida):**
+
+| Origen | Elemento | Ubicación en passenger | Cómo se adaptó |
+|---|---|---|---|
+| `apps/mobile/src/components/Button.tsx` | 5 variants (`primary`/`secondary`/`danger`/`cta`/`outline`) | `src/components/Button.tsx` | Adaptar `theme.colors.turquoise` → `primary`, agregar `outline` variant |
+| `apps/mobile/src/components/Input.tsx` | label + error + leftElement/rightElement | `src/components/Input.tsx` | Adaptar theme, agregar `icon` prop |
+| `apps/mobile/src/lib/realtime.ts` | `subscribeToTripChannel` | `src/lib/realtime.ts` (a crear) | Copiar tal cual — eventos coinciden |
+| `apps/backend/src/shared/lib/route-utils.ts` | `safeCall` error shape | `src/api/client.ts` interceptor | Matchear `{ error: { code, message, status }, meta: { timestamp } }` |
+| `apps/backend/src/features/trips/routes.ts` | 14 endpoints | `src/api/passenger.ts` (a crear) | Consumir via `api.get/post/put` |
+| `apps/backend/src/features/sos/routes.ts` | POST /sos | `src/api/passenger.ts` | Consumir |
+| `apps/backend/src/features/ratings/routes.ts` | POST /ratings/trips/:id | `src/api/passenger.ts` | Consumir |
+| `apps/backend/src/features/maps/` | autocomplete, geocode, directions | `src/api/passenger.ts` | Consumir |
+| `apps/backend/src/features/location/` | WS /ws/location | `src/lib/websocket.ts` (a crear) | Consumir para tracking |
+| `apps/backend/src/shared/lib/push.ts` | FCM send | futuro | Cuando hagamos push notifications |
+
+**Theme no se unifica:** `apps/mobile` usa `turquoise #1BBFAE` + Nunito (identidad del driver). El passenger usa `primary #00C2B3` + Inter (identidad del pasajero). **No mergear.** Documentar la diferencia.
+
+**Shared package futuro:** cuando tengamos 3+ componentes reusables en ambos apps, considerar `packages/lifty-ui` con extract. No antes.
+
 ## Vision General
 
 Este documento sirve como guia principal para el desarrollo de la aplicacion de pasajeros de Lifty. Define la arquitectura, estandares, flujos de trabajo y expectativas para todos los agentes de IA y desarrolladores que trabajen en este proyecto.
