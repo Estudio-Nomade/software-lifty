@@ -41,94 +41,97 @@ export function HomeScreen() {
         </View>
       </View>
 
-      <ScrollView
-        style={styles.body}
-        contentContainerStyle={styles.bodyContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.greeting}>
-          <Text style={styles.greetingHi}>¡Hola, {displayName}!</Text>
-          <Text style={styles.greetingSub}>¿A dónde vamos hoy?</Text>
-        </View>
-
-        <View style={styles.mapArea}>
-          <View style={styles.mapPlaceholder}>
-            <Ionicons name="map-outline" size={48} color={theme.colors.deepBlue} />
-            <Text style={styles.mapLabel}>Mapa</Text>
+      <View style={styles.bodyWrap}>
+        <ScrollView
+          style={styles.body}
+          contentContainerStyle={styles.bodyContent}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <View style={styles.greeting}>
+            <Text style={styles.greetingHi}>¡Hola, {displayName}!</Text>
+            <Text style={styles.greetingSub}>¿A dónde vamos hoy?</Text>
           </View>
-          <TouchableOpacity style={styles.centerBtn}>
-            <Ionicons name="locate" size={22} color={theme.colors.primary} />
-          </TouchableOpacity>
-        </View>
 
-        <View style={styles.shortcuts}>
-          <TouchableOpacity style={styles.shortcut} onPress={() => navigate('TripRequest')}>
-            <Ionicons name="home" size={24} color={theme.colors.deepBlue} />
-            <Text style={styles.shortcutLabel}>Casa</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.shortcut} onPress={() => navigate('TripRequest')}>
-            <Ionicons name="briefcase" size={24} color={theme.colors.deepBlue} />
-            <Text style={styles.shortcutLabel}>Trabajo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.shortcut} onPress={() => navigate('TripRequest')}>
-            <Ionicons name="time" size={24} color={theme.colors.deepBlue} />
-            <Text style={styles.shortcutLabel}>Reciente</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.heroCard}>
-          <View style={styles.heroIllustration}>
-            <Ionicons name="map-outline" size={36} color={theme.colors.primary} />
-            <Text style={styles.heroRoute}>• ╌ ╌ ╌ ╌ ╌ •</Text>
-            <Ionicons name="location" size={28} color={theme.colors.primary} />
+          <View style={styles.mapArea}>
+            <View style={styles.mapPlaceholder}>
+              <Ionicons name="map-outline" size={48} color={theme.colors.deepBlue} />
+              <Text style={styles.mapLabel}>Mapa</Text>
+            </View>
+            <TouchableOpacity style={styles.centerBtn}>
+              <Ionicons name="locate" size={22} color={theme.colors.primary} />
+            </TouchableOpacity>
           </View>
-          <Text style={styles.heroTagline}>Tu viaje, simple y confiable</Text>
-          <TouchableOpacity
-            style={styles.heroCTA}
-            onPress={() => navigate('TripRequest')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.heroCTAText}>Solicitar viaje</Text>
+
+          <View style={styles.shortcuts}>
+            <TouchableOpacity style={styles.shortcut} onPress={() => navigate('TripRequest')}>
+              <Ionicons name="home" size={24} color={theme.colors.deepBlue} />
+              <Text style={styles.shortcutLabel}>Casa</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.shortcut} onPress={() => navigate('TripRequest')}>
+              <Ionicons name="briefcase" size={24} color={theme.colors.deepBlue} />
+              <Text style={styles.shortcutLabel}>Trabajo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.shortcut} onPress={() => navigate('TripRequest')}>
+              <Ionicons name="time" size={24} color={theme.colors.deepBlue} />
+              <Text style={styles.shortcutLabel}>Reciente</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.heroCard}>
+            <View style={styles.heroIllustration}>
+              <Ionicons name="map-outline" size={36} color={theme.colors.primary} />
+              <Text style={styles.heroRoute}>• ╌ ╌ ╌ ╌ ╌ •</Text>
+              <Ionicons name="location" size={28} color={theme.colors.primary} />
+            </View>
+            <Text style={styles.heroTagline}>Tu viaje, simple y confiable</Text>
+            <TouchableOpacity
+              style={styles.heroCTA}
+              onPress={() => navigate('TripRequest')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.heroCTAText}>Solicitar viaje</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.suggestionsTitle}>Sugerencias para vos</Text>
+
+          {SUGGESTIONS.map((item) => (
+            <TouchableOpacity
+              key={item.name}
+              style={styles.suggestionItem}
+              onPress={() => navigate('TripRequest')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.suggestionIconCircle}>
+                <Ionicons name={item.icon as any} size={20} color={theme.colors.deepBlue} />
+              </View>
+              <View style={styles.suggestionTexts}>
+                <Text style={styles.suggestionName}>{item.name}</Text>
+                <Text style={styles.suggestionDesc}>{item.desc}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <View style={styles.tabBar}>
+          <TouchableOpacity style={styles.tab}>
+            <Ionicons name="home" size={20} color={theme.colors.primary} />
+            <Text style={styles.tabActive}>Inicio</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tab}>
+            <Ionicons name="search" size={20} color={theme.colors.mediumGray} />
+            <Text style={styles.tabLabel}>Buscar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tab} onPress={() => navigate('TripHistory')}>
+            <Ionicons name="list" size={20} color={theme.colors.mediumGray} />
+            <Text style={styles.tabLabel}>Viajes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tab} onPress={() => navigate('Profile')}>
+            <Ionicons name="person-outline" size={20} color={theme.colors.mediumGray} />
+            <Text style={styles.tabLabel}>Perfil</Text>
           </TouchableOpacity>
         </View>
-
-        <Text style={styles.suggestionsTitle}>Sugerencias para vos</Text>
-
-        {SUGGESTIONS.map((item) => (
-          <TouchableOpacity
-            key={item.name}
-            style={styles.suggestionItem}
-            onPress={() => navigate('TripRequest')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.suggestionIconCircle}>
-              <Ionicons name={item.icon as any} size={20} color={theme.colors.deepBlue} />
-            </View>
-            <View style={styles.suggestionTexts}>
-              <Text style={styles.suggestionName}>{item.name}</Text>
-              <Text style={styles.suggestionDesc}>{item.desc}</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      <View style={styles.tabBar}>
-        <TouchableOpacity style={styles.tab}>
-          <Ionicons name="home" size={20} color={theme.colors.primary} />
-          <Text style={styles.tabActive}>Inicio</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tab}>
-          <Ionicons name="search" size={20} color={theme.colors.mediumGray} />
-          <Text style={styles.tabLabel}>Buscar</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tab} onPress={() => navigate('TripHistory')}>
-          <Ionicons name="list" size={20} color={theme.colors.mediumGray} />
-          <Text style={styles.tabLabel}>Viajes</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.tab} onPress={() => navigate('Profile')}>
-          <Ionicons name="person-outline" size={20} color={theme.colors.mediumGray} />
-          <Text style={styles.tabLabel}>Perfil</Text>
-        </TouchableOpacity>
       </View>
 
       <TouchableOpacity
@@ -171,8 +174,11 @@ const styles = StyleSheet.create({
     padding: theme.spacing.sm,
   },
   body: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: theme.colors.lightGray,
+  },
+  bodyWrap: {
+    flex: 1,
   },
   bodyContent: {
     paddingBottom: theme.spacing.md,
