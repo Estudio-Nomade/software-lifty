@@ -142,7 +142,6 @@ export function LoginCredentialsScreen() {
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
-              icon="📧"
               style={styles.inputField}
             />
             <View style={styles.gap} />
@@ -152,7 +151,6 @@ export function LoginCredentialsScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
-                icon="🔒"
                 style={styles.inputField}
               />
               <TouchableOpacity
@@ -175,7 +173,6 @@ export function LoginCredentialsScreen() {
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   secureTextEntry={!showPassword}
-                  icon="🔒"
                   style={styles.inputField}
                   error={
                     confirmPassword.length > 0 && password !== confirmPassword
@@ -189,7 +186,6 @@ export function LoginCredentialsScreen() {
                   value={phone}
                   onChangeText={setPhone}
                   keyboardType="phone-pad"
-                  icon="📱"
                   style={styles.inputField}
                 />
                 <Text style={styles.fieldHint}>Podés completarlo después desde tu perfil</Text>
@@ -291,7 +287,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: theme.spacing.lg,
-    justifyContent: 'center',
+    paddingTop: theme.spacing.xl,
   },
   brand: {
     fontSize: theme.fontSize['4xl'],
@@ -300,7 +296,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   title: {
-    fontSize: theme.fontSize['3xl'],
+    fontSize: theme.fontSize['2xl'],
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.white,
     marginTop: theme.spacing.sm,
@@ -364,6 +360,7 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.primary,
+    marginTop: theme.spacing.sm,
   },
   switchAuth: {
     fontSize: theme.fontSize.sm,
