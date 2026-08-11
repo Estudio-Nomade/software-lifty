@@ -1,5 +1,5 @@
 {
-  "version": "2.14",
+  "version": "2.15",
   "children": [
     {
       "type": "frame",
@@ -11,7 +11,7 @@
       "width": 200,
       "height": 52,
       "fill": "$primary",
-      "cornerRadius": "$radius-button",
+      "cornerRadius": "$radius-md",
       "layout": "vertical",
       "justifyContent": "center",
       "alignItems": "center",
@@ -23,7 +23,7 @@
           "fill": "$white",
           "content": "Button",
           "fontFamily": "$font-family",
-          "fontSize": "$font-body-lg",
+          "fontSize": "$font-md",
           "fontWeight": "medium"
         }
       ]
@@ -37,7 +37,7 @@
       "reusable": true,
       "width": 200,
       "fill": "#00000000",
-      "cornerRadius": "$radius-button",
+      "cornerRadius": "$radius-md",
       "stroke": "$primary",
       "strokeWidth": 2,
       "layout": "vertical",
@@ -51,7 +51,7 @@
           "fill": "$primary",
           "content": "Button",
           "fontFamily": "$font-family",
-          "fontSize": "$font-body-lg",
+          "fontSize": "$font-md",
           "fontWeight": "medium"
         }
       ]
@@ -65,7 +65,7 @@
       "reusable": true,
       "width": 200,
       "fill": "$dangerRed",
-      "cornerRadius": "$radius-button",
+      "cornerRadius": "$radius-md",
       "layout": "vertical",
       "justifyContent": "center",
       "alignItems": "center",
@@ -77,7 +77,7 @@
           "fill": "$white",
           "content": "Button",
           "fontFamily": "$font-family",
-          "fontSize": "$font-body-lg",
+          "fontSize": "$font-md",
           "fontWeight": "medium"
         }
       ]
@@ -92,7 +92,7 @@
       "width": 280,
       "height": 52,
       "fill": "$primary",
-      "cornerRadius": "$radius-button",
+      "cornerRadius": "$radius-md",
       "layout": "vertical",
       "justifyContent": "center",
       "alignItems": "center",
@@ -104,7 +104,7 @@
           "fill": "$white",
           "content": "BUTTON CTA",
           "fontFamily": "$font-family",
-          "fontSize": "$font-body-lg",
+          "fontSize": "$font-md",
           "fontWeight": "medium"
         }
       ]
@@ -119,7 +119,7 @@
       "width": 320,
       "height": 160,
       "fill": "$white",
-      "cornerRadius": "$radius-card",
+      "cornerRadius": "$radius-lg",
       "layout": "vertical",
       "gap": "$spacing-sm",
       "padding": "$spacing-md",
@@ -157,7 +157,7 @@
       "reusable": true,
       "width": 320,
       "fill": "$white",
-      "cornerRadius": "$radius-input",
+      "cornerRadius": "$radius-sm",
       "gap": 8,
       "padding": 12,
       "alignItems": "center",
@@ -169,7 +169,7 @@
           "fill": "$mediumGray",
           "content": "Placeholder",
           "fontFamily": "$font-family",
-          "fontSize": "$font-body",
+          "fontSize": "$font-sm",
           "fontWeight": "normal"
         }
       ]
@@ -563,7 +563,6 @@
       "height": 844,
       "fill": "$deepBlue",
       "layout": "vertical",
-      "gap": "$spacing-lg",
       "justifyContent": "center",
       "alignItems": "center",
       "children": [
@@ -577,54 +576,74 @@
         },
         {
           "type": "frame",
-          "id": "KzOyc",
-          "name": "LogoMark",
-          "width": 120,
-          "height": 142,
-          "fill": {
-            "type": "image",
-            "enabled": true,
-            "url": "lifty-logo.png",
-            "mode": "fit"
-          }
-        },
-        {
-          "type": "text",
-          "id": "INy0m",
-          "name": "Logo",
-          "fill": "$white",
-          "content": "Lifty",
-          "fontFamily": "$font-family",
-          "fontSize": "$font-4xl",
-          "fontWeight": "bold"
-        },
-        {
-          "type": "frame",
-          "id": "rJJub",
-          "name": "TaglineRow",
-          "gap": 4,
-          "justifyContent": "center",
+          "id": "eQzwo",
+          "name": "LogoWrap",
+          "layout": "vertical",
+          "gap": 24,
           "alignItems": "center",
           "children": [
             {
-              "type": "text",
-              "id": "GauYF",
-              "name": "Tag1",
-              "fill": "$white",
-              "content": "Movilidad que",
-              "fontFamily": "$font-family",
-              "fontSize": "$font-sm",
-              "fontWeight": "normal"
+              "type": "frame",
+              "id": "hiYv5",
+              "name": "LogoMark",
+              "width": 96,
+              "height": 96,
+              "fill": "$primary",
+              "cornerRadius": 999,
+              "layout": "vertical",
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "H93eg",
+                  "name": "LogoLetter",
+                  "fill": "$white",
+                  "content": "L",
+                  "fontFamily": "$font-family",
+                  "fontSize": 64,
+                  "fontWeight": "700"
+                }
+              ]
             },
             {
               "type": "text",
-              "id": "VntGK",
-              "name": "Tag2",
-              "fill": "$primary",
-              "content": "te eleva.",
+              "id": "lxHoD",
+              "name": "LogoText",
+              "fill": "$white",
+              "content": "Lifty",
               "fontFamily": "$font-family",
-              "fontSize": "$font-sm",
-              "fontWeight": "normal"
+              "fontSize": 48,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "RgQLu",
+              "name": "Tagline",
+              "gap": 6,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "DKFJw",
+                  "name": "Tag1",
+                  "fill": "$white",
+                  "content": "Movilidad que",
+                  "fontFamily": "$font-family",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "pTpaq",
+                  "name": "Tag2",
+                  "fill": "$primary",
+                  "content": "te eleva.",
+                  "fontFamily": "$font-family",
+                  "fontSize": 14,
+                  "fontWeight": "600"
+                }
+              ]
             }
           ]
         }
@@ -705,7 +724,7 @@
               "fill": "$white",
               "content": "¡Bienvenido de vuelta!",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -801,7 +820,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -894,7 +913,7 @@
               "fill": "$white",
               "content": "¡Crea tu cuenta!",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -933,139 +952,7 @@
                   "id": "c87QP",
                   "name": "Placeholder",
                   "fill": "$mediumGray",
-                  "content": "Nombre completo",
-                  "fontFamily": "$font-family",
-                  "fontSize": "$font-md",
-                  "fontWeight": "normal"
-                }
-              ]
-            },
-            {
-              "type": "frame",
-              "id": "J6dnL",
-              "name": "emailInput",
-              "width": "fill_container",
-              "fill": "$white",
-              "cornerRadius": "$radius-sm",
-              "gap": 8,
-              "padding": 12,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "text",
-                  "id": "o5C2f2",
-                  "name": "Icon",
-                  "fill": "$mediumGray",
-                  "content": "📧",
-                  "fontFamily": "$font-family",
-                  "fontSize": "$font-md",
-                  "fontWeight": "normal"
-                },
-                {
-                  "type": "text",
-                  "id": "dJnwZ",
-                  "name": "Placeholder",
-                  "fill": "$mediumGray",
-                  "content": "juan@email.com",
-                  "fontFamily": "$font-family",
-                  "fontSize": "$font-md",
-                  "fontWeight": "normal"
-                }
-              ]
-            },
-            {
-              "type": "frame",
-              "id": "s0t94A",
-              "name": "phoneInput",
-              "width": "fill_container",
-              "fill": "$white",
-              "cornerRadius": "$radius-sm",
-              "gap": 8,
-              "padding": 12,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "text",
-                  "id": "ZyuBx",
-                  "name": "Icon",
-                  "fill": "$mediumGray",
-                  "content": "📱",
-                  "fontFamily": "$font-family",
-                  "fontSize": "$font-md",
-                  "fontWeight": "normal"
-                },
-                {
-                  "type": "text",
-                  "id": "SSy5e",
-                  "name": "Placeholder",
-                  "fill": "$mediumGray",
-                  "content": "+54 9 11 1234 5678",
-                  "fontFamily": "$font-family",
-                  "fontSize": "$font-md",
-                  "fontWeight": "normal"
-                }
-              ]
-            },
-            {
-              "type": "frame",
-              "id": "A5e7iS",
-              "name": "passwordInput",
-              "width": "fill_container",
-              "fill": "$white",
-              "cornerRadius": "$radius-sm",
-              "gap": 8,
-              "padding": 12,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "text",
-                  "id": "Om9b3",
-                  "name": "Icon",
-                  "fill": "$mediumGray",
-                  "content": "🔒",
-                  "fontFamily": "$font-family",
-                  "fontSize": "$font-md",
-                  "fontWeight": "normal"
-                },
-                {
-                  "type": "text",
-                  "id": "JKU7P",
-                  "name": "Placeholder",
-                  "fill": "$mediumGray",
-                  "content": "Contraseña",
-                  "fontFamily": "$font-family",
-                  "fontSize": "$font-md",
-                  "fontWeight": "normal"
-                }
-              ]
-            },
-            {
-              "type": "frame",
-              "id": "xXatP",
-              "name": "confirmInput",
-              "width": "fill_container",
-              "fill": "$white",
-              "cornerRadius": "$radius-sm",
-              "gap": 8,
-              "padding": 12,
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "text",
-                  "id": "bqVDp",
-                  "name": "Icon",
-                  "fill": "$mediumGray",
-                  "content": "🔒",
-                  "fontFamily": "$font-family",
-                  "fontSize": "$font-md",
-                  "fontWeight": "normal"
-                },
-                {
-                  "type": "text",
-                  "id": "E6yW1",
-                  "name": "Placeholder",
-                  "fill": "$mediumGray",
-                  "content": "Confirmar clave",
+                  "content": "Nombre",
                   "fontFamily": "$font-family",
                   "fontSize": "$font-md",
                   "fontWeight": "normal"
@@ -1084,12 +971,45 @@
             },
             {
               "type": "frame",
+              "id": "Eywlz",
+              "name": "surnameInput",
+              "width": "fill_container",
+              "fill": "$white",
+              "cornerRadius": 10,
+              "gap": 8,
+              "padding": "$spacing-md",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "jgMz7",
+                  "name": "Icon",
+                  "fill": "$mediumGray",
+                  "content": "👤",
+                  "fontFamily": "$font-family",
+                  "fontSize": 18,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "DrZzK",
+                  "name": "Placeholder",
+                  "fill": "$mediumGray",
+                  "content": "Apellido",
+                  "fontFamily": "$font-family",
+                  "fontSize": "$font-md",
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
               "id": "rBsYn",
               "name": "RegBtn",
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -1099,7 +1019,7 @@
                   "id": "k4eLhK",
                   "name": "BtnText",
                   "fill": "$white",
-                  "content": "CREAR CUENTA",
+                  "content": "Continuar",
                   "fontFamily": "$font-family",
                   "fontSize": "$font-md",
                   "fontWeight": "medium"
@@ -1198,7 +1118,7 @@
               "content": "¡Casi listo!",
               "textAlign": "center",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -1397,7 +1317,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -1493,7 +1413,7 @@
               "fill": "$white",
               "content": "Completa tu perfil",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -1655,7 +1575,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -1762,7 +1682,7 @@
               "fill": "$white",
               "content": "Agrega tu método de pago",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -1945,7 +1865,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -3153,7 +3073,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -3165,7 +3085,7 @@
                   "fill": "$white",
                   "content": "CONTINUAR",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "medium"
                 }
               ]
@@ -3278,7 +3198,7 @@
               "fill": "$deepBlue",
               "content": "Conectando con conductor...",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h2",
+              "fontSize": "$font-lg",
               "fontWeight": "bold"
             },
             {
@@ -3288,7 +3208,7 @@
               "fill": "$mediumGray",
               "content": "⏱ 30s",
               "fontFamily": "$font-family",
-              "fontSize": "$font-body",
+              "fontSize": "$font-sm",
               "fontWeight": "normal"
             },
             {
@@ -3298,7 +3218,7 @@
               "fill": "$mediumGray",
               "content": "🚗 Auto · 📍 Av. Corrientes → Av. 9 de Julio",
               "fontFamily": "$font-family",
-              "fontSize": "$font-caption",
+              "fontSize": "$font-xs",
               "fontWeight": "normal"
             },
             {
@@ -3308,7 +3228,7 @@
               "width": "fill_container",
               "height": 40,
               "fill": "#00000000",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "stroke": "$dangerRed",
               "strokeWidth": 2,
               "layout": "vertical",
@@ -3322,7 +3242,7 @@
                   "fill": "$dangerRed",
                   "content": "CANCELAR VIAJE",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "medium"
                 }
               ]
@@ -3379,7 +3299,7 @@
               "fill": "$deepBlue",
               "content": "En camino",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -3513,7 +3433,7 @@
                       "fill": "$mediumGray",
                       "content": "Toyota Corolla · ABC 123",
                       "fontFamily": "$font-family",
-                      "fontSize": "$font-caption",
+                      "fontSize": "$font-xs",
                       "fontWeight": "normal"
                     },
                     {
@@ -3567,7 +3487,7 @@
               "width": "fill_container",
               "height": 40,
               "fill": "$dangerRed",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -3666,7 +3586,7 @@
               "content": "Compartir viaje",
               "textAlign": "center",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -3815,7 +3735,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -3918,7 +3838,7 @@
               "fill": "$deepBlue",
               "content": "Conductor llegó",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -4011,7 +3931,7 @@
               "content": "¡Llegó!",
               "textAlign": "center",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -4071,7 +3991,7 @@
                           "fill": "$primary",
                           "content": "★ 4.9",
                           "fontFamily": "$font-family",
-                          "fontSize": "$font-caption",
+                          "fontSize": "$font-xs",
                           "fontWeight": "bold"
                         }
                       ]
@@ -4083,7 +4003,7 @@
                       "fill": "$mediumGray",
                       "content": "Toyota Corolla · ABC 123",
                       "fontFamily": "$font-family",
-                      "fontSize": "$font-caption",
+                      "fontSize": "$font-xs",
                       "fontWeight": "normal"
                     }
                   ]
@@ -4119,7 +4039,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -4131,7 +4051,7 @@
                   "fill": "$white",
                   "content": "INICIAR VIAJE",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "medium"
                 }
               ]
@@ -4188,7 +4108,7 @@
               "fill": "$deepBlue",
               "content": "Verificación",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -4281,7 +4201,7 @@
               "content": "Verificación de seguridad",
               "textAlign": "center",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -4503,7 +4423,7 @@
                           "fill": "$primary",
                           "content": "★ 4.9",
                           "fontFamily": "$font-family",
-                          "fontSize": "$font-caption",
+                          "fontSize": "$font-xs",
                           "fontWeight": "bold"
                         }
                       ]
@@ -4515,7 +4435,7 @@
                       "fill": "$mediumGray",
                       "content": "Toyota Corolla · ABC 123",
                       "fontFamily": "$font-family",
-                      "fontSize": "$font-caption",
+                      "fontSize": "$font-xs",
                       "fontWeight": "normal"
                     }
                   ]
@@ -4539,7 +4459,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -4551,7 +4471,7 @@
                   "fill": "$white",
                   "content": "INICIAR VIAJE",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "medium"
                 }
               ]
@@ -4619,7 +4539,7 @@
               "fill": "$deepBlue",
               "content": "En viaje",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -4672,7 +4592,7 @@
               "content": "Mapa",
               "fontFamily": "$font-family",
               "fontSize": "$font-lg",
-              "fontWeight": "normal"
+              "fontWeight": "600"
             }
           ]
         },
@@ -4761,10 +4681,10 @@
               "id": "Jmemn",
               "name": "ChangeDest",
               "fill": "$primary",
-              "content": "✏️ Modificar destino",
+              "content": "✏️  Modificar destino",
               "fontFamily": "$font-family",
-              "fontSize": "$font-sm",
-              "fontWeight": "normal"
+              "fontSize": "$font-md",
+              "fontWeight": "600"
             },
             {
               "type": "frame",
@@ -4773,7 +4693,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$dangerRed",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -4991,7 +4911,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -5056,7 +4976,7 @@
               "fill": "$deepBlue",
               "content": "✅ Viaje finalizado",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             }
           ]
@@ -5091,7 +5011,7 @@
               "content": "¡Llegaste!",
               "textAlign": "center",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -5113,7 +5033,7 @@
               "content": "⭐⭐⭐⭐☆ (4.0)",
               "textAlign": "center",
               "fontFamily": "$font-family",
-              "fontSize": "$font-caption",
+              "fontSize": "$font-xs",
               "fontWeight": "normal"
             },
             {
@@ -5261,7 +5181,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -5344,7 +5264,7 @@
               "fill": "$deepBlue",
               "content": "Pago",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             }
           ]
@@ -5748,7 +5668,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -5760,7 +5680,7 @@
                   "fill": "$white",
                   "content": "PAGAR $4.500",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "medium"
                 }
               ]
@@ -5848,7 +5768,7 @@
               "content": "¡Pago exitoso!",
               "textAlign": "center",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -5933,7 +5853,7 @@
               "width": "fill_container",
               "height": 40,
               "fill": "#ffffff1a",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "stroke": "$primary",
               "strokeWidth": 2,
               "layout": "vertical",
@@ -5959,7 +5879,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -6033,7 +5953,7 @@
               "fill": "$deepBlue",
               "content": "Comprobante",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             }
           ]
@@ -6445,7 +6365,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -6469,7 +6389,7 @@
               "width": "fill_container",
               "height": 40,
               "fill": "#00000000",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "stroke": "$primary",
               "strokeWidth": 2,
               "layout": "vertical",
@@ -6543,7 +6463,7 @@
               "fill": "$white",
               "content": "Historial de Viajes",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             }
           ]
@@ -6616,7 +6536,7 @@
                           "fill": "$deepBlue",
                           "content": "Av. Corrientes",
                           "fontFamily": "$font-family",
-                          "fontSize": "$font-body",
+                          "fontSize": "$font-sm",
                           "fontWeight": "normal"
                         },
                         {
@@ -6636,7 +6556,7 @@
                           "fill": "$deepBlue",
                           "content": "Av. 9 de Julio",
                           "fontFamily": "$font-family",
-                          "fontSize": "$font-body",
+                          "fontSize": "$font-sm",
                           "fontWeight": "normal"
                         }
                       ]
@@ -6660,7 +6580,7 @@
                   "fill": "$deepBlue",
                   "content": "$3.500",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-price",
+                  "fontSize": "$font-xl",
                   "fontWeight": "bold"
                 }
               ]
@@ -6713,7 +6633,7 @@
                           "fill": "$deepBlue",
                           "content": "Casa",
                           "fontFamily": "$font-family",
-                          "fontSize": "$font-body",
+                          "fontSize": "$font-sm",
                           "fontWeight": "normal"
                         },
                         {
@@ -6733,7 +6653,7 @@
                           "fill": "$deepBlue",
                           "content": "Trabajo",
                           "fontFamily": "$font-family",
-                          "fontSize": "$font-body",
+                          "fontSize": "$font-sm",
                           "fontWeight": "normal"
                         }
                       ]
@@ -6757,7 +6677,7 @@
                   "fill": "$deepBlue",
                   "content": "$2.200",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-price",
+                  "fontSize": "$font-xl",
                   "fontWeight": "bold"
                 }
               ]
@@ -6810,7 +6730,7 @@
                           "fill": "$deepBlue",
                           "content": "Shopping",
                           "fontFamily": "$font-family",
-                          "fontSize": "$font-body",
+                          "fontSize": "$font-sm",
                           "fontWeight": "normal"
                         },
                         {
@@ -6830,7 +6750,7 @@
                           "fill": "$deepBlue",
                           "content": "Casa",
                           "fontFamily": "$font-family",
-                          "fontSize": "$font-body",
+                          "fontSize": "$font-sm",
                           "fontWeight": "normal"
                         }
                       ]
@@ -6854,7 +6774,7 @@
                   "fill": "$deepBlue",
                   "content": "$4.100",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-price",
+                  "fontSize": "$font-xl",
                   "fontWeight": "bold"
                 }
               ]
@@ -7067,7 +6987,7 @@
           "width": "fill_container",
           "height": 52,
           "fill": "$primary",
-          "cornerRadius": "$radius-button",
+          "cornerRadius": "$radius-md",
           "layout": "vertical",
           "padding": 16,
           "justifyContent": "center",
@@ -7092,7 +7012,7 @@
           "width": "fill_container",
           "height": 52,
           "fill": "#00000000",
-          "cornerRadius": "$radius-button",
+          "cornerRadius": "$radius-md",
           "stroke": "$white",
           "strokeWidth": 2,
           "layout": "vertical",
@@ -7131,7 +7051,7 @@
               "fill": "$white",
               "content": "CREAR CUENTA",
               "fontFamily": "$font-family",
-              "fontSize": "$font-body-lg",
+              "fontSize": "$font-md",
               "fontWeight": "medium"
             }
           ]
@@ -7227,7 +7147,7 @@
               "content": "Ingresá tu celular",
               "textAlign": "center",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -7305,7 +7225,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "padding": 16,
               "justifyContent": "center",
@@ -7416,7 +7336,7 @@
               "content": "Recuperar contraseña",
               "textAlign": "center",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -7470,7 +7390,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "padding": 16,
               "justifyContent": "center",
@@ -7547,7 +7467,7 @@
               "fill": "$white",
               "content": "Términos y condiciones",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             }
           ]
@@ -7689,7 +7609,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "padding": 16,
               "justifyContent": "center",
@@ -8581,7 +8501,7 @@
               "content": "¿Dónde te encontramos?",
               "textAlign": "center",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -8653,7 +8573,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "padding": 16,
               "justifyContent": "center",
@@ -8737,7 +8657,7 @@
               "fill": "$deepBlue",
               "content": "Confirmar y pagar",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             }
           ]
@@ -8805,7 +8725,7 @@
               "content": "$3.500",
               "textAlign": "center",
               "fontFamily": "$font-family",
-              "fontSize": "$font-price",
+              "fontSize": "$font-xl",
               "fontWeight": "bold"
             },
             {
@@ -8968,7 +8888,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "padding": 16,
               "justifyContent": "center",
@@ -9038,7 +8958,7 @@
               "fill": "$deepBlue",
               "content": "Casi llegás",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -9113,7 +9033,7 @@
               "content": "¿Llevás todo?",
               "textAlign": "center",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -9268,7 +9188,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "padding": 16,
               "justifyContent": "center",
@@ -9326,7 +9246,7 @@
               "content": "¿Cancelar el viaje?",
               "textAlign": "center",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -9371,7 +9291,7 @@
                   "fill": "$dangerRed",
                   "content": "$800",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-price",
+                  "fontSize": "$font-xl",
                   "fontWeight": "bold"
                 }
               ]
@@ -9572,7 +9492,7 @@
                   "width": "fill_container",
                   "height": 52,
                   "fill": "$dangerRed",
-                  "cornerRadius": "$radius-button",
+                  "cornerRadius": "$radius-md",
                   "layout": "vertical",
                   "padding": 14,
                   "justifyContent": "center",
@@ -9585,7 +9505,7 @@
                       "fill": "$white",
                       "content": "SÍ, CANCELAR",
                       "fontFamily": "$font-family",
-                      "fontSize": "$font-body-lg",
+                      "fontSize": "$font-md",
                       "fontWeight": "bold"
                     }
                   ]
@@ -9597,7 +9517,7 @@
                   "width": "fill_container",
                   "height": 52,
                   "fill": "#00000000",
-                  "cornerRadius": "$radius-button",
+                  "cornerRadius": "$radius-md",
                   "stroke": "$mediumGray",
                   "strokeWidth": 1,
                   "layout": "vertical",
@@ -9632,7 +9552,7 @@
       "reusable": true,
       "width": 358,
       "fill": "$white",
-      "cornerRadius": "$radius-card",
+      "cornerRadius": "$radius-lg",
       "effect": {
         "type": "shadow",
         "shadowType": "outer",
@@ -9666,7 +9586,7 @@
               "fill": "$deepBlue",
               "content": "JP",
               "fontFamily": "$font-family",
-              "fontSize": "$font-body-lg",
+              "fontSize": "$font-md",
               "fontWeight": "bold"
             }
           ]
@@ -9694,7 +9614,7 @@
                   "fill": "$deepBlue",
                   "content": "Juan Pérez",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "bold"
                 },
                 {
@@ -9704,7 +9624,7 @@
                   "fill": "$primary",
                   "content": "★ 4.9",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-caption",
+                  "fontSize": "$font-xs",
                   "fontWeight": "bold"
                 }
               ]
@@ -9716,7 +9636,7 @@
               "fill": "$mediumGray",
               "content": "Toyota Corolla · AB 123 CD",
               "fontFamily": "$font-family",
-              "fontSize": "$font-caption",
+              "fontSize": "$font-xs",
               "fontWeight": "normal"
             }
           ]
@@ -9765,7 +9685,7 @@
           "fill": "$white",
           "content": "Juan Pérez",
           "fontFamily": "$font-family",
-          "fontSize": "$font-body",
+          "fontSize": "$font-sm",
           "fontWeight": "bold"
         }
       ]
@@ -9801,7 +9721,7 @@
           "fill": "$white",
           "content": "Título",
           "fontFamily": "$font-family",
-          "fontSize": "$font-h1",
+          "fontSize": "$font-2xl",
           "fontWeight": "bold"
         }
       ]
@@ -9837,7 +9757,7 @@
           "fill": "$deepBlue",
           "content": "Título",
           "fontFamily": "$font-family",
-          "fontSize": "$font-h1",
+          "fontSize": "$font-2xl",
           "fontWeight": "bold"
         }
       ]
@@ -9873,7 +9793,7 @@
           "fill": "$white",
           "content": "Lifty",
           "fontFamily": "$font-family",
-          "fontSize": "$font-h1",
+          "fontSize": "$font-2xl",
           "fontWeight": "bold"
         },
         {
@@ -9946,7 +9866,7 @@
               "fill": "$primary",
               "content": "Inicio",
               "fontFamily": "$font-family",
-              "fontSize": "$font-caption",
+              "fontSize": "$font-xs",
               "fontWeight": "bold"
             }
           ]
@@ -9979,7 +9899,7 @@
               "fill": "$mediumGray",
               "content": "Buscar",
               "fontFamily": "$font-family",
-              "fontSize": "$font-caption",
+              "fontSize": "$font-xs",
               "fontWeight": "normal"
             }
           ]
@@ -10012,7 +9932,7 @@
               "fill": "$mediumGray",
               "content": "Viajes",
               "fontFamily": "$font-family",
-              "fontSize": "$font-caption",
+              "fontSize": "$font-xs",
               "fontWeight": "normal"
             }
           ]
@@ -10045,7 +9965,7 @@
               "fill": "$mediumGray",
               "content": "Perfil",
               "fontFamily": "$font-family",
-              "fontSize": "$font-caption",
+              "fontSize": "$font-xs",
               "fontWeight": "normal"
             }
           ]
@@ -10092,7 +10012,7 @@
               "fill": "$white",
               "content": "Buscando conductor",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             }
           ]
@@ -10126,7 +10046,7 @@
               "fill": "$deepBlue",
               "content": "Buscando conductores cercanos...",
               "fontFamily": "$font-family",
-              "fontSize": "$font-body-lg",
+              "fontSize": "$font-md",
               "fontWeight": "medium"
             },
             {
@@ -10136,7 +10056,7 @@
               "fill": "$mediumGray",
               "content": "Esto puede tomar hasta 2 minutos",
               "fontFamily": "$font-family",
-              "fontSize": "$font-body",
+              "fontSize": "$font-sm",
               "fontWeight": "normal"
             },
             {
@@ -10145,7 +10065,7 @@
               "name": "TimeoutCard",
               "width": "fill_container",
               "fill": "$amber",
-              "cornerRadius": "$radius-card",
+              "cornerRadius": "$radius-lg",
               "layout": "vertical",
               "gap": 8,
               "padding": "$spacing-md",
@@ -10157,7 +10077,7 @@
                   "fill": "$deepBlue",
                   "content": "⚠️ Sin conductores disponibles",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "bold"
                 },
                 {
@@ -10169,7 +10089,7 @@
                   "width": "fill_container",
                   "content": "No hay conductores cerca en este momento. Podés reintentar o programar el viaje para más tarde.",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body",
+                  "fontSize": "$font-sm",
                   "fontWeight": "normal"
                 },
                 {
@@ -10179,7 +10099,7 @@
                   "width": "fill_container",
                   "height": 52,
                   "fill": "$primary",
-                  "cornerRadius": "$radius-button",
+                  "cornerRadius": "$radius-md",
                   "layout": "vertical",
                   "justifyContent": "center",
                   "alignItems": "center",
@@ -10191,7 +10111,7 @@
                       "fill": "$white",
                       "content": "REINTENTAR",
                       "fontFamily": "$font-family",
-                      "fontSize": "$font-body-lg",
+                      "fontSize": "$font-md",
                       "fontWeight": "bold"
                     }
                   ]
@@ -10205,7 +10125,7 @@
               "width": "fill_container",
               "height": 40,
               "fill": "#00000000",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "stroke": "$mediumGray",
               "strokeWidth": 1,
               "layout": "vertical",
@@ -10219,7 +10139,7 @@
                   "fill": "$deepBlue",
                   "content": "CANCELAR BÚSQUEDA",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "medium"
                 }
               ]
@@ -10278,7 +10198,7 @@
               "fill": "$white",
               "content": "Error de pago",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             }
           ]
@@ -10312,7 +10232,7 @@
               "fill": "$deepBlue",
               "content": "Tarjeta rechazada",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -10324,7 +10244,7 @@
               "width": "fill_container",
               "content": "El pago no pudo procesarse. Verificá los datos de tu tarjeta o intentá con otro método de pago.",
               "fontFamily": "$font-family",
-              "fontSize": "$font-body",
+              "fontSize": "$font-sm",
               "fontWeight": "normal"
             },
             {
@@ -10333,7 +10253,7 @@
               "name": "ErrorCard",
               "width": "fill_container",
               "fill": "$white",
-              "cornerRadius": "$radius-card",
+              "cornerRadius": "$radius-lg",
               "layout": "vertical",
               "gap": "$spacing-sm",
               "padding": "$spacing-md",
@@ -10345,7 +10265,7 @@
                   "fill": "$mediumGray",
                   "content": "Tarjeta usada",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-caption",
+                  "fontSize": "$font-xs",
                   "fontWeight": "normal"
                 },
                 {
@@ -10355,7 +10275,7 @@
                   "fill": "$deepBlue",
                   "content": "•••• 4242 — Visa Crédito",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body",
+                  "fontSize": "$font-sm",
                   "fontWeight": "medium"
                 }
               ]
@@ -10367,7 +10287,7 @@
               "fill": "$deepBlue",
               "content": "$4.500",
               "fontFamily": "$font-family",
-              "fontSize": "$font-price",
+              "fontSize": "$font-xl",
               "fontWeight": "bold"
             },
             {
@@ -10377,7 +10297,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -10389,7 +10309,7 @@
                   "fill": "$white",
                   "content": "REINTENTAR PAGO",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "bold"
                 }
               ]
@@ -10401,7 +10321,7 @@
               "width": "fill_container",
               "height": 40,
               "fill": "#00000000",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "stroke": "$primary",
               "strokeWidth": 2,
               "layout": "vertical",
@@ -10415,7 +10335,7 @@
                   "fill": "$primary",
                   "content": "USAR OTRO MÉTODO",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "medium"
                 }
               ]
@@ -10474,7 +10394,7 @@
               "fill": "$white",
               "content": "Reporte enviado",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             }
           ]
@@ -10508,7 +10428,7 @@
               "fill": "$deepBlue",
               "content": "¡Reporte enviado!",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -10520,7 +10440,7 @@
               "width": "fill_container",
               "content": "Le avisamos al conductor sobre tu objeto olvidado. Te va a contactar pronto para coordinar la devolución.",
               "fontFamily": "$font-family",
-              "fontSize": "$font-body",
+              "fontSize": "$font-sm",
               "fontWeight": "normal"
             },
             {
@@ -10529,7 +10449,7 @@
               "name": "InfoCard",
               "width": "fill_container",
               "fill": "$white",
-              "cornerRadius": "$radius-card",
+              "cornerRadius": "$radius-lg",
               "layout": "vertical",
               "gap": "$spacing-sm",
               "padding": "$spacing-md",
@@ -10541,7 +10461,7 @@
                   "fill": "$deepBlue",
                   "content": "Datos del viaje",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "bold"
                 },
                 {
@@ -10551,7 +10471,7 @@
                   "fill": "$mediumGray",
                   "content": "🚗 Juan Pérez · Toyota Corolla",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body",
+                  "fontSize": "$font-sm",
                   "fontWeight": "normal"
                 },
                 {
@@ -10561,7 +10481,7 @@
                   "fill": "$mediumGray",
                   "content": "📅 Hoy · 15:30  |  📍 Av. Corrientes → Av. 9 de Julio",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body",
+                  "fontSize": "$font-sm",
                   "fontWeight": "normal"
                 }
               ]
@@ -10573,7 +10493,7 @@
               "fill": "$mediumGray",
               "content": "Referencia: #LT-2024-0891",
               "fontFamily": "$font-family",
-              "fontSize": "$font-caption",
+              "fontSize": "$font-xs",
               "fontWeight": "normal"
             },
             {
@@ -10583,7 +10503,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -10595,7 +10515,7 @@
                   "fill": "$white",
                   "content": "CERRAR",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "medium"
                 }
               ]
@@ -10654,7 +10574,7 @@
               "fill": "$white",
               "content": "Editar perfil",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             },
             {
@@ -10671,7 +10591,7 @@
               "fill": "$primary",
               "content": "Guardar",
               "fontFamily": "$font-family",
-              "fontSize": "$font-body-lg",
+              "fontSize": "$font-md",
               "fontWeight": "bold"
             }
           ]
@@ -10727,7 +10647,7 @@
                   "fill": "$primary",
                   "content": "Cambiar foto",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body",
+                  "fontSize": "$font-sm",
                   "fontWeight": "medium"
                 }
               ]
@@ -10739,7 +10659,7 @@
               "fill": "$mediumGray",
               "content": "INFORMACIÓN PERSONAL",
               "fontFamily": "$font-family",
-              "fontSize": "$font-caption",
+              "fontSize": "$font-xs",
               "fontWeight": "bold"
             },
             {
@@ -10749,7 +10669,7 @@
               "width": "fill_container",
               "height": 48,
               "fill": "$white",
-              "cornerRadius": "$radius-input",
+              "cornerRadius": "$radius-sm",
               "gap": 8,
               "padding": 12,
               "alignItems": "center",
@@ -10771,7 +10691,7 @@
                   "fill": "$deepBlue",
                   "content": "Juan Pérez",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body",
+                  "fontSize": "$font-sm",
                   "fontWeight": "normal"
                 }
               ]
@@ -10783,7 +10703,7 @@
               "width": "fill_container",
               "height": 48,
               "fill": "$white",
-              "cornerRadius": "$radius-input",
+              "cornerRadius": "$radius-sm",
               "gap": 8,
               "padding": 12,
               "alignItems": "center",
@@ -10805,7 +10725,7 @@
                   "fill": "$deepBlue",
                   "content": "juan@email.com",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body",
+                  "fontSize": "$font-sm",
                   "fontWeight": "normal"
                 }
               ]
@@ -10817,7 +10737,7 @@
               "width": "fill_container",
               "height": 48,
               "fill": "$white",
-              "cornerRadius": "$radius-input",
+              "cornerRadius": "$radius-sm",
               "gap": 8,
               "padding": 12,
               "alignItems": "center",
@@ -10839,7 +10759,7 @@
                   "fill": "$deepBlue",
                   "content": "+54 11 5555-1234",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body",
+                  "fontSize": "$font-sm",
                   "fontWeight": "normal"
                 }
               ]
@@ -10851,7 +10771,7 @@
               "fill": "$mediumGray",
               "content": "PREFERENCIAS",
               "fontFamily": "$font-family",
-              "fontSize": "$font-caption",
+              "fontSize": "$font-xs",
               "fontWeight": "bold"
             },
             {
@@ -10861,7 +10781,7 @@
               "width": "fill_container",
               "height": 48,
               "fill": "$white",
-              "cornerRadius": "$radius-input",
+              "cornerRadius": "$radius-sm",
               "gap": 8,
               "padding": 12,
               "alignItems": "center",
@@ -10873,7 +10793,7 @@
                   "fill": "$deepBlue",
                   "content": "Notificaciones push",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body",
+                  "fontSize": "$font-sm",
                   "fontWeight": "normal"
                 },
                 {
@@ -10897,7 +10817,7 @@
               "width": "fill_container",
               "height": 48,
               "fill": "$white",
-              "cornerRadius": "$radius-input",
+              "cornerRadius": "$radius-sm",
               "gap": 8,
               "padding": 12,
               "alignItems": "center",
@@ -10909,7 +10829,7 @@
                   "fill": "$deepBlue",
                   "content": "Idioma",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body",
+                  "fontSize": "$font-sm",
                   "fontWeight": "normal"
                 },
                 {
@@ -10926,7 +10846,7 @@
                   "fill": "$mediumGray",
                   "content": "Español",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body",
+                  "fontSize": "$font-sm",
                   "fontWeight": "normal"
                 }
               ]
@@ -10985,7 +10905,7 @@
               "fill": "$white",
               "content": "Calificar viaje",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             }
           ]
@@ -11007,7 +10927,7 @@
               "name": "DriverCard",
               "width": "fill_container",
               "fill": "$white",
-              "cornerRadius": "$radius-card",
+              "cornerRadius": "$radius-lg",
               "gap": "$spacing-sm",
               "padding": "$spacing-md",
               "alignItems": "center",
@@ -11031,7 +10951,7 @@
                       "fill": "$deepBlue",
                       "content": "JP",
                       "fontFamily": "$font-family",
-                      "fontSize": "$font-body-lg",
+                      "fontSize": "$font-md",
                       "fontWeight": "bold"
                     }
                   ]
@@ -11043,7 +10963,7 @@
                   "fill": "$deepBlue",
                   "content": "Juan Pérez",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "bold"
                 },
                 {
@@ -11053,7 +10973,7 @@
                   "fill": "$mediumGray",
                   "content": "Toyota Corolla · ABC 123",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-caption",
+                  "fontSize": "$font-xs",
                   "fontWeight": "normal"
                 }
               ]
@@ -11065,7 +10985,7 @@
               "fill": "$mediumGray",
               "content": "¿Cómo estuvo tu viaje?",
               "fontFamily": "$font-family",
-              "fontSize": "$font-body-lg",
+              "fontSize": "$font-md",
               "fontWeight": "normal"
             },
             {
@@ -11084,7 +11004,7 @@
               "name": "CommentInput",
               "width": "fill_container",
               "fill": "$white",
-              "cornerRadius": "$radius-card",
+              "cornerRadius": "$radius-lg",
               "padding": "$spacing-md",
               "children": [
                 {
@@ -11094,7 +11014,7 @@
                   "fill": "$mediumGray",
                   "content": "Contanos más sobre tu experiencia (opcional)...",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body",
+                  "fontSize": "$font-sm",
                   "fontWeight": "normal"
                 }
               ]
@@ -11114,7 +11034,7 @@
                   "width": "fill_container",
                   "height": 40,
                   "fill": "$lightGray",
-                  "cornerRadius": "$radius-chip",
+                  "cornerRadius": "$radius-full",
                   "layout": "vertical",
                   "padding": "$spacing-sm",
                   "justifyContent": "center",
@@ -11127,7 +11047,7 @@
                       "fill": "$deepBlue",
                       "content": "Buena conversación",
                       "fontFamily": "$font-family",
-                      "fontSize": "$font-caption",
+                      "fontSize": "$font-xs",
                       "fontWeight": "medium"
                     }
                   ]
@@ -11139,7 +11059,7 @@
                   "width": "fill_container",
                   "height": 40,
                   "fill": "$lightGray",
-                  "cornerRadius": "$radius-chip",
+                  "cornerRadius": "$radius-full",
                   "layout": "vertical",
                   "padding": "$spacing-sm",
                   "justifyContent": "center",
@@ -11152,7 +11072,7 @@
                       "fill": "$deepBlue",
                       "content": "Auto limpio",
                       "fontFamily": "$font-family",
-                      "fontSize": "$font-caption",
+                      "fontSize": "$font-xs",
                       "fontWeight": "medium"
                     }
                   ]
@@ -11164,7 +11084,7 @@
                   "width": "fill_container",
                   "height": 40,
                   "fill": "$lightGray",
-                  "cornerRadius": "$radius-chip",
+                  "cornerRadius": "$radius-full",
                   "layout": "vertical",
                   "padding": "$spacing-sm",
                   "justifyContent": "center",
@@ -11177,7 +11097,7 @@
                       "fill": "$deepBlue",
                       "content": "Manejo seguro",
                       "fontFamily": "$font-family",
-                      "fontSize": "$font-caption",
+                      "fontSize": "$font-xs",
                       "fontWeight": "medium"
                     }
                   ]
@@ -11189,7 +11109,7 @@
                   "width": "fill_container",
                   "height": 40,
                   "fill": "$lightGray",
-                  "cornerRadius": "$radius-chip",
+                  "cornerRadius": "$radius-full",
                   "layout": "vertical",
                   "padding": "$spacing-sm",
                   "justifyContent": "center",
@@ -11202,7 +11122,7 @@
                       "fill": "$deepBlue",
                       "content": "Buena música",
                       "fontFamily": "$font-family",
-                      "fontSize": "$font-caption",
+                      "fontSize": "$font-xs",
                       "fontWeight": "medium"
                     }
                   ]
@@ -11223,7 +11143,7 @@
               "width": "fill_container",
               "height": 52,
               "fill": "$primary",
-              "cornerRadius": "$radius-button",
+              "cornerRadius": "$radius-md",
               "layout": "vertical",
               "justifyContent": "center",
               "alignItems": "center",
@@ -11235,7 +11155,7 @@
                   "fill": "$white",
                   "content": "ENVIAR CALIFICACIÓN",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-body-lg",
+                  "fontSize": "$font-md",
                   "fontWeight": "medium"
                 }
               ]
@@ -11294,7 +11214,7 @@
               "fill": "$deepBlue",
               "content": "¿A dónde vamos?",
               "fontFamily": "$font-family",
-              "fontSize": "$font-h1",
+              "fontSize": "$font-2xl",
               "fontWeight": "bold"
             }
           ]
@@ -11325,7 +11245,7 @@
           "name": "SearchBox",
           "width": 358,
           "fill": "$white",
-          "cornerRadius": "$radius-input",
+          "cornerRadius": "$radius-sm",
           "gap": 8,
           "padding": 12,
           "alignItems": "center",
@@ -11347,7 +11267,7 @@
               "fill": "$mediumGray",
               "content": "Buscar destino",
               "fontFamily": "$font-family",
-              "fontSize": "$font-body",
+              "fontSize": "$font-sm",
               "fontWeight": "normal"
             }
           ]
@@ -11381,7 +11301,7 @@
               "fill": "$deepBlue",
               "content": "Sin lugares recientes",
               "fontFamily": "$font-family",
-              "fontSize": "$font-body-lg",
+              "fontSize": "$font-md",
               "fontWeight": "bold"
             },
             {
@@ -11393,7 +11313,1320 @@
               "width": "fill_container",
               "content": "Tus destinos frecuentes van a aparecer acá después de tus primeros viajes.",
               "fontFamily": "$font-family",
-              "fontSize": "$font-body",
+              "fontSize": "$font-sm",
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "NOdJs",
+      "x": 2720,
+      "y": 3816,
+      "name": "trip-detail",
+      "clip": true,
+      "width": 390,
+      "height": 844,
+      "fill": "$lightGray",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "y25ra",
+          "name": "StatusBar",
+          "width": "fill_container",
+          "height": 44,
+          "fill": "$white"
+        },
+        {
+          "type": "frame",
+          "id": "Z8i3i",
+          "name": "Navbar",
+          "width": "fill_container",
+          "height": 56,
+          "fill": "$white",
+          "gap": 12,
+          "padding": [
+            0,
+            16
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "id": "UFveo",
+              "type": "ref",
+              "ref": "Sq2sB",
+              "name": "HeaderBack",
+              "width": "fit_content",
+              "height": "fit_content",
+              "descendants": {
+                "sxn0X": {
+                  "content": "Detalle del viaje"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "pPpSy",
+          "name": "Body",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": "$spacing-md",
+          "padding": "$spacing-md",
+          "children": [
+            {
+              "type": "frame",
+              "id": "m7Cg3I",
+              "name": "MapCard",
+              "clip": true,
+              "width": "fill_container",
+              "height": 140,
+              "fill": "$white",
+              "cornerRadius": 16,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "PHIPd",
+                  "x": 0,
+                  "y": 0,
+                  "name": "MapBg",
+                  "fill": "#C5D9E8",
+                  "width": 358,
+                  "height": 140
+                },
+                {
+                  "type": "text",
+                  "id": "E8RxOH",
+                  "x": 175,
+                  "y": 65,
+                  "name": "MapLabel",
+                  "fill": "$deepBlue",
+                  "content": "Mapa",
+                  "fontFamily": "$font-family",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "path",
+                  "id": "T6dIyM",
+                  "x": 0,
+                  "y": 0,
+                  "name": "RoutePath",
+                  "geometry": "M48 120l32-20 40-10 40-15 40-20 40-5 40 10 40 15",
+                  "viewBox": [
+                    0,
+                    0,
+                    360,
+                    160
+                  ],
+                  "width": 358,
+                  "height": 140,
+                  "stroke": "$primary",
+                  "strokeWidth": 4
+                },
+                {
+                  "type": "ellipse",
+                  "id": "HbEji",
+                  "x": 42,
+                  "y": 114,
+                  "name": "OriginDot",
+                  "fill": "$primary",
+                  "width": 14,
+                  "height": 14
+                },
+                {
+                  "type": "ellipse",
+                  "id": "EEMtH",
+                  "x": 316,
+                  "y": 69,
+                  "name": "DestDot",
+                  "fill": "$deepBlue",
+                  "width": 14,
+                  "height": 14
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "N9vhnF",
+              "name": "TripCard",
+              "width": "fill_container",
+              "fill": "$white",
+              "cornerRadius": 16,
+              "layout": "vertical",
+              "gap": "$spacing-md",
+              "padding": "$spacing-md",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ACwf6",
+                  "name": "DateRow",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "aeSdk",
+                      "name": "CalDot",
+                      "fill": "$primary",
+                      "width": 8,
+                      "height": 8
+                    },
+                    {
+                      "type": "text",
+                      "id": "npg88",
+                      "name": "DateLabel",
+                      "fill": "$deepBlue",
+                      "content": "15 Jul 2026 — 14:45",
+                      "fontFamily": "$font-family",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Z7nmev",
+                  "name": "RouteFrame",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "k39uo",
+                      "name": "FromRow",
+                      "width": "fill_container",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Nuilu",
+                          "name": "FromDot",
+                          "width": 10,
+                          "height": 10,
+                          "fill": "$primary",
+                          "cornerRadius": 999
+                        },
+                        {
+                          "type": "frame",
+                          "id": "mDlMr",
+                          "name": "FromCol",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "uuF45",
+                              "name": "FromLabel",
+                              "fill": "$deepBlue",
+                              "content": "Av. Corrientes 1234",
+                              "fontFamily": "$font-family",
+                              "fontSize": 14,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "HRcvg",
+                      "name": "Divider",
+                      "fill": "$lightGray",
+                      "width": 1,
+                      "height": 16
+                    },
+                    {
+                      "type": "frame",
+                      "id": "uajO4",
+                      "name": "ToRow",
+                      "width": "fill_container",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "eiUSj",
+                          "name": "ToDot",
+                          "width": 10,
+                          "height": 10,
+                          "fill": "$deepBlue",
+                          "cornerRadius": 999
+                        },
+                        {
+                          "type": "frame",
+                          "id": "h3HpSO",
+                          "name": "ToCol",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "qM17d",
+                              "name": "ToLabel",
+                              "fill": "$deepBlue",
+                              "content": "Av. 9 de Julio 4567",
+                              "fontFamily": "$font-family",
+                              "fontSize": 14,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "as98Q",
+                  "name": "StatsRow",
+                  "width": "fill_container",
+                  "gap": "$spacing-md",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "VOD0j",
+                      "name": "DistFrame",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "W0d1d",
+                          "name": "DistDot",
+                          "fill": "$mediumGray",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "YiGoz",
+                          "name": "DistLabel",
+                          "fill": "$mediumGray",
+                          "content": "5.2 km",
+                          "fontFamily": "$font-family",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "HihZM",
+                      "name": "DurFrame",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "wvWnn",
+                          "name": "DurDot",
+                          "fill": "$mediumGray",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "IsGr0",
+                          "name": "DurLabel",
+                          "fill": "$mediumGray",
+                          "content": "15 min",
+                          "fontFamily": "$font-family",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "cJJMl",
+              "type": "ref",
+              "ref": "I01NT",
+              "name": "DriverCard",
+              "width": "fill_container",
+              "descendants": {
+                "fAdiJ": {
+                  "fill": "$primary"
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "L2zkmz",
+              "name": "FareCard",
+              "width": "fill_container",
+              "fill": "$white",
+              "cornerRadius": 16,
+              "layout": "vertical",
+              "gap": "$spacing-sm",
+              "padding": "$spacing-md",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "k8hsX4",
+                  "name": "FareTitle",
+                  "fill": "$deepBlue",
+                  "content": "Tarifa",
+                  "fontFamily": "$font-family",
+                  "fontSize": 16,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "lHNaL",
+                  "name": "Row_Subtotal",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "L6Fib6",
+                      "name": "Label",
+                      "fill": "$mediumGray",
+                      "content": "Subtotal",
+                      "fontFamily": "$font-family",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ft2a0",
+                      "name": "Value",
+                      "fill": "$deepBlue",
+                      "content": "$3.500",
+                      "fontFamily": "$font-family",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Nb0TG",
+                  "name": "Row_Propina",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "FtBUH",
+                      "name": "Label",
+                      "fill": "$mediumGray",
+                      "content": "Propina",
+                      "fontFamily": "$font-family",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "py0Fj",
+                      "name": "Value",
+                      "fill": "$deepBlue",
+                      "content": "$1.000",
+                      "fontFamily": "$font-family",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "o6ad1l",
+                  "name": "Sep",
+                  "fill": "$lightGray",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "pGeLm",
+                  "name": "TotalRow",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "tr2SX",
+                      "name": "TotalLabel",
+                      "fill": "$deepBlue",
+                      "content": "Total",
+                      "fontFamily": "$font-family",
+                      "fontSize": 16,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "YwBAV",
+                      "name": "TotalValue",
+                      "fill": "$primary",
+                      "content": "$4.500",
+                      "fontFamily": "$font-family",
+                      "fontSize": 18,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "PXAkh",
+                  "name": "PaymentRow",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    0,
+                    0,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "IWDfG",
+                      "name": "PayLabel",
+                      "fill": "$mediumGray",
+                      "content": "Pago",
+                      "fontFamily": "$font-family",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "XE1gZ",
+                      "name": "PayValue",
+                      "fill": "$deepBlue",
+                      "content": "Efectivo",
+                      "fontFamily": "$font-family",
+                      "fontSize": 13,
+                      "fontWeight": "600"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "gJxQ1",
+              "name": "Actions",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": "$spacing-sm",
+              "padding": [
+                8,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "id": "DvSzc",
+                  "type": "ref",
+                  "ref": "WKYoZ",
+                  "name": "RepeatBtn",
+                  "width": "fill_container",
+                  "height": 52,
+                  "descendants": {
+                    "eRD8d": {
+                      "content": "Repetir viaje"
+                    }
+                  }
+                },
+                {
+                  "id": "am8LA",
+                  "type": "ref",
+                  "ref": "o5979y",
+                  "name": "ReportBtn",
+                  "width": "fill_container",
+                  "height": 52,
+                  "descendants": {
+                    "Ypfzc": {
+                      "content": "Reportar problema"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "pO0zl",
+      "x": 2720,
+      "y": 2912,
+      "name": "ride-sos",
+      "clip": true,
+      "width": 390,
+      "height": 844,
+      "fill": "$white",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "UBD0g",
+          "name": "StatusBar",
+          "width": "fill_container",
+          "height": 44,
+          "fill": "$white"
+        },
+        {
+          "type": "frame",
+          "id": "zzc7U",
+          "name": "Navbar",
+          "width": "fill_container",
+          "height": 56,
+          "fill": "$white",
+          "gap": 12,
+          "padding": [
+            0,
+            16
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "id": "T36wgc",
+              "type": "ref",
+              "ref": "JENHw",
+              "name": "HeaderClose",
+              "width": "fit_content",
+              "height": "fit_content",
+              "descendants": {
+                "c6guK": {
+                  "content": "Emergencia"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "hBAag",
+          "name": "Body",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": "$spacing-lg",
+          "padding": "$spacing-md",
+          "children": [
+            {
+              "type": "frame",
+              "id": "EFEqe",
+              "name": "HeroBlock",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": "$spacing-sm",
+              "padding": [
+                16,
+                0,
+                8,
+                0
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "griNx",
+                  "name": "HeroIcon",
+                  "width": 64,
+                  "height": 64,
+                  "fill": "$dangerRed",
+                  "cornerRadius": 999,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center"
+                },
+                {
+                  "type": "text",
+                  "id": "MIXYr",
+                  "name": "HeroIconEmoji",
+                  "fill": "$white",
+                  "content": "🚨",
+                  "fontFamily": "$font-family",
+                  "fontSize": 32,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "l8PW5",
+                  "name": "HeroTitle",
+                  "fill": "$deepBlue",
+                  "content": "¿Qué está pasando?",
+                  "textAlign": "center",
+                  "fontFamily": "$font-family",
+                  "fontSize": "$font-2xl",
+                  "fontWeight": "700"
+                },
+                {
+                  "type": "text",
+                  "id": "xg0AR",
+                  "name": "HeroSubtitle",
+                  "fill": "$mediumGray",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Vamos a contactar a nuestro equipo de soporte y notificar a tus contactos de emergencia.",
+                  "textAlign": "center",
+                  "fontFamily": "$font-family",
+                  "fontSize": 14,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ypPKv",
+              "name": "OptionsBlock",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": "$spacing-sm",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "ygPsl",
+                  "name": "OptionsLabel",
+                  "fill": "$mediumGray",
+                  "content": "Tipo de emergencia",
+                  "fontFamily": "$font-family",
+                  "fontSize": "$font-sm",
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "frame",
+                  "id": "L20sQU",
+                  "name": "sos-accidente",
+                  "width": "fill_container",
+                  "fill": "$lightGray",
+                  "cornerRadius": 16,
+                  "gap": "$spacing-md",
+                  "padding": [
+                    "$spacing-sm",
+                    "$spacing-md"
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "VZweX",
+                      "name": "Icon_sos-accidente",
+                      "width": 40,
+                      "height": 40,
+                      "fill": "$white",
+                      "cornerRadius": 999,
+                      "layout": "vertical",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "lD2uI",
+                          "name": "IconEmoji",
+                          "fill": "$deepBlue",
+                          "content": "🚗",
+                          "fontFamily": "$font-family",
+                          "fontSize": 24,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wCTfR",
+                      "name": "Col_sos-accidente",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ud9Qu",
+                          "name": "Label",
+                          "fill": "$deepBlue",
+                          "content": "Accidente",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-md",
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "EzAlk",
+                          "name": "Desc",
+                          "fill": "$mediumGray",
+                          "content": "Choque o colisión",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-sm",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "FOfJp",
+                      "name": "Radio",
+                      "width": 20,
+                      "height": 20,
+                      "stroke": "$mediumGray",
+                      "strokeWidth": 2
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ERUtU",
+                  "name": "sos-medica",
+                  "width": "fill_container",
+                  "fill": "$lightGray",
+                  "cornerRadius": 16,
+                  "gap": "$spacing-md",
+                  "padding": [
+                    "$spacing-sm",
+                    "$spacing-md"
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "nPDzx",
+                      "name": "Icon_sos-medica",
+                      "width": 40,
+                      "height": 40,
+                      "fill": "$white",
+                      "cornerRadius": 999,
+                      "layout": "vertical",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "lhKrH",
+                          "name": "IconEmoji",
+                          "fill": "$deepBlue",
+                          "content": "🏥",
+                          "fontFamily": "$font-family",
+                          "fontSize": 24,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "gQgSo",
+                      "name": "Col_sos-medica",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "GcdIF",
+                          "name": "Label",
+                          "fill": "$deepBlue",
+                          "content": "Emergencia médica",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-md",
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "qLSBy",
+                          "name": "Desc",
+                          "fill": "$mediumGray",
+                          "content": "Problema de salud",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-sm",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "sHIi5",
+                      "name": "Radio",
+                      "width": 20,
+                      "height": 20,
+                      "stroke": "$mediumGray",
+                      "strokeWidth": 2
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "yYAcv",
+                  "name": "sos-riesgo",
+                  "width": "fill_container",
+                  "fill": "$lightGray",
+                  "cornerRadius": 16,
+                  "gap": "$spacing-md",
+                  "padding": [
+                    "$spacing-sm",
+                    "$spacing-md"
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "KwZAi",
+                      "name": "Icon_sos-riesgo",
+                      "width": 40,
+                      "height": 40,
+                      "fill": "$white",
+                      "cornerRadius": 999,
+                      "layout": "vertical",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "v0TcN",
+                          "name": "IconEmoji",
+                          "fill": "$deepBlue",
+                          "content": "⚠️",
+                          "fontFamily": "$font-family",
+                          "fontSize": 24,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "b7SBG",
+                      "name": "Col_sos-riesgo",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "i5qGd",
+                          "name": "Label",
+                          "fill": "$deepBlue",
+                          "content": "Situación de riesgo",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-md",
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "pPapP",
+                          "name": "Desc",
+                          "fill": "$mediumGray",
+                          "content": "Me siento inseguro/a",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-sm",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "Lp1gZ",
+                      "name": "Radio",
+                      "width": 20,
+                      "height": 20,
+                      "stroke": "$mediumGray",
+                      "strokeWidth": 2
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "BdzfT",
+                  "name": "sos-otra",
+                  "width": "fill_container",
+                  "fill": "$lightGray",
+                  "cornerRadius": 16,
+                  "gap": "$spacing-md",
+                  "padding": [
+                    "$spacing-sm",
+                    "$spacing-md"
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Lf4oP",
+                      "name": "Icon_sos-otra",
+                      "width": 40,
+                      "height": 40,
+                      "fill": "$white",
+                      "cornerRadius": 999,
+                      "layout": "vertical",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "vPL5F",
+                          "name": "IconEmoji",
+                          "fill": "$deepBlue",
+                          "content": "❓",
+                          "fontFamily": "$font-family",
+                          "fontSize": 24,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "cPRuu",
+                      "name": "Col_sos-otra",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "LXtoa",
+                          "name": "Label",
+                          "fill": "$deepBlue",
+                          "content": "Otra",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-md",
+                          "fontWeight": "600"
+                        },
+                        {
+                          "type": "text",
+                          "id": "UMctq",
+                          "name": "Desc",
+                          "fill": "$mediumGray",
+                          "content": "Cuéntanos qué pasó",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-sm",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "u3hUzv",
+                      "name": "Radio",
+                      "width": 20,
+                      "height": 20,
+                      "stroke": "$mediumGray",
+                      "strokeWidth": 2
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "GlFMI",
+              "name": "Actions",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "padding": [
+                8,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "id": "UdnJl",
+                  "type": "ref",
+                  "ref": "Lebt1",
+                  "name": "SendAlertBtn",
+                  "width": "fill_container",
+                  "height": 52,
+                  "descendants": {
+                    "amqFm": {
+                      "content": "Enviar alerta"
+                    }
+                  }
+                },
+                {
+                  "id": "izAkB",
+                  "type": "ref",
+                  "ref": "o5979y",
+                  "name": "Call911Btn",
+                  "width": "fill_container",
+                  "height": 52,
+                  "descendants": {
+                    "Ypfzc": {
+                      "content": "📞  Llamar al 911"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "wMV6o",
+      "x": 2720,
+      "y": 1104,
+      "name": "select-pickup",
+      "clip": true,
+      "width": 390,
+      "height": 844,
+      "fill": "$lightGray",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "CwOTG",
+          "name": "StatusBar",
+          "width": "fill_container",
+          "height": 44,
+          "fill": "$white"
+        },
+        {
+          "type": "frame",
+          "id": "K27KP",
+          "name": "Navbar",
+          "width": "fill_container",
+          "height": 56,
+          "fill": "$white",
+          "gap": 12,
+          "padding": [
+            0,
+            16
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "BMjqk",
+              "name": "Close",
+              "fill": "$primary",
+              "content": "✕",
+              "fontFamily": "$font-family",
+              "fontSize": "$font-xl",
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "FUL8M",
+          "name": "MapPreview",
+          "width": "fill_container",
+          "height": 300,
+          "fill": "#B8D4E3",
+          "layout": "vertical",
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "q1Teek",
+              "name": "MapLabel",
+              "fill": "$deepBlue",
+              "content": "Mapa",
+              "fontFamily": "$font-family",
+              "fontSize": "$font-lg",
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "gZwfs",
+          "layoutPosition": "absolute",
+          "x": 16,
+          "y": 114,
+          "name": "SearchBox",
+          "width": 358,
+          "fill": "$white",
+          "cornerRadius": "$radius-md",
+          "gap": 8,
+          "padding": 12,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "m2fBk",
+              "name": "SearchIcon",
+              "fill": "$mediumGray",
+              "content": "🔍",
+              "fontFamily": "$font-family",
+              "fontSize": "$font-md",
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "CrrGX",
+              "name": "SearchPlaceholder",
+              "fill": "$mediumGray",
+              "content": "¿Desde dónde salís?",
+              "fontFamily": "$font-family",
+              "fontSize": "$font-md",
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "inLSD",
+          "name": "DestContent",
+          "width": "fill_container",
+          "height": "fill_container",
+          "fill": "$white",
+          "cornerRadius": [
+            16,
+            16,
+            0,
+            0
+          ],
+          "layout": "vertical",
+          "gap": "$spacing-md",
+          "padding": "$spacing-md",
+          "children": [
+            {
+              "type": "text",
+              "id": "fl1b4",
+              "name": "SectionTitle",
+              "fill": "$deepBlue",
+              "content": "📍  Tu ubicación actual",
+              "fontFamily": "$font-family",
+              "fontSize": "$font-md",
+              "fontWeight": "bold"
+            },
+            {
+              "type": "frame",
+              "id": "F8DIir",
+              "name": "PlaceCard",
+              "width": "fill_container",
+              "height": 56,
+              "fill": "$lightGray",
+              "cornerRadius": "$radius-sm",
+              "gap": 8,
+              "padding": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "v6AAh",
+                  "name": "PlaceIcon",
+                  "fill": "$primary",
+                  "content": "📍",
+                  "fontFamily": "$font-family",
+                  "fontSize": "$font-lg",
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "EDndC",
+                  "name": "PlaceInfo",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "F105M",
+                      "name": "PlaceName",
+                      "fill": "$deepBlue",
+                      "content": "Trabajo",
+                      "fontFamily": "$font-family",
+                      "fontSize": "$font-md",
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "text",
+                      "id": "GFTN2",
+                      "name": "PlaceAddr",
+                      "fill": "$mediumGray",
+                      "content": "Av. 9 de Julio 1234",
+                      "fontFamily": "$font-family",
+                      "fontSize": "$font-xs",
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "lvlPM",
+              "name": "PlaceCard",
+              "width": "fill_container",
+              "height": 56,
+              "fill": "$lightGray",
+              "cornerRadius": "$radius-sm",
+              "gap": 8,
+              "padding": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Yx06S",
+                  "name": "PlaceIcon",
+                  "fill": "$primary",
+                  "content": "⭐",
+                  "fontFamily": "$font-family",
+                  "fontSize": "$font-lg",
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "ruaeV",
+                  "name": "PlaceInfo",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "justifyContent": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "m5qoJa",
+                      "name": "PlaceName",
+                      "fill": "$deepBlue",
+                      "content": "Casa",
+                      "fontFamily": "$font-family",
+                      "fontSize": "$font-md",
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "text",
+                      "id": "UI8cx",
+                      "name": "PlaceAddr",
+                      "fill": "$mediumGray",
+                      "content": "Av. Corrientes 4567",
+                      "fontFamily": "$font-family",
+                      "fontSize": "$font-xs",
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "hnXau",
+              "name": "UseLocation",
+              "fill": "$primary",
+              "content": "📍  Confirmar ubicación actual",
+              "fontFamily": "$font-family",
+              "fontSize": "$font-sm",
               "fontWeight": "normal"
             }
           ]
@@ -11401,517 +12634,7 @@
       ]
     }
   ],
-  "themes": {
-    "Mode": [
-      "Light",
-      "Dark"
-    ]
-  },
   "variables": {
-    "--sidebar": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#E7E8E5"
-        },
-        {
-          "value": "#18181b",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--sidebar-foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#666666"
-        },
-        {
-          "value": "#fafafa",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--sidebar-primary": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#18181b"
-        },
-        {
-          "value": "#18181b",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--sidebar-primary-foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#fafafa"
-        },
-        {
-          "value": "#fafafa",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--sidebar-border": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#CBCCC9"
-        },
-        {
-          "value": "#ffffff1a",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--sidebar-accent": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#CBCCC9"
-        },
-        {
-          "value": "#2a2a30",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--sidebar-accent-foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#18181b"
-        },
-        {
-          "value": "#fafafa",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--sidebar-ring": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#71717a"
-        },
-        {
-          "value": "#71717a",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--background": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#F2F3F0"
-        },
-        {
-          "value": "#111111",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#111111"
-        },
-        {
-          "value": "#FFFFFF",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--card": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#FFFFFF"
-        },
-        {
-          "value": "#1A1A1A",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--card-foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#111111"
-        },
-        {
-          "value": "#FFFFFF",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--popover": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#FFFFFF"
-        },
-        {
-          "value": "#1A1A1A",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--popover-foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#111111"
-        },
-        {
-          "value": "#FFFFFF",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--primary": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#FF8400"
-        },
-        {
-          "value": "#FF8400",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--primary-foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#111111"
-        },
-        {
-          "value": "#111111",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--secondary": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#E7E8E5"
-        },
-        {
-          "value": "#2E2E2E",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--secondary-foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#111111"
-        },
-        {
-          "value": "#FFFFFF",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--muted": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#F2F3F0"
-        },
-        {
-          "value": "#2E2E2E",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--muted-foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#666666"
-        },
-        {
-          "value": "#B8B9B6",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--accent": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#F2F3F0"
-        },
-        {
-          "value": "#111111",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--accent-foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#111111"
-        },
-        {
-          "value": "#F2F3F0",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--destructive": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#D93C15"
-        },
-        {
-          "value": "#FF5C33",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--border": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#CBCCC9"
-        },
-        {
-          "value": "#2E2E2E",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--input": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#CBCCC9"
-        },
-        {
-          "value": "#2E2E2E",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--ring": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#666666"
-        },
-        {
-          "value": "#666666",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--white": {
-      "type": "color",
-      "value": "#FFFFFF"
-    },
-    "--black": {
-      "type": "color",
-      "value": "#000000"
-    },
-    "--font-primary": {
-      "type": "string",
-      "value": "JetBrains Mono"
-    },
-    "--font-secondary": {
-      "type": "string",
-      "value": "Geist"
-    },
-    "--radius-none": {
-      "type": "number",
-      "value": 0
-    },
-    "--radius-pill": {
-      "type": "number",
-      "value": 999
-    },
-    "--color-success": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#DFE6E1"
-        },
-        {
-          "value": "#222924",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--color-success-foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#004D1A"
-        },
-        {
-          "value": "#B6FFCE",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--color-warning": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#E9E3D8"
-        },
-        {
-          "value": "#291C0F",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--color-warning-foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#804200"
-        },
-        {
-          "value": "#FF8400",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--color-error": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#E5DCDA"
-        },
-        {
-          "value": "#24100B",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--color-error-foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#8C1C00"
-        },
-        {
-          "value": "#FF5C33",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--color-info": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#DFDFE6"
-        },
-        {
-          "value": "#222229",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--color-info-foreground": {
-      "type": "color",
-      "value": [
-        {
-          "value": "#000066"
-        },
-        {
-          "value": "#B2B2FF",
-          "theme": {
-            "Mode": "Dark"
-          }
-        }
-      ]
-    },
-    "--radius-m": {
-      "type": "number",
-      "value": 16
-    },
     "primary": {
       "type": "color",
       "value": "#00C2B3"
@@ -11974,23 +12697,7 @@
     },
     "radius-full": {
       "type": "number",
-      "value": 9999
-    },
-    "button-height": {
-      "type": "number",
-      "value": 52
-    },
-    "button-cta-height": {
-      "type": "number",
-      "value": 52
-    },
-    "input-height": {
-      "type": "number",
-      "value": 48
-    },
-    "navbar-height": {
-      "type": "number",
-      "value": 56
+      "value": 999
     },
     "font-family": {
       "type": "string",
@@ -12032,57 +12739,13 @@
       "type": "number",
       "value": 48
     },
-    "success": {
+    "radius-lg": {
+      "type": "number",
+      "value": 16
+    },
+    "black": {
       "type": "color",
-      "value": "#00C2B3"
-    },
-    "font-h1": {
-      "type": "number",
-      "value": 28
-    },
-    "font-h2": {
-      "type": "number",
-      "value": 20
-    },
-    "font-body-lg": {
-      "type": "number",
-      "value": 16
-    },
-    "font-body": {
-      "type": "number",
-      "value": 14
-    },
-    "font-caption": {
-      "type": "number",
-      "value": 12
-    },
-    "font-price": {
-      "type": "number",
-      "value": 24
-    },
-    "radius-button": {
-      "type": "number",
-      "value": 12
-    },
-    "radius-card": {
-      "type": "number",
-      "value": 16
-    },
-    "radius-input": {
-      "type": "number",
-      "value": 10
-    },
-    "radius-chip": {
-      "type": "number",
-      "value": 999
-    },
-    "statusbar-height": {
-      "type": "number",
-      "value": 44
-    },
-    "button-height-sm": {
-      "type": "number",
-      "value": 40
+      "value": "#000000"
     }
   },
   "fileToken": "3250d5b2-6f28-4870-ae81-941268cbb3a6"
