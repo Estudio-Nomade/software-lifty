@@ -58,6 +58,10 @@ export function LoginCredentialsScreen() {
           setInfo(
             'Te enviamos un email de verificación. Revisá tu casilla para activar tu cuenta.',
           );
+        } else {
+          setError(
+            'Este email ya está registrado en Lifty. Iniciá sesión en lugar de crear una cuenta nueva.',
+          );
         }
       } else {
         const { data, error: err } = await supabase.auth.signInWithPassword({
@@ -167,7 +171,19 @@ export function LoginCredentialsScreen() {
               <TouchableOpacity onPress={() => navigate('ForgotPassword')}>
                 <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
               </TouchableOpacity>
-            ) : null}
+            ) : (
+              <TouchableOpacity
+                onPress={() => {
+                  clearDraft();
+                  setError(null);
+                  setInfo(null);
+                  setEmail('');
+                  setPassword('');
+                }}
+              >
+                <Text style={styles.forgotPassword}>¿Ya tenés cuenta? Iniciá sesión</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
