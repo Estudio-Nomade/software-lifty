@@ -6,8 +6,9 @@ import { theme } from '../theme';
 
 export function HomeScreen() {
   const { navigate } = useAppNavigation();
+  const fullName = useAuthStore((s) => s.fullName);
   const email = useAuthStore((s) => s.email);
-  const displayName = email?.split('@')[0] ?? 'Usuario';
+  const displayName = fullName || email?.split('@')[0] || 'Usuario';
 
   return (
     <SafeAreaView style={styles.safe}>

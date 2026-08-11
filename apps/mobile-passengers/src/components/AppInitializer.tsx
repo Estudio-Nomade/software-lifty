@@ -22,7 +22,13 @@ function SessionRestore() {
         setSessionRestored(true);
         return;
       }
-      setSession(token, data.session?.user?.id ?? null, data.session?.user?.email ?? null);
+      const metadata = data.session?.user?.user_metadata as Record<string, unknown> | undefined;
+      setSession(
+        token,
+        data.session?.user?.id ?? null,
+        data.session?.user?.email ?? null,
+        (metadata?.full_name as string) ?? undefined,
+      );
       setSessionRestored(true);
     };
     restore();

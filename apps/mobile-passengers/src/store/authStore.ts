@@ -9,7 +9,13 @@ interface AuthState {
   needsRedirect: boolean;
   sessionRestored: boolean;
   email: string | null;
-  setSession: (token: string | null, userId?: string | null, email?: string | null) => void;
+  fullName: string | null;
+  setSession: (
+    token: string | null,
+    userId?: string | null,
+    email?: string | null,
+    fullName?: string | null,
+  ) => void;
   clearAuth: () => void;
   resetRedirect: () => void;
   setSessionRestored: (restored: boolean) => void;
@@ -24,12 +30,14 @@ export const useAuthStore = create<AuthState>()(
       needsRedirect: false,
       sessionRestored: false,
       email: null,
-      setSession: (token, userId, email) =>
+      fullName: null,
+      setSession: (token, userId, email, fullName) =>
         set((state) => ({
           token,
           isAuthenticated: !!token,
           userId: userId ?? state.userId,
           email: email ?? state.email,
+          fullName: fullName ?? state.fullName,
         })),
       clearAuth: () =>
         set({

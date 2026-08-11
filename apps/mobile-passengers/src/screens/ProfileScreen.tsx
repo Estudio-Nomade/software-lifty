@@ -6,6 +6,7 @@ import { theme } from '../theme';
 
 export function ProfileScreen() {
   const { goBack, navigate } = useAppNavigation();
+  const fullName = useAuthStore((s) => s.fullName);
   const email = useAuthStore((s) => s.email);
 
   return (
@@ -22,7 +23,7 @@ export function ProfileScreen() {
         <View style={styles.avatar}>
           <Ionicons name="person" size={40} color={theme.colors.mediumGray} />
         </View>
-        <Text style={styles.name}>{email?.split('@')[0] ?? 'Usuario'}</Text>
+        <Text style={styles.name}>{fullName || email?.split('@')[0] || 'Usuario'}</Text>
         <Text style={styles.email}>{email}</Text>
 
         <View style={styles.menu}>
