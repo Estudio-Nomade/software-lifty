@@ -319,6 +319,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.lg,
+    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   toggleSection: {
     alignItems: 'center',

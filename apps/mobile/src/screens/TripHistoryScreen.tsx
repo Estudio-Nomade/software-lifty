@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.lightGray,
     gap: theme.spacing.md,
     paddingVertical: theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
+    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   tripCard: {
     width: 343,
