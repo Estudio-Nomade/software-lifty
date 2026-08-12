@@ -87,6 +87,7 @@ export function QuickChips({ onSelect }: QuickChipsProps) {
 const styles = StyleSheet.create({
   scroll: {
     flexGrow: 0,
+    marginTop: theme.spacing.md,
   },
   scrollContent: {
     paddingHorizontal: theme.spacing.md,
@@ -112,6 +113,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.md,
     gap: theme.spacing.sm,
   },
   editInput: {
