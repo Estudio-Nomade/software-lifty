@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingBottom: theme.spacing['2xl'],
+    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   content: {
     flex: 1,

@@ -74,9 +74,9 @@ function TripCard({ trip }: { trip: Trip }) {
 
       <View style={styles.tripFooter}>
         <Text style={styles.tripFare}>
-          {trip.total_fare || trip.final_fare
+          {trip.total_fare != null || trip.final_fare != null
             ? formatCurrency(trip.total_fare ?? trip.final_fare!)
-            : trip.estimate_fare
+            : trip.estimate_fare != null
               ? `${formatCurrency(trip.estimate_fare)} aprox.`
               : '—'}
         </Text>
@@ -102,6 +102,8 @@ export function TripHistoryScreen() {
     }
   }, [data, page]);
 
+  const isInitialLoading = isLoading && page === 1;
+
   const hasMore = Array.isArray(data) && data.length === LIMIT;
 
   const handleLoadMore = () => {
@@ -110,33 +112,44 @@ export function TripHistoryScreen() {
     }
   };
 
-  if (isLoading && page === 1) {
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <TouchableOpacity onPress={goBack}>
+        <Ionicons name="arrow-back" size={24} color={theme.colors.white} />
+      </TouchableOpacity>
+      <Text style={styles.title}>Historial de viajes</Text>
+      <View style={{ width: 24 }} />
+    </View>
+  );
+
+  const renderErrorFooter = () => {
+    if (!error) return null;
     return (
+      <View style={styles.errorFooter}>
+        <Ionicons name="cloud-offline-outline" size={20} color={theme.colors.dangerRed} />
+        <Text style={styles.errorFooterText}>Error al cargar más viajes</Text>
+        <TouchableOpacity onPress={() => refetch()}>
+          <Text style={styles.retryInlineText}>Reintentar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  let content: React.ReactNode;
+
+  if (isInitialLoading) {
+    content = (
       <SafeAreaView style={styles.safe}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={goBack}>
-            <Ionicons name="arrow-back" size={24} color={theme.colors.white} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Historial de viajes</Text>
-          <View style={{ width: 24 }} />
-        </View>
+        {renderHeader()}
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       </SafeAreaView>
     );
-  }
-
-  if (error) {
-    return (
+  } else if (error && allTrips.length === 0) {
+    content = (
       <SafeAreaView style={styles.safe}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={goBack}>
-            <Ionicons name="arrow-back" size={24} color={theme.colors.white} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Historial de viajes</Text>
-          <View style={{ width: 24 }} />
-        </View>
+        {renderHeader()}
         <View style={styles.centered}>
           <Ionicons name="cloud-offline-outline" size={48} color={theme.colors.mediumGray} />
           <Text style={styles.errorText}>No se pudo cargar</Text>
@@ -146,25 +159,21 @@ export function TripHistoryScreen() {
         </View>
       </SafeAreaView>
     );
-  }
-
-  return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={goBack}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.white} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Historial de viajes</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      {allTrips.length === 0 ? (
+  } else if (allTrips.length === 0) {
+    content = (
+      <SafeAreaView style={styles.safe}>
+        {renderHeader()}
         <View style={styles.centered}>
           <Ionicons name="car-outline" size={48} color={theme.colors.mediumGray} />
           <Text style={styles.emptyTitle}>Sin viajes aún</Text>
           <Text style={styles.emptySub}>Tus viajes aparecerán aquí</Text>
         </View>
-      ) : (
+      </SafeAreaView>
+    );
+  } else {
+    content = (
+      <SafeAreaView style={styles.safe}>
+        {renderHeader()}
         <FlatList
           data={allTrips}
           keyExtractor={(item) => item.id}
@@ -173,18 +182,23 @@ export function TripHistoryScreen() {
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.3}
           ListFooterComponent={
-            isFetching ? (
-              <ActivityIndicator
-                size="small"
-                color={theme.colors.primary}
-                style={{ paddingVertical: theme.spacing.md }}
-              />
-            ) : null
+            <>
+              {isFetching && (
+                <ActivityIndicator
+                  size="small"
+                  color={theme.colors.primary}
+                  style={{ paddingVertical: theme.spacing.md }}
+                />
+              )}
+              {renderErrorFooter()}
+            </>
           }
         />
-      )}
-    </SafeAreaView>
-  );
+      </SafeAreaView>
+    );
+  }
+
+  return content;
 }
 
 const styles = StyleSheet.create({
@@ -305,5 +319,22 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.semibold,
     color: theme.colors.white,
+  },
+  errorFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  errorFooterText: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.dangerRed,
+  },
+  retryInlineText: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.primary,
   },
 });

@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.lightGray,
     gap: theme.spacing.md,
     padding: theme.spacing.md,
-    paddingBottom: theme.spacing.lg,
+    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   profileCard: {
     width: 343,
