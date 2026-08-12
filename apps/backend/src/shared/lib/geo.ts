@@ -1,9 +1,11 @@
 import { logger } from './logger';
 import { getRedis } from './redis';
 
-const PHOTON_URL = process.env.PHOTON_URL || 'https://photon.komoot.io';
+const NOMINATIM_URL = process.env.NOMINATIM_URL || 'https://nominatim.openstreetmap.org';
 const OSRM_URL = process.env.OSRM_URL || 'https://router.project-osrm.org';
 const IS_PROD = process.env.NODE_ENV === 'production';
+const GEO_USER_AGENT = 'Lifty/1.0 (contact: liftyviajes.com)';
+const GEO_TIMEOUT_MS = 8000;
 
 const GEO_CACHE_TTL = 24 * 60 * 60;
 
@@ -97,14 +99,20 @@ async function cacheSet(key: string, value: string, ttlSeconds: number): Promise
   await redis.setex(key, ttlSeconds, value);
 }
 
-function formatPhotonAddress(props: Record<string, string | number | undefined>): string {
-  const parts = [
-    String(props.name || props.street || ''),
-    String(props.city || props.town || props.village || ''),
-    String(props.state || ''),
-    String(props.country || ''),
-  ].filter(Boolean);
-  return parts.join(', ');
+interface NominatimFeature {
+  lat: string;
+  lon: string;
+  display_name: string;
+  place_id?: number;
+}
+
+async function fetchGeo(url: URL): Promise<NominatimFeature[] | NominatimFeature> {
+  const res = await fetch(url.toString(), {
+    headers: { 'User-Agent': GEO_USER_AGENT },
+    signal: AbortSignal.timeout(GEO_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Geocoder API error: ${res.status}`);
+  return (await res.json()) as NominatimFeature[] | NominatimFeature;
 }
 
 export async function autocomplete(input: string): Promise<PlaceResult[]> {
@@ -118,30 +126,18 @@ export async function autocomplete(input: string): Promise<PlaceResult[]> {
       ];
     }
 
-    const url = new URL(`${PHOTON_URL}/api/`);
+    const url = new URL(`${NOMINATIM_URL}/search`);
     url.searchParams.set('q', input.trim());
+    url.searchParams.set('format', 'json');
     url.searchParams.set('limit', '5');
-    url.searchParams.set('lang', 'es');
+    url.searchParams.set('addressdetails', '0');
 
-    const res = await fetch(url.toString());
-    if (!res.ok) throw new Error(`Photon API error: ${res.status}`);
+    const data = await fetchGeo(url);
+    const features = Array.isArray(data) ? data : [data];
 
-    const data = (await res.json()) as {
-      features?: Array<{
-        properties: {
-          osm_id: number;
-          name?: string;
-          street?: string;
-          city?: string;
-          state?: string;
-          country?: string;
-        };
-      }>;
-    };
-
-    return (data.features || []).map((f) => ({
-      description: formatPhotonAddress(f.properties),
-      place_id: String(f.properties.osm_id),
+    return features.map((f) => ({
+      description: f.display_name,
+      place_id: f.place_id != null ? String(f.place_id) : f.display_name,
     }));
   } catch (err) {
     logger.error('[geo] autocomplete failed:', (err as Error).message);
@@ -162,42 +158,34 @@ export async function geocode(params: {
       return { lat: -34.6037, lng: -58.3816, formatted_address: 'Buenos Aires, Argentina' };
     }
 
-    let url: string;
+    let url: URL;
 
     if (params.lat !== undefined && params.lng !== undefined) {
-      const reverseUrl = new URL(`${PHOTON_URL}/reverse`);
+      const reverseUrl = new URL(`${NOMINATIM_URL}/reverse`);
       reverseUrl.searchParams.set('lat', String(params.lat));
       reverseUrl.searchParams.set('lon', String(params.lng));
-      reverseUrl.searchParams.set('lang', 'default');
-      url = reverseUrl.toString();
+      reverseUrl.searchParams.set('format', 'json');
+      reverseUrl.searchParams.set('addressdetails', '0');
+      url = reverseUrl;
     } else if (params.address) {
-      const forwardUrl = new URL(`${PHOTON_URL}/api/`);
+      const forwardUrl = new URL(`${NOMINATIM_URL}/search`);
       forwardUrl.searchParams.set('q', params.address);
+      forwardUrl.searchParams.set('format', 'json');
       forwardUrl.searchParams.set('limit', '1');
-      forwardUrl.searchParams.set('lang', 'default');
-      url = forwardUrl.toString();
+      forwardUrl.searchParams.set('addressdetails', '0');
+      url = forwardUrl;
     } else {
       return { lat: -34.6037, lng: -58.3816, formatted_address: 'Buenos Aires, Argentina' };
     }
 
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Photon API error: ${res.status}`);
-
-    const data = (await res.json()) as {
-      features?: Array<{
-        geometry: { coordinates: [number, number] };
-        properties: Record<string, string | undefined>;
-      }>;
-    };
-
-    const feature = data.features?.[0];
+    const data = await fetchGeo(url);
+    const feature = Array.isArray(data) ? data[0] : data;
     if (!feature) throw new Error('No geocoding results');
 
-    const [lng, lat] = feature.geometry.coordinates;
     return {
-      lat: Math.round(lat * 1000000) / 1000000,
-      lng: Math.round(lng * 1000000) / 1000000,
-      formatted_address: formatPhotonAddress(feature.properties),
+      lat: Math.round(Number(feature.lat) * 1000000) / 1000000,
+      lng: Math.round(Number(feature.lon) * 1000000) / 1000000,
+      formatted_address: feature.display_name,
     };
   } catch (err) {
     logger.error('[geo] geocode failed:', (err as Error).message);
