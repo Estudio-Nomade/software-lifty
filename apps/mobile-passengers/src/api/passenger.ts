@@ -27,16 +27,42 @@ export async function estimateFare(params: {
 }
 
 export async function requestRide(params: {
-  pickup_lat: number;
-  pickup_lng: number;
-  pickup_address: string;
-  destination_lat: number;
-  destination_lng: number;
-  destination_address: string;
-  vehicle_type?: 'auto' | 'moto';
-  payment_method?: 'cash' | 'mercadopago';
+  origin_lat: number;
+  origin_lng: number;
+  dest_lat: number;
+  dest_lng: number;
+  origin_address: string;
+  dest_address: string;
+  vehicle_type: 'auto' | 'moto';
+  distance_km: number;
+  duration_minutes: number;
 }): Promise<Trip> {
   const { data } = await api.post<Trip>('/passenger/trips/request', params);
+  return data;
+}
+
+export async function getDirections(params: {
+  origin_lat: number;
+  origin_lng: number;
+  dest_lat: number;
+  dest_lng: number;
+}): Promise<{ distance_km: number; duration_minutes: number }> {
+  const { data } = await api.get<{ distance_km: number; duration_minutes: number }>(
+    '/maps/directions',
+    { params },
+  );
+  return data;
+}
+
+export async function geocodeAddress(address: string): Promise<{
+  lat: number;
+  lng: number;
+  formatted_address: string;
+}> {
+  const { data } = await api.get<{ lat: number; lng: number; formatted_address: string }>(
+    '/maps/geocode',
+    { params: { address } },
+  );
   return data;
 }
 
