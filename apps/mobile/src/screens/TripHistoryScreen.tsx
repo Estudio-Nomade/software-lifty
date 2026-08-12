@@ -210,11 +210,12 @@ export const TripHistoryScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.white,
   },
   content: {
     flexGrow: 1,
     alignItems: 'center',
+    backgroundColor: theme.colors.lightGray,
     gap: theme.spacing.md,
     paddingVertical: theme.spacing.md,
     paddingBottom: theme.spacing.xl,
