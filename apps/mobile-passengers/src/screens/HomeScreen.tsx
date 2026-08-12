@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { geocodeAddress } from '../api/passenger';
 import type { PlaceSuggestion } from '../api/types';
 import { HomeHeader } from '../components/HomeHeader';
 import { HowItWorks } from '../components/HowItWorks';
@@ -31,6 +32,7 @@ export function HomeScreen() {
   const [pickupAddress, setPickupAddress] = useState('');
   const [destAddress, setDestAddress] = useState('');
   const [recenterKey, setRecenterKey] = useState(0);
+  const [destCoord, setDestCoord] = useState<{ lat: number; lng: number } | null>(null);
 
   const suggestions = usePlaceAutocomplete(destAddress);
 
@@ -76,18 +78,36 @@ export function HomeScreen() {
 
   const handleChipSelect = (address: string) => {
     setDestAddress(address);
+    setDestCoord(null);
   };
 
   const handleSelectSuggestion = (suggestion: PlaceSuggestion) => {
     setDestAddress(suggestion.description);
+    setDestCoord({ lat: suggestion.lat, lng: suggestion.lng });
   };
 
-  const handleConfirmDestination = () => {
-    if (!destAddress.trim()) return;
+  const handleConfirmDestination = async () => {
+    const dest = destAddress.trim();
+    if (!dest) return;
     Keyboard.dismiss();
+
+    let resolvedDest = destCoord;
+    if (!resolvedDest) {
+      try {
+        const g = await geocodeAddress(dest);
+        resolvedDest = { lat: g.lat, lng: g.lng };
+      } catch {
+        resolvedDest = null;
+      }
+    }
+
     navigate('VehicleSelect', {
       pickup: pickupAddress,
-      destination: destAddress.trim(),
+      destination: dest,
+      pickupLat: current ? String(current.lat) : '',
+      pickupLng: current ? String(current.lng) : '',
+      destLat: resolvedDest ? String(resolvedDest.lat) : '',
+      destLng: resolvedDest ? String(resolvedDest.lng) : '',
     });
   };
 
