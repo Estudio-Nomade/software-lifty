@@ -7,39 +7,44 @@ export interface PassengerProfile {
 }
 
 export type TripStatus =
-  | 'idle'
-  | 'requested'
-  | 'driver_assigned'
-  | 'driver_en_route'
-  | 'driver_arrived'
-  | 'in_trip'
+  | 'pending'
+  | 'offered'
+  | 'request_received'
+  | 'accepted'
+  | 'en_route'
+  | 'waiting'
   | 'completed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'cancelled_early'
+  | 'cancelled_late'
+  | 'rejected'
+  | 'expired'
+  | 'rated';
 
 export interface Trip {
   id: string;
   passenger_id: string;
-  driver_id?: string;
+  driver_id?: string | null;
   status: TripStatus;
-  pickup_lat: number;
-  pickup_lng: number;
-  pickup_address: string;
-  destination_lat: number;
-  destination_lng: number;
-  destination_address: string;
-  estimate_fare?: number;
-  final_fare?: number;
-  total_fare?: number;
-  vehicle_type?: 'auto' | 'moto';
-  payment_method?: 'cash' | 'mercadopago';
-  verification_code?: string;
-  driver_name?: string;
-  driver_avatar_url?: string;
-  driver_rating?: number;
-  vehicle_brand?: string;
-  vehicle_model?: string;
-  vehicle_color?: string;
-  vehicle_plate?: string;
+  origin_lat: number;
+  origin_lng: number;
+  dest_lat: number;
+  dest_lng: number;
+  origin_address?: string | null;
+  dest_address?: string | null;
+  distance_km?: number | null;
+  duration_minutes?: number | null;
+  total_fare?: number | null;
+  verification_code?: string | null;
+  driver_name?: string | null;
+  driver_avatar_url?: string | null;
+  driver_rating?: number | null;
+  vehicle_brand?: string | null;
+  vehicle_model?: string | null;
+  vehicle_color?: string | null;
+  vehicle_plate?: string | null;
+  driver_lat?: number | null;
+  driver_lng?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -54,6 +59,8 @@ export interface FareEstimate {
 export interface PlaceSuggestion {
   place_id: string;
   description: string;
+  lat: number;
+  lng: number;
 }
 
 export interface ApiError {

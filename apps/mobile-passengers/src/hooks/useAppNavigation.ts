@@ -15,6 +15,7 @@ const SCREEN_TO_ROUTE = {
   TripRequest: '/trip-request',
   VehicleSelect: '/vehicle-select',
   TripInProgress: '/trip-in-progress',
+  ConnectingDriver: '/connecting-driver',
   TripComplete: '/trip-complete',
   TripHistory: '/trip-history',
   Profile: '/profile',
