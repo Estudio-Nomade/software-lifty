@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import {
-  Image,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -14,21 +13,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { HomeHeader } from '../components/HomeHeader';
+import { HowItWorks } from '../components/HowItWorks';
+import { QuickChips } from '../components/QuickChips';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
-
-const RECENT_PLACES = [
-  { name: 'Trabajo', address: 'Av. 9 de Julio 1234' },
-  { name: 'Casa', address: 'Av. Corrientes 5678' },
-  { name: 'Gimnasio', address: 'Calle Falsa 742' },
-];
 
 export function HomeScreen() {
   const { navigate } = useAppNavigation();
-  const fullName = useAuthStore((s) => s.fullName);
-  const email = useAuthStore((s) => s.email);
-  const displayName = fullName || email?.split('@')[0] || 'Usuario';
 
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [pickupAddress, setPickupAddress] = useState('');
@@ -68,6 +60,10 @@ export function HomeScreen() {
     Keyboard.dismiss();
     setSearchExpanded(false);
     setDestAddress('');
+  };
+
+  const handleChipSelect = (address: string) => {
+    setDestAddress(address);
   };
 
   const handleConfirmDestination = () => {
@@ -129,6 +125,8 @@ export function HomeScreen() {
                 </View>
               </View>
 
+              <QuickChips onSelect={handleChipSelect} />
+
               <TouchableOpacity
                 style={[styles.confirmBtn, !destAddress.trim() && styles.confirmBtnDisabled]}
                 onPress={handleConfirmDestination}
@@ -138,26 +136,6 @@ export function HomeScreen() {
                 <Ionicons name="search" size={18} color={theme.colors.white} />
                 <Text style={styles.confirmBtnText}>Buscar destino</Text>
               </TouchableOpacity>
-
-              <View style={styles.recentSection}>
-                <Text style={styles.recentTitle}>Lugares recientes</Text>
-                {RECENT_PLACES.map((place) => (
-                  <TouchableOpacity
-                    key={place.name}
-                    style={styles.recentItem}
-                    onPress={() => setDestAddress(place.address)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.recentIconCircle}>
-                      <Ionicons name="time-outline" size={18} color={theme.colors.white} />
-                    </View>
-                    <View style={styles.recentTexts}>
-                      <Text style={styles.recentName}>{place.name}</Text>
-                      <Text style={styles.recentAddr}>{place.address}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
             </ScrollView>
           </KeyboardAvoidingView>
         ) : (
@@ -166,19 +144,7 @@ export function HomeScreen() {
             contentContainerStyle={styles.bodyContent}
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.greeting}>
-              <View style={styles.greetingRow}>
-                <View>
-                  <Text style={styles.greetingHi}>¡Hola, {displayName}!</Text>
-                  <Text style={styles.greetingSub}>¿A dónde vamos hoy?</Text>
-                </View>
-                <Image
-                  source={require('../../assets/logo.png')}
-                  style={styles.logo}
-                  resizeMode="contain"
-                />
-              </View>
-            </View>
+            <HomeHeader />
 
             <TouchableOpacity
               style={styles.searchBar}
@@ -190,36 +156,41 @@ export function HomeScreen() {
             </TouchableOpacity>
 
             <View style={styles.mapArea}>
-              <View style={styles.mapPlaceholder}>
-                <Ionicons name="map-outline" size={48} color={theme.colors.deepBlue} />
-                <Text style={styles.mapLabel}>Mapa</Text>
-              </View>
+              <TouchableOpacity
+                style={styles.locateBtn}
+                activeOpacity={0.8}
+                accessibilityLabel="Centrar ubicación"
+              >
+                <Ionicons name="locate-outline" size={20} color={theme.colors.primary} />
+              </TouchableOpacity>
             </View>
 
-            <Text style={styles.suggestionsTitle}>Sugerencias para vos</Text>
-            <View style={styles.emptySuggestions}>
-              <Ionicons name="compass-outline" size={36} color={theme.colors.mediumGray} />
-              <Text style={styles.emptySuggestionsText}>
-                Aún no tenés sugerencias.{'\n'}¡Pedí tu primer viaje y empezá a descubrir!
-              </Text>
-            </View>
+            <HowItWorks />
           </ScrollView>
         )}
 
         <View style={styles.tabBar}>
-          <TouchableOpacity style={styles.tab}>
+          <TouchableOpacity style={styles.tab} activeOpacity={0.8}>
             <Ionicons name="home" size={20} color={theme.colors.primary} />
             <Text style={styles.tabActive}>Inicio</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tab} onPress={handleOpenSearch}>
+          <TouchableOpacity style={styles.tab} onPress={handleOpenSearch} activeOpacity={0.8}>
             <Ionicons name="search" size={20} color={theme.colors.mediumGray} />
             <Text style={styles.tabLabel}>Buscar</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tab} onPress={() => navigate('TripHistory')}>
+          <TouchableOpacity
+            style={styles.tab}
+            onPress={() => navigate('TripHistory')}
+            activeOpacity={0.8}
+          >
             <Ionicons name="list" size={20} color={theme.colors.mediumGray} />
             <Text style={styles.tabLabel}>Viajes</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tab} onPress={() => navigate('Profile')}>
+          <TouchableOpacity
+            style={styles.tab}
+            onPress={() => navigate('Profile')}
+            activeOpacity={0.8}
+          >
             <Ionicons name="person-outline" size={20} color={theme.colors.mediumGray} />
             <Text style={styles.tabLabel}>Perfil</Text>
           </TouchableOpacity>
@@ -244,31 +215,6 @@ const styles = StyleSheet.create({
   bodyContent: {
     paddingBottom: theme.spacing.md,
   },
-  greeting: {
-    backgroundColor: theme.colors.deepBlue,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-  },
-  greetingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  greetingHi: {
-    fontSize: theme.fontSize.lg,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
-  },
-  greetingSub: {
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
-    color: theme.colors.mediumGray,
-    marginTop: 2,
-  },
-  logo: {
-    width: 72,
-    height: 28,
-  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -280,6 +226,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 8,
     height: 48,
+    ...theme.shadows.card,
   },
   searchPlaceholder: {
     flex: 1,
@@ -288,40 +235,23 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
   },
   mapArea: {
-    height: 320,
-    backgroundColor: '#B8D4E3',
+    height: 200,
+    marginHorizontal: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    backgroundColor: '#0D2B45',
+    overflow: 'hidden',
+  },
+  locateBtn: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.white,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mapPlaceholder: {
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-  },
-  mapLabel: {
-    fontSize: theme.fontSize.md,
-    fontFamily: theme.fontFamily.medium,
-    color: theme.colors.deepBlue,
-  },
-  suggestionsTitle: {
-    fontSize: theme.fontSize.md,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.deepBlue,
-    paddingHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.lg,
-    marginBottom: theme.spacing.sm,
-  },
-  emptySuggestions: {
-    alignItems: 'center',
-    paddingVertical: theme.spacing.xl,
-    gap: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.xl,
-  },
-  emptySuggestionsText: {
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
-    color: theme.colors.mediumGray,
-    textAlign: 'center',
-    lineHeight: 20,
+    ...theme.shadows.card,
   },
   expandedSearch: {
     flex: 1,
@@ -378,45 +308,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.lightGray,
     marginHorizontal: 12,
   },
-  recentSection: {
-    marginTop: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.md,
-    gap: 8,
-  },
-  recentTitle: {
-    fontSize: theme.fontSize.md,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
-    marginBottom: 4,
-  },
-  recentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
-  },
-  recentIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.radius.full,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  recentTexts: {
-    flex: 1,
-    gap: 2,
-  },
-  recentName: {
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.semibold,
-    color: theme.colors.white,
-  },
-  recentAddr: {
-    fontSize: theme.fontSize.xs,
-    fontFamily: theme.fontFamily.regular,
-    color: theme.colors.mediumGray,
-  },
   fieldInput: {
     flex: 1,
     fontSize: theme.fontSize.md,
@@ -450,12 +341,14 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.white,
     borderTopWidth: 1,
     borderTopColor: theme.colors.lightGray,
+    paddingBottom: 8,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
+    paddingVertical: 8,
   },
   tabActive: {
     fontSize: theme.fontSize.xs,
