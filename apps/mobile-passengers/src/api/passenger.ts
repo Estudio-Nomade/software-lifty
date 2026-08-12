@@ -36,31 +36,31 @@ export async function requestRide(params: {
   vehicle_type?: 'auto' | 'moto';
   payment_method?: 'cash' | 'mercadopago';
 }): Promise<Trip> {
-  const { data } = await api.post<Trip>('/passenger/rides/request', params);
+  const { data } = await api.post<Trip>('/passenger/trips/request', params);
   return data;
 }
 
 export async function getActiveRide(): Promise<Trip | null> {
-  const { data } = await api.get<Trip | null>('/passenger/rides/active');
+  const { data } = await api.get<Trip | null>('/passenger/trips/active');
   return data;
 }
 
-export async function getRideHistory(): Promise<Trip[]> {
-  const { data } = await api.get<Trip[]>('/passenger/rides/history');
+export async function getRideHistory(page = 1, limit = 20): Promise<Trip[]> {
+  const { data } = await api.get<Trip[]>('/passenger/trips/history', { params: { page, limit } });
   return data;
 }
 
 export async function getRideDetails(rideId: string): Promise<Trip> {
-  const { data } = await api.get<Trip>(`/passenger/rides/${rideId}/details`);
+  const { data } = await api.get<Trip>(`/passenger/trips/${rideId}`);
   return data;
 }
 
 export async function cancelRide(rideId: string, reason?: string): Promise<void> {
-  await api.post(`/passenger/rides/${rideId}/cancel`, { reason });
+  await api.post(`/passenger/trips/${rideId}/cancel`, { reason });
 }
 
 export async function rateRide(rideId: string, rating: number, comment?: string): Promise<void> {
-  await api.post(`/passenger/rides/${rideId}/rate`, { rating, comment });
+  await api.post(`/passenger/trips/${rideId}/rate`, { rating, comment });
 }
 
 export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
