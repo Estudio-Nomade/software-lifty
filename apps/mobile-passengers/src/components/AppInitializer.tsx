@@ -6,11 +6,19 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { LoadingOverlay } from './feedback/LoadingOverlay';
 
-const PUBLIC_ROUTES = ['', 'register', 'forgot-password', 'auth', 'terms', 'login-credentials'];
+const PUBLIC_ROUTES = [
+  '',
+  'register',
+  'forgot-password',
+  'auth',
+  'terms',
+  'login-credentials',
+  'verify-email',
+  'location-permissions',
+];
 
 function SessionRestore() {
   const setSession = useAuthStore((s) => s.setSession);
-  const clearAuth = useAuthStore((s) => s.clearAuth);
   const setSessionRestored = useAuthStore((s) => s.setSessionRestored);
 
   useEffect(() => {
@@ -18,15 +26,20 @@ function SessionRestore() {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token ?? null;
       if (!token) {
-        clearAuth();
         setSessionRestored(true);
         return;
       }
-      setSession(token, data.session?.user?.id ?? null, data.session?.user?.email ?? null);
+      const metadata = data.session?.user?.user_metadata as Record<string, unknown> | undefined;
+      setSession(
+        token,
+        data.session?.user?.id ?? null,
+        data.session?.user?.email ?? null,
+        (metadata?.full_name as string) ?? undefined,
+      );
       setSessionRestored(true);
     };
     restore();
-  }, [setSession, clearAuth, setSessionRestored]);
+  }, [setSession, setSessionRestored]);
 
   return null;
 }
@@ -68,7 +81,7 @@ function AuthRedirectWatcher() {
 
     const current = segments[0] ?? '';
     if (PUBLIC_ROUTES.includes(current) || current === '') {
-      router.replace('/location-permissions');
+      router.replace('/home');
     }
   }, [sessionRestored, isAuthenticated, segments, router]);
 
@@ -83,8 +96,9 @@ function ActiveTripRecovery() {
 
   useEffect(() => {
     if (!sessionRestored || !isAuthenticated || navigatedRef.current) return;
+    navigatedRef.current = true;
     InteractionManager.runAfterInteractions(() => {
-      router.replace('/location-permissions');
+      router.replace('/home');
     });
   }, [sessionRestored, isAuthenticated, router]);
 

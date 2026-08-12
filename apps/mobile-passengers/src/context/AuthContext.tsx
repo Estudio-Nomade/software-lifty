@@ -37,7 +37,13 @@ function normalizeEmail(email: string): string {
 function syncStore(session: Session | null) {
   const store = useAuthStore.getState();
   if (session?.access_token) {
-    store.setSession(session.access_token, session.user?.id ?? null, session.user?.email ?? null);
+    const metadata = session.user?.user_metadata as Record<string, unknown> | undefined;
+    store.setSession(
+      session.access_token,
+      session.user?.id ?? null,
+      session.user?.email ?? null,
+      (metadata?.full_name as string) ?? undefined,
+    );
   }
 }
 

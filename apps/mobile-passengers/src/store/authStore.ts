@@ -9,7 +9,13 @@ interface AuthState {
   needsRedirect: boolean;
   sessionRestored: boolean;
   email: string | null;
-  setSession: (token: string | null, userId?: string | null, email?: string | null) => void;
+  fullName: string | null;
+  setSession: (
+    token: string | null,
+    userId?: string | null,
+    email?: string | null,
+    fullName?: string | null,
+  ) => void;
   clearAuth: () => void;
   resetRedirect: () => void;
   setSessionRestored: (restored: boolean) => void;
@@ -24,21 +30,24 @@ export const useAuthStore = create<AuthState>()(
       needsRedirect: false,
       sessionRestored: false,
       email: null,
-      setSession: (token, userId, email) =>
+      fullName: null,
+      setSession: (token, userId, email, fullName) =>
         set((state) => ({
           token,
           isAuthenticated: !!token,
           userId: userId ?? state.userId,
           email: email ?? state.email,
+          fullName: fullName ?? state.fullName,
+          needsRedirect: token ? false : state.needsRedirect,
         })),
       clearAuth: () =>
         set({
           token: null,
           userId: null,
           email: null,
+          fullName: null,
           isAuthenticated: false,
           needsRedirect: true,
-          sessionRestored: false,
         }),
       resetRedirect: () => set({ needsRedirect: false }),
       setSessionRestored: (sessionRestored) => set({ sessionRestored }),
@@ -50,8 +59,17 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         userId: state.userId,
         email: state.email,
+        fullName: state.fullName,
         isAuthenticated: state.isAuthenticated,
       }),
+      merge: (persisted: unknown, current: AuthState) => {
+        const p = persisted as Partial<AuthState>;
+        return {
+          ...current,
+          ...p,
+          fullName: current.fullName || p?.fullName || null,
+        };
+      },
     },
   ),
 );

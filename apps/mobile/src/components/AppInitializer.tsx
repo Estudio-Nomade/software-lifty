@@ -68,6 +68,8 @@ function LocationInit() {
 
 function ActiveTripRecovery() {
   const driverId = useAuthStore((s) => s.driverId);
+  const sessionRestored = useAuthStore((s) => s.sessionRestored);
+  const driverStatus = useAuthStore((s) => s.driverStatus);
   const router = useRouter();
   const routerRef = useRef(router);
   routerRef.current = router;
@@ -75,7 +77,8 @@ function ActiveTripRecovery() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!driverId || navigatedRef.current) return;
+    if (!driverId || !sessionRestored || driverStatus !== 'approved' || navigatedRef.current)
+      return;
     let cancelled = false;
     const check = async () => {
       setLoading(true);
@@ -119,7 +122,7 @@ function ActiveTripRecovery() {
     return () => {
       cancelled = true;
     };
-  }, [driverId]);
+  }, [driverId, sessionRestored, driverStatus]);
 
   if (loading) {
     return <LoadingOverlay visible />;

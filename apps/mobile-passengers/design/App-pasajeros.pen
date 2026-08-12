@@ -2190,35 +2190,324 @@
             },
             {
               "type": "frame",
-              "id": "F2ePwm",
-              "name": "PromoBanner",
+              "id": "HeroCard",
+              "name": "HeroCard",
               "width": "fill_container",
-              "height": 56,
-              "fill": "$amber",
-              "cornerRadius": "$radius-md",
-              "gap": 8,
-              "padding": 16,
+              "fill": "$deepBlue",
+              "cornerRadius": "$radius-lg",
+              "layout": "vertical",
+              "gap": 12,
+              "padding": 20,
               "alignItems": "center",
               "children": [
                 {
-                  "type": "text",
-                  "id": "XeiSb",
-                  "name": "PromoText",
-                  "fill": "$white",
-                  "content": "🎉 20% OFF en tu primer viaje",
-                  "fontFamily": "$font-family",
-                  "fontSize": "$font-sm",
-                  "fontWeight": "bold"
+                  "type": "frame",
+                  "id": "HeroIllus",
+                  "name": "Illustration",
+                  "width": "fill_container",
+                  "height": 90,
+                  "fill": "#00000000",
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "HeroRouteLine",
+                      "name": "RouteLine",
+                      "fill": "$primary",
+                      "content": "• ╌ ╌ ╌ ╌ ╌ •",
+                      "fontFamily": "$font-family",
+                      "fontSize": "$font-xl",
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "HeroCar",
+                      "name": "Car",
+                      "fill": "$primary",
+                      "content": "🚗",
+                      "fontFamily": "$font-family",
+                      "fontSize": "$font-3xl",
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "HeroPin",
+                      "layoutPosition": "absolute",
+                      "name": "Pin",
+                      "fill": "$primary",
+                      "content": "📍",
+                      "x": 180,
+                      "y": 20,
+                      "fontFamily": "$font-family",
+                      "fontSize": "$font-md",
+                      "fontWeight": "normal"
+                    }
+                  ]
                 },
                 {
                   "type": "text",
-                  "id": "KNUYQ",
-                  "name": "PromoCTA",
+                  "id": "HeroTagline",
+                  "name": "Tagline",
                   "fill": "$white",
-                  "content": "Usar →",
+                  "content": "Tu viaje, simple y confiable",
+                  "textAlign": "center",
                   "fontFamily": "$font-family",
-                  "fontSize": "$font-sm",
+                  "fontSize": "$font-lg",
                   "fontWeight": "bold"
+                },
+                {
+                  "type": "frame",
+                  "id": "HeroCTA",
+                  "name": "CTABtn",
+                  "width": "fill_container",
+                  "height": 48,
+                  "fill": "$primary",
+                  "cornerRadius": "$radius-md",
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "HeroCTALabel",
+                      "name": "CTAText",
+                      "fill": "$white",
+                      "content": "Solicitar viaje",
+                      "fontFamily": "$font-family",
+                      "fontSize": "$font-md",
+                      "fontWeight": "bold"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "SuggestionsSection",
+              "name": "Suggestions",
+              "width": "fill_container",
+              "fill": "#00000000",
+              "layout": "vertical",
+              "gap": 8,
+              "padding": [
+                8,
+                8,
+                0,
+                8
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "SuggTitleRef",
+                  "name": "SectionTitle",
+                  "fill": "$deepBlue",
+                  "content": "Sugerencias para vos",
+                  "fontFamily": "$font-family",
+                  "fontSize": "$font-md",
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "frame",
+                  "id": "SuggItemCentro",
+                  "name": "SuggestionItem",
+                  "width": "fill_container",
+                  "height": 52,
+                  "fill": "#00000000",
+                  "gap": 12,
+                  "padding": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "SuggCircleCentro",
+                      "name": "IconCircle",
+                      "width": 40,
+                      "height": 40,
+                      "fill": "$lightGray",
+                      "cornerRadius": "$radius-full",
+                      "layout": "vertical",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "SuggIconCentro",
+                          "name": "Icon",
+                          "fill": "$deepBlue",
+                          "content": "🏙️",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-lg",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "SuggTextCentro",
+                      "name": "Texts",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "SuggNameCentro",
+                          "name": "Name",
+                          "fill": "$deepBlue",
+                          "content": "Centro",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-sm",
+                          "fontWeight": "semibold"
+                        },
+                        {
+                          "type": "text",
+                          "id": "SuggDescCentro",
+                          "name": "Desc",
+                          "fill": "$mediumGray",
+                          "content": "Centro de la ciudad",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-xs",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "SuggItemTerminal",
+                  "name": "SuggestionItem",
+                  "width": "fill_container",
+                  "height": 52,
+                  "fill": "#00000000",
+                  "gap": 12,
+                  "padding": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "SuggCircleTerminal",
+                      "name": "IconCircle",
+                      "width": 40,
+                      "height": 40,
+                      "fill": "$lightGray",
+                      "cornerRadius": "$radius-full",
+                      "layout": "vertical",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "SuggIconTerminal",
+                          "name": "Icon",
+                          "fill": "$deepBlue",
+                          "content": "🚌",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-lg",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "SuggTextTerminal",
+                      "name": "Texts",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "SuggNameTerminal",
+                          "name": "Name",
+                          "fill": "$deepBlue",
+                          "content": "Terminal",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-sm",
+                          "fontWeight": "semibold"
+                        },
+                        {
+                          "type": "text",
+                          "id": "SuggDescTerminal",
+                          "name": "Desc",
+                          "fill": "$mediumGray",
+                          "content": "Terminal de Ómnibus",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-xs",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "SuggItemHospital",
+                  "name": "SuggestionItem",
+                  "width": "fill_container",
+                  "height": 52,
+                  "fill": "#00000000",
+                  "gap": 12,
+                  "padding": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "SuggCircleHospital",
+                      "name": "IconCircle",
+                      "width": 40,
+                      "height": 40,
+                      "fill": "$lightGray",
+                      "cornerRadius": "$radius-full",
+                      "layout": "vertical",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "SuggIconHospital",
+                          "name": "Icon",
+                          "fill": "$deepBlue",
+                          "content": "🏥",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-lg",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "SuggTextHospital",
+                      "name": "Texts",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "SuggNameHospital",
+                          "name": "Name",
+                          "fill": "$deepBlue",
+                          "content": "Hospital",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-sm",
+                          "fontWeight": "semibold"
+                        },
+                        {
+                          "type": "text",
+                          "id": "SuggDescHospital",
+                          "name": "Desc",
+                          "fill": "$mediumGray",
+                          "content": "Hospital Ramón Santamarina",
+                          "fontFamily": "$font-family",
+                          "fontSize": "$font-xs",
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },

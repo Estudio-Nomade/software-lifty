@@ -1,18 +1,94 @@
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import * as Location from 'expo-location';
+import { useEffect, useState } from 'react';
+import {
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
+const SUGGESTIONS = [
+  { icon: 'business-outline', name: 'Centro', desc: 'Centro de la ciudad' },
+  { icon: 'bus-outline', name: 'Terminal', desc: 'Terminal de Ómnibus' },
+  { icon: 'medkit-outline', name: 'Hospital', desc: 'Hospital Ramón Santamarina' },
+];
+
+const RECENT_PLACES = [
+  { name: 'Trabajo', address: 'Av. 9 de Julio 1234' },
+  { name: 'Casa', address: 'Av. Corrientes 5678' },
+  { name: 'Gimnasio', address: 'Calle Falsa 742' },
+];
+
 export function HomeScreen() {
   const { navigate } = useAppNavigation();
+  const fullName = useAuthStore((s) => s.fullName);
   const email = useAuthStore((s) => s.email);
-  const displayName = email?.split('@')[0] ?? 'Usuario';
+  const displayName = fullName || email?.split('@')[0] || 'Usuario';
+
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const [pickupAddress, setPickupAddress] = useState('');
+  const [destAddress, setDestAddress] = useState('');
+
+  useEffect(() => {
+    if (!searchExpanded) return;
+    let cancelled = false;
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      const pos = await Location.getCurrentPositionAsync({});
+      if (cancelled) return;
+      const [addr] = await Location.reverseGeocodeAsync({
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+      });
+      if (cancelled) return;
+      const name =
+        addr?.street && addr?.streetNumber
+          ? `${addr.street} ${addr.streetNumber}`
+          : (addr?.name ?? '');
+      setPickupAddress(
+        name || `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`,
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchExpanded]);
+
+  const handleOpenSearch = () => {
+    setSearchExpanded(true);
+  };
+
+  const handleCloseSearch = () => {
+    Keyboard.dismiss();
+    setSearchExpanded(false);
+    setDestAddress('');
+  };
+
+  const handleConfirmDestination = () => {
+    if (!destAddress.trim()) return;
+    Keyboard.dismiss();
+    navigate('VehicleSelect', {
+      pickup: pickupAddress,
+      destination: destAddress.trim(),
+    });
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.navbar}>
-        <Text style={styles.brand}>Lifty</Text>
+        <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
         <View style={styles.navActions}>
           <TouchableOpacity style={styles.navBtn}>
             <Ionicons name="notifications-outline" size={22} color={theme.colors.white} />
@@ -26,45 +102,138 @@ export function HomeScreen() {
         </View>
       </View>
 
-      <TouchableOpacity
-        style={styles.greeting}
-        onPress={() => navigate('TripRequest')}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.greetingHi}>¡Hola, {displayName}!</Text>
-        <Text style={styles.greetingSub}>¿A dónde vamos hoy?</Text>
-      </TouchableOpacity>
+      <View style={styles.bodyWrap}>
+        {searchExpanded ? (
+          <KeyboardAvoidingView
+            style={styles.expandedSearch}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <View style={styles.expandedHeader}>
+              <TouchableOpacity onPress={handleCloseSearch} style={styles.expandedBack}>
+                <Ionicons name="arrow-back" size={22} color={theme.colors.white} />
+              </TouchableOpacity>
+              <Text style={styles.expandedTitle}>Solicitar viaje</Text>
+            </View>
 
-      <View style={styles.mapArea}>
-        <View style={styles.mapPlaceholder}>
-          <Ionicons name="map-outline" size={48} color={theme.colors.deepBlue} />
-          <Text style={styles.mapLabel}>Mapa</Text>
-        </View>
-        <TouchableOpacity style={styles.centerBtn}>
-          <Ionicons name="locate" size={22} color={theme.colors.primary} />
-        </TouchableOpacity>
-      </View>
+            <ScrollView
+              style={styles.expandedBody}
+              contentContainerStyle={styles.expandedBodyContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.searchFields}>
+                <View style={styles.fieldRow}>
+                  <View style={styles.fieldDotPickup} />
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="Desde"
+                    placeholderTextColor={theme.colors.mediumGray}
+                    value={pickupAddress}
+                    onChangeText={setPickupAddress}
+                  />
+                </View>
 
-      <View style={styles.bottomDock}>
-        <View style={styles.shortcuts}>
-          <TouchableOpacity style={styles.shortcut}>
-            <Ionicons name="home" size={24} color={theme.colors.deepBlue} />
-            <Text style={styles.shortcutLabel}>Casa</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.shortcut}>
-            <Ionicons name="briefcase" size={24} color={theme.colors.deepBlue} />
-            <Text style={styles.shortcutLabel}>Trabajo</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.shortcut}>
-            <Ionicons name="time" size={24} color={theme.colors.deepBlue} />
-            <Text style={styles.shortcutLabel}>Reciente</Text>
-          </TouchableOpacity>
-        </View>
+                <View style={styles.fieldDivider} />
 
-        <TouchableOpacity style={styles.promo} activeOpacity={0.8}>
-          <Text style={styles.promoText}>🎉 20% OFF en tu primer viaje</Text>
-          <Ionicons name="arrow-forward" size={16} color={theme.colors.white} />
-        </TouchableOpacity>
+                <View style={styles.fieldRow}>
+                  <View style={styles.fieldDotDest} />
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="Hacia"
+                    placeholderTextColor={theme.colors.mediumGray}
+                    value={destAddress}
+                    onChangeText={setDestAddress}
+                    autoFocus
+                    returnKeyType="search"
+                    onSubmitEditing={handleConfirmDestination}
+                  />
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.confirmBtn, !destAddress.trim() && styles.confirmBtnDisabled]}
+                onPress={handleConfirmDestination}
+                disabled={!destAddress.trim()}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="search" size={18} color={theme.colors.white} />
+                <Text style={styles.confirmBtnText}>Buscar destino</Text>
+              </TouchableOpacity>
+
+              <View style={styles.recentSection}>
+                <Text style={styles.recentTitle}>Lugares recientes</Text>
+                {RECENT_PLACES.map((place) => (
+                  <TouchableOpacity
+                    key={place.name}
+                    style={styles.recentItem}
+                    onPress={() => setDestAddress(place.address)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.recentIconCircle}>
+                      <Ionicons name="time-outline" size={18} color={theme.colors.deepBlue} />
+                    </View>
+                    <View style={styles.recentTexts}>
+                      <Text style={styles.recentName}>{place.name}</Text>
+                      <Text style={styles.recentAddr}>{place.address}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        ) : (
+          <ScrollView
+            style={styles.body}
+            contentContainerStyle={styles.bodyContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.greeting}>
+              <Text style={styles.greetingHi}>¡Hola, {displayName}!</Text>
+              <Text style={styles.greetingSub}>¿A dónde vamos hoy?</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.searchBar}
+              onPress={handleOpenSearch}
+              activeOpacity={0.9}
+            >
+              <Ionicons name="search" size={18} color={theme.colors.mediumGray} />
+              <Text style={styles.searchPlaceholder}>¿A dónde vas?</Text>
+              <View style={styles.searchPin}>
+                <Ionicons name="locate" size={18} color={theme.colors.primary} />
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.mapArea}>
+              <View style={styles.mapPlaceholder}>
+                <Ionicons name="map-outline" size={48} color={theme.colors.deepBlue} />
+                <Text style={styles.mapLabel}>Mapa</Text>
+              </View>
+              <TouchableOpacity style={styles.centerBtn}>
+                <Ionicons name="locate" size={22} color={theme.colors.primary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.suggestionsTitle}>Sugerencias para vos</Text>
+
+            {SUGGESTIONS.map((item) => (
+              <TouchableOpacity
+                key={item.name}
+                style={styles.suggestionItem}
+                onPress={() => navigate('VehicleSelect')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.suggestionIconCircle}>
+                  <Ionicons name={item.icon as any} size={20} color={theme.colors.deepBlue} />
+                </View>
+                <View style={styles.suggestionTexts}>
+                  <Text style={styles.suggestionName}>{item.name}</Text>
+                  <Text style={styles.suggestionDesc}>{item.desc}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         <View style={styles.tabBar}>
           <TouchableOpacity style={styles.tab}>
@@ -92,7 +261,7 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.deepBlue,
   },
   navbar: {
     height: theme.dimensions.navbarHeight,
@@ -102,10 +271,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing.md,
   },
-  brand: {
-    fontSize: theme.fontSize.lg,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
+  logo: {
+    width: 72,
+    height: 28,
   },
   navActions: {
     flexDirection: 'row',
@@ -114,10 +282,20 @@ const styles = StyleSheet.create({
   navBtn: {
     padding: theme.spacing.sm,
   },
+  bodyWrap: {
+    flex: 1,
+  },
+  body: {
+    flexGrow: 1,
+    backgroundColor: theme.colors.lightGray,
+  },
+  bodyContent: {
+    paddingBottom: theme.spacing.md,
+  },
   greeting: {
     backgroundColor: theme.colors.deepBlue,
     paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
     gap: 2,
   },
   greetingHi: {
@@ -130,8 +308,34 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
   },
-  mapArea: {
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.radius.md,
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+    paddingHorizontal: 12,
+    gap: 8,
+    height: 48,
+  },
+  searchPlaceholder: {
     flex: 1,
+    fontSize: theme.fontSize.md,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+  },
+  searchPin: {
+    width: 32,
+    height: 32,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.lightGray,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapArea: {
+    height: 320,
     backgroundColor: '#B8D4E3',
     justifyContent: 'center',
     alignItems: 'center',
@@ -156,40 +360,160 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  bottomDock: {
-    backgroundColor: theme.colors.white,
-    paddingTop: theme.spacing.sm,
-  },
-  shortcuts: {
-    flexDirection: 'row',
+  suggestionsTitle: {
+    fontSize: theme.fontSize.md,
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.deepBlue,
     paddingHorizontal: theme.spacing.md,
-    height: 64,
-    gap: theme.spacing.md,
+    marginTop: theme.spacing.lg,
+    marginBottom: theme.spacing.sm,
   },
-  shortcut: {
-    flex: 1,
+  suggestionItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+    gap: 12,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 10,
   },
-  shortcutLabel: {
+  suggestionIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.lightGray,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  suggestionTexts: {
+    flex: 1,
+    gap: 2,
+  },
+  suggestionName: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.deepBlue,
+  },
+  suggestionDesc: {
     fontSize: theme.fontSize.xs,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
   },
-  promo: {
+  expandedSearch: {
+    flex: 1,
+    backgroundColor: theme.colors.deepBlue,
+  },
+  expandedBody: {
+    flex: 1,
+  },
+  expandedBodyContent: {
+    paddingBottom: theme.spacing.md,
+  },
+  expandedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: theme.colors.amber,
-    borderRadius: theme.radius.md,
+    height: theme.dimensions.navbarHeight,
     paddingHorizontal: theme.spacing.md,
-    marginHorizontal: theme.spacing.md,
-    height: 44,
-    marginBottom: theme.spacing.sm,
+    gap: theme.spacing.md,
   },
-  promoText: {
+  expandedBack: {
+    padding: theme.spacing.sm,
+  },
+  expandedTitle: {
+    fontSize: theme.fontSize.lg,
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.white,
+  },
+  searchFields: {
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.radius.md,
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.md,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    height: 48,
+    gap: 12,
+  },
+  fieldDotPickup: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.primary,
+  },
+  fieldDotDest: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.dangerRed,
+  },
+  fieldDivider: {
+    height: 1,
+    backgroundColor: theme.colors.lightGray,
+    marginHorizontal: 12,
+  },
+  recentSection: {
+    marginTop: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
+    gap: 8,
+  },
+  recentTitle: {
+    fontSize: theme.fontSize.md,
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.white,
+    marginBottom: 4,
+  },
+  recentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+  },
+  recentIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: theme.radius.full,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recentTexts: {
+    flex: 1,
+    gap: 2,
+  },
+  recentName: {
     fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.white,
+  },
+  recentAddr: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+  },
+  fieldInput: {
+    flex: 1,
+    fontSize: theme.fontSize.md,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.deepBlue,
+    padding: 0,
+  },
+  confirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.md,
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.lg,
+    height: 48,
+    gap: 8,
+  },
+  confirmBtnDisabled: {
+    opacity: 0.5,
+  },
+  confirmBtnText: {
+    fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.white,
   },
@@ -197,6 +521,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: theme.dimensions.tabBarHeight,
     alignItems: 'center',
+    backgroundColor: theme.colors.white,
     borderTopWidth: 1,
     borderTopColor: theme.colors.lightGray,
   },

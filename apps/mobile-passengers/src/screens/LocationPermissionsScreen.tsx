@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -12,15 +12,6 @@ export function LocationPermissionsScreen() {
   const setPermissionGranted = useLocationStore((s) => s.setPermissionGranted);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    Location.getForegroundPermissionsAsync().then(({ status }) => {
-      if (status === 'granted') {
-        setPermissionGranted(true);
-        replace('Home');
-      }
-    });
-  }, [replace, setPermissionGranted]);
 
   const handleEnable = async () => {
     setLoading(true);
