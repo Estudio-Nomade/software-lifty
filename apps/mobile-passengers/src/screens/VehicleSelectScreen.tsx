@@ -1,10 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '../components/Button';
+import { PassengerMap } from '../components/Map/PassengerMap';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useLocationStore } from '../store/locationStore';
 import { theme } from '../theme';
 
-const VEHICLES = [
+interface Vehicle {
+  id: 'auto' | 'moto';
+  name: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  eta: string;
+  capacity: string;
+  price: string;
+}
+
+const VEHICLES: Vehicle[] = [
   {
     id: 'auto',
     name: 'Auto',
@@ -21,12 +34,16 @@ const VEHICLES = [
     capacity: '1 pasajero',
     price: '$2.100',
   },
-  { id: 'van', name: 'Van', icon: 'bus', eta: '18 min', capacity: '6 pasajeros', price: '$4.800' },
 ];
 
 export function VehicleSelectScreen() {
   const { goBack, navigate } = useAppNavigation();
-  const [selected, setSelected] = React.useState('auto');
+  const current = useLocationStore((s) => s.current);
+  const { pickup, destination } = useLocalSearchParams<{
+    pickup?: string;
+    destination?: string;
+  }>();
+  const [selected, setSelected] = useState<Vehicle['id']>('auto');
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -36,17 +53,24 @@ export function VehicleSelectScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.mapPreview}>
-        <Ionicons name="map-outline" size={48} color={theme.colors.deepBlue} />
-        <Text style={styles.mapLabel}>Mapa - Ruta</Text>
+      <View style={styles.mapContainer}>
+        <PassengerMap
+          centerCoordinate={current ? [current.lng, current.lat] : [-58.3816, -34.6037]}
+          userLocation={current ? [current.lng, current.lat] : null}
+          style={styles.mapFill}
+        />
       </View>
 
       <View style={styles.routeSummary}>
         <Ionicons name="location" size={16} color={theme.colors.dangerRed} />
-        <Text style={styles.routeAddr}>Av. Corrientes</Text>
+        <Text style={styles.routeAddr} numberOfLines={1}>
+          {pickup || 'Origen'}
+        </Text>
         <Ionicons name="arrow-forward" size={16} color={theme.colors.mediumGray} />
         <Ionicons name="location" size={16} color={theme.colors.primary} />
-        <Text style={styles.routeAddr}>Av. 9 de Julio</Text>
+        <Text style={styles.routeAddr} numberOfLines={1}>
+          {destination || 'Destino'}
+        </Text>
       </View>
 
       <View style={styles.content}>
@@ -58,7 +82,7 @@ export function VehicleSelectScreen() {
             style={[styles.vehicleCard, selected === v.id && styles.vehicleSelected]}
             onPress={() => setSelected(v.id)}
           >
-            <Ionicons name={v.icon as any} size={28} color={theme.colors.deepBlue} />
+            <Ionicons name={v.icon} size={28} color={theme.colors.deepBlue} />
             <View style={styles.vehicleInfo}>
               <Text style={styles.vehicleName}>{v.name}</Text>
               <View style={styles.vehicleMeta}>
@@ -73,7 +97,9 @@ export function VehicleSelectScreen() {
         <View style={styles.footer}>
           <View style={styles.footerRow}>
             <Ionicons name="location-outline" size={16} color={theme.colors.mediumGray} />
-            <Text style={styles.footerAddr}>Av. 9 de Julio 1234</Text>
+            <Text style={styles.footerAddr} numberOfLines={1}>
+              {destination || ''}
+            </Text>
           </View>
           <Button
             variant="cta"
@@ -87,8 +113,6 @@ export function VehicleSelectScreen() {
     </SafeAreaView>
   );
 }
-
-import React from 'react';
 
 const styles = StyleSheet.create({
   safe: {
@@ -105,17 +129,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     padding: theme.spacing.sm,
   },
-  mapPreview: {
+  mapContainer: {
     height: 180,
-    backgroundColor: '#B8D4E3',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: theme.colors.lightGray,
   },
-  mapLabel: {
-    fontSize: theme.fontSize.md,
-    fontFamily: theme.fontFamily.medium,
-    color: theme.colors.deepBlue,
-    marginTop: theme.spacing.sm,
+  mapFill: {
+    flex: 1,
   },
   routeSummary: {
     height: 48,
