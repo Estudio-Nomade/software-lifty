@@ -82,7 +82,10 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   backBtn: {
-    padding: theme.spacing.xs,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontSize: theme.fontSize.md,
