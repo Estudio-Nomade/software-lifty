@@ -24,8 +24,8 @@ import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { Navbar } from '../components/Navbar';
 import { SideMenu } from '../components/SideMenu';
-import { TabBar, type TabKey } from '../components/TabBar';
 import { Text } from '../components/ui/Text';
+import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useOnlineStore } from '../store/onlineStore';
@@ -107,7 +107,7 @@ export const ProfileScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const signOut = useSignOut();
   const isOnline = useOnlineStore((s) => s.isOnline);
-  const [activeTab, setActiveTab] = useState<TabKey>('profile');
+  const { setActiveTab } = useTabBar();
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [documents, setDocuments] = useState<DriverDocument[]>([]);
@@ -144,13 +144,6 @@ export const ProfileScreen: React.FC = () => {
       fetchData();
     }, [fetchData]),
   );
-
-  const handleTabPress = (tab: TabKey) => {
-    setActiveTab(tab);
-    if (tab === 'home') navigation.navigate(isOnline ? 'Active' : 'Online');
-    if (tab === 'earnings') navigation.navigate('Earnings');
-    if (tab === 'trips') navigation.navigate('TripHistory');
-  };
 
   const handleSignOut = () => {
     signOut.mutate();
@@ -256,7 +249,6 @@ export const ProfileScreen: React.FC = () => {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.turquoise} />
         </View>
-        <TabBar activeTab={activeTab} onTabPress={handleTabPress} />
       </View>
     );
   }
@@ -435,7 +427,6 @@ export const ProfileScreen: React.FC = () => {
         </KeyboardAvoidingView>
       </Modal>
 
-      <TabBar activeTab={activeTab} onTabPress={handleTabPress} />
       <SideMenu
         visible={menuVisible}
         onClose={() => setMenuVisible(false)}
@@ -462,7 +453,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.lightGray,
     gap: theme.spacing.md,
     padding: theme.spacing.md,
-    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
+    paddingBottom: theme.spacing.lg,
   },
   profileCard: {
     width: 343,

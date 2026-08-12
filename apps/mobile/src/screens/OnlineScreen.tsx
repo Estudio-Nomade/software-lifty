@@ -10,10 +10,10 @@ import { Card } from '../components/Card';
 import { MapView } from '../components/MapView';
 import { Navbar } from '../components/Navbar';
 import { SideMenu } from '../components/SideMenu';
-import { TabBar, type TabKey } from '../components/TabBar';
 import { Toggle } from '../components/Toggle';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { Text } from '../components/ui/Text';
+import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
@@ -27,7 +27,7 @@ export const OnlineScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const isOnline = useOnlineStore((s) => s.isOnline);
   const setOnline = useOnlineStore((s) => s.setOnline);
-  const [activeTab, setActiveTab] = useState<TabKey>('home');
+  const { setActiveTab } = useTabBar();
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const heatmapPoints = useHeatmapPolling();
@@ -107,13 +107,6 @@ export const OnlineScreen: React.FC = () => {
     },
     [setOnline, navigation, documentsPendingReview],
   );
-
-  const handleTabPress = (tab: TabKey) => {
-    setActiveTab(tab);
-    if (tab === 'earnings') navigation.navigate('Earnings');
-    if (tab === 'trips') navigation.navigate('TripHistory');
-    if (tab === 'profile') navigation.navigate('Profile');
-  };
 
   const menuItems = useMemo(
     () => [
@@ -294,8 +287,6 @@ export const OnlineScreen: React.FC = () => {
         <View style={styles.spacer} />
       </View>
 
-      <TabBar activeTab={activeTab} onTabPress={handleTabPress} />
-
       <SideMenu
         visible={menuVisible}
         onClose={() => setMenuVisible(false)}
@@ -319,7 +310,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.lg,
-    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   toggleSection: {
     alignItems: 'center',
