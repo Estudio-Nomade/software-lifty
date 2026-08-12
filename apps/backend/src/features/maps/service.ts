@@ -20,8 +20,8 @@ export interface FareEstimateResult extends FareResult {
 }
 
 export const mapsService = {
-  async autocomplete(input: string): Promise<PlaceResult[]> {
-    return geoAutocomplete(input);
+  async autocomplete(input: string, lat?: number, lng?: number): Promise<PlaceResult[]> {
+    return geoAutocomplete(input, lat, lng);
   },
 
   async geocode(params: { lat?: number; lng?: number; address?: string }): Promise<GeocodeResult> {

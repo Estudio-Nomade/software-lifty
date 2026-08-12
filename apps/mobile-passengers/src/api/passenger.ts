@@ -63,7 +63,13 @@ export async function rateRide(rideId: string, rating: number, comment?: string)
   await api.post(`/passenger/trips/${rideId}/rate`, { rating, comment });
 }
 
-export async function searchPlaces(query: string): Promise<PlaceSuggestion[]> {
-  const { data } = await api.get<PlaceSuggestion[]>('/maps/autocomplete', { params: { query } });
+export async function searchPlaces(
+  input: string,
+  lat?: number,
+  lng?: number,
+): Promise<PlaceSuggestion[]> {
+  const { data } = await api.get<PlaceSuggestion[]>('/maps/places/autocomplete', {
+    params: { input, lat, lng },
+  });
   return data;
 }

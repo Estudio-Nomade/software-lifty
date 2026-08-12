@@ -15,7 +15,8 @@ export const mapsRoutes = new Elysia({ prefix: '/maps' })
   .use(authGuard)
   .get(
     '/places/autocomplete',
-    ({ query, set }) => safeCall(() => mapsService.autocomplete(query.input), set),
+    ({ query, set }) =>
+      safeCall(() => mapsService.autocomplete(query.input, query.lat, query.lng), set),
     { query: autocompleteQuery, requireAuth: true },
   )
   .get(

@@ -54,8 +54,6 @@ export interface FareEstimate {
 export interface PlaceSuggestion {
   place_id: string;
   description: string;
-  lat: number;
-  lng: number;
 }
 
 export interface ApiError {

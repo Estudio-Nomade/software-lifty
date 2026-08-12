@@ -2,6 +2,8 @@ import { t } from 'elysia';
 
 export const autocompleteQuery = t.Object({
   input: t.String({ minLength: 1 }),
+  lat: t.Optional(t.Number()),
+  lng: t.Optional(t.Number()),
 });
 
 export const geocodeQuery = t.Object({
