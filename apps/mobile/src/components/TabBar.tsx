@@ -59,12 +59,12 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabPress }) => {
 
 const styles = StyleSheet.create({
   container: {
+    width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'flex-start',
     backgroundColor: theme.colors.white,
     paddingTop: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
     borderTopWidth: 1,
     borderTopColor: theme.colors.lightGray,
   },
