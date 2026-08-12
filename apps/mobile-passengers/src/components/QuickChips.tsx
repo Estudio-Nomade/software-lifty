@@ -33,7 +33,7 @@ export function QuickChips({ onSelect }: QuickChipsProps) {
       onSelect(favorite.address);
       return;
     }
-    setEditor({ mode: 'add', label: favorite.label });
+    setEditor({ mode: 'edit', favorite });
   };
 
   const handleEditPress = (favorite: Favorite) => setEditor({ mode: 'edit', favorite });

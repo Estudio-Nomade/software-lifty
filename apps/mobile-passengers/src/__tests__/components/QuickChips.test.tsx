@@ -35,6 +35,16 @@ describe('QuickChips', () => {
     expect(getByText('Agregar a favorito')).toBeTruthy();
   });
 
+  test('filling an empty seed chip updates it instead of duplicating', async () => {
+    const { getByText, getByPlaceholderText } = await render(<QuickChips onSelect={jest.fn()} />);
+    await fireEvent.press(getByText('Casa'));
+    await fireEvent.changeText(getByPlaceholderText('Escribí la dirección'), 'Cabildo 200');
+    await fireEvent.press(getByText('Agregar a favorito'));
+    const { favorites } = useFavoritesStore.getState();
+    expect(favorites).toHaveLength(2);
+    expect(favorites[0]).toEqual({ id: 'casa', label: 'Casa', address: 'Cabildo 200' });
+  });
+
   test('deleting a favorite confirms and removes it', async () => {
     useFavoritesStore.getState().updateFavorite('casa', 'Casa', 'Cabildo 200');
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
