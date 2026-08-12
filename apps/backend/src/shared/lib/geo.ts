@@ -1,7 +1,7 @@
 import { logger } from './logger';
 import { getRedis } from './redis';
 
-const NOMINATIM_URL = process.env.NOMINATIM_URL || 'https://nominatim.openstreetmap.org';
+const PHOTON_URL = process.env.PHOTON_URL || 'https://photon.komoot.io';
 const OSRM_URL = process.env.OSRM_URL || 'https://router.project-osrm.org';
 const IS_PROD = process.env.NODE_ENV === 'production';
 const GEO_USER_AGENT = 'Lifty/1.0 (contact: liftyviajes.com)';
@@ -99,20 +99,36 @@ async function cacheSet(key: string, value: string, ttlSeconds: number): Promise
   await redis.setex(key, ttlSeconds, value);
 }
 
-interface NominatimFeature {
-  lat: string;
-  lon: string;
-  display_name: string;
-  place_id?: number;
+function formatPhotonAddress(props: Record<string, string | number | undefined>): string {
+  const parts = [
+    String(props.name || props.street || ''),
+    String(props.city || props.town || props.village || ''),
+    String(props.state || ''),
+    String(props.country || ''),
+  ].filter(Boolean);
+  return parts.join(', ');
 }
 
-async function fetchGeo(url: URL): Promise<NominatimFeature[] | NominatimFeature> {
+interface PhotonFeature {
+  geometry: { coordinates: [number, number] };
+  properties: {
+    osm_id: number;
+    name?: string;
+    street?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    [key: string]: string | number | undefined;
+  };
+}
+
+async function fetchPhoton(url: URL): Promise<{ features?: PhotonFeature[] }> {
   const res = await fetch(url.toString(), {
     headers: { 'User-Agent': GEO_USER_AGENT },
     signal: AbortSignal.timeout(GEO_TIMEOUT_MS),
   });
-  if (!res.ok) throw new Error(`Geocoder API error: ${res.status}`);
-  return (await res.json()) as NominatimFeature[] | NominatimFeature;
+  if (!res.ok) throw new Error(`Photon API error: ${res.status}`);
+  return (await res.json()) as { features?: PhotonFeature[] };
 }
 
 export async function autocomplete(
@@ -130,22 +146,20 @@ export async function autocomplete(
       ];
     }
 
-    const url = new URL(`${NOMINATIM_URL}/search`);
+    const url = new URL(`${PHOTON_URL}/api/`);
     url.searchParams.set('q', input.trim());
-    url.searchParams.set('format', 'json');
     url.searchParams.set('limit', '5');
-    url.searchParams.set('addressdetails', '0');
+    url.searchParams.set('lang', 'default');
     if (lat != null && lng != null) {
-      const bias = 0.5;
-      url.searchParams.set('viewbox', `${lng - bias},${lat - bias},${lng + bias},${lat + bias}`);
+      url.searchParams.set('lat', String(lat));
+      url.searchParams.set('lon', String(lng));
     }
 
-    const data = await fetchGeo(url);
-    const features = Array.isArray(data) ? data : [data];
+    const data = await fetchPhoton(url);
 
-    return features.map((f) => ({
-      description: f.display_name,
-      place_id: f.place_id != null ? String(f.place_id) : f.display_name,
+    return (data.features || []).map((f) => ({
+      description: formatPhotonAddress(f.properties),
+      place_id: String(f.properties.osm_id),
     }));
   } catch (err) {
     logger.error('[geo] autocomplete failed:', (err as Error).message);
@@ -169,31 +183,30 @@ export async function geocode(params: {
     let url: URL;
 
     if (params.lat !== undefined && params.lng !== undefined) {
-      const reverseUrl = new URL(`${NOMINATIM_URL}/reverse`);
+      const reverseUrl = new URL(`${PHOTON_URL}/reverse`);
       reverseUrl.searchParams.set('lat', String(params.lat));
       reverseUrl.searchParams.set('lon', String(params.lng));
-      reverseUrl.searchParams.set('format', 'json');
-      reverseUrl.searchParams.set('addressdetails', '0');
+      reverseUrl.searchParams.set('lang', 'default');
       url = reverseUrl;
     } else if (params.address) {
-      const forwardUrl = new URL(`${NOMINATIM_URL}/search`);
+      const forwardUrl = new URL(`${PHOTON_URL}/api/`);
       forwardUrl.searchParams.set('q', params.address);
-      forwardUrl.searchParams.set('format', 'json');
       forwardUrl.searchParams.set('limit', '1');
-      forwardUrl.searchParams.set('addressdetails', '0');
+      forwardUrl.searchParams.set('lang', 'default');
       url = forwardUrl;
     } else {
       return { lat: -34.6037, lng: -58.3816, formatted_address: 'Buenos Aires, Argentina' };
     }
 
-    const data = await fetchGeo(url);
-    const feature = Array.isArray(data) ? data[0] : data;
+    const data = await fetchPhoton(url);
+    const feature = data.features?.[0];
     if (!feature) throw new Error('No geocoding results');
 
+    const [lng, lat] = feature.geometry.coordinates;
     return {
-      lat: Math.round(Number(feature.lat) * 1000000) / 1000000,
-      lng: Math.round(Number(feature.lon) * 1000000) / 1000000,
-      formatted_address: feature.display_name,
+      lat: Math.round(lat * 1000000) / 1000000,
+      lng: Math.round(lng * 1000000) / 1000000,
+      formatted_address: formatPhotonAddress(feature.properties),
     };
   } catch (err) {
     logger.error('[geo] geocode failed:', (err as Error).message);
