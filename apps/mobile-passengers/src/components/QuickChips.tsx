@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 36,
+    height: 44,
     paddingHorizontal: theme.spacing.md,
     backgroundColor: theme.colors.white,
     borderRadius: 999,
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   },
   editInput: {
     flex: 1,
-    height: 40,
+    height: 44,
     backgroundColor: theme.colors.white,
     borderRadius: theme.radius.sm,
     paddingHorizontal: theme.spacing.md,
@@ -127,8 +127,8 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.lightGray,
   },
   editSave: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: theme.radius.sm,
     backgroundColor: theme.colors.white,
     borderWidth: 1,
