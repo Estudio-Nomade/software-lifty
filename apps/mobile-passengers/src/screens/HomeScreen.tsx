@@ -150,6 +150,16 @@ export function HomeScreen() {
                 </View>
               </View>
 
+              <TouchableOpacity
+                style={[styles.confirmBtn, !destAddress.trim() && styles.confirmBtnDisabled]}
+                onPress={handleConfirmDestination}
+                disabled={!destAddress.trim()}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="search" size={18} color={theme.colors.white} />
+                <Text style={styles.confirmBtnText}>Buscar destino</Text>
+              </TouchableOpacity>
+
               <View style={styles.recentSection}>
                 <Text style={styles.recentTitle}>Lugares recientes</Text>
                 {RECENT_PLACES.map((place) => (
@@ -169,16 +179,6 @@ export function HomeScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-
-              <TouchableOpacity
-                style={[styles.confirmBtn, !destAddress.trim() && styles.confirmBtnDisabled]}
-                onPress={handleConfirmDestination}
-                disabled={!destAddress.trim()}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="search" size={18} color={theme.colors.white} />
-                <Text style={styles.confirmBtnText}>Buscar destino</Text>
-              </TouchableOpacity>
             </ScrollView>
           </KeyboardAvoidingView>
         ) : (
