@@ -115,7 +115,11 @@ async function fetchGeo(url: URL): Promise<NominatimFeature[] | NominatimFeature
   return (await res.json()) as NominatimFeature[] | NominatimFeature;
 }
 
-export async function autocomplete(input: string): Promise<PlaceResult[]> {
+export async function autocomplete(
+  input: string,
+  lat?: number,
+  lng?: number,
+): Promise<PlaceResult[]> {
   if (!input || input.trim().length === 0) return [];
 
   try {
@@ -131,6 +135,10 @@ export async function autocomplete(input: string): Promise<PlaceResult[]> {
     url.searchParams.set('format', 'json');
     url.searchParams.set('limit', '5');
     url.searchParams.set('addressdetails', '0');
+    if (lat != null && lng != null) {
+      const bias = 0.5;
+      url.searchParams.set('viewbox', `${lng - bias},${lat - bias},${lng + bias},${lat + bias}`);
+    }
 
     const data = await fetchGeo(url);
     const features = Array.isArray(data) ? data : [data];
