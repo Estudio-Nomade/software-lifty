@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { getDirections, requestRide } from '../api/passenger';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -39,11 +40,66 @@ const VEHICLES: Vehicle[] = [
 export function VehicleSelectScreen() {
   const { goBack, navigate } = useAppNavigation();
   const current = useLocationStore((s) => s.current);
-  const { pickup, destination } = useLocalSearchParams<{
+  const { pickup, destination, pickupLat, pickupLng, destLat, destLng } = useLocalSearchParams<{
     pickup?: string;
     destination?: string;
+    pickupLat?: string;
+    pickupLng?: string;
+    destLat?: string;
+    destLng?: string;
   }>();
   const [selected, setSelected] = useState<Vehicle['id']>('auto');
+  const [loading, setLoading] = useState(false);
+
+  const handleRequest = async () => {
+    if (!pickupLat || !pickupLng || !destLat || !destLng) {
+      Alert.alert('Ubicación no disponible', 'No pudimos obtener tu ubicación. Reintentá.');
+      return;
+    }
+
+    const originLat = Number(pickupLat);
+    const originLng = Number(pickupLng);
+    const destLatNum = Number(destLat);
+    const destLngNum = Number(destLng);
+
+    if (
+      Number.isNaN(originLat) ||
+      Number.isNaN(originLng) ||
+      Number.isNaN(destLatNum) ||
+      Number.isNaN(destLngNum)
+    ) {
+      Alert.alert('Ubicación no disponible', 'No pudimos obtener tu ubicación. Reintentá.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const dir = await getDirections({
+        origin_lat: originLat,
+        origin_lng: originLng,
+        dest_lat: destLatNum,
+        dest_lng: destLngNum,
+      });
+
+      const trip = await requestRide({
+        origin_lat: originLat,
+        origin_lng: originLng,
+        dest_lat: destLatNum,
+        dest_lng: destLngNum,
+        origin_address: pickup || '',
+        dest_address: destination || '',
+        vehicle_type: selected,
+        distance_km: dir.distance_km,
+        duration_minutes: dir.duration_minutes,
+      });
+
+      navigate('ConnectingDriver', { tripId: trip.id });
+    } catch {
+      Alert.alert('No se pudo solicitar el viaje', 'Intentalo de nuevo.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -103,7 +159,8 @@ export function VehicleSelectScreen() {
           </View>
           <Button
             variant="cta"
-            onPress={() => navigate('TripInProgress')}
+            onPress={handleRequest}
+            loading={loading}
             style={styles.solicitarBtn}
           >
             SOLICITAR {VEHICLES.find((v) => v.id === selected)?.price}

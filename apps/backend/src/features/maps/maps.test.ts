@@ -84,6 +84,8 @@ describe('Maps Proxy', () => {
     expect(data.length).toBeGreaterThan(0);
     expect(data[0].description).toContain('Avellaneda');
     expect(data[0].place_id).toBeString();
+    expect(data[0].lat).toBeNumber();
+    expect(data[0].lng).toBeNumber();
   });
 
   test('autocomplete without auth returns 401', async () => {

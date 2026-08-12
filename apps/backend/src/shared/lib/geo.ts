@@ -12,6 +12,8 @@ const GEO_CACHE_TTL = 24 * 60 * 60;
 export interface PlaceResult {
   description: string;
   place_id: string;
+  lat: number;
+  lng: number;
 }
 
 export interface GeocodeResult {
@@ -141,8 +143,18 @@ export async function autocomplete(
   try {
     if (process.env.NODE_ENV === 'test') {
       return [
-        { description: `${input}, Buenos Aires, Argentina`, place_id: 'mock-1' },
-        { description: `${input}, Mendoza, Argentina`, place_id: 'mock-2' },
+        {
+          description: `${input}, Buenos Aires, Argentina`,
+          place_id: 'mock-1',
+          lat: -34.6037,
+          lng: -58.3816,
+        },
+        {
+          description: `${input}, Mendoza, Argentina`,
+          place_id: 'mock-2',
+          lat: -32.8908,
+          lng: -68.8272,
+        },
       ];
     }
 
@@ -160,6 +172,8 @@ export async function autocomplete(
     return (data.features || []).map((f) => ({
       description: formatPhotonAddress(f.properties),
       place_id: String(f.properties.osm_id),
+      lat: f.geometry.coordinates[1],
+      lng: f.geometry.coordinates[0],
     }));
   } catch (err) {
     logger.error('[geo] autocomplete failed:', (err as Error).message);
