@@ -48,7 +48,6 @@ export const useAuthStore = create<AuthState>()(
           fullName: null,
           isAuthenticated: false,
           needsRedirect: true,
-          sessionRestored: false,
         }),
       resetRedirect: () => set({ needsRedirect: false }),
       setSessionRestored: (sessionRestored) => set({ sessionRestored }),
