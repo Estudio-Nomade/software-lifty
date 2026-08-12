@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import {
@@ -16,16 +15,20 @@ import {
 } from 'react-native';
 import { HomeHeader } from '../components/HomeHeader';
 import { HowItWorks } from '../components/HowItWorks';
+import { PassengerMap } from '../components/Map/PassengerMap';
 import { QuickChips } from '../components/QuickChips';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useLocation } from '../hooks/useLocation';
 import { theme } from '../theme';
 
 export function HomeScreen() {
   const { navigate } = useAppNavigation();
+  const { current } = useLocation();
 
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [pickupAddress, setPickupAddress] = useState('');
   const [destAddress, setDestAddress] = useState('');
+  const [recenterKey, setRecenterKey] = useState(0);
 
   useEffect(() => {
     if (!searchExpanded) return;
@@ -53,10 +56,8 @@ export function HomeScreen() {
     };
   }, [searchExpanded]);
 
-  const handleLocate = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return;
-    Location.getCurrentPositionAsync({});
+  const handleLocate = () => {
+    setRecenterKey((k) => k + 1);
   };
 
   const handleOpenSearch = () => {
@@ -162,10 +163,14 @@ export function HomeScreen() {
               <Text style={styles.searchPlaceholder}>¿A dónde vas?</Text>
             </TouchableOpacity>
 
-            <LinearGradient
-              colors={[theme.colors.deepBlue, `${theme.colors.primary}26`]}
-              style={styles.mapArea}
-            >
+            <View style={styles.mapArea}>
+              <PassengerMap
+                centerCoordinate={current ? [current.lng, current.lat] : [-58.3816, -34.6037]}
+                userLocation={current ? [current.lng, current.lat] : null}
+                followUserLocation
+                recenterKey={recenterKey}
+                style={styles.mapFill}
+              />
               <TouchableOpacity
                 style={styles.locateBtn}
                 onPress={handleLocate}
@@ -174,7 +179,7 @@ export function HomeScreen() {
               >
                 <Ionicons name="locate-outline" size={20} color={theme.colors.primary} />
               </TouchableOpacity>
-            </LinearGradient>
+            </View>
 
             <HowItWorks />
           </ScrollView>
@@ -249,8 +254,11 @@ const styles = StyleSheet.create({
     height: 200,
     marginHorizontal: theme.spacing.md,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.deepBlue,
+    backgroundColor: theme.colors.lightGray,
     overflow: 'hidden',
+  },
+  mapFill: {
+    flex: 1,
   },
   locateBtn: {
     position: 'absolute',
