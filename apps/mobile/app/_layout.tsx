@@ -8,7 +8,8 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppInitializer } from '../src/components/AppInitializer';
 import { ConnectivityBanner } from '../src/components/feedback/ConnectivityBanner';
 import { ErrorBoundary } from '../src/components/feedback/ErrorBoundary';
@@ -40,7 +41,7 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         <AuthProvider>
-          <View style={styles.root}>
+          <SafeAreaView style={styles.root} edges={['left', 'right']}>
             <StatusBar style="auto" />
             <Stack
               screenOptions={{
@@ -51,7 +52,7 @@ export default function RootLayout() {
             />
             <AppInitializer />
             <ConnectivityBanner />
-          </View>
+          </SafeAreaView>
         </AuthProvider>
       </ErrorBoundary>
     </QueryClientProvider>
