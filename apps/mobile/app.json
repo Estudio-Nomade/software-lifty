@@ -23,7 +23,11 @@
       },
       "package": "com.lifty.conductor",
       "versionCode": 1,
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "navigationBar": {
+        "backgroundColor": "#FFFFFF",
+        "barStyle": "dark-content"
+      }
     },
     "experiments": {
       "reactCompiler": true

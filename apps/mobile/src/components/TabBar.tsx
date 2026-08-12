@@ -29,7 +29,7 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabPress }) => {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom + theme.spacing.sm }]}>
+    <View style={[styles.container, { paddingBottom: insets.bottom + theme.spacing['2xl'] }]}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.key;
         return (
