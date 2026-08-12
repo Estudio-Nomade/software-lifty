@@ -169,17 +169,17 @@ export function HomeScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-            </ScrollView>
 
-            <TouchableOpacity
-              style={[styles.confirmBtn, !destAddress.trim() && styles.confirmBtnDisabled]}
-              onPress={handleConfirmDestination}
-              disabled={!destAddress.trim()}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="search" size={18} color={theme.colors.white} />
-              <Text style={styles.confirmBtnText}>Buscar destino</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmBtn, !destAddress.trim() && styles.confirmBtnDisabled]}
+                onPress={handleConfirmDestination}
+                disabled={!destAddress.trim()}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="search" size={18} color={theme.colors.white} />
+                <Text style={styles.confirmBtnText}>Buscar destino</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </KeyboardAvoidingView>
         ) : (
           <ScrollView
