@@ -52,6 +52,11 @@ export function VehicleSelectScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleRequest = async () => {
+    if (!pickupLat || !pickupLng || !destLat || !destLng) {
+      Alert.alert('Ubicación no disponible', 'No pudimos obtener tu ubicación. Reintentá.');
+      return;
+    }
+
     const originLat = Number(pickupLat);
     const originLng = Number(pickupLng);
     const destLatNum = Number(destLat);

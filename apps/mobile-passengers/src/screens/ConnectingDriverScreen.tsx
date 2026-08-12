@@ -21,13 +21,22 @@ export function ConnectingDriverScreen() {
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
 
+    const proceedToTrip = async (id: string) => {
+      const full = await getRideDetails(id).catch(() => null);
+      if (!full?.driver_id) return;
+      setActiveTrip(full);
+      replace('TripInProgress');
+    };
+
     if (userId) {
       unsubscribe = subscribeToPassengerChannel(userId, async (trip: any) => {
         if (!tripId || trip?.id !== tripId || !trip?.driver_id) return;
-        const full = await getRideDetails(tripId).catch(() => null);
-        setActiveTrip(full ?? trip);
-        replace('TripInProgress');
+        await proceedToTrip(tripId);
       });
+    }
+
+    if (tripId) {
+      proceedToTrip(tripId);
     }
 
     const timeout = setTimeout(() => setTimedOut(true), SEARCH_TIMEOUT_MS);

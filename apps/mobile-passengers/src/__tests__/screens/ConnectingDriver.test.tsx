@@ -1,6 +1,7 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
 import { ConnectingDriverScreen } from '../../screens/ConnectingDriverScreen';
+import { useAuthStore } from '../../store/authStore';
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ tripId: 'trip-123' }),
@@ -16,12 +17,13 @@ jest.mock('../../hooks/useAppNavigation', () => ({
 }));
 
 jest.mock('../../api/passenger', () => ({
-  getRideDetails: jest.fn(),
+  getRideDetails: jest.fn().mockResolvedValue(null),
   cancelRide: jest.fn().mockResolvedValue(undefined),
 }));
 
 describe('ConnectingDriverScreen', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     jest.useFakeTimers();
     mockReplace.mockClear();
   });
@@ -51,5 +53,22 @@ describe('ConnectingDriverScreen', () => {
     });
     expect(cancelRide).toHaveBeenCalledWith('trip-123');
     expect(mockReplace).toHaveBeenCalledWith('Home');
+  });
+
+  test('navigates to trip-in-progress when a driver claims the trip', async () => {
+    useAuthStore.setState({ userId: 'passenger-1' });
+    const { getRideDetails } = require('../../api/passenger');
+    const { subscribeToPassengerChannel } = require('../../lib/realtime');
+    getRideDetails.mockResolvedValue({ id: 'trip-123', driver_id: 'd-1' });
+
+    await render(<ConnectingDriverScreen />);
+
+    const onTripStatus = subscribeToPassengerChannel.mock.calls[0][1];
+    await act(async () => {
+      await onTripStatus({ id: 'trip-123', driver_id: 'd-1' });
+    });
+
+    expect(getRideDetails).toHaveBeenCalledWith('trip-123');
+    expect(mockReplace).toHaveBeenCalledWith('TripInProgress');
   });
 });

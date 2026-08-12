@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect } from 'react';
 import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { getActiveRide } from '../api/passenger';
+import { cancelRide, getActiveRide } from '../api/passenger';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -25,6 +25,14 @@ export function TripInProgressScreen() {
   }, [activeTrip, setActiveTrip]);
 
   const trip = activeTrip;
+
+  const handleCancel = async () => {
+    if (trip?.id) {
+      await cancelRide(trip.id).catch(() => {});
+    }
+    navigate('Home');
+  };
+
   const driverCoord: [number, number] | null =
     trip?.driver_lat != null && trip?.driver_lng != null
       ? [trip.driver_lng, trip.driver_lat]
@@ -40,7 +48,6 @@ export function TripInProgressScreen() {
           centerCoordinate={
             driverCoord ?? (current ? [current.lng, current.lat] : [-58.3816, -34.6037])
           }
-          userLocation={driverCoord}
           followUserLocation={false}
           style={styles.mapFill}
         />
@@ -75,7 +82,7 @@ export function TripInProgressScreen() {
           </Button>
         </View>
 
-        <Button variant="danger" onPress={() => navigate('Home')} style={styles.cancelBtn}>
+        <Button variant="danger" onPress={handleCancel} style={styles.cancelBtn}>
           CANCELAR VIAJE
         </Button>
       </View>
