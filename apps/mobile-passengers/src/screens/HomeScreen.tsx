@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import {
   Image,
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -102,7 +104,10 @@ export function HomeScreen() {
 
       <View style={styles.bodyWrap}>
         {searchExpanded ? (
-          <View style={styles.expandedSearch}>
+          <KeyboardAvoidingView
+            style={styles.expandedSearch}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
             <View style={styles.expandedHeader}>
               <TouchableOpacity onPress={handleCloseSearch} style={styles.expandedBack}>
                 <Ionicons name="arrow-back" size={22} color={theme.colors.white} />
@@ -110,54 +115,61 @@ export function HomeScreen() {
               <Text style={styles.expandedTitle}>Solicitar viaje</Text>
             </View>
 
-            <View style={styles.searchFields}>
-              <View style={styles.fieldRow}>
-                <View style={styles.fieldDotPickup} />
-                <TextInput
-                  style={styles.fieldInput}
-                  placeholder="Desde"
-                  placeholderTextColor={theme.colors.mediumGray}
-                  value={pickupAddress}
-                  onChangeText={setPickupAddress}
-                />
+            <ScrollView
+              style={styles.expandedBody}
+              contentContainerStyle={styles.expandedBodyContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.searchFields}>
+                <View style={styles.fieldRow}>
+                  <View style={styles.fieldDotPickup} />
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="Desde"
+                    placeholderTextColor={theme.colors.mediumGray}
+                    value={pickupAddress}
+                    onChangeText={setPickupAddress}
+                  />
+                </View>
+
+                <View style={styles.fieldDivider} />
+
+                <View style={styles.fieldRow}>
+                  <View style={styles.fieldDotDest} />
+                  <TextInput
+                    style={styles.fieldInput}
+                    placeholder="Hacia"
+                    placeholderTextColor={theme.colors.mediumGray}
+                    value={destAddress}
+                    onChangeText={setDestAddress}
+                    autoFocus
+                    returnKeyType="search"
+                    onSubmitEditing={handleConfirmDestination}
+                  />
+                </View>
               </View>
 
-              <View style={styles.fieldDivider} />
-
-              <View style={styles.fieldRow}>
-                <View style={styles.fieldDotDest} />
-                <TextInput
-                  style={styles.fieldInput}
-                  placeholder="Hacia"
-                  placeholderTextColor={theme.colors.mediumGray}
-                  value={destAddress}
-                  onChangeText={setDestAddress}
-                  autoFocus
-                  returnKeyType="search"
-                  onSubmitEditing={handleConfirmDestination}
-                />
+              <View style={styles.recentSection}>
+                <Text style={styles.recentTitle}>Lugares recientes</Text>
+                {RECENT_PLACES.map((place) => (
+                  <TouchableOpacity
+                    key={place.name}
+                    style={styles.recentItem}
+                    onPress={() => setDestAddress(place.address)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.recentIconCircle}>
+                      <Ionicons name="time-outline" size={18} color={theme.colors.deepBlue} />
+                    </View>
+                    <View style={styles.recentTexts}>
+                      <Text style={styles.recentName}>{place.name}</Text>
+                      <Text style={styles.recentAddr}>{place.address}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
               </View>
-            </View>
-
-            <View style={styles.recentSection}>
-              <Text style={styles.recentTitle}>Lugares recientes</Text>
-              {RECENT_PLACES.map((place) => (
-                <TouchableOpacity
-                  key={place.name}
-                  style={styles.recentItem}
-                  onPress={() => setDestAddress(place.address)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.recentIconCircle}>
-                    <Ionicons name="time-outline" size={18} color={theme.colors.deepBlue} />
-                  </View>
-                  <View style={styles.recentTexts}>
-                    <Text style={styles.recentName}>{place.name}</Text>
-                    <Text style={styles.recentAddr}>{place.address}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
+            </ScrollView>
 
             <TouchableOpacity
               style={[styles.confirmBtn, !destAddress.trim() && styles.confirmBtnDisabled]}
@@ -168,7 +180,7 @@ export function HomeScreen() {
               <Ionicons name="search" size={18} color={theme.colors.white} />
               <Text style={styles.confirmBtnText}>Buscar destino</Text>
             </TouchableOpacity>
-          </View>
+          </KeyboardAvoidingView>
         ) : (
           <ScrollView
             style={styles.body}
@@ -388,6 +400,12 @@ const styles = StyleSheet.create({
   expandedSearch: {
     flex: 1,
     backgroundColor: theme.colors.deepBlue,
+  },
+  expandedBody: {
+    flex: 1,
+  },
+  expandedBodyContent: {
+    paddingBottom: theme.spacing.md,
   },
   expandedHeader: {
     flexDirection: 'row',
