@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { searchPlaces } from '../api/passenger';
 import type { PlaceSuggestion } from '../api/types';
+import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
 import { theme } from '../theme';
 
 interface Chip {
@@ -23,27 +23,8 @@ interface QuickChipsProps {
 export function QuickChips({ onSelect }: QuickChipsProps) {
   const [editingChip, setEditingChip] = useState<string | null>(null);
   const [addressInput, setAddressInput] = useState('');
-  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
 
-  useEffect(() => {
-    if (!editingChip) return;
-    const trimmed = addressInput.trim();
-    if (trimmed.length < 3) {
-      setSuggestions([]);
-      return;
-    }
-
-    const timeout = setTimeout(async () => {
-      try {
-        const results = await searchPlaces(trimmed);
-        setSuggestions(results);
-      } catch {
-        setSuggestions([]);
-      }
-    }, 300);
-
-    return () => clearTimeout(timeout);
-  }, [addressInput, editingChip]);
+  const suggestions = usePlaceAutocomplete(editingChip ? addressInput : '');
 
   const handleChipPress = (chip: Chip) => {
     if (chip.savedAddress) {
@@ -52,12 +33,10 @@ export function QuickChips({ onSelect }: QuickChipsProps) {
     }
     setEditingChip(chip.name);
     setAddressInput('');
-    setSuggestions([]);
   };
 
   const handleSelectSuggestion = (suggestion: PlaceSuggestion) => {
     setAddressInput(suggestion.description);
-    setSuggestions([]);
   };
 
   const handleSaveAddress = () => {
@@ -69,7 +48,6 @@ export function QuickChips({ onSelect }: QuickChipsProps) {
     onSelect(trimmed);
     setEditingChip(null);
     setAddressInput('');
-    setSuggestions([]);
   };
 
   if (editingChip) {

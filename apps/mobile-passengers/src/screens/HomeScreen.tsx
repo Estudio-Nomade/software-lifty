@@ -13,12 +13,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import type { PlaceSuggestion } from '../api/types';
 import { HomeHeader } from '../components/HomeHeader';
 import { HowItWorks } from '../components/HowItWorks';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { QuickChips } from '../components/QuickChips';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useLocation } from '../hooks/useLocation';
+import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
 import { theme } from '../theme';
 
 export function HomeScreen() {
@@ -29,6 +31,8 @@ export function HomeScreen() {
   const [pickupAddress, setPickupAddress] = useState('');
   const [destAddress, setDestAddress] = useState('');
   const [recenterKey, setRecenterKey] = useState(0);
+
+  const suggestions = usePlaceAutocomplete(destAddress);
 
   useEffect(() => {
     if (!searchExpanded) return;
@@ -72,6 +76,10 @@ export function HomeScreen() {
 
   const handleChipSelect = (address: string) => {
     setDestAddress(address);
+  };
+
+  const handleSelectSuggestion = (suggestion: PlaceSuggestion) => {
+    setDestAddress(suggestion.description);
   };
 
   const handleConfirmDestination = () => {
@@ -132,6 +140,24 @@ export function HomeScreen() {
                   />
                 </View>
               </View>
+
+              {suggestions.length > 0 ? (
+                <View style={styles.suggestions}>
+                  {suggestions.map((suggestion) => (
+                    <TouchableOpacity
+                      key={suggestion.place_id}
+                      style={styles.suggestionItem}
+                      onPress={() => handleSelectSuggestion(suggestion)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="location-outline" size={18} color={theme.colors.mediumGray} />
+                      <Text style={styles.suggestionText} numberOfLines={1}>
+                        {suggestion.description}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
 
               <QuickChips onSelect={handleChipSelect} />
 
@@ -333,6 +359,28 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.deepBlue,
     padding: 0,
+  },
+  suggestions: {
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.radius.md,
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.xs,
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    minHeight: 44,
+  },
+  suggestionText: {
+    flex: 1,
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.deepBlue,
   },
   confirmBtn: {
     flexDirection: 'row',
