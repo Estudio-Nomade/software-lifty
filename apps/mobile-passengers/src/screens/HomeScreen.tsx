@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import {
@@ -51,6 +52,12 @@ export function HomeScreen() {
       cancelled = true;
     };
   }, [searchExpanded]);
+
+  const handleLocate = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return;
+    Location.getCurrentPositionAsync({});
+  };
 
   const handleOpenSearch = () => {
     setSearchExpanded(true);
@@ -155,15 +162,19 @@ export function HomeScreen() {
               <Text style={styles.searchPlaceholder}>¿A dónde vas?</Text>
             </TouchableOpacity>
 
-            <View style={styles.mapArea}>
+            <LinearGradient
+              colors={[theme.colors.deepBlue, `${theme.colors.primary}26`]}
+              style={styles.mapArea}
+            >
               <TouchableOpacity
                 style={styles.locateBtn}
+                onPress={handleLocate}
                 activeOpacity={0.8}
                 accessibilityLabel="Centrar ubicación"
               >
                 <Ionicons name="locate-outline" size={20} color={theme.colors.primary} />
               </TouchableOpacity>
-            </View>
+            </LinearGradient>
 
             <HowItWorks />
           </ScrollView>

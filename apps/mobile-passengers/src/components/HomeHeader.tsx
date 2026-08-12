@@ -18,6 +18,9 @@ export function HomeHeader() {
         activeOpacity={0.7}
         accessibilityLabel="Notificaciones"
         hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
+        onPress={() => {
+          // TODO: wire to notifications screen when implemented
+        }}
       >
         <View style={styles.notifIcon}>
           <View style={styles.notifOuter} />
