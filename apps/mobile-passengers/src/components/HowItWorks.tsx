@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     color: theme.colors.deepBlue,
   },
   stepDesc: {
-    fontSize: theme.fontSize.xs,
+    fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
     marginTop: 2,
