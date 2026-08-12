@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useAuthStore } from '../store/authStore';
@@ -25,7 +26,13 @@ export function HomeHeader() {
         onPress={() => navigate('Notifications')}
       >
         <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
-        {unreadCount > 0 ? <View style={styles.badge} /> : null}
+        <View style={[styles.notifBadge, unreadCount > 0 && styles.notifBadgeUnread]}>
+          <Ionicons
+            name="notifications"
+            size={11}
+            color={unreadCount > 0 ? theme.colors.white : theme.colors.deepBlue}
+          />
+        </View>
       </TouchableOpacity>
     </View>
   );
@@ -63,15 +70,21 @@ const styles = StyleSheet.create({
     width: 44,
     height: 32,
   },
-  badge: {
+  notifBadge: {
     position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: theme.colors.amber,
+    bottom: 0,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: theme.colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1.5,
+    borderColor: theme.colors.deepBlue,
+  },
+  notifBadgeUnread: {
+    backgroundColor: theme.colors.amber,
     borderColor: theme.colors.deepBlue,
   },
 });
