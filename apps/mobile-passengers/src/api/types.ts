@@ -29,9 +29,17 @@ export interface Trip {
   destination_address: string;
   estimate_fare?: number;
   final_fare?: number;
+  total_fare?: number;
   vehicle_type?: 'auto' | 'moto';
   payment_method?: 'cash' | 'mercadopago';
   verification_code?: string;
+  driver_name?: string;
+  driver_avatar_url?: string;
+  driver_rating?: number;
+  vehicle_brand?: string;
+  vehicle_model?: string;
+  vehicle_color?: string;
+  vehicle_plate?: string;
   created_at: string;
   updated_at: string;
 }

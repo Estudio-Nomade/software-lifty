@@ -1,10 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
+
+interface MenuItem {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  danger?: boolean;
+}
 
 export function ProfileScreen() {
   const { goBack, navigate } = useAppNavigation();
@@ -12,6 +27,14 @@ export function ProfileScreen() {
   const fullName = useAuthStore((s) => s.fullName);
   const email = useAuthStore((s) => s.email);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const displayName = fullName || email?.split('@')[0] || 'Usuario';
+  const initials = displayName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -21,6 +44,56 @@ export function ProfileScreen() {
       setLoggingOut(false);
     }
   };
+
+  const primaryMenu: MenuItem[] = [
+    {
+      icon: 'create-outline',
+      label: 'Editar perfil',
+      onPress: () => Alert.alert('Editar perfil', 'Próximamente'),
+    },
+    {
+      icon: 'card-outline',
+      label: 'Métodos de pago',
+      onPress: () => navigate('PaymentMethod'),
+    },
+    {
+      icon: 'time-outline',
+      label: 'Historial de viajes',
+      onPress: () => navigate('TripHistory'),
+    },
+  ];
+
+  const secondaryMenu: MenuItem[] = [
+    {
+      icon: 'document-text-outline',
+      label: 'Términos y condiciones',
+      onPress: () => navigate('Terms'),
+    },
+    {
+      icon: 'help-circle-outline',
+      label: 'Soporte',
+      onPress: () => Alert.alert('Soporte', 'Próximamente'),
+    },
+  ];
+
+  const renderMenuItem = (item: MenuItem) => (
+    <TouchableOpacity
+      key={item.label}
+      style={styles.menuItem}
+      onPress={item.onPress}
+      activeOpacity={0.6}
+    >
+      <View style={[styles.menuIcon, item.danger && styles.menuIconDanger]}>
+        <Ionicons
+          name={item.icon}
+          size={22}
+          color={item.danger ? theme.colors.dangerRed : theme.colors.deepBlue}
+        />
+      </View>
+      <Text style={[styles.menuText, item.danger && styles.menuTextDanger]}>{item.label}</Text>
+      <Ionicons name="chevron-forward" size={18} color={theme.colors.mediumGray} />
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -32,30 +105,18 @@ export function ProfileScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.avatar}>
-          <Ionicons name="person" size={40} color={theme.colors.mediumGray} />
-        </View>
-        <Text style={styles.name}>{fullName || email?.split('@')[0] || 'Usuario'}</Text>
-        <Text style={styles.email}>{email}</Text>
-
-        <View style={styles.menu}>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigate('PaymentMethod')}>
-            <Ionicons name="card-outline" size={22} color={theme.colors.deepBlue} />
-            <Text style={styles.menuText}>Método de pago</Text>
-            <Ionicons name="chevron-forward" size={20} color={theme.colors.mediumGray} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigate('TripHistory')}>
-            <Ionicons name="time-outline" size={22} color={theme.colors.deepBlue} />
-            <Text style={styles.menuText}>Historial de viajes</Text>
-            <Ionicons name="chevron-forward" size={20} color={theme.colors.mediumGray} />
-          </TouchableOpacity>
-          <View style={styles.menuItem}>
-            <Ionicons name="shield-checkmark-outline" size={22} color={theme.colors.deepBlue} />
-            <Text style={styles.menuText}>Seguridad</Text>
-            <Ionicons name="chevron-forward" size={20} color={theme.colors.mediumGray} />
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.profileSection}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initials}</Text>
           </View>
+          <Text style={styles.name}>{fullName || displayName}</Text>
+          {email && <Text style={styles.email}>{email}</Text>}
         </View>
+
+        <View style={styles.menuGroup}>{primaryMenu.map(renderMenuItem)}</View>
+
+        <View style={styles.menuGroup}>{secondaryMenu.map(renderMenuItem)}</View>
 
         <TouchableOpacity
           style={styles.logoutBtn}
@@ -68,13 +129,13 @@ export function ProfileScreen() {
             {loggingOut ? 'Cerrando sesión...' : 'Cerrar sesión'}
           </Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.white },
+  safe: { flex: 1, backgroundColor: theme.colors.lightGray },
   header: {
     height: theme.dimensions.navbarHeight,
     backgroundColor: theme.colors.deepBlue,
@@ -89,44 +150,62 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
   },
   content: {
-    flex: 1,
-    padding: theme.spacing.lg,
+    padding: theme.spacing.md,
+    gap: theme.spacing.md,
+    paddingBottom: theme.spacing['2xl'],
+  },
+  profileSection: {
     alignItems: 'center',
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.xl,
+    gap: theme.spacing.sm,
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.deepBlue,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: theme.spacing.xl,
+  },
+  avatarText: {
+    fontSize: theme.fontSize['2xl'],
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.white,
   },
   name: {
     fontSize: theme.fontSize.xl,
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.deepBlue,
-    marginTop: theme.spacing.md,
   },
   email: {
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
-    marginTop: theme.spacing.xs,
   },
-  menu: {
-    width: '100%',
-    marginTop: theme.spacing.xl,
-    gap: 1,
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: theme.radius.md,
+  menuGroup: {
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: theme.spacing.md,
-    backgroundColor: theme.colors.white,
+    paddingVertical: 14,
+    paddingHorizontal: theme.spacing.md,
     gap: theme.spacing.md,
+  },
+  menuIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.lightGray,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuIconDanger: {
+    backgroundColor: 'rgba(229, 57, 53, 0.1)',
   },
   menuText: {
     flex: 1,
@@ -134,17 +213,19 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.deepBlue,
   },
+  menuTextDanger: {
+    color: theme.colors.dangerRed,
+  },
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: theme.spacing.xl,
     paddingVertical: theme.spacing.md,
     gap: theme.spacing.sm,
     borderWidth: 1,
     borderColor: theme.colors.dangerRed,
     borderRadius: theme.radius.md,
-    width: '100%',
+    backgroundColor: theme.colors.white,
   },
   logoutText: {
     fontSize: theme.fontSize.md,

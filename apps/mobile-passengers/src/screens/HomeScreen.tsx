@@ -18,12 +18,6 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
-const SUGGESTIONS = [
-  { icon: 'business-outline', name: 'Centro', desc: 'Centro de la ciudad' },
-  { icon: 'bus-outline', name: 'Terminal', desc: 'Terminal de Ómnibus' },
-  { icon: 'medkit-outline', name: 'Hospital', desc: 'Hospital Ramón Santamarina' },
-];
-
 const RECENT_PLACES = [
   { name: 'Trabajo', address: 'Av. 9 de Julio 1234' },
   { name: 'Casa', address: 'Av. Corrientes 5678' },
@@ -87,21 +81,6 @@ export function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.navbar}>
-        <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
-        <View style={styles.navActions}>
-          <TouchableOpacity style={styles.navBtn}>
-            <Ionicons name="notifications-outline" size={22} color={theme.colors.white} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navBtn}>
-            <Ionicons name="person-circle-outline" size={24} color={theme.colors.white} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navBtn}>
-            <Ionicons name="menu" size={24} color={theme.colors.white} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
       <View style={styles.bodyWrap}>
         {searchExpanded ? (
           <KeyboardAvoidingView
@@ -170,7 +149,7 @@ export function HomeScreen() {
                     activeOpacity={0.7}
                   >
                     <View style={styles.recentIconCircle}>
-                      <Ionicons name="time-outline" size={18} color={theme.colors.deepBlue} />
+                      <Ionicons name="time-outline" size={18} color={theme.colors.white} />
                     </View>
                     <View style={styles.recentTexts}>
                       <Text style={styles.recentName}>{place.name}</Text>
@@ -188,8 +167,17 @@ export function HomeScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.greeting}>
-              <Text style={styles.greetingHi}>¡Hola, {displayName}!</Text>
-              <Text style={styles.greetingSub}>¿A dónde vamos hoy?</Text>
+              <View style={styles.greetingRow}>
+                <View>
+                  <Text style={styles.greetingHi}>¡Hola, {displayName}!</Text>
+                  <Text style={styles.greetingSub}>¿A dónde vamos hoy?</Text>
+                </View>
+                <Image
+                  source={require('../../assets/logo.png')}
+                  style={styles.logo}
+                  resizeMode="contain"
+                />
+              </View>
             </View>
 
             <TouchableOpacity
@@ -199,9 +187,6 @@ export function HomeScreen() {
             >
               <Ionicons name="search" size={18} color={theme.colors.mediumGray} />
               <Text style={styles.searchPlaceholder}>¿A dónde vas?</Text>
-              <View style={styles.searchPin}>
-                <Ionicons name="locate" size={18} color={theme.colors.primary} />
-              </View>
             </TouchableOpacity>
 
             <View style={styles.mapArea}>
@@ -209,29 +194,15 @@ export function HomeScreen() {
                 <Ionicons name="map-outline" size={48} color={theme.colors.deepBlue} />
                 <Text style={styles.mapLabel}>Mapa</Text>
               </View>
-              <TouchableOpacity style={styles.centerBtn}>
-                <Ionicons name="locate" size={22} color={theme.colors.primary} />
-              </TouchableOpacity>
             </View>
 
             <Text style={styles.suggestionsTitle}>Sugerencias para vos</Text>
-
-            {SUGGESTIONS.map((item) => (
-              <TouchableOpacity
-                key={item.name}
-                style={styles.suggestionItem}
-                onPress={() => navigate('VehicleSelect')}
-                activeOpacity={0.7}
-              >
-                <View style={styles.suggestionIconCircle}>
-                  <Ionicons name={item.icon as any} size={20} color={theme.colors.deepBlue} />
-                </View>
-                <View style={styles.suggestionTexts}>
-                  <Text style={styles.suggestionName}>{item.name}</Text>
-                  <Text style={styles.suggestionDesc}>{item.desc}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
+            <View style={styles.emptySuggestions}>
+              <Ionicons name="compass-outline" size={36} color={theme.colors.mediumGray} />
+              <Text style={styles.emptySuggestionsText}>
+                Aún no tenés sugerencias.{'\n'}¡Pedí tu primer viaje y empezá a descubrir!
+              </Text>
+            </View>
           </ScrollView>
         )}
 
@@ -240,7 +211,7 @@ export function HomeScreen() {
             <Ionicons name="home" size={20} color={theme.colors.primary} />
             <Text style={styles.tabActive}>Inicio</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.tab}>
+          <TouchableOpacity style={styles.tab} onPress={handleOpenSearch}>
             <Ionicons name="search" size={20} color={theme.colors.mediumGray} />
             <Text style={styles.tabLabel}>Buscar</Text>
           </TouchableOpacity>
@@ -263,25 +234,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.deepBlue,
   },
-  navbar: {
-    height: theme.dimensions.navbarHeight,
-    backgroundColor: theme.colors.deepBlue,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md,
-  },
-  logo: {
-    width: 72,
-    height: 28,
-  },
-  navActions: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  navBtn: {
-    padding: theme.spacing.sm,
-  },
   bodyWrap: {
     flex: 1,
   },
@@ -295,8 +247,12 @@ const styles = StyleSheet.create({
   greeting: {
     backgroundColor: theme.colors.deepBlue,
     paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.sm,
-    gap: 2,
+    paddingVertical: theme.spacing.md,
+  },
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   greetingHi: {
     fontSize: theme.fontSize.lg,
@@ -307,6 +263,11 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
+    marginTop: 2,
+  },
+  logo: {
+    width: 72,
+    height: 28,
   },
   searchBar: {
     flexDirection: 'row',
@@ -326,14 +287,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
   },
-  searchPin: {
-    width: 32,
-    height: 32,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.lightGray,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   mapArea: {
     height: 320,
     backgroundColor: '#B8D4E3',
@@ -349,17 +302,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.medium,
     color: theme.colors.deepBlue,
   },
-  centerBtn: {
-    position: 'absolute',
-    top: theme.spacing.md,
-    right: theme.spacing.md,
-    width: 40,
-    height: 40,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   suggestionsTitle: {
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.bold,
@@ -368,34 +310,18 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.lg,
     marginBottom: theme.spacing.sm,
   },
-  suggestionItem: {
-    flexDirection: 'row',
+  emptySuggestions: {
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 10,
+    paddingVertical: theme.spacing.xl,
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xl,
   },
-  suggestionIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.lightGray,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  suggestionTexts: {
-    flex: 1,
-    gap: 2,
-  },
-  suggestionName: {
+  emptySuggestionsText: {
     fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.semibold,
-    color: theme.colors.deepBlue,
-  },
-  suggestionDesc: {
-    fontSize: theme.fontSize.xs,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   expandedSearch: {
     flex: 1,

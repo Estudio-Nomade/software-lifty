@@ -7,9 +7,9 @@ import type { EarningsDaily } from '../api/types';
 import { Card } from '../components/Card';
 import { Navbar } from '../components/Navbar';
 import { SideMenu } from '../components/SideMenu';
-import { TabBar, type TabKey } from '../components/TabBar';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { Text } from '../components/ui/Text';
+import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useOnlineStore } from '../store/onlineStore';
@@ -19,7 +19,7 @@ export const EarningsScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const signOut = useSignOut();
   const isOnline = useOnlineStore((s) => s.isOnline);
-  const [activeTab, setActiveTab] = React.useState<TabKey>('earnings');
+  const { setActiveTab } = useTabBar();
   const [menuVisible, setMenuVisible] = React.useState(false);
 
   const {
@@ -35,13 +35,6 @@ export const EarningsScreen: React.FC = () => {
     },
     refetchInterval: 60_000,
   });
-
-  const handleTabPress = (tab: TabKey) => {
-    setActiveTab(tab);
-    if (tab === 'home') navigation.navigate(isOnline ? 'Active' : 'Online');
-    if (tab === 'trips') navigation.navigate('TripHistory');
-    if (tab === 'profile') navigation.navigate('Profile');
-  };
 
   const menuItems = React.useMemo(
     () => [
@@ -407,7 +400,6 @@ export const EarningsScreen: React.FC = () => {
         </Card>
       </ScrollView>
 
-      <TabBar activeTab={activeTab} onTabPress={handleTabPress} />
       <SideMenu visible={menuVisible} onClose={() => setMenuVisible(false)} menuItems={menuItems} />
     </View>
   );
@@ -416,13 +408,14 @@ export const EarningsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.white,
     gap: theme.spacing.md,
   },
   content: {
     alignItems: 'center',
+    backgroundColor: theme.colors.lightGray,
     gap: theme.spacing.md,
-    paddingBottom: theme.spacing.lg,
+    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   totalCard: {
     width: 343,

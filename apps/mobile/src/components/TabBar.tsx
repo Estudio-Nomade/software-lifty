@@ -29,7 +29,7 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabPress }) => {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom + theme.spacing.sm }]}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.key;
         return (
@@ -59,14 +59,24 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabPress }) => {
 
 const styles = StyleSheet.create({
   container: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'space-around',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     backgroundColor: theme.colors.white,
     paddingTop: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
+    minHeight: theme.dimensions.tabBarHeight,
     borderTopWidth: 1,
     borderTopColor: theme.colors.lightGray,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 10,
+    zIndex: 1000,
   },
   tab: {
     alignItems: 'center',
