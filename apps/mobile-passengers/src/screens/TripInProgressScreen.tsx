@@ -1,17 +1,49 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useEffect } from 'react';
 import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { getActiveRide } from '../api/passenger';
 import { Button } from '../components/Button';
+import { PassengerMap } from '../components/Map/PassengerMap';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useLocationStore } from '../store/locationStore';
+import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 
 export function TripInProgressScreen() {
   const { navigate } = useAppNavigation();
+  const current = useLocationStore((s) => s.current);
+  const activeTrip = useRideStore((s) => s.activeTrip);
+  const setActiveTrip = useRideStore((s) => s.setActiveTrip);
+
+  useEffect(() => {
+    if (activeTrip) return;
+    getActiveRide()
+      .then((t) => {
+        if (t) setActiveTrip(t);
+      })
+      .catch(() => {});
+  }, [activeTrip, setActiveTrip]);
+
+  const trip = activeTrip;
+  const driverCoord: [number, number] | null =
+    trip?.driver_lat != null && trip?.driver_lng != null
+      ? [trip.driver_lng, trip.driver_lat]
+      : null;
+
+  const vehicleLabel =
+    [trip?.vehicle_brand, trip?.vehicle_model].filter(Boolean).join(' ') || 'Vehículo';
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.mapArea}>
-        <Ionicons name="map-outline" size={48} color={theme.colors.deepBlue} />
-        <Text style={styles.mapLabel}>Mapa</Text>
+        <PassengerMap
+          centerCoordinate={
+            driverCoord ?? (current ? [current.lng, current.lat] : [-58.3816, -34.6037])
+          }
+          userLocation={driverCoord}
+          followUserLocation={false}
+          style={styles.mapFill}
+        />
       </View>
 
       <View style={styles.content}>
@@ -21,13 +53,16 @@ export function TripInProgressScreen() {
           </View>
           <View style={styles.driverInfo}>
             <Text style={styles.statusText}>Tu conductor viene en camino</Text>
-            <Text style={styles.driverName}>Juan Pérez</Text>
+            <Text style={styles.driverName}>{trip?.driver_name ?? 'Tu conductor'}</Text>
             <View style={styles.vehicleRow}>
-              <Text style={styles.vehicleDetail}>⭐ 4.8</Text>
-              <Text style={styles.vehicleDetail}>Toyota Corolla</Text>
-              <Text style={styles.vehicleDetail}>ABC 123</Text>
+              {trip?.driver_rating != null ? (
+                <Text style={styles.vehicleDetail}>⭐ {trip.driver_rating}</Text>
+              ) : null}
+              <Text style={styles.vehicleDetail}>{vehicleLabel}</Text>
+              {trip?.vehicle_plate ? (
+                <Text style={styles.vehicleDetail}>{trip.vehicle_plate}</Text>
+              ) : null}
             </View>
-            <Text style={styles.eta}>⏱ 5 min</Text>
           </View>
         </View>
 
@@ -52,15 +87,10 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.lightGray },
   mapArea: {
     flex: 1,
-    backgroundColor: '#B8D4E3',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: theme.colors.lightGray,
   },
-  mapLabel: {
-    fontSize: theme.fontSize.md,
-    fontFamily: theme.fontFamily.medium,
-    color: theme.colors.deepBlue,
-    marginTop: theme.spacing.sm,
+  mapFill: {
+    flex: 1,
   },
   content: {
     backgroundColor: theme.colors.white,
@@ -98,12 +128,6 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xs,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
-  },
-  eta: {
-    fontSize: theme.fontSize.md,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.amber,
-    marginTop: 2,
   },
   actions: { flexDirection: 'row', gap: theme.spacing.md },
   actionBtn: { flex: 1 },
