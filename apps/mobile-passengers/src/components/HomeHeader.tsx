@@ -1,10 +1,14 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useAuthStore } from '../store/authStore';
+import { useNotificationsStore } from '../store/notificationsStore';
 import { theme } from '../theme';
 
 export function HomeHeader() {
+  const { navigate } = useAppNavigation();
   const fullName = useAuthStore((s) => s.fullName);
   const email = useAuthStore((s) => s.email);
+  const unreadCount = useNotificationsStore((s) => s.unreadCount);
   const displayName = fullName || email?.split('@')[0] || 'Usuario';
 
   return (
@@ -18,14 +22,10 @@ export function HomeHeader() {
         activeOpacity={0.7}
         accessibilityLabel="Notificaciones"
         hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
-        onPress={() => {
-          // TODO: wire to notifications screen when implemented
-        }}
+        onPress={() => navigate('Notifications')}
       >
-        <View style={styles.notifIcon}>
-          <View style={styles.notifOuter} />
-          <View style={styles.notifDot} />
-        </View>
+        <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
+        {unreadCount > 0 ? <View style={styles.badge} /> : null}
       </TouchableOpacity>
     </View>
   );
@@ -59,26 +59,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  notifIcon: {
-    width: 22,
-    height: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
+  logo: {
+    width: 44,
+    height: 32,
   },
-  notifOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: theme.colors.white,
-  },
-  notifDot: {
+  badge: {
     position: 'absolute',
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.colors.white,
-    top: 4,
-    right: 4,
+    top: 2,
+    right: 2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.amber,
+    borderWidth: 1.5,
+    borderColor: theme.colors.deepBlue,
   },
 });

@@ -20,6 +20,7 @@ const SCREEN_TO_ROUTE = {
   Profile: '/profile',
   PaymentMethod: '/payment-method',
   Chat: '/chat',
+  Notifications: '/notifications',
 } as const;
 
 export type ScreenName = keyof typeof SCREEN_TO_ROUTE;
