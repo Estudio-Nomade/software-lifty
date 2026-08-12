@@ -74,6 +74,7 @@ export function HomeScreen() {
     Keyboard.dismiss();
     setSearchExpanded(false);
     setDestAddress('');
+    setDestCoord(null);
   };
 
   const handleChipSelect = (address: string) => {
@@ -153,7 +154,10 @@ export function HomeScreen() {
                     placeholder="Hacia"
                     placeholderTextColor={theme.colors.mediumGray}
                     value={destAddress}
-                    onChangeText={setDestAddress}
+                    onChangeText={(text) => {
+                      setDestAddress(text);
+                      setDestCoord(null);
+                    }}
                     autoFocus
                     returnKeyType="search"
                     onSubmitEditing={handleConfirmDestination}
