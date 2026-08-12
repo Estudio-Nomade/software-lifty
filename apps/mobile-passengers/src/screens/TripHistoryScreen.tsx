@@ -18,13 +18,19 @@ import { theme } from '../theme';
 const LIMIT = 20;
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
+  pending: { label: 'Pendiente', color: theme.colors.amber },
+  offered: { label: 'Ofertado', color: theme.colors.amber },
+  request_received: { label: 'Solicitado', color: theme.colors.amber },
+  accepted: { label: 'Conductor asignado', color: theme.colors.deepBlue },
+  en_route: { label: 'En camino', color: theme.colors.deepBlue },
+  waiting: { label: 'Conductor llegó', color: theme.colors.deepBlue },
   completed: { label: 'Completado', color: theme.colors.primary },
   cancelled: { label: 'Cancelado', color: theme.colors.dangerRed },
-  requested: { label: 'Solicitado', color: theme.colors.amber },
-  driver_assigned: { label: 'Conductor asignado', color: theme.colors.deepBlue },
-  driver_en_route: { label: 'En camino', color: theme.colors.deepBlue },
-  driver_arrived: { label: 'Conductor llegó', color: theme.colors.deepBlue },
-  in_trip: { label: 'En viaje', color: theme.colors.primary },
+  cancelled_early: { label: 'Cancelado', color: theme.colors.dangerRed },
+  cancelled_late: { label: 'Cancelado', color: theme.colors.dangerRed },
+  rejected: { label: 'Rechazado', color: theme.colors.mediumGray },
+  expired: { label: 'Expirado', color: theme.colors.mediumGray },
+  rated: { label: 'Completado', color: theme.colors.primary },
 };
 
 function formatDate(iso: string) {
@@ -61,24 +67,20 @@ function TripCard({ trip }: { trip: Trip }) {
         <View style={styles.addressRow}>
           <View style={styles.dotPickup} />
           <Text style={styles.addressText} numberOfLines={1}>
-            {trip.pickup_address ? shortAddress(trip.pickup_address) : '—'}
+            {trip.origin_address ? shortAddress(trip.origin_address) : '—'}
           </Text>
         </View>
         <View style={styles.addressRow}>
           <View style={styles.dotDest} />
           <Text style={styles.addressText} numberOfLines={1}>
-            {trip.destination_address ? shortAddress(trip.destination_address) : '—'}
+            {trip.dest_address ? shortAddress(trip.dest_address) : '—'}
           </Text>
         </View>
       </View>
 
       <View style={styles.tripFooter}>
         <Text style={styles.tripFare}>
-          {trip.total_fare != null || trip.final_fare != null
-            ? formatCurrency(trip.total_fare ?? trip.final_fare!)
-            : trip.estimate_fare != null
-              ? `${formatCurrency(trip.estimate_fare)} aprox.`
-              : '—'}
+          {trip.total_fare != null ? formatCurrency(trip.total_fare) : '—'}
         </Text>
         {trip.driver_name && <Text style={styles.driverName}>{trip.driver_name}</Text>}
       </View>
