@@ -7,12 +7,13 @@ jest.mock('../../hooks/useAppNavigation', () => ({
   useAppNavigation: () => ({ navigate: jest.fn() }),
 }));
 
-jest.mock('react-native-webview', () => ({
-  WebView: () => null,
+jest.mock('../../components/Map/PassengerMap', () => ({
+  PassengerMap: () => null,
 }));
 
 jest.mock('../../api/passenger', () => ({
   getActiveRide: jest.fn().mockResolvedValue(null),
+  cancelRide: jest.fn().mockResolvedValue(undefined),
 }));
 
 describe('TripInProgressScreen', () => {
@@ -43,5 +44,45 @@ describe('TripInProgressScreen', () => {
     expect(getByText('⭐ 4.9')).toBeTruthy();
     expect(getByText('Toyota Etios')).toBeTruthy();
     expect(getByText('AB 123 CD')).toBeTruthy();
+  });
+
+  test('shows verification code when the trip has one', async () => {
+    useRideStore.getState().setActiveTrip({
+      id: 'trip-2',
+      passenger_id: 'p-1',
+      status: 'waiting',
+      origin_lat: -34.6,
+      origin_lng: -58.38,
+      dest_lat: -34.7,
+      dest_lng: -58.4,
+      driver_name: 'María López',
+      verification_code: '4821',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    const { getByText } = await render(<TripInProgressScreen />);
+    expect(getByText('4821')).toBeTruthy();
+    expect(getByText('Código de verificación')).toBeTruthy();
+    expect(getByText('El conductor llegó')).toBeTruthy();
+  });
+
+  test('hides verification code when missing', async () => {
+    useRideStore.getState().setActiveTrip({
+      id: 'trip-3',
+      passenger_id: 'p-1',
+      status: 'accepted',
+      origin_lat: -34.6,
+      origin_lng: -58.38,
+      dest_lat: -34.7,
+      dest_lng: -58.4,
+      driver_name: 'María López',
+      verification_code: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    const { queryByText } = await render(<TripInProgressScreen />);
+    expect(queryByText('Código de verificación')).toBeNull();
   });
 });

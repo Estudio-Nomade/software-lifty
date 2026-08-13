@@ -41,6 +41,24 @@ export function TripInProgressScreen() {
   const vehicleLabel =
     [trip?.vehicle_brand, trip?.vehicle_model].filter(Boolean).join(' ') || 'Vehículo';
 
+  const statusLabel = (() => {
+    switch (trip?.status) {
+      case 'waiting':
+        return 'El conductor llegó';
+      case 'en_route':
+        return 'Tu conductor viene en camino';
+      case 'accepted':
+        return 'Conductor asignado';
+      case 'request_received':
+      case 'offered':
+        return 'Buscando conductor';
+      default:
+        return 'Viaje en curso';
+    }
+  })();
+
+  const showVerificationCode = Boolean(trip?.verification_code);
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.mapArea}>
@@ -59,7 +77,7 @@ export function TripInProgressScreen() {
             <Ionicons name="person" size={28} color={theme.colors.mediumGray} />
           </View>
           <View style={styles.driverInfo}>
-            <Text style={styles.statusText}>Tu conductor viene en camino</Text>
+            <Text style={styles.statusText}>{statusLabel}</Text>
             <Text style={styles.driverName}>{trip?.driver_name ?? 'Tu conductor'}</Text>
             <View style={styles.vehicleRow}>
               {trip?.driver_rating != null ? (
@@ -72,6 +90,14 @@ export function TripInProgressScreen() {
             </View>
           </View>
         </View>
+
+        {showVerificationCode ? (
+          <View style={styles.codeCard} accessibilityLabel="Código de verificación">
+            <Text style={styles.codeLabel}>Código de verificación</Text>
+            <Text style={styles.codeValue}>{trip?.verification_code}</Text>
+            <Text style={styles.codeHint}>Dale este código al conductor para iniciar</Text>
+          </View>
+        ) : null}
 
         <View style={styles.actions}>
           <Button variant="secondary" onPress={() => navigate('Chat')} style={styles.actionBtn}>
@@ -135,6 +161,30 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xs,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
+  },
+  codeCard: {
+    backgroundColor: theme.colors.lightGray,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  codeLabel: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.mediumGray,
+  },
+  codeValue: {
+    fontSize: theme.fontSize['4xl'],
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.deepBlue,
+    letterSpacing: 8,
+  },
+  codeHint: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+    textAlign: 'center',
   },
   actions: { flexDirection: 'row', gap: theme.spacing.md },
   actionBtn: { flex: 1 },

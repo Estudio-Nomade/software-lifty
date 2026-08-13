@@ -16,3 +16,9 @@ export const requestTripBody = t.Object({
 export const tripIdParams = t.Object({
   id: t.String(),
 });
+
+export const rateTripBody = t.Object({
+  rating: t.Integer({ minimum: 1, maximum: 5 }),
+  tags: t.Optional(t.String({ maxLength: 255 })),
+  comment: t.Optional(t.String({ maxLength: 500 })),
+});

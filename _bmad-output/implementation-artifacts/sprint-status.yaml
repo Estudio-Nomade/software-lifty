@@ -1,9 +1,13 @@
 # generated: 2026-08-10
-# last_updated: 2026-08-10
+# last_updated: 2026-08-13
 # project: software-lifty
 # project_key: NOKEY
 # tracking_system: file-system
 # story_location: _bmad-output/implementation-artifacts
+#
+# Resync 2026-08-13: status aligned to main after pull
+# (PRs #241–#253). Docs in epics-and-stories.md still say
+# PENDING for epics 3–9 — code is ahead; treat this file as SoT.
 
 # STATUS DEFINITIONS:
 # ==================
@@ -29,7 +33,7 @@
 #   - done: Completed
 
 generated: 2026-08-10
-last_updated: 2026-08-10
+last_updated: 2026-08-13
 project: software-lifty
 project_key: NOKEY
 tracking_system: file-system
@@ -59,57 +63,61 @@ development_status:
   2-6-registration-draft: done
   epic-2-retrospective: optional
 
-  # ===== Epic 3: Home + Map Shell — PENDING =====
-  epic-3: backlog
-  3-1-map-provider: backlog
-  3-2-location-permission: backlog
-  3-3-home-screen-with-bottom-cta: backlog
-  3-4-tabbar-component: backlog
-  3-5-navbar-component: backlog
+  # ===== Epic 3: Home + Map Shell — DONE =====
+  # OpenFreeMap, location permissions, Home CTA, tab bar, headers
+  epic-3: done
+  3-1-map-provider: done
+  3-2-location-permission: done
+  3-3-home-screen-with-bottom-cta: done
+  3-4-tabbar-component: done
+  3-5-navbar-component: done
   epic-3-retrospective: optional
 
-  # ===== Epic 4: Trip Request — PENDING =====
-  epic-4: backlog
-  4-1-set-pickup: backlog
-  4-2-set-destination: backlog
-  4-3-fare-review: backlog
-  4-4-searching-driver: backlog
-  4-5-trip-request-api: backlog
+  # ===== Epic 4: Trip Request — DONE =====
+  # pickup/dest autocomplete, vehicle select + directions, connecting, request API
+  epic-4: done
+  4-1-set-pickup: done
+  4-2-set-destination: done
+  4-3-fare-review: done
+  4-4-searching-driver: done
+  4-5-trip-request-api: done
   epic-4-retrospective: optional
 
-  # ===== Epic 5: Trip Lifecycle + SOS — PENDING =====
-  epic-5: backlog
-  5-1-driver-found: backlog
-  5-2-verification-code: backlog
-  5-3-driver-enroute: backlog
-  5-4-in-trip: backlog
+  # ===== Epic 5: Trip Lifecycle + SOS — IN PROGRESS =====
+  epic-5: in-progress
+  5-1-driver-found: done
+  5-2-verification-code: done
+  5-3-driver-enroute: done
+  5-4-in-trip: in-progress
   5-5-sos: backlog
-  5-6-cancel-trip: backlog
+  5-6-cancel-trip: done
   epic-5-retrospective: optional
 
-  # ===== Epic 6: Post-Trip (Rating + Payment) — PENDING =====
-  epic-6: backlog
-  6-1-trip-complete: backlog
-  6-2-rating: backlog
+  # ===== Epic 6: Post-Trip (Rating + Payment) — IN PROGRESS =====
+  # TripComplete UI exists with mock data; rate API not wired; payment shell only
+  epic-6: in-progress
+  6-1-trip-complete: in-progress
+  6-2-rating: in-progress
   6-3-payment-cash: backlog
   6-4-completion-flow: backlog
   epic-6-retrospective: optional
 
-  # ===== Epic 7: Trip History + Detail — PENDING =====
-  epic-7: backlog
-  7-1-history-list: backlog
+  # ===== Epic 7: Trip History + Detail — IN PROGRESS =====
+  epic-7: in-progress
+  7-1-history-list: done
   7-2-trip-detail: backlog
   epic-7-retrospective: optional
 
-  # ===== Epic 8: Profile + Sign Out — PENDING =====
-  epic-8: backlog
-  8-1-profile-view: backlog
-  8-2-sign-out: backlog
+  # ===== Epic 8: Profile + Sign Out — DONE =====
+  epic-8: done
+  8-1-profile-view: done
+  8-2-sign-out: done
   epic-8-retrospective: optional
 
-  # ===== Epic 9: Polish + Tests (Buffer) — PENDING =====
-  epic-9: backlog
-  9-1-component-tests: backlog
+  # ===== Epic 9: Polish + Tests (Buffer) — IN PROGRESS =====
+  # Partial: favorites/ConnectingDriver/TripInProgress tests exist
+  epic-9: in-progress
+  9-1-component-tests: in-progress
   9-2-hook-tests: backlog
   9-3-keyboard-polish: backlog
   9-4-loading-states: backlog
@@ -117,5 +125,61 @@ development_status:
   9-6-i18n-groundwork: backlog
   epic-9-retrospective: optional
 
-# Action items discovered in retrospectives will be appended here.
-# action_items: []
+# Cross-cutting gaps found in 2026-08-13 code audit (not full stories yet).
+action_items:
+  - id: ai-1
+    action: "Fix passenger client API paths — rateRide should hit /ratings (not /passenger/trips/:id/rate); verify/remove dead estimateFare → /passenger/rides/estimate"
+    status: done
+    epic: 6
+    owner: backend+mobile
+    note: "rateRide kept at POST /passenger/trips/:id/rate (new passenger→driver endpoint); estimateFare → POST /maps/fare-estimate"
+  - id: ai-2
+    action: "requirePassenger must accept role 'both' (dual-role) — currently only role === 'passenger'"
+    status: done
+    epic: 5
+    owner: backend
+  - id: ai-3
+    action: "Wire TripComplete to real trip data + rateRide; completion flow after driver completes"
+    status: open
+    epic: 6
+    owner: mobile
+  - id: ai-4
+    action: "Show verification_code on passenger in-trip / driver-found UI"
+    status: done
+    epic: 5
+    owner: mobile
+  - id: ai-5
+    action: "SOS UI consuming POST /sos"
+    status: open
+    epic: 5
+    owner: mobile
+  - id: ai-6
+    action: "Live driver tracking on map (realtime/poll refresh of driver_lat/lng)"
+    status: open
+    epic: 5
+    owner: mobile
+  - id: ai-7
+    action: "Chat + call driver (shells only today)"
+    status: open
+    epic: 5
+    owner: mobile
+  - id: ai-8
+    action: "Cash payment MVP + payment method screen beyond empty state"
+    status: open
+    epic: 6
+    owner: mobile+backend
+  - id: ai-9
+    action: "Trip detail screen from history"
+    status: open
+    epic: 7
+    owner: mobile
+  - id: ai-10
+    action: "Favorites backend sync (today local AsyncStorage only)"
+    status: open
+    epic: 4
+    owner: backend+mobile
+  - id: ai-11
+    action: "Resync passenger-app/epics-and-stories.md DONE markers to match this file"
+    status: open
+    epic: docs
+    owner: docs

@@ -10,7 +10,7 @@ import {
   vehicles,
 } from '../../shared/db/schema';
 import { getCommissionRate } from '../../shared/lib/commission';
-import { AppError, NotFoundError } from '../../shared/lib/errors';
+import { AppError, ConflictError, NotFoundError } from '../../shared/lib/errors';
 import { calculateFare } from '../../shared/lib/fuel-pricing';
 import { geocode } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
@@ -262,6 +262,95 @@ export const passengerTripService = {
       .orderBy(desc(trips.created_at))
       .limit(limit)
       .offset(offset);
+  },
+
+  async rateTrip(
+    user: AuthUser,
+    tripId: string,
+    body: { rating: number; tags?: string; comment?: string },
+  ) {
+    if (body.rating < 1 || body.rating > 5) {
+      throw new AppError('Score must be between 1 and 5', 400, 'BAD_REQUEST');
+    }
+
+    return db.transaction(async (tx) => {
+      const [trip] = await tx
+        .select()
+        .from(trips)
+        .where(and(eq(trips.id, tripId), eq(trips.passenger_id, user.id)))
+        .for('update')
+        .limit(1);
+
+      if (!trip) throw new NotFoundError('Trip not found');
+
+      const [existing] = await tx
+        .select({ id: ratings.id })
+        .from(ratings)
+        .where(and(eq(ratings.trip_id, tripId), eq(ratings.rater_id, user.id)))
+        .for('update')
+        .limit(1);
+
+      if (existing) throw new ConflictError('Rating already exists for this trip');
+
+      if (trip.status !== 'completed') {
+        throw new AppError('Trip is not in completed status', 400, 'BAD_REQUEST');
+      }
+
+      if (!trip.driver_id) {
+        throw new AppError('Trip has no assigned driver', 400, 'BAD_REQUEST');
+      }
+
+      const [driver] = await tx
+        .select({ id: drivers.id, user_id: drivers.user_id })
+        .from(drivers)
+        .where(eq(drivers.id, trip.driver_id))
+        .limit(1);
+
+      if (!driver) throw new NotFoundError('Driver not found');
+
+      await tx
+        .update(trips)
+        .set({ status: 'rated', updated_at: new Date() })
+        .where(eq(trips.id, tripId));
+
+      await tx.insert(tripEvents).values({
+        trip_id: tripId,
+        from_status: 'completed',
+        to_status: 'rated',
+      });
+
+      const [rating] = await tx
+        .insert(ratings)
+        .values({
+          trip_id: tripId,
+          rater_id: user.id,
+          ratee_id: driver.user_id,
+          score: body.rating,
+          tags: body.tags ?? null,
+          comment: body.comment ?? null,
+        })
+        .returning({ id: ratings.id });
+
+      const allRatings = await tx
+        .select({ score: ratings.score })
+        .from(ratings)
+        .where(eq(ratings.ratee_id, driver.user_id));
+
+      const avg =
+        allRatings.length > 0
+          ? allRatings.reduce((sum, r) => sum + r.score, 0) / allRatings.length
+          : 0;
+
+      await tx
+        .update(drivers)
+        .set({
+          rating_avg: Math.round(avg * 100) / 100,
+          updated_at: new Date(),
+        })
+        .where(eq(drivers.id, driver.id));
+
+      return { rating_id: rating.id, message: 'Rating submitted' };
+    });
   },
 };
 
