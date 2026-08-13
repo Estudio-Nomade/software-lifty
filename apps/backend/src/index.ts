@@ -13,7 +13,6 @@ import { notificationsRoutes } from './features/notifications/routes';
 import { passengerTripRoutes } from './features/passenger-trips/routes';
 import { passengersRoutes } from './features/passengers/routes';
 import { paymentMethodsRoutes } from './features/payment-methods/routes';
-import { paymentsRoutes } from './features/payments/routes';
 import { ratingsRoutes } from './features/ratings/routes';
 import { sosRoutes } from './features/sos/routes';
 import { tripRoutes, tripWebhookRoute } from './features/trips/routes';
@@ -64,7 +63,6 @@ export function createApp(customAuthPlugin?: typeof authPlugin) {
             { name: 'trips', description: 'State machine de viajes' },
             { name: 'location', description: 'WebSocket ubicación en tiempo real' },
             { name: 'maps', description: 'Proxy Google Maps' },
-            { name: 'payments', description: 'Webhook Mercado Pago + withdrawals' },
             { name: 'earnings', description: 'Ganancias y estadísticas' },
             { name: 'ratings', description: 'Calificaciones' },
             { name: 'sos', description: 'Emergencias' },
@@ -101,7 +99,6 @@ export function createApp(customAuthPlugin?: typeof authPlugin) {
         .use(tripRoutes)
         .use(tripWebhookRoute)
         .use(mapsRoutes)
-        .use(paymentsRoutes)
         .use(earningsRoutes)
         .use(driverStatsRoutes)
         .use(ratingsRoutes)
@@ -140,9 +137,6 @@ export function createApp(customAuthPlugin?: typeof authPlugin) {
         checks.redis = 'unconfigured';
       }
 
-      if (process.env.MERCADOPAGO_ACCESS_TOKEN) {
-        checks.mercadopago = 'configured';
-      }
       if (process.env.RESEND_API_KEY) {
         checks.resend = 'configured';
       }

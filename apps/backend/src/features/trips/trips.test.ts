@@ -559,7 +559,7 @@ describe('Trip State Machine', () => {
     expect(driver.platform_debt).toBeGreaterThan(0);
   });
 
-  test('15. collect mercadopago trip sets is_collected and does NOT accumulate platform_debt', async () => {
+  test('15. collect transfer trip sets is_collected and accumulates platform_debt', async () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);
 
@@ -579,17 +579,17 @@ describe('Trip State Machine', () => {
     const { status, data } = await request(
       'PUT',
       `/api/trips/${trip.id}/collect`,
-      { payment_method: 'mercadopago' },
+      { payment_method: 'transfer' },
       token,
     );
 
     expect(status).toBe(200);
     expect(data.is_collected).toBe(true);
-    expect(data.payment_method).toBe('mercadopago');
+    expect(data.payment_method).toBe('transfer');
 
     const db = getDb();
     const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
-    expect(driver.platform_debt).toBe(0);
+    expect(driver.platform_debt).toBeGreaterThan(0);
   });
 
   test('16. collect already collected trip returns error', async () => {
@@ -614,7 +614,7 @@ describe('Trip State Machine', () => {
     const { status, data } = await request(
       'PUT',
       `/api/trips/${trip.id}/collect`,
-      { payment_method: 'mercadopago' },
+      { payment_method: 'transfer' },
       token,
     );
 

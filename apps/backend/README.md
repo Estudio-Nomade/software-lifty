@@ -55,7 +55,6 @@ Copiar `.env.example` a `.env` y completar las credenciales según el entorno.
 |---|---|---|
 | `TWILIO_*` | Twilio | Envío de SMS (OTP). En dev se muestra por consola. |
 | `DIDIT_API_KEY`, `DIDIT_WEBHOOK_SECRET` | DIDIT | Verificación de identidad (KYC). |
-| `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET` | Mercado Pago | Cobro de viajes y retiros. En dev usa mocks. |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Supabase Storage | Almacenamiento de documentos del conductor. |
 | `FCM_SERVICE_ACCOUNT_JSON` | Firebase | Notificaciones push. |
 | `PHOTON_URL`, `OSRM_URL` | Komoot / OSRM | Geocodificación y cálculo de rutas. Tienen defaults públicos. |
@@ -72,7 +71,6 @@ La API documenta **49 endpoints** en 15 módulos. Swagger UI disponible en `http
 | Trips | `/trips`, `/trips/accept`, `/trips/arrive`, `/trips/start`, `/trips/complete`, `/trips/cancel` | Máquina de estados de viajes |
 | Location | `GET/PUT /location`, `WS /location/ws` | Ubicación en tiempo real (HTTP + WebSocket) |
 | Maps | `/maps/geocode`, `/maps/route` | Proxy de geocodificación y rutas |
-| Payments | `/payments/webhook`, `/payments/withdraw` | Webhook de Mercado Pago y retiros |
 | Earnings | `/earnings`, `/earnings/stats` | Ganancias y estadísticas del conductor |
 | Ratings | `/ratings` | Calificaciones de viajes |
 | SOS | `/sos` | Eventos de emergencia |
@@ -85,7 +83,7 @@ La API documenta **49 endpoints** en 15 módulos. Swagger UI disponible en `http
 
 | Endpoint | Descripción |
 |---|---|
-| `GET /health` | Health check (DB, Redis, MercadoPago, Supabase, DIDIT) |
+| `GET /health` | Health check (DB, Redis, Supabase, DIDIT) |
 | `GET /ready` | Ready check (la app puede servir tráfico) |
 | `GET /metrics` | Métricas en formato Prometheus |
 
@@ -157,7 +155,7 @@ src/
 │   └── payment-methods/
 └── shared/
     ├── db/                   # Cliente DB, esquemas Drizzle, migraciones
-    ├── lib/                  # JWT, Redis, bcrypt, MercadoPago, DIDIT, SMS, etc.
+    ├── lib/                  # JWT, Redis, bcrypt, DIDIT, SMS, etc.
     ├── middleware/            # Auth, security (CORS), rate limiting, metrics
     └── testing/              # Helpers para tests de integración
 ```

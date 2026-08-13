@@ -25,9 +25,6 @@ async function truncateAll() {
   await db.execute('DELETE FROM push_tokens');
   await db.execute('DELETE FROM driver_documents');
   await db.execute('DELETE FROM vehicles');
-  await db.execute('DELETE FROM payments');
-  await db.execute('DELETE FROM withdrawals');
-  await db.execute('DELETE FROM payout_methods');
   await db.execute('DELETE FROM drivers');
   await db.execute('DELETE FROM users');
   await db.execute('DELETE FROM commission_phases');
@@ -549,60 +546,6 @@ describe('Maps', () => {
     );
     expect(status).not.toBe(500);
     expect(status).not.toBe(401);
-  });
-});
-
-// ── Payments ──
-describe('Payments', () => {
-  test('webhook/mercadopago no sig → 401 ish', async () => {
-    // Manual body parsing in route may fail with app.handle()
-    const { status } = await req('POST', '/api/payments/webhook/mercadopago', {
-      payment_id: 'p1',
-      trip_id: 't1',
-    });
-    expect(status).toBeGreaterThanOrEqual(400);
-  });
-  test('history no auth → 401', async () => {
-    const { status } = await req('GET', '/api/payments/history');
-    expect(status).toBe(401);
-  });
-  test('history → 200', async () => {
-    const token = await register('+54926100601');
-    await driver(token);
-    const { status, data } = await req('GET', '/api/payments/history', undefined, token);
-    expect(status).toBe(200);
-    expect(data.payments).toBeArray();
-  });
-  test('withdraw no auth → 401', async () => {
-    const { status } = await req('POST', '/api/payments/withdraw', {
-      amount: 100,
-      payout_method_id: 'x',
-    });
-    expect(status).toBe(401);
-  });
-  test('withdraw no driver → 404', async () => {
-    const token = await register('+54926100602');
-    const { status } = await req(
-      'POST',
-      '/api/payments/withdraw',
-      {
-        amount: 100,
-        payout_method_id: '00000000-0000-0000-0000-000000000000',
-      },
-      token,
-    );
-    expect(status).toBe(404);
-  });
-  test('withdrawals no auth → 401', async () => {
-    const { status } = await req('GET', '/api/payments/withdrawals');
-    expect(status).toBe(401);
-  });
-  test('withdrawals → 200', async () => {
-    const token = await register('+54926100603');
-    await driver(token);
-    const { status, data } = await req('GET', '/api/payments/withdrawals', undefined, token);
-    expect(status).toBe(200);
-    expect(data.withdrawals).toBeArray();
   });
 });
 

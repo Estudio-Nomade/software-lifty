@@ -9,12 +9,6 @@ export const driverIdParams = t.Object({
   driver_id: t.String(),
 });
 
-export const withdrawalsQuery = t.Object({
-  status: t.Optional(t.String()),
-  from: t.Optional(t.String()),
-  to: t.Optional(t.String()),
-});
-
 export const updatePhaseSchema = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
   month_start: t.Optional(t.Number({ minimum: 1 })),

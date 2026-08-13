@@ -7,22 +7,16 @@ import { getDb, resetDb } from '../../shared/db/client';
 import {
   commissionPhases,
   drivers,
-  payments,
-  payoutMethods,
   platformConfig,
   tripEvents,
   trips,
   users,
-  withdrawals,
 } from '../../shared/db/schema';
 import { createTestToken } from '../../shared/testing/utils';
 let app: any;
 
 async function truncateTables() {
   const db = getDb();
-  await db.delete(withdrawals);
-  await db.delete(payments);
-  await db.delete(payoutMethods);
   await db.delete(tripEvents);
   await db.delete(trips);
   await db.delete(drivers);
@@ -67,49 +61,24 @@ async function createDriverRow(token: string): Promise<string> {
   return driver!.id;
 }
 
-async function addPaymentMethod(token: string, accountNumber: string): Promise<string> {
-  const { data } = await request(
-    'POST',
-    '/api/drivers/me/payment-methods',
-    {
-      method_type: 'bank_transfer',
-      account_number: accountNumber,
-      titular_name: 'Driver Name',
-    },
-    token,
-  );
-  return data.id;
-}
-
-async function createTripAndPayment(token: string): Promise<{ tripId: string }> {
-  const { data: trip } = await request(
-    'POST',
-    '/api/trips',
-    {
+async function insertCompletedTrip(driverId: string, driverEarnings = 1200): Promise<string> {
+  const db = getDb();
+  const now = new Date();
+  const [trip] = await db
+    .insert(trips)
+    .values({
+      driver_id: driverId,
+      status: 'completed',
       origin_lat: -31.9,
       origin_lng: -65.0,
       dest_lat: -31.88,
       dest_lng: -65.02,
-      vehicle_type: 'car',
-      distance_km: 5,
-      duration_minutes: 10,
-    },
-    token,
-  );
-
-  await request(
-    'POST',
-    '/api/payments/webhook/mercadopago',
-    { payment_id: 'mp-test-earn-001', trip_id: trip.id },
-    undefined,
-    { 'X-MP-Signature': 'valid-signature-abc123' },
-  );
-
-  return { tripId: trip.id };
-}
-
-async function createWithdrawal(token: string, amount: number, pmId: string) {
-  await request('POST', '/api/payments/withdraw', { amount, payout_method_id: pmId }, token);
+      driver_earnings: driverEarnings,
+      created_at: now,
+      updated_at: now,
+    })
+    .returning({ id: trips.id });
+  return trip.id;
 }
 
 beforeAll(() => {
@@ -153,10 +122,10 @@ describe('Earnings + Stats + TVF', () => {
     expect(data.available_balance).toBe(0);
   });
 
-  test('GET /summary returns earnings after payment', async () => {
+  test('GET /summary returns earnings after completed trip', async () => {
     const token = await registerAndGetToken(phone, password);
-    await createDriverRow(token);
-    await createTripAndPayment(token);
+    const driverId = await createDriverRow(token);
+    await insertCompletedTrip(driverId, 1200);
 
     const { status, data } = await request('GET', '/api/earnings/summary', undefined, token);
 
@@ -166,25 +135,10 @@ describe('Earnings + Stats + TVF', () => {
     expect(data.available_balance).toBe(1200);
   });
 
-  test('GET /summary includes withdrawals in available_balance', async () => {
-    const token = await registerAndGetToken(phone, password);
-    await createDriverRow(token);
-    const pmId = await addPaymentMethod(token, '0000003100088888888888');
-    await createTripAndPayment(token);
-    await createWithdrawal(token, 500, pmId);
-
-    const { status, data } = await request('GET', '/api/earnings/summary', undefined, token);
-
-    expect(status).toBe(200);
-    expect(data.today.earnings).toBe(1200);
-    expect(data.today.withdrawals).toBe(500);
-    expect(data.available_balance).toBe(700);
-  });
-
   test('GET /history returns paginated items', async () => {
     const token = await registerAndGetToken(phone, password);
-    await createDriverRow(token);
-    const { tripId } = await createTripAndPayment(token);
+    const driverId = await createDriverRow(token);
+    const tripId = await insertCompletedTrip(driverId, 1200);
 
     const { status, data } = await request(
       'GET',
@@ -209,8 +163,8 @@ describe('Earnings + Stats + TVF', () => {
 
   test('GET /history with date filters works', async () => {
     const token = await registerAndGetToken(phone, password);
-    await createDriverRow(token);
-    const { tripId } = await createTripAndPayment(token);
+    const driverId = await createDriverRow(token);
+    await insertCompletedTrip(driverId, 1200);
 
     const futureDate = '2027-01-01';
 
@@ -224,40 +178,16 @@ describe('Earnings + Stats + TVF', () => {
     expect(futureData.items.length).toBe(0);
 
     const db = getDb();
-    const [payment] = await db.select({ created_at: payments.created_at }).from(payments).limit(1);
-    const paymentDate = payment!.created_at!.toISOString().slice(0, 10);
+    const [trip] = await db.select({ created_at: trips.created_at }).from(trips).limit(1);
+    const tripDate = trip!.created_at!.toISOString().slice(0, 10);
     const { status, data } = await request(
       `GET`,
-      `/api/earnings/history?page=1&limit=20&from=${paymentDate}&to=${paymentDate}`,
+      `/api/earnings/history?page=1&limit=20&from=${tripDate}&to=${tripDate}`,
       undefined,
       token,
     );
     expect(status).toBe(200);
     expect(data.items.length).toBeGreaterThanOrEqual(1);
-  });
-
-  test('GET /history includes withdrawals', async () => {
-    const token = await registerAndGetToken(phone, password);
-    await createDriverRow(token);
-    const pmId = await addPaymentMethod(token, '0000003100088888888888');
-    await createTripAndPayment(token);
-    await createWithdrawal(token, 500, pmId);
-
-    const { status, data } = await request(
-      'GET',
-      '/api/earnings/history?page=1&limit=20',
-      undefined,
-      token,
-    );
-
-    expect(status).toBe(200);
-
-    const earningItem = data.items.find((i: any) => i.type === 'earning');
-    expect(earningItem).not.toBeNull();
-
-    const withdrawalItem = data.items.find((i: any) => i.type === 'withdrawal');
-    expect(withdrawalItem).not.toBeNull();
-    expect(withdrawalItem.amount).toBe(500);
   });
 
   test('GET /stats returns driver stats', async () => {
@@ -374,8 +304,8 @@ describe('Earnings + Stats + TVF', () => {
 
   test('GET /stats includes total_earnings', async () => {
     const token = await registerAndGetToken(phone, password);
-    await createDriverRow(token);
-    await createTripAndPayment(token);
+    const driverId = await createDriverRow(token);
+    await insertCompletedTrip(driverId, 1200);
 
     const { status, data } = await request('GET', '/api/drivers/me/stats', undefined, token);
 

@@ -8,7 +8,6 @@ import { AppError, BadRequestError, NotFoundError } from '../../shared/lib/error
 import { calculateFare } from '../../shared/lib/fuel-pricing';
 import { geocode, haversineDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
-import { getPayment } from '../../shared/lib/mercado-pago';
 import { calculatePlatformFee } from '../../shared/lib/pricing';
 import { sendPushToUser } from '../../shared/lib/push';
 import type { AuthUser } from '../../shared/middleware/auth';
@@ -656,12 +655,7 @@ export const tripService = {
     return trip;
   },
 
-  async collectTrip(
-    user: AuthUser,
-    tripId: string,
-    paymentMethod: 'cash' | 'mercadopago',
-    mpPaymentId?: string,
-  ) {
+  async collectTrip(user: AuthUser, tripId: string, paymentMethod: 'cash' | 'transfer') {
     const driverId = await getDriverId(user);
 
     const [preCheck] = await db
@@ -672,14 +666,6 @@ export const tripService = {
 
     if (preCheck?.is_collected) {
       throw new AppError('Payment already collected for this trip', 400, 'BAD_REQUEST');
-    }
-
-    if (paymentMethod === 'mercadopago' && mpPaymentId) {
-      const paymentInfo = await getPayment(mpPaymentId);
-
-      if (paymentInfo.status !== 'approved') {
-        throw new AppError(`Payment not approved: ${paymentInfo.status}`, 400, 'BAD_REQUEST');
-      }
     }
 
     return db.transaction(async (tx) => {
@@ -699,7 +685,7 @@ export const tripService = {
         .where(eq(trips.id, tripId))
         .returning();
 
-      if (paymentMethod === 'cash' && trip.platform_fee) {
+      if (trip.platform_fee) {
         await tx
           .update(drivers)
           .set({
