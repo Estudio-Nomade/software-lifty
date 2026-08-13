@@ -32,7 +32,7 @@ export const TripCompleteScreen: React.FC = () => {
   const { setActiveTab } = useTabBar();
   const [step, setStep] = React.useState<Step>('collect');
   const [collecting, setCollecting] = React.useState(false);
-  const [collectingMP, setCollectingMP] = React.useState(false);
+  const [collectingTransfer, setCollectingTransfer] = React.useState(false);
   const [rating, setRating] = React.useState(0);
   const [comment, setComment] = React.useState('');
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
@@ -88,17 +88,17 @@ export const TripCompleteScreen: React.FC = () => {
     }
   };
 
-  const handleCollectMP = async () => {
+  const handleCollectTransfer = async () => {
     if (!activeTripId) return;
-    setCollectingMP(true);
+    setCollectingTransfer(true);
     try {
-      await apiClient.put(`/trips/${activeTripId}/collect`, { payment_method: 'mercadopago' });
+      await apiClient.put(`/trips/${activeTripId}/collect`, { payment_method: 'transfer' });
       setStep('rate');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'No se pudo registrar el cobro.';
       Alert.alert('Error', message);
     } finally {
-      setCollectingMP(false);
+      setCollectingTransfer(false);
     }
   };
 
@@ -172,9 +172,9 @@ export const TripCompleteScreen: React.FC = () => {
         style={styles.button}
       />
       <Button
-        title="Cobre por Mercado Pago"
-        onPress={handleCollectMP}
-        loading={collectingMP}
+        title="Cobre por transferencia"
+        onPress={handleCollectTransfer}
+        loading={collectingTransfer}
         variant="secondary"
         style={styles.button}
       />

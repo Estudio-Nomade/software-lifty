@@ -6,8 +6,6 @@ export { payoutMethods } from './payout-methods';
 export { trips } from './trips';
 export { tripEvents } from './trip-events';
 export { driverLocations } from './driver-locations';
-export { payments } from './payments';
-export { withdrawals } from './withdrawals';
 export { ratings } from './ratings';
 export { sosEvents } from './sos-events';
 export { pushTokens } from './push-tokens';
