@@ -1,36 +1,51 @@
 # Deferred work
 
-- source_spec: none
-  summary: Show verification_code on passenger in-trip / driver-found UI
-  evidence: Split from Epic 5 batch; mobile-only after backend API paths land
+Last resync: 2026-08-13 (post PR #254, #255)
+
+## Resolved
 
 - source_spec: none
-  summary: SOS UI consuming POST /sos
-  evidence: Split from Epic 5 batch; independent mobile feature
+  summary: Show verification_code on passenger in-trip UI
+  status: done
+  evidence: PR #254 — TripInProgressScreen
+
+- source_spec: none
+  summary: Dual-role requirePassenger + rate/estimate API paths
+  status: done
+  evidence: PR #254
+
+- source_spec: none
+  summary: SOS backend passenger-capable
+  status: done
+  evidence: PR #255 — no getDriverId; trip ownership passenger|driver
+
+- source_spec: _bmad-output/implementation-artifacts/spec-dual-role-api-paths.md
+  summary: Bound tags/comment lengths in passenger rate body
+  status: done
+  evidence: PR #254 — maxLength 255/500 on rateTripBody
+
+## Open
+
+- source_spec: none
+  summary: SOS UI consuming POST /sos (mobile)
+  evidence: Backend ready (#255); screen + client wire still missing
 
 - source_spec: none
   summary: Wire TripComplete to real trip data + rateRide completion flow
-  evidence: Depends on correct rate API path (this batch); ship after paths fixed
+  evidence: Rate API exists; UI still mock
 
 - source_spec: none
-  summary: Live driver tracking, chat, call driver, cash payment, trip detail, favorites backend
-  evidence: Later epics / action items; not part of dual-role + API path fix
+  summary: Live driver tracking, chat, call driver
+  evidence: Epic 5 partial shells
+
+- source_spec: none
+  summary: Cash payment MVP + trip detail + favorites backend sync
+  evidence: Later epics / action items
 
 - source_spec: _bmad-output/implementation-artifacts/spec-dual-role-api-paths.md
   summary: Mutual passenger+driver rating — first rater sets trip to rated and blocks the other
-  evidence: Both rate flows require status completed then set rated; product needs dual-rating or separate flags
+  evidence: Both rate flows require status completed then set rated; product decision needed
 
 - source_spec: _bmad-output/implementation-artifacts/spec-dual-role-api-paths.md
   summary: DB unique (trip_id, rater_id) + driver row lock for rating_avg concurrency
   evidence: App-level FOR UPDATE does not lock empty rating rows; avg recomputed without locking driver
-
-- source_spec: _bmad-output/implementation-artifacts/spec-dual-role-api-paths.md
-  summary: Bound tags/comment lengths in rate body schemas to avoid DB 500s
-  evidence: varchar limits in ratings table; TypeBox currently unbounded
-
-## Deferred from: code review of spec-dual-role-api-paths.md (2026-08-13)
-
-- Mutual passenger+driver rating blocked by shared completed→rated status (spec accepted passenger sets rated)
-- No DB unique (trip_id, rater_id); concurrent insert race — pre-existing ratings pattern
-- rating_avg mixes dual-role ratee scores — same as driver ratings path
-- Concurrent rating_avg lost update without driver row lock — pre-existing
