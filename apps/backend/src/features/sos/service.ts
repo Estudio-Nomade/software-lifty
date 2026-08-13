@@ -1,17 +1,35 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
-import { getDriverId } from '../../shared/db/queries';
 import { drivers, sosEvents, trips } from '../../shared/db/schema';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import type { AuthUser } from '../../shared/middleware/auth';
 
-async function verifyTrip(tripId: string, driverId: string): Promise<void> {
+/** Trip is accessible if the user is the passenger or the assigned driver. */
+async function verifyTripAccess(tripId: string, userId: string): Promise<void> {
   const [trip] = await db
-    .select({ id: trips.id })
+    .select({
+      id: trips.id,
+      passenger_id: trips.passenger_id,
+      driver_id: trips.driver_id,
+    })
     .from(trips)
-    .where(and(eq(trips.id, tripId), eq(trips.driver_id, driverId)))
+    .where(eq(trips.id, tripId))
     .limit(1);
+
   if (!trip) throw new NotFoundError('Trip not found');
+
+  if (trip.passenger_id === userId) return;
+
+  if (trip.driver_id) {
+    const [driver] = await db
+      .select({ id: drivers.id })
+      .from(drivers)
+      .where(and(eq(drivers.id, trip.driver_id), eq(drivers.user_id, userId)))
+      .limit(1);
+    if (driver) return;
+  }
+
+  throw new NotFoundError('Trip not found');
 }
 
 export const sosService = {
@@ -30,10 +48,8 @@ export const sosService = {
       throw new AppError(`Invalid type: ${body.type}`, 400, 'BAD_REQUEST');
     }
 
-    const driverId = await getDriverId(user);
-
     if (body.trip_id) {
-      await verifyTrip(body.trip_id, driverId);
+      await verifyTripAccess(body.trip_id, user.id);
     }
 
     const [sos] = await db
@@ -66,10 +82,8 @@ export const sosService = {
       throw new AppError(`Invalid accident_type: ${body.accident_type}`, 400, 'BAD_REQUEST');
     }
 
-    const driverId = await getDriverId(user);
-
     if (body.trip_id) {
-      await verifyTrip(body.trip_id, driverId);
+      await verifyTripAccess(body.trip_id, user.id);
     }
 
     const [sos] = await db

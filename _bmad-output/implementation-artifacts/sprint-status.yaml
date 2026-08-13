@@ -153,6 +153,7 @@ action_items:
     status: open
     epic: 5
     owner: mobile
+    note: "Backend passenger SOS ready (no getDriverId); UI still pending"
   - id: ai-6
     action: "Live driver tracking on map (realtime/poll refresh of driver_lat/lng)"
     status: open
