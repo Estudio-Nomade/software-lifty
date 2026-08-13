@@ -246,6 +246,13 @@
       "when": 1786800000000,
       "tag": "0033_passenger_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1786900000000,
+      "tag": "0034_passenger_trips_nullable_driver",
+      "breakpoints": true
     }
   ]
 }
