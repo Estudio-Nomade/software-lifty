@@ -17,13 +17,29 @@ export async function updateProfile(profile: Partial<PassengerProfile>): Promise
 }
 
 export async function estimateFare(params: {
-  pickup_lat: number;
-  pickup_lng: number;
-  destination_lat: number;
-  destination_lng: number;
+  origin_lat: number;
+  origin_lng: number;
+  dest_lat: number;
+  dest_lng: number;
+  vehicle_type: 'auto' | 'moto';
 }): Promise<FareEstimate> {
-  const { data } = await api.post<FareEstimate>('/passenger/rides/estimate', params);
-  return data;
+  const { data } = await api.post<{
+    total: number;
+    distance_km: number;
+    duration_minutes: number;
+  }>('/maps/fare-estimate', {
+    origin_lat: params.origin_lat,
+    origin_lng: params.origin_lng,
+    dest_lat: params.dest_lat,
+    dest_lng: params.dest_lng,
+    vehicle_type: params.vehicle_type === 'moto' ? 'motorcycle' : 'car',
+  });
+  return {
+    fare: data.total,
+    distance_km: data.distance_km,
+    duration_min: data.duration_minutes,
+    vehicle_type: params.vehicle_type,
+  };
 }
 
 export async function requestRide(params: {

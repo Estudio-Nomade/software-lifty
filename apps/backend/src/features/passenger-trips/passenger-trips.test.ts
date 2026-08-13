@@ -12,6 +12,7 @@ import {
   drivers,
   fuelPriceLog,
   platformConfig,
+  ratings,
   tripEvents,
   trips,
   users,
@@ -24,6 +25,7 @@ let testId = 0;
 
 async function truncateTables() {
   const db = getDb();
+  await db.delete(ratings);
   await db.delete(tripEvents);
   await db.delete(trips);
   await db.delete(driverLocations);
@@ -266,7 +268,7 @@ describe('Passenger Trips', () => {
     expect(data.error.message).toContain('cancel');
   });
 
-  test('GET /active returns 500 for non-passenger role', async () => {
+  test('GET /active returns 403 for non-passenger role', async () => {
     const db = getDb();
     testId++;
     const userId = `00000000-0000-4000-8000-${String(testId).padStart(12, '0')}`;
@@ -296,5 +298,144 @@ describe('Passenger Trips', () => {
 
     expect(status).toBe(200);
     expect(data).toEqual([]);
+  });
+
+  test('POST /request accepts dual-role (both) user', async () => {
+    const db = getDb();
+    testId++;
+    const userId = `00000000-0000-4000-8000-${String(testId).padStart(12, '0')}`;
+    await db.insert(users).values({
+      id: userId,
+      phone: `+549261${String(testId).padStart(6, '0')}`,
+      full_name: 'Dual Role',
+      role: 'both',
+    });
+    const token = createTestToken(userId);
+
+    const { status, data } = await createTrip(token);
+
+    expect(status).toBe(200);
+    expect(data.id).toBeTruthy();
+    expect(data.passenger_id).toBe(userId);
+  });
+
+  test('GET /active accepts dual-role (both) user', async () => {
+    const db = getDb();
+    testId++;
+    const userId = `00000000-0000-4000-8000-${String(testId).padStart(12, '0')}`;
+    await db.insert(users).values({
+      id: userId,
+      phone: `+549261${String(testId).padStart(6, '0')}`,
+      full_name: 'Dual Role',
+      role: 'both',
+    });
+    const token = createTestToken(userId);
+
+    const { status, data } = await request('GET', '/api/passenger/trips/active', undefined, token);
+
+    expect(status).toBe(200);
+    expect(data).toBeNull();
+  });
+
+  test('POST /:id/rate rates driver and marks trip rated', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ status: 'completed', driver_id: driverId, updated_at: new Date() })
+      .where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/rate`,
+      { rating: 5, comment: 'Great ride' },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.rating_id).toBeTruthy();
+    expect(data.message).toBe('Rating submitted');
+
+    const [updated] = await db.select().from(trips).where(eq(trips.id, trip.id));
+    expect(updated.status).toBe('rated');
+
+    const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
+    expect(driver.rating_avg).toBe(5);
+
+    const [ratingRow] = await db.select().from(ratings).where(eq(ratings.id, data.rating_id));
+    expect(ratingRow.score).toBe(5);
+    expect(ratingRow.comment).toBe('Great ride');
+    expect(ratingRow.rater_id).toBe(trip.passenger_id);
+    expect(ratingRow.ratee_id).toBe(driver.user_id);
+  });
+
+  test('POST /:id/rate duplicate returns 409', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ status: 'completed', driver_id: driverId, updated_at: new Date() })
+      .where(eq(trips.id, trip.id));
+
+    await request('POST', `/api/passenger/trips/${trip.id}/rate`, { rating: 4 }, token);
+    const { status, data } = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/rate`,
+      { rating: 5 },
+      token,
+    );
+
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('CONFLICT');
+  });
+
+  test('POST /:id/rate non-completed trip returns 400', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ status: 'accepted', driver_id: driverId, updated_at: new Date() })
+      .where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/rate`,
+      { rating: 3 },
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('BAD_REQUEST');
+  });
+
+  test('POST /:id/rate another passenger trip returns 404', async () => {
+    const token1 = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token1, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token1);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ status: 'completed', driver_id: driverId, updated_at: new Date() })
+      .where(eq(trips.id, trip.id));
+
+    const token2 = await createPassengerToken();
+    const { status } = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/rate`,
+      { rating: 5 },
+      token2,
+    );
+
+    expect(status).toBe(404);
   });
 });
