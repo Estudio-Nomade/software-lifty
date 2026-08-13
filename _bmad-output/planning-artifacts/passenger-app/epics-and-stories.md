@@ -65,13 +65,15 @@ This document decomposes the PRD (`_bmad-output/planning-artifacts/passenger-app
 
 1. **Epic 1** — Foundation (Phase 0) [DONE]
 2. **Epic 2** — Auth (Phase 1) [DONE]
-3. **Epic 3** — Home + Map Shell [PENDING]
-4. **Epic 4** — Trip Request [PENDING]
-5. **Epic 5** — Trip Lifecycle + SOS [PENDING]
-6. **Epic 6** — Post-Trip (Rating + Payment) [PENDING]
-7. **Epic 7** — Trip History + Detail [PENDING]
-8. **Epic 8** — Profile + Sign Out [PENDING]
-9. **Epic 9** — Polish + Tests (Buffer) [PENDING]
+3. **Epic 3** — Home + Map Shell [DONE]
+4. **Epic 4** — Trip Request [DONE]
+5. **Epic 5** — Trip Lifecycle + SOS [IN PROGRESS] — verification done; SOS backend ready (#255); SOS UI + live tracking open
+6. **Epic 6** — Post-Trip (Rating + Payment) [IN PROGRESS] — rate API ready (#254); TripComplete/payment open
+7. **Epic 7** — Trip History + Detail [IN PROGRESS] — list done; detail open
+8. **Epic 8** — Profile + Sign Out [DONE]
+9. **Epic 9** — Polish + Tests (Buffer) [IN PROGRESS]
+
+> **Status SoT:** `_bmad-output/implementation-artifacts/sprint-status.yaml` (last resync 2026-08-13, PRs #254–#255).
 
 ---
 
@@ -308,7 +310,7 @@ So that my profile has the correct name.
 
 ---
 
-## Epic 3: Home + Map Shell [PENDING]
+## Epic 3: Home + Map Shell [DONE]
 
 **Goal**: Build the post-auth Home screen with a map, location awareness, and the navigation shell (TabBar) so users can request trips.
 
@@ -377,7 +379,7 @@ So that I can navigate consistently.
 
 ---
 
-## Epic 4: Trip Request [PENDING]
+## Epic 4: Trip Request [DONE]
 
 **Goal**: Implement the trip request flow: select pickup, select destination, get fare estimate, confirm.
 
@@ -451,9 +453,11 @@ So that trips are persisted.
 
 ---
 
-## Epic 5: Trip Lifecycle + SOS [PENDING]
+## Epic 5: Trip Lifecycle + SOS [IN PROGRESS]
 
 **Goal**: After a driver accepts, show the driver card, verification code, and in-trip tracking. Implement SOS with 4 emergency types.
+
+**Progress (2026-08-13):** 5.1–5.3 + 5.6 largely shipped; 5.2 verification UI done (#254); SOS backend passenger-capable (#255); 5.5 SOS UI + 5.4 live tracking still open.
 
 ### Story 5.1: DriverFound card
 
@@ -534,7 +538,9 @@ So that I can cancel if the driver is taking too long.
 
 ---
 
-## Epic 6: Post-Trip (Rating + Payment) [PENDING]
+## Epic 6: Post-Trip (Rating + Payment) [IN PROGRESS]
+
+**Progress (2026-08-13):** `POST /passenger/trips/:id/rate` shipped (#254). TripComplete still mock; payment cash open.
 
 **Goal**: After the trip completes, show the summary, collect rating, and process payment.
 
@@ -592,7 +598,9 @@ So that I can return to Home and the trip appears in history.
 
 ---
 
-## Epic 7: Trip History + Detail [PENDING]
+## Epic 7: Trip History + Detail [IN PROGRESS]
+
+**Progress (2026-08-13):** History list wired; trip detail open.
 
 **Goal**: Implement the trip history list and trip detail screens so users can review past trips.
 
@@ -624,7 +632,7 @@ So that I can review the cost, driver, and report issues.
 
 ---
 
-## Epic 8: Profile + Sign Out [PENDING]
+## Epic 8: Profile + Sign Out [DONE]
 
 **Goal**: Implement the profile view and sign-out flow.
 
@@ -655,7 +663,9 @@ So that I can log in with a different account.
 
 ---
 
-## Epic 9: Polish + Tests (Buffer) [PENDING]
+## Epic 9: Polish + Tests (Buffer) [IN PROGRESS]
+
+**Progress (2026-08-13):** Partial component/screen tests (favorites, ConnectingDriver, TripInProgress).
 
 **Goal**: Polish the app, add tests, and address edge cases.
 
