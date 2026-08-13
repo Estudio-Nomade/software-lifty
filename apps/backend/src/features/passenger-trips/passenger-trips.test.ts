@@ -337,6 +337,29 @@ describe('Passenger Trips', () => {
     expect(data).toBeNull();
   });
 
+  test('requestTrip assigns nearest online driver and marks trip offered', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    // matchAndBroadcast runs via setImmediate after the response; poll until assigned.
+    const db = getDb();
+    let assigned: (typeof trips.$inferSelect) | null = null;
+    for (let i = 0; i < 40; i++) {
+      const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+      if (row?.driver_id) {
+        assigned = row;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    expect(assigned).toBeTruthy();
+    expect(assigned?.driver_id).toBe(driverId);
+    expect(assigned?.status).toBe('offered');
+    expect(assigned?.expires_at).toBeTruthy();
+  });
+
   test('POST /:id/rate rates driver and marks trip rated', async () => {
     const token = await createPassengerToken();
     const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);

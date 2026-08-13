@@ -1,10 +1,12 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
-import { driverLocations, drivers, users } from '../../shared/db/schema';
+import { driverLocations, drivers, tripEvents, trips, users } from '../../shared/db/schema';
 import { haversineDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
 import { broadcastTripRequest } from '../trips/service';
+
+const OFFER_TIMEOUT_MS = 20_000;
 
 interface NearbyDriver {
   driverId: string;
@@ -68,20 +70,49 @@ export async function matchAndBroadcast(trip: {
     return { drivers_found: 0 };
   }
 
-  for (const driver of nearby) {
-    broadcastTripRequest(driver.driverId, trip);
+  const driver = nearby[0];
+  const expiresAt = new Date(Date.now() + OFFER_TIMEOUT_MS);
 
-    sendPushToUser(driver.userId, {
-      title: 'Nuevo viaje',
-      body: `Viaje solicitado de ${trip.origin_address ?? 'origen'} a ${trip.dest_address ?? 'destino'} — $${trip.total_fare ?? 'N/A'}`,
-      data: { trip_id: trip.id, type: 'trip:request' },
+  const assigned = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(trips)
+      .set({
+        driver_id: driver.driverId,
+        status: 'offered',
+        expires_at: expiresAt,
+        updated_at: new Date(),
+      })
+      .where(and(eq(trips.id, trip.id), eq(trips.status, 'pending')))
+      .returning();
+
+    if (!updated) return null;
+
+    await tx.insert(tripEvents).values({
+      trip_id: trip.id,
+      from_status: 'pending',
+      to_status: 'offered',
     });
-  }
 
-  logger.info('[matchAndBroadcast] Broadcast sent', {
-    tripId: trip.id,
-    driversFound: nearby.length,
+    return updated;
   });
 
-  return { drivers_found: nearby.length };
+  if (!assigned) {
+    logger.info('[matchAndBroadcast] Trip no longer pending, skipped', { tripId: trip.id });
+    return { drivers_found: 0 };
+  }
+
+  broadcastTripRequest(driver.driverId, assigned);
+
+  sendPushToUser(driver.userId, {
+    title: 'Nuevo viaje',
+    body: `Viaje solicitado de ${assigned.origin_address ?? 'origen'} a ${assigned.dest_address ?? 'destino'} — $${assigned.total_fare ?? 'N/A'}`,
+    data: { trip_id: trip.id, type: 'trip:request' },
+  });
+
+  logger.info('[matchAndBroadcast] Assigned nearest driver', {
+    tripId: trip.id,
+    driverId: driver.driverId,
+  });
+
+  return { drivers_found: 1, driver_id: driver.driverId };
 }
