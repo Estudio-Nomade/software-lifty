@@ -459,8 +459,11 @@ describe('Trips', () => {
   });
   test('all trip mutations require auth → 401', async () => {
     const fid = '00000000-0000-0000-0000-000000000000';
+    const bodies: Record<string, object | undefined> = {
+      complete: { lat: -31.9, lng: -65.0 },
+    };
     for (const action of ['accept', 'reject', 'en-route', 'complete', 'cancel']) {
-      const { status } = await req('POST', `/api/trips/${fid}/${action}`);
+      const { status } = await req('POST', `/api/trips/${fid}/${action}`, bodies[action]);
       expect(status).toBe(401);
     }
   });
