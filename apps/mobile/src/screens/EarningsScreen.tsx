@@ -165,16 +165,6 @@ export const EarningsScreen: React.FC = () => {
             </Card>
 
             <Card>
-              <TouchableOpacity
-                style={styles.withdrawRow}
-                onPress={() => navigation.navigate('Withdraw')}
-              >
-                <Text style={styles.withdrawLabel}>Retirar saldo</Text>
-                <Text style={styles.changeLink}>Retirar →</Text>
-              </TouchableOpacity>
-            </Card>
-
-            <Card>
               <Text style={styles.cardTitle}>Tus ganancias</Text>
               <View style={styles.row}>
                 <View style={styles.rowLabelContainer}>
@@ -388,16 +378,6 @@ export const EarningsScreen: React.FC = () => {
             </Card>
           </>
         )}
-        <Card padding={theme.spacing.md}>
-          <View style={styles.paymentScheduleRow}>
-            <Ionicons name="time-outline" size={20} color={theme.colors.turquoise} />
-            <Text style={styles.paymentScheduleText}>
-              Los retiros se procesan de lunes a viernes entre las 18 y 20 hs. Se transfiere el
-              saldo de viajes con Mercado Pago y transferencia. Los cobros en efectivo ya los tenes
-              y se descuentan del saldo a transferir.
-            </Text>
-          </View>
-        </Card>
       </ScrollView>
 
       <SideMenu visible={menuVisible} onClose={() => setMenuVisible(false)} menuItems={menuItems} />
@@ -543,17 +523,6 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.turquoise,
   },
-  paymentScheduleRow: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-    alignItems: 'flex-start',
-  },
-  paymentScheduleText: {
-    flex: 1,
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.mediumGray,
-    lineHeight: 20,
-  },
   exemptNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -570,16 +539,6 @@ const styles = StyleSheet.create({
     color: theme.colors.turquoise,
     fontWeight: theme.fontWeight.medium,
     lineHeight: 18,
-  },
-  withdrawRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  withdrawLabel: {
-    fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
-    color: theme.colors.deepBlue,
   },
   errorSection: {
     width: 343,

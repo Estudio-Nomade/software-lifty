@@ -31,7 +31,6 @@ const SCREEN_TO_ROUTE = {
   Earnings: '/earnings',
   Profile: '/profile',
   PaymentMethod: '/payment-method',
-  Withdraw: '/withdraw',
   SelectProvince: '/select-province',
   SelectDistrict: '/select-district',
   DistrictTerms: '/district-terms',
