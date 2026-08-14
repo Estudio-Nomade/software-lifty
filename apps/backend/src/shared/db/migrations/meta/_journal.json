@@ -267,6 +267,13 @@
       "when": 1787100000000,
       "tag": "0036_fuel_price_log",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1787200000000,
+      "tag": "0037_duration_minutes_real",
+      "breakpoints": true
     }
   ]
 }
