@@ -54,3 +54,7 @@ export const completeBody = t.Object({
 export const respondBody = t.Object({
   action: t.Union([t.Literal('accept'), t.Literal('reject')]),
 });
+
+export const sendMessageBody = t.Object({
+  text: t.String({ minLength: 1, maxLength: 1000 }),
+});

@@ -49,6 +49,15 @@ export interface Trip {
   updated_at: string;
 }
 
+export interface TripMessage {
+  id: string;
+  trip_id: string;
+  sender_id: string;
+  sender_role: 'driver' | 'passenger';
+  text: string;
+  created_at: string;
+}
+
 export interface FareEstimate {
   fare: number;
   distance_km: number;

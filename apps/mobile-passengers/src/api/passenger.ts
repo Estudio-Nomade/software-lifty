@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { FareEstimate, PassengerProfile, PlaceSuggestion, Trip } from './types';
+import type { FareEstimate, PassengerProfile, PlaceSuggestion, Trip, TripMessage } from './types';
 
 export async function registerPassenger(phone?: string): Promise<PassengerProfile> {
   const { data } = await api.post<PassengerProfile>('/passenger/register', { phone });
@@ -101,8 +101,25 @@ export async function cancelRide(rideId: string, reason?: string): Promise<void>
   await api.post(`/passenger/trips/${rideId}/cancel`, { reason });
 }
 
+export async function retryRide(rideId: string): Promise<{ drivers_found: number; trip: Trip }> {
+  const { data } = await api.post<{ drivers_found: number; trip: Trip }>(
+    `/passenger/trips/${rideId}/retry`,
+  );
+  return data;
+}
+
 export async function rateRide(rideId: string, rating: number, comment?: string): Promise<void> {
   await api.post(`/passenger/trips/${rideId}/rate`, { rating, comment });
+}
+
+export async function listTripMessages(tripId: string): Promise<TripMessage[]> {
+  const { data } = await api.get<TripMessage[]>(`/passenger/trips/${tripId}/messages`);
+  return Array.isArray(data) ? data : ((data as { data?: TripMessage[] })?.data ?? []);
+}
+
+export async function sendTripMessage(tripId: string, text: string): Promise<TripMessage> {
+  const { data } = await api.post<TripMessage>(`/passenger/trips/${tripId}/messages`, { text });
+  return (data as { data?: TripMessage })?.data ?? data;
 }
 
 export async function searchPlaces(

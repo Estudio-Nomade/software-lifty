@@ -104,11 +104,15 @@ function realGetUser(token: string): Promise<AuthUser | null> {
 }
 
 async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
-  const userPhone =
+  const email = supabaseUser.email?.trim() || null;
+  const rawPhone =
     supabaseUser.phone ??
     ((supabaseUser.user_metadata as Record<string, unknown> | undefined)?.phone as
       | string
       | undefined);
+  // Empty phone strings must become NULL: `users.phone` is UNIQUE, and multiple
+  // empty-string rows would violate the constraint on account creation.
+  const phone = rawPhone?.trim() || null;
 
   const [existing] = await db
     .select({
@@ -130,12 +134,36 @@ async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
     };
   }
 
+  // Re-registration: same email but a new Supabase `sub`. Reuse the existing row
+  // instead of failing on the UNIQUE email constraint.
+  if (email) {
+    const [byEmail] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        phone: users.phone,
+      })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (byEmail) {
+      const role = await deriveRole(byEmail.id);
+      return {
+        id: byEmail.id,
+        role,
+        email: byEmail.email,
+        phone: byEmail.phone,
+      };
+    }
+  }
+
   const [created] = await db
     .insert(users)
     .values({
       id: supabaseUser.id,
-      email: supabaseUser.email ?? null,
-      phone: userPhone ?? null,
+      email,
+      phone,
       role: 'driver',
     })
     .returning({

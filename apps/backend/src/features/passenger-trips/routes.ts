@@ -1,14 +1,14 @@
 import { Elysia } from 'elysia';
-import { AppError } from '../../shared/lib/errors';
 import { safeCall } from '../../shared/lib/route-utils';
+import type { AuthUser } from '../../shared/middleware/auth';
 import { authGuard } from '../../shared/middleware/require-auth';
-import { rateTripBody, requestTripBody, tripIdParams } from './schema';
+import { passengersService } from '../passengers/service';
+import { tripService } from '../trips/service';
+import { rateTripBody, requestTripBody, sendMessageBody, tripIdParams } from './schema';
 import { passengerTripService } from './service';
 
-function requirePassenger(user: { role: string | null }) {
-  if (user.role !== 'passenger' && user.role !== 'both') {
-    throw new AppError('Only passengers can access this endpoint', 403, 'FORBIDDEN');
-  }
+async function asPassenger(user: AuthUser) {
+  await passengersService.register(user.id);
 }
 
 export const passengerTripRoutes = new Elysia({ prefix: '/passenger/trips' })
@@ -16,8 +16,8 @@ export const passengerTripRoutes = new Elysia({ prefix: '/passenger/trips' })
   .post(
     '/request',
     ({ user, body, set }) =>
-      safeCall(() => {
-        requirePassenger(user);
+      safeCall(async () => {
+        await asPassenger(user);
         return passengerTripService.requestTrip(user, body);
       }, set),
     { body: requestTripBody, requireAuth: true },
@@ -25,17 +25,26 @@ export const passengerTripRoutes = new Elysia({ prefix: '/passenger/trips' })
   .get(
     '/active',
     ({ user, set }) =>
-      safeCall(() => {
-        requirePassenger(user);
+      safeCall(async () => {
+        await asPassenger(user);
         return passengerTripService.getActiveTrip(user);
       }, set),
     { requireAuth: true },
   )
+  .post(
+    '/:id/retry',
+    ({ user, params, set }) =>
+      safeCall(async () => {
+        await asPassenger(user);
+        return passengerTripService.retryTrip(user, params.id);
+      }, set),
+    { params: tripIdParams, requireAuth: true },
+  )
   .get(
     '/history',
     ({ user, query, set }) =>
-      safeCall(() => {
-        requirePassenger(user);
+      safeCall(async () => {
+        await asPassenger(user);
         return passengerTripService.getTripHistory(
           user,
           Number(query.page) || 1,
@@ -47,8 +56,8 @@ export const passengerTripRoutes = new Elysia({ prefix: '/passenger/trips' })
   .get(
     '/:id',
     ({ user, params, set }) =>
-      safeCall(() => {
-        requirePassenger(user);
+      safeCall(async () => {
+        await asPassenger(user);
         return passengerTripService.getTripById(user, params.id);
       }, set),
     { params: tripIdParams, requireAuth: true },
@@ -56,17 +65,35 @@ export const passengerTripRoutes = new Elysia({ prefix: '/passenger/trips' })
   .post(
     '/:id/cancel',
     ({ user, params, set }) =>
-      safeCall(() => {
-        requirePassenger(user);
+      safeCall(async () => {
+        await asPassenger(user);
         return passengerTripService.cancelTrip(user, params.id);
       }, set),
     { params: tripIdParams, requireAuth: true },
   )
+  .get(
+    '/:id/messages',
+    ({ user, params, set }) =>
+      safeCall(async () => {
+        await asPassenger(user);
+        return tripService.listMessages(user, params.id);
+      }, set),
+    { params: tripIdParams, requireAuth: true },
+  )
+  .post(
+    '/:id/messages',
+    ({ user, params, body, set }) =>
+      safeCall(async () => {
+        await asPassenger(user);
+        return tripService.sendMessage(user, params.id, body.text);
+      }, set),
+    { params: tripIdParams, body: sendMessageBody, requireAuth: true },
+  )
   .post(
     '/:id/rate',
     ({ user, params, body, set }) =>
-      safeCall(() => {
-        requirePassenger(user);
+      safeCall(async () => {
+        await asPassenger(user);
         return passengerTripService.rateTrip(user, params.id, body);
       }, set),
     { params: tripIdParams, body: rateTripBody, requireAuth: true },

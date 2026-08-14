@@ -2,7 +2,8 @@ import { and, desc, eq, getTableColumns, inArray, not, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { getDb } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
-import { drivers, ratings, tripEvents, trips, users } from '../../shared/db/schema';
+import { drivers, ratings, tripEvents, tripMessages, trips, users } from '../../shared/db/schema';
+import { broadcastTripMessage } from '../../shared/lib/broadcast';
 import { getCommissionRate } from '../../shared/lib/commission';
 import { AppError, BadRequestError, NotFoundError } from '../../shared/lib/errors';
 import { calculateFare } from '../../shared/lib/fuel-pricing';
@@ -19,8 +20,8 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   request_received: ['accepted', 'rejected', 'cancelled'],
   accepted: ['en_route', 'cancelled'],
   en_route: ['waiting', 'cancelled'],
-  waiting: ['in_trip', 'cancelled_early', 'cancelled_late'],
-  in_trip: ['completed', 'cancelled'],
+  waiting: ['in_trip'],
+  in_trip: ['completed'],
   completed: ['rated'],
 };
 
@@ -54,6 +55,24 @@ export function broadcastTripRequest(driverId: string, trip: any) {
   })
     .then((res) => logger.info('[BROADCAST] Response:', res.status))
     .catch((err) => logger.error('[BROADCAST] Error:', (err as Error).message));
+}
+
+export function broadcastTripCancelled(driverId: string, trip: any) {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !key) return;
+
+  fetch(`${url}/realtime/v1/api/broadcast`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      messages: [{ topic: `driver:${driverId}`, event: 'trip:cancelled', payload: trip }],
+    }),
+  }).catch((err) => logger.error('[BROADCAST] cancel error:', (err as Error).message));
 }
 
 const TERMINAL_STATUSES = [
@@ -596,7 +615,11 @@ export const tripService = {
 
   async cancelTrip(user: AuthUser, tripId: string) {
     const driverId = await getDriverId(user);
-    return transitionTrip(driverId, tripId, 'cancelled');
+    const result = await transitionTrip(driverId, tripId, 'cancelled');
+    if (result.passenger_id) {
+      broadcastToPassenger(result.passenger_id, result);
+    }
+    return result;
   },
 
   async getActiveTrip(user: AuthUser) {
@@ -756,5 +779,55 @@ export const tripService = {
 
       return updated;
     });
+  },
+
+  async assertTripParticipant(user: AuthUser, tripId: string) {
+    const [trip] = await db.select().from(trips).where(eq(trips.id, tripId)).limit(1);
+    if (!trip) throw new NotFoundError('Trip not found');
+
+    if (trip.passenger_id === user.id) {
+      return { trip, role: 'passenger' as const, senderId: user.id };
+    }
+
+    const [driver] = await db
+      .select({ id: drivers.id })
+      .from(drivers)
+      .where(eq(drivers.user_id, user.id))
+      .limit(1);
+
+    if (driver && trip.driver_id === driver.id) {
+      return { trip, role: 'driver' as const, senderId: user.id };
+    }
+
+    throw new AppError('Not a participant of this trip', 403, 'FORBIDDEN');
+  },
+
+  async listMessages(user: AuthUser, tripId: string) {
+    await this.assertTripParticipant(user, tripId);
+    return db
+      .select()
+      .from(tripMessages)
+      .where(eq(tripMessages.trip_id, tripId))
+      .orderBy(tripMessages.created_at);
+  },
+
+  async sendMessage(user: AuthUser, tripId: string, text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) throw new AppError('Message cannot be empty', 400, 'BAD_REQUEST');
+    if (trimmed.length > 1000) throw new AppError('Message too long', 400, 'BAD_REQUEST');
+
+    const { role, senderId } = await this.assertTripParticipant(user, tripId);
+    const [row] = await db
+      .insert(tripMessages)
+      .values({
+        trip_id: tripId,
+        sender_id: senderId,
+        sender_role: role,
+        text: trimmed,
+      })
+      .returning();
+
+    broadcastTripMessage(tripId, row);
+    return row;
   },
 };

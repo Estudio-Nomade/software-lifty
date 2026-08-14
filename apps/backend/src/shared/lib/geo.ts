@@ -102,8 +102,14 @@ async function cacheSet(key: string, value: string, ttlSeconds: number): Promise
 }
 
 function formatPhotonAddress(props: Record<string, string | number | undefined>): string {
+  const name = props.name ? String(props.name) : '';
+  const street = props.street ? String(props.street) : '';
+  const housenumber = props.housenumber ? String(props.housenumber) : '';
+
+  const primary = name || (street && housenumber ? `${street} ${housenumber}` : street);
+
   const parts = [
-    String(props.name || props.street || ''),
+    primary,
     String(props.city || props.town || props.village || ''),
     String(props.state || ''),
     String(props.country || ''),
@@ -117,6 +123,7 @@ interface PhotonFeature {
     osm_id: number;
     name?: string;
     street?: string;
+    housenumber?: string;
     city?: string;
     state?: string;
     country?: string;

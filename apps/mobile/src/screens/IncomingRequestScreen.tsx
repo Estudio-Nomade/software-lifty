@@ -37,6 +37,7 @@ export const IncomingRequestScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   const timedOut = useRef(false);
+  const acceptingRef = useRef(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lat = useLocationStore((s) => s.lat);
   const lng = useLocationStore((s) => s.lng);
@@ -119,13 +120,15 @@ export const IncomingRequestScreen: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!trip || accepted || timedOut.current) return;
+    if (!trip || accepted || timedOut.current || acceptingRef.current) return;
     if (seconds <= 0) {
+      if (acceptingRef.current || accepted) return;
       timedOut.current = true;
       apiClient
         .post(`/trips/${trip.id}/reject`)
         .catch(() => {})
         .finally(() => {
+          if (acceptingRef.current) return;
           navigation.navigate('Online');
         });
       return;
@@ -148,6 +151,7 @@ export const IncomingRequestScreen: React.FC = () => {
       try {
         const response = await apiClient.get('/trips/active');
         const active = (response.data?.data ?? response.data) as Trip | null;
+        if (acceptingRef.current || accepted || timedOut.current) return;
         if (!active || (active.status !== 'request_received' && active.status !== 'offered')) {
           if (pollRef.current) clearInterval(pollRef.current);
           if (active) {
@@ -182,7 +186,8 @@ export const IncomingRequestScreen: React.FC = () => {
   }, [trip, lat, lng]);
 
   const handleAccept = async () => {
-    if (!trip || loading) return;
+    if (!trip || loading || acceptingRef.current) return;
+    acceptingRef.current = true;
     setLoading(true);
     try {
       const response = await apiClient.post(`/trips/${trip.id}/accept`);
@@ -191,6 +196,7 @@ export const IncomingRequestScreen: React.FC = () => {
       setAccepted(true);
       navigation.replace('Navigation');
     } catch (err: any) {
+      acceptingRef.current = false;
       if (__DEV__) console.error('[handleAccept] error:', err?.message ?? err);
       const isTokenExpired =
         err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED';

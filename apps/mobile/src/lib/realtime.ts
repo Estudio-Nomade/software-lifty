@@ -1,14 +1,22 @@
+import { apiClient } from '../api/client';
 import { supabase } from './supabase';
 
 export function subscribeToDriverChannel(
   driverId: string,
   onTripRequest: (trip: any) => void,
+  onTripCancelled?: (trip: any) => void,
 ): () => void {
   const channel = supabase.channel(`driver:${driverId}`);
 
   channel.on('broadcast', { event: 'trip:request' }, ({ payload }) => {
     onTripRequest(payload);
   });
+
+  if (onTripCancelled) {
+    channel.on('broadcast', { event: 'trip:cancelled' }, ({ payload }) => {
+      onTripCancelled(payload);
+    });
+  }
 
   channel.subscribe((status) => {
     if (status === 'SUBSCRIBED') {
@@ -94,10 +102,6 @@ export function subscribeToTripChannel(
   };
 }
 
-export async function sendMessage(tripId: string, driverId: string, text: string): Promise<void> {
-  await supabase.from('messages').insert({
-    trip_id: tripId,
-    driver_id: driverId,
-    text,
-  });
+export async function sendMessage(tripId: string, text: string): Promise<void> {
+  await apiClient.post(`/trips/${tripId}/messages`, { text });
 }

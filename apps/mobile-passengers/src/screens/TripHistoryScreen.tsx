@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { getRideHistory } from '../api/passenger';
 import type { Trip } from '../api/types';
+import { BottomTabBar } from '../components/BottomTabBar';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { theme } from '../theme';
 
@@ -141,70 +142,67 @@ export function TripHistoryScreen() {
 
   if (isInitialLoading) {
     content = (
-      <SafeAreaView style={styles.safe}>
-        {renderHeader()}
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
-      </SafeAreaView>
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
     );
   } else if (error && allTrips.length === 0) {
     content = (
-      <SafeAreaView style={styles.safe}>
-        {renderHeader()}
-        <View style={styles.centered}>
-          <Ionicons name="cloud-offline-outline" size={48} color={theme.colors.mediumGray} />
-          <Text style={styles.errorText}>No se pudo cargar</Text>
-          <TouchableOpacity onPress={() => refetch()} style={styles.retryBtn}>
-            <Text style={styles.retryText}>Reintentar</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <View style={styles.centered}>
+        <Ionicons name="cloud-offline-outline" size={48} color={theme.colors.mediumGray} />
+        <Text style={styles.errorText}>No se pudo cargar</Text>
+        <TouchableOpacity onPress={() => refetch()} style={styles.retryBtn}>
+          <Text style={styles.retryText}>Reintentar</Text>
+        </TouchableOpacity>
+      </View>
     );
   } else if (allTrips.length === 0) {
     content = (
-      <SafeAreaView style={styles.safe}>
-        {renderHeader()}
-        <View style={styles.centered}>
-          <Ionicons name="car-outline" size={48} color={theme.colors.mediumGray} />
-          <Text style={styles.emptyTitle}>Sin viajes aún</Text>
-          <Text style={styles.emptySub}>Tus viajes aparecerán aquí</Text>
-        </View>
-      </SafeAreaView>
+      <View style={styles.centered}>
+        <Ionicons name="car-outline" size={48} color={theme.colors.mediumGray} />
+        <Text style={styles.emptyTitle}>Sin viajes aún</Text>
+        <Text style={styles.emptySub}>Tus viajes aparecerán aquí</Text>
+      </View>
     );
   } else {
     content = (
-      <SafeAreaView style={styles.safe}>
-        {renderHeader()}
-        <FlatList
-          data={allTrips}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <TripCard trip={item} />}
-          contentContainerStyle={styles.listContent}
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.3}
-          ListFooterComponent={
-            <>
-              {isFetching && (
-                <ActivityIndicator
-                  size="small"
-                  color={theme.colors.primary}
-                  style={{ paddingVertical: theme.spacing.md }}
-                />
-              )}
-              {renderErrorFooter()}
-            </>
-          }
-        />
-      </SafeAreaView>
+      <FlatList
+        style={styles.list}
+        data={allTrips}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => <TripCard trip={item} />}
+        contentContainerStyle={styles.listContent}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={
+          <>
+            {isFetching && (
+              <ActivityIndicator
+                size="small"
+                color={theme.colors.primary}
+                style={{ paddingVertical: theme.spacing.md }}
+              />
+            )}
+            {renderErrorFooter()}
+          </>
+        }
+      />
     );
   }
 
-  return content;
+  return (
+    <SafeAreaView style={styles.safe}>
+      {renderHeader()}
+      <View style={styles.body}>{content}</View>
+      <BottomTabBar activeTab="trips" />
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.lightGray },
+  body: { flex: 1 },
+  list: { flex: 1 },
   header: {
     height: theme.dimensions.navbarHeight,
     backgroundColor: theme.colors.deepBlue,

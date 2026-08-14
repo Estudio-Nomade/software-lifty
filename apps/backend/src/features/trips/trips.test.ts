@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
-import { commissionPhases, drivers, platformConfig, ratings, tripEvents, trips, users } from '../../shared/db/schema';
+import { commissionPhases, drivers, platformConfig, ratings, tripEvents, tripMessages, trips, users } from '../../shared/db/schema';
 import { createTestAuthPlugin, createTestToken } from '../../shared/testing/utils';
 
 let app: any;
@@ -15,6 +15,7 @@ let testId = 0;
 async function truncateTables() {
   const db = getDb();
   await db.delete(tripEvents);
+  await db.delete(tripMessages);
   await db.delete(trips);
   await db.delete(drivers);
   await db.delete(users);
@@ -338,7 +339,7 @@ describe('Trip State Machine', () => {
     expect(events[5].to_status).toBe('completed');
   });
 
-  test('7. cancel from waiting < 5min → cancelled_early', async () => {
+  test('7. cancel from waiting is rejected after driver arrived', async () => {
     const token = await registerAndGetToken(phone, password);
     await createDriverRow(token);
 
@@ -353,9 +354,6 @@ describe('Trip State Machine', () => {
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
 
-    const db = getDb();
-    await db.update(trips).set({ waiting_since: new Date() }).where(eq(trips.id, trip.id));
-
     const { status, data } = await request(
       'POST',
       `/api/trips/${trip.id}/cancel`,
@@ -363,13 +361,13 @@ describe('Trip State Machine', () => {
       token,
     );
 
-    expect(status).toBe(200);
-    expect(data.status).toBe('cancelled_early');
+    expect(status).toBe(400);
+    expect(data.error.message).toContain('waiting');
   });
 
-  test('8. cancel from waiting >= 5min → cancelled_late', async () => {
+  test('8. cancel from waiting after 5min is still rejected', async () => {
     const token = await registerAndGetToken(phone, password);
-    const driverId = await createDriverRow(token);
+    await createDriverRow(token);
 
     const { data: trip } = await request(
       'POST',
@@ -399,15 +397,8 @@ describe('Trip State Machine', () => {
       token,
     );
 
-    expect(status).toBe(200);
-    expect(data.status).toBe('cancelled_late');
-    expect(data.total_fare).toBeGreaterThan(0);
-    expect(data.platform_fee).toBeGreaterThan(0);
-    expect(data.driver_earnings).toBeGreaterThan(0);
-    expect(data.driver_earnings).toBeLessThan(data.total_fare);
-
-    const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
-    expect(driver.platform_debt).toBeGreaterThan(0);
+    expect(status).toBe(400);
+    expect(data.error.message).toContain('waiting');
   });
 
   test('9. GET /active returns active trip', async () => {
@@ -861,5 +852,76 @@ describe('Trip State Machine', () => {
     expect(data.passenger_name).toBe('Rated Passenger');
     expect(data.passenger_phone).toBe('+5492613333333');
     expect(data.passenger_rating).toBe(4.5);
+  });
+
+  test('23. driver can send and list trip messages', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+
+    const db = getDb();
+    const [passenger] = await db
+      .insert(users)
+      .values({ phone: '+5492614444444', full_name: 'Chat Pax', role: 'passenger' })
+      .returning({ id: users.id });
+
+    const { data: trip } = await request(
+      'POST',
+      '/api/trips',
+      {
+        origin_lat: -31.9,
+        origin_lng: -65.0,
+        dest_lat: -31.88,
+        dest_lng: -65.02,
+        vehicle_type: 'car',
+        distance_km: 5,
+        duration_minutes: 15,
+        passenger_id: passenger.id,
+      },
+      token,
+    );
+
+    const sent = await request(
+      'POST',
+      `/api/trips/${trip.id}/messages`,
+      { text: 'Voy en camino' },
+      token,
+    );
+    expect(sent.status).toBe(200);
+    expect(sent.data.text).toBe('Voy en camino');
+    expect(sent.data.sender_role).toBe('driver');
+
+    const listed = await request('GET', `/api/trips/${trip.id}/messages`, undefined, token);
+    expect(listed.status).toBe(200);
+    expect(listed.data.length).toBe(1);
+    expect(listed.data[0].text).toBe('Voy en camino');
+  });
+
+  test('24. stranger cannot read trip messages', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+    const { data: trip } = await request(
+      'POST',
+      '/api/trips',
+      {
+        origin_lat: -31.9,
+        origin_lng: -65.0,
+        dest_lat: -31.88,
+        dest_lng: -65.02,
+        vehicle_type: 'car',
+        distance_km: 5,
+        duration_minutes: 15,
+      },
+      token,
+    );
+
+    const other = await registerAndGetToken('+5492615555555', 'x');
+    const { status, data } = await request(
+      'GET',
+      `/api/trips/${trip.id}/messages`,
+      undefined,
+      other,
+    );
+    expect(status).toBe(403);
+    expect(data.error.code).toBe('FORBIDDEN');
   });
 });

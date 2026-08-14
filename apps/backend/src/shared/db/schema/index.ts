@@ -14,3 +14,4 @@ export { fuelPriceLog } from './fuel-price-log';
 export { commissionPhases } from './commission-phases';
 export { platformConfig } from './platform-config';
 export { passengerProfiles } from './passenger-profiles';
+export { tripMessages } from './trip-messages';

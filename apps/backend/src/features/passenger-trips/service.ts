@@ -117,6 +117,35 @@ export const passengerTripService = {
     return trip;
   },
 
+  async retryTrip(user: AuthUser, tripId: string) {
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(and(eq(trips.id, tripId), eq(trips.passenger_id, user.id)))
+      .limit(1);
+
+    if (!trip) throw new NotFoundError('Trip not found');
+    if (trip.status !== 'pending') {
+      throw new AppError(`Trip is not pending, current status: ${trip.status}`, 400, 'BAD_REQUEST');
+    }
+
+    const result = await matchAndBroadcast({
+      id: trip.id,
+      origin_address: trip.origin_address,
+      dest_address: trip.dest_address,
+      total_fare: trip.total_fare,
+      origin_lat: trip.origin_lat,
+      origin_lng: trip.origin_lng,
+      dest_lat: trip.dest_lat,
+      dest_lng: trip.dest_lng,
+      distance_km: trip.distance_km,
+      duration_minutes: trip.duration_minutes,
+    });
+
+    const [updated] = await db.select().from(trips).where(eq(trips.id, tripId));
+    return { drivers_found: result.drivers_found, trip: updated };
+  },
+
   async getActiveTrip(user: AuthUser) {
     const result = await db
       .select({
@@ -197,7 +226,7 @@ export const passengerTripService = {
 
       if (!trip) throw new NotFoundError('Trip not found');
 
-      const allowedStatuses = ['pending', 'offered', 'accepted'];
+      const allowedStatuses = ['pending', 'offered', 'accepted', 'en_route'];
       if (!allowedStatuses.includes(trip.status)) {
         throw new AppError(`Cannot cancel trip in status: ${trip.status}`, 400, 'BAD_REQUEST');
       }
@@ -230,6 +259,28 @@ export const passengerTripService = {
       }
 
       const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
+      if (trip.driver_id && updated) {
+        const url = process.env.SUPABASE_URL;
+        const key = process.env.SUPABASE_SECRET_KEY;
+        if (url && key) {
+          fetch(`${url}/realtime/v1/api/broadcast`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: key,
+              Authorization: `Bearer ${key}`,
+            },
+            body: JSON.stringify({
+              messages: [
+                { topic: `driver:${trip.driver_id}`, event: 'trip:cancelled', payload: updated },
+              ],
+            }),
+          }).catch((err) => logger.error('[BROADCAST] passenger cancel:', (err as Error).message));
+        }
+      }
+      if (updated) {
+        broadcastToPassenger(user.id, updated);
+      }
       return updated;
     });
   },

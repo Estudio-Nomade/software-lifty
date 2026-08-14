@@ -77,6 +77,30 @@ export const OnlineScreen: React.FC = () => {
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
 
+  useEffect(() => {
+    let cancelled = false;
+    const resume = async () => {
+      try {
+        const { data } = await apiClient.get('/trips/active');
+        const trip = data?.data ?? data;
+        if (cancelled || !trip?.status) return;
+        if (trip.status === 'request_received' || trip.status === 'offered') {
+          navigation.navigate('IncomingRequest');
+        } else if (trip.status === 'accepted' || trip.status === 'en_route') {
+          navigation.replace('Navigation');
+        } else if (trip.status === 'waiting') {
+          navigation.replace('WaitingPassenger');
+        } else if (trip.status === 'in_trip') {
+          navigation.replace('TripInProgress');
+        }
+      } catch {}
+    };
+    resume();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigation]);
+
   const handleToggle = useCallback(
     async (newValue: boolean) => {
       setToggleError(null);
@@ -93,6 +117,10 @@ export const OnlineScreen: React.FC = () => {
         setOnline(newValue);
 
         if (newValue) {
+          const { lat, lng, heading } = useLocationStore.getState();
+          if (lat != null && lng != null) {
+            await apiClient.put('/drivers/me/heartbeat', { lat, lng, heading }).catch(() => {});
+          }
           navigation.replace('Active');
         } else {
           const ref = useOnlineStore.getState().heartbeatIntervalRef;

@@ -152,6 +152,30 @@ export const ActiveScreen: React.FC = () => {
   }, [driverId, isOnline, navigation]);
 
   useEffect(() => {
+    let cancelled = false;
+    const resume = async () => {
+      try {
+        const { data } = await apiClient.get('/trips/active');
+        const trip = data?.data ?? data;
+        if (cancelled || !trip?.status) return;
+        if (trip.status === 'request_received' || trip.status === 'offered') {
+          navigation.navigate('IncomingRequest');
+        } else if (trip.status === 'accepted' || trip.status === 'en_route') {
+          navigation.replace('Navigation');
+        } else if (trip.status === 'waiting') {
+          navigation.replace('WaitingPassenger');
+        } else if (trip.status === 'in_trip') {
+          navigation.replace('TripInProgress');
+        }
+      } catch {}
+    };
+    resume();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigation]);
+
+  useEffect(() => {
     if (!onlineSince) return;
     setOnlineTime(Date.now() - onlineSince);
     const interval = setInterval(() => {
@@ -164,6 +188,10 @@ export const ActiveScreen: React.FC = () => {
     setToggleError(null);
     try {
       await apiClient.put('/drivers/me/online', { is_online: true });
+      const { lat, lng, heading } = useLocationStore.getState();
+      if (lat != null && lng != null) {
+        await apiClient.put('/drivers/me/heartbeat', { lat, lng, heading }).catch(() => {});
+      }
       const now = Date.now();
       setOnlineSince(now);
       useOnlineStore.setState({ isOnline: true });

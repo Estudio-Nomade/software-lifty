@@ -1,19 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect } from 'react';
-import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Alert, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { cancelRide, getActiveRide } from '../api/passenger';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { subscribeToPassengerChannel } from '../lib/realtime';
+import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 
 export function TripInProgressScreen() {
-  const { navigate } = useAppNavigation();
+  const { navigate, replace } = useAppNavigation();
   const current = useLocationStore((s) => s.current);
+  const userId = useAuthStore((s) => s.userId);
   const activeTrip = useRideStore((s) => s.activeTrip);
   const setActiveTrip = useRideStore((s) => s.setActiveTrip);
+  const reset = useRideStore((s) => s.reset);
 
   useEffect(() => {
     if (activeTrip) return;
@@ -24,13 +28,31 @@ export function TripInProgressScreen() {
       .catch(() => {});
   }, [activeTrip, setActiveTrip]);
 
+  useEffect(() => {
+    if (!userId) return;
+    return subscribeToPassengerChannel(userId, (incoming) => {
+      const status = incoming?.status;
+      if (status === 'cancelled' || status === 'cancelled_early' || status === 'cancelled_late') {
+        reset();
+        replace('Home');
+      }
+    });
+  }, [userId, reset, replace]);
+
   const trip = activeTrip;
 
   const handleCancel = async () => {
-    if (trip?.id) {
-      await cancelRide(trip.id).catch(() => {});
+    if (!trip?.id) {
+      replace('Home');
+      return;
     }
-    navigate('Home');
+    try {
+      await cancelRide(trip.id);
+      reset();
+      replace('Home');
+    } catch {
+      Alert.alert('Error', 'No se pudo cancelar el viaje. Intentalo de nuevo.');
+    }
   };
 
   const driverCoord: [number, number] | null =
@@ -108,9 +130,11 @@ export function TripInProgressScreen() {
           </Button>
         </View>
 
-        <Button variant="danger" onPress={handleCancel} style={styles.cancelBtn}>
-          CANCELAR VIAJE
-        </Button>
+        {trip?.status === 'accepted' || trip?.status === 'en_route' ? (
+          <Button variant="danger" onPress={handleCancel} style={styles.cancelBtn}>
+            CANCELAR VIAJE
+          </Button>
+        ) : null}
       </View>
     </SafeAreaView>
   );

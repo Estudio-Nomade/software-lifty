@@ -12,7 +12,11 @@ jest.mock('../../api/client', () => ({
 
 const mockNavigate = jest.fn();
 jest.mock('../../hooks/useAppNavigation', () => ({
-  useAppNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn(), replace: jest.fn() }),
+  useAppNavigation: () => ({
+    navigate: mockNavigate,
+    goBack: jest.fn(),
+    replace: (...args: unknown[]) => mockNavigate(...args),
+  }),
 }));
 
 jest.mock('../../lib/location', () => ({ stopTracking: jest.fn() }));

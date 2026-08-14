@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import { Button } from '../components/Button';
 import { ChatBackground } from '../components/ChatBackground';
@@ -20,7 +21,6 @@ import { OTPInput } from '../components/OTPInput';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { sendMessage, subscribeToTripChannel } from '../lib/realtime';
-import { useAuthStore } from '../store/authStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
@@ -29,11 +29,10 @@ const AMBER_THRESHOLD = 120;
 
 export const WaitingPassengerScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const [seconds, setSeconds] = useState(WAIT_SECONDS);
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
-  const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationError, setVerificationError] = useState('');
@@ -44,7 +43,6 @@ export const WaitingPassengerScreen: React.FC = () => {
   const activeTripId = useTripStore((s) => s.activeTripId);
   const clearTrip = useTripStore((s) => s.clearTrip);
   const trip = useTripStore((s) => s.trip);
-  const driverId = useAuthStore((s) => s.driverId);
 
   useEffect(() => {
     if (!trip) return;
@@ -73,9 +71,21 @@ export const WaitingPassengerScreen: React.FC = () => {
     if (!activeTripId) return;
     const unsubscribe = subscribeToTripChannel(activeTripId, {
       onMessage: (msg) => {
-        setMessages((prev) => [...prev, msg]);
+        setMessages((prev) => {
+          if (msg.id && prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
       },
     });
+
+    apiClient
+      .get(`/trips/${activeTripId}/messages`)
+      .then((res) => {
+        const rows = res.data?.data ?? res.data;
+        if (Array.isArray(rows)) setMessages(rows);
+      })
+      .catch(() => {});
+
     return () => {
       unsubscribe();
     };
@@ -83,19 +93,19 @@ export const WaitingPassengerScreen: React.FC = () => {
 
   const handleSend = async () => {
     const text = inputText.trim();
-    if (!text || !activeTripId || !driverId) return;
+    if (!text || !activeTripId) return;
 
     setInputText('');
 
     const optimistic = {
-      sender_id: driverId,
+      sender_role: 'driver',
       text,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimistic]);
 
     try {
-      await sendMessage(activeTripId, driverId, text);
+      await sendMessage(activeTripId, text);
     } catch {
       Alert.alert('Error', 'No se pudo enviar el mensaje.');
     }
@@ -105,7 +115,6 @@ export const WaitingPassengerScreen: React.FC = () => {
   const secs = seconds % 60;
   const timerDisplay = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   const timerColor = seconds > AMBER_THRESHOLD ? theme.colors.turquoise : theme.colors.amber;
-  const hasTimeLeft = seconds > 0;
 
   const handleStartTripPress = () => {
     setVerificationCode('');
@@ -161,38 +170,6 @@ export const WaitingPassengerScreen: React.FC = () => {
     }
   };
 
-  const handleCancelConfirm = async () => {
-    if (!activeTripId) return;
-    setShowModal(false);
-    setLoading(true);
-    try {
-      await apiClient.post(`/trips/${activeTripId}/cancel`);
-      clearTrip();
-      navigation.navigate('Online');
-    } catch (err: any) {
-      const isTokenExpired =
-        err?.code === 'TOKEN_REQUIRED' ||
-        err?.code === 'TOKEN_EXPIRED' ||
-        err?.error?.code === 'TOKEN_REQUIRED' ||
-        err?.error?.code === 'TOKEN_EXPIRED';
-      if (isTokenExpired) {
-        clearTrip();
-        Alert.alert('Sesion expirada', 'Tu sesion ha expirado. Inicia sesion nuevamente.', [
-          {
-            text: 'OK',
-            onPress: () => {
-              navigation.replace('Welcome');
-            },
-          },
-        ]);
-        return;
-      }
-      Alert.alert('Error', 'No se pudo cancelar el viaje.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -200,33 +177,6 @@ export const WaitingPassengerScreen: React.FC = () => {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <StatusBar barStyle="dark-content" />
-      {showModal && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modal}>
-            <Text style={styles.modalIcon}>⚠️</Text>
-            <Text style={styles.modalTitle}>Cancelar viaje?</Text>
-            <Text style={styles.modalText}>
-              {hasTimeLeft
-                ? 'Si cancelas antes de los 5 minutos, baja tu tasa de finalizacion.'
-                : 'Ya pasaron los 5 minutos de espera. Recibiras una compensacion.'}
-            </Text>
-            <Button
-              title="CANCELAR VIAJE"
-              variant="danger"
-              onPress={handleCancelConfirm}
-              loading={loading}
-              style={styles.modalButton}
-            />
-            <Button
-              title="SEGUIR ESPERANDO"
-              onPress={() => setShowModal(false)}
-              disabled={loading}
-              style={styles.modalButton}
-            />
-          </View>
-        </View>
-      )}
-
       {showVerificationModal && (
         <KeyboardAvoidingView
           style={styles.modalOverlay}
@@ -278,24 +228,23 @@ export const WaitingPassengerScreen: React.FC = () => {
         </TouchableOpacity>
       )}
 
-      <View style={styles.spacer} />
-      <Text style={styles.arrivedLabel}>Llegaste</Text>
-
-      <View style={[styles.timerCircle, { borderColor: timerColor }]}>
-        <Text style={[styles.timerText, { color: timerColor }]}>{timerDisplay}</Text>
-      </View>
-
-      <Text style={styles.totalWait}>5:00</Text>
-
-      <Text style={styles.waitingFor}>Esperando al pasajero</Text>
-      <Text style={styles.address}>en {displayAddress ?? trip?.origin_address ?? 'Origen'}</Text>
-
-      {trip?.pickup_instructions ? (
-        <View style={styles.instructionsCard}>
-          <Text style={styles.instructionsLabel}>📝</Text>
-          <Text style={styles.instructionsText}>{trip.pickup_instructions}</Text>
+      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.sm }]}>
+        <Text style={styles.arrivedLabel}>Llegaste</Text>
+        <View style={[styles.timerCircle, { borderColor: timerColor }]}>
+          <Text style={[styles.timerText, { color: timerColor }]}>{timerDisplay}</Text>
         </View>
-      ) : null}
+        <Text style={styles.totalWait}>5:00</Text>
+        <Text style={styles.waitingFor}>Esperando al pasajero</Text>
+        <Text style={styles.address} numberOfLines={2}>
+          en {displayAddress ?? trip?.origin_address ?? 'Origen'}
+        </Text>
+        {trip?.pickup_instructions ? (
+          <View style={styles.instructionsCard}>
+            <Text style={styles.instructionsLabel}>📝</Text>
+            <Text style={styles.instructionsText}>{trip.pickup_instructions}</Text>
+          </View>
+        ) : null}
+      </View>
 
       <View style={styles.chatArea}>
         <ChatBackground />
@@ -303,36 +252,41 @@ export const WaitingPassengerScreen: React.FC = () => {
           ref={chatScrollRef}
           style={styles.chatScroll}
           contentContainerStyle={styles.chatContent}
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
         >
           {messages.map((msg, index) => (
-            <ChatBubble key={index} message={msg.text} isDriver={msg.sender_id === driverId} />
+            <ChatBubble
+              key={msg.id ?? index}
+              message={msg.text}
+              isDriver={msg.sender_role === 'driver'}
+            />
           ))}
         </ScrollView>
       </View>
 
-      <View style={styles.chatInputRow}>
-        <TextInput
-          style={styles.chatInput}
-          placeholder="Escribi un mensaje..."
-          placeholderTextColor={theme.colors.mediumGray}
-          value={inputText}
-          onChangeText={setInputText}
-          onSubmitEditing={handleSend}
-          returnKeyType="send"
-        />
-        <TouchableOpacity onPress={handleSend}>
-          <Text style={styles.sendIcon}>→</Text>
-        </TouchableOpacity>
+      <View
+        style={[
+          styles.footer,
+          { paddingBottom: theme.dimensions.tabBarHeight + insets.bottom + theme.spacing.sm },
+        ]}
+      >
+        <View style={styles.chatInputRow}>
+          <TextInput
+            style={styles.chatInput}
+            placeholder="Escribi un mensaje..."
+            placeholderTextColor={theme.colors.mediumGray}
+            value={inputText}
+            onChangeText={setInputText}
+            onSubmitEditing={handleSend}
+            returnKeyType="send"
+          />
+          <TouchableOpacity onPress={handleSend}>
+            <Text style={styles.sendIcon}>→</Text>
+          </TouchableOpacity>
+        </View>
+        <Button title="INICIAR VIAJE" onPress={handleStartTripPress} style={styles.button} />
       </View>
-
-      <Button title="INICIAR VIAJE" onPress={handleStartTripPress} style={styles.button} />
-
-      <TouchableOpacity onPress={() => setShowModal(true)}>
-        <Text style={styles.cancelLink}>
-          {hasTimeLeft ? 'Cancelar viaje' : 'Cancelar con compensacion'}
-        </Text>
-      </TouchableOpacity>
     </KeyboardAvoidingView>
   );
 };
@@ -341,11 +295,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.white,
-    alignItems: 'center',
-    gap: theme.spacing.sm,
   },
-  spacer: {
-    height: 24,
+  header: {
+    alignItems: 'center',
+    paddingTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    gap: 2,
   },
   arrivedLabel: {
     fontSize: theme.fontSize.sm,
@@ -353,8 +308,8 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
   },
   timerCircle: {
-    width: 100,
-    height: 100,
+    width: 64,
+    height: 64,
     borderRadius: theme.radius.full,
     borderWidth: 4,
     borderColor: theme.colors.turquoise,
@@ -362,7 +317,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   timerText: {
-    fontSize: theme.fontSize.xl,
+    fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
   },
@@ -371,13 +326,15 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
   },
   waitingFor: {
-    fontSize: theme.fontSize.lg,
+    fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
   },
   address: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
+    textAlign: 'center',
+    paddingHorizontal: theme.spacing.md,
   },
   instructionsCard: {
     flexDirection: 'row',
@@ -400,16 +357,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   chatArea: {
-    width: 343,
-    flex: 1,
+    height: 120,
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.sm,
     borderRadius: theme.radius.lg,
     backgroundColor: theme.colors.lightGray,
-    padding: theme.spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
+    padding: theme.spacing.sm,
+    overflow: 'hidden',
+  },
+  footer: {
+    marginTop: 'auto',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    gap: theme.spacing.sm,
+    backgroundColor: theme.colors.white,
   },
   chatScroll: {
     flex: 1,
@@ -422,7 +384,7 @@ const styles = StyleSheet.create({
   chatInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: 343,
+    width: '100%',
     height: 48,
     borderRadius: theme.radius.inputRadius,
     borderWidth: 1,
@@ -442,13 +404,7 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.bold,
   },
   button: {
-    width: 327,
-  },
-  cancelLink: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
-    color: theme.colors.mediumGray,
-    marginBottom: theme.spacing.md,
+    width: '100%',
   },
   modalOverlay: {
     position: 'absolute',
