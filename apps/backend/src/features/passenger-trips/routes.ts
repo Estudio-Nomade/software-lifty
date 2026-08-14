@@ -3,7 +3,8 @@ import { safeCall } from '../../shared/lib/route-utils';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { authGuard } from '../../shared/middleware/require-auth';
 import { passengersService } from '../passengers/service';
-import { rateTripBody, requestTripBody, tripIdParams } from './schema';
+import { tripService } from '../trips/service';
+import { rateTripBody, requestTripBody, sendMessageBody, tripIdParams } from './schema';
 import { passengerTripService } from './service';
 
 async function asPassenger(user: AuthUser) {
@@ -69,6 +70,24 @@ export const passengerTripRoutes = new Elysia({ prefix: '/passenger/trips' })
         return passengerTripService.cancelTrip(user, params.id);
       }, set),
     { params: tripIdParams, requireAuth: true },
+  )
+  .get(
+    '/:id/messages',
+    ({ user, params, set }) =>
+      safeCall(async () => {
+        await asPassenger(user);
+        return tripService.listMessages(user, params.id);
+      }, set),
+    { params: tripIdParams, requireAuth: true },
+  )
+  .post(
+    '/:id/messages',
+    ({ user, params, body, set }) =>
+      safeCall(async () => {
+        await asPassenger(user);
+        return tripService.sendMessage(user, params.id, body.text);
+      }, set),
+    { params: tripIdParams, body: sendMessageBody, requireAuth: true },
   )
   .post(
     '/:id/rate',

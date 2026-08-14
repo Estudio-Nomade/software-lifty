@@ -1,3 +1,4 @@
+import { apiClient } from '../api/client';
 import { supabase } from './supabase';
 
 export function subscribeToDriverChannel(
@@ -101,10 +102,6 @@ export function subscribeToTripChannel(
   };
 }
 
-export async function sendMessage(tripId: string, driverId: string, text: string): Promise<void> {
-  await supabase.from('messages').insert({
-    trip_id: tripId,
-    driver_id: driverId,
-    text,
-  });
+export async function sendMessage(tripId: string, text: string): Promise<void> {
+  await apiClient.post(`/trips/${tripId}/messages`, { text });
 }

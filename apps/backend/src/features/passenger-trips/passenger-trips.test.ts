@@ -13,6 +13,7 @@ import {
   fuelPriceLog,
   passengerProfiles,
   platformConfig,
+  tripMessages,
   ratings,
   tripEvents,
   trips,
@@ -28,6 +29,7 @@ async function truncateTables() {
   const db = getDb();
   await db.delete(ratings);
   await db.delete(tripEvents);
+  await db.delete(tripMessages);
   await db.delete(trips);
   await db.delete(driverLocations);
   await db.delete(vehicles);

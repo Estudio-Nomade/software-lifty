@@ -7,6 +7,7 @@ import {
   completeBody,
   createTripBody,
   respondBody,
+  sendMessageBody,
   startTripBody,
   tripIdParams,
   webhookTripRequestBody,
@@ -109,6 +110,17 @@ export const tripRoutes = new Elysia({ prefix: '/trips' })
         set,
       ),
     { requireAuth: true },
+  )
+  .get(
+    '/:id/messages',
+    ({ user, params, set }) => safeCall(() => tripService.listMessages(user, params.id), set),
+    { params: tripIdParams, requireAuth: true },
+  )
+  .post(
+    '/:id/messages',
+    ({ user, params, body, set }) =>
+      safeCall(() => tripService.sendMessage(user, params.id, body.text), set),
+    { params: tripIdParams, body: sendMessageBody, requireAuth: true },
   )
   .get(
     '/:id',

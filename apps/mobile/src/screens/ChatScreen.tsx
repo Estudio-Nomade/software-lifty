@@ -11,12 +11,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { apiClient } from '../api/client';
 import { ChatBackground } from '../components/ChatBackground';
 import { ChatBubble } from '../components/ChatBubble';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { sendMessage, subscribeToTripChannel } from '../lib/realtime';
-import { useAuthStore } from '../store/authStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
@@ -29,7 +29,6 @@ export const ChatScreen: React.FC = () => {
 
   const activeTripId = useTripStore((s) => s.activeTripId);
   const trip = useTripStore((s) => s.trip);
-  const driverId = useAuthStore((s) => s.driverId);
 
   const scrollToEnd = useCallback(() => {
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
@@ -42,9 +41,21 @@ export const ChatScreen: React.FC = () => {
     if (!activeTripId) return;
     const unsubscribe = subscribeToTripChannel(activeTripId, {
       onMessage: (msg) => {
-        setMessages((prev) => [...prev, msg]);
+        setMessages((prev) => {
+          if (msg.id && prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
       },
     });
+
+    apiClient
+      .get(`/trips/${activeTripId}/messages`)
+      .then((res) => {
+        const rows = res.data?.data ?? res.data;
+        if (Array.isArray(rows)) setMessages(rows);
+      })
+      .catch(() => {});
+
     return () => {
       unsubscribe();
     };
@@ -52,12 +63,12 @@ export const ChatScreen: React.FC = () => {
 
   const handleSend = async () => {
     const text = inputText.trim();
-    if (!text || !activeTripId || !driverId) return;
+    if (!text || !activeTripId) return;
 
     setInputText('');
 
     const optimistic = {
-      sender_id: driverId,
+      sender_role: 'driver',
       text,
       created_at: new Date().toISOString(),
     };
@@ -65,7 +76,7 @@ export const ChatScreen: React.FC = () => {
     scrollToEnd();
 
     try {
-      await sendMessage(activeTripId, driverId, text);
+      await sendMessage(activeTripId, text);
     } catch {
       Alert.alert('Error', 'No se pudo enviar el mensaje.');
     }
@@ -99,7 +110,11 @@ export const ChatScreen: React.FC = () => {
             showsVerticalScrollIndicator={false}
           >
             {messages.map((msg, index) => (
-              <ChatBubble key={index} message={msg.text} isDriver={msg.sender_id === driverId} />
+              <ChatBubble
+                key={msg.id ?? index}
+                message={msg.text}
+                isDriver={msg.sender_role === 'driver'}
+              />
             ))}
           </ScrollView>
         </View>

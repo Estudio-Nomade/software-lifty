@@ -76,3 +76,21 @@ export function broadcastTripLocation(tripId: string, payload: LocationPayload):
 export function clearBroadcastThrottle(tripId: string): void {
   lastBroadcastMap.delete(tripId);
 }
+
+export function broadcastTripMessage(tripId: string, payload: Record<string, unknown>): void {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !key) return;
+
+  fetch(`${url}/realtime/v1/api/broadcast`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      messages: [{ topic: `trip:${tripId}`, event: 'message:sent', payload }],
+    }),
+  }).catch((err) => logger.error('[BROADCAST] chat error:', (err as Error).message));
+}

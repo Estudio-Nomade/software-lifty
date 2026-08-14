@@ -22,3 +22,7 @@ export const rateTripBody = t.Object({
   tags: t.Optional(t.String({ maxLength: 255 })),
   comment: t.Optional(t.String({ maxLength: 500 })),
 });
+
+export const sendMessageBody = t.Object({
+  text: t.String({ minLength: 1, maxLength: 1000 }),
+});

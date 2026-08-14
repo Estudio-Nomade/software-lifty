@@ -21,7 +21,6 @@ import { OTPInput } from '../components/OTPInput';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { sendMessage, subscribeToTripChannel } from '../lib/realtime';
-import { useAuthStore } from '../store/authStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
@@ -44,7 +43,6 @@ export const WaitingPassengerScreen: React.FC = () => {
   const activeTripId = useTripStore((s) => s.activeTripId);
   const clearTrip = useTripStore((s) => s.clearTrip);
   const trip = useTripStore((s) => s.trip);
-  const driverId = useAuthStore((s) => s.driverId);
 
   useEffect(() => {
     if (!trip) return;
@@ -73,9 +71,21 @@ export const WaitingPassengerScreen: React.FC = () => {
     if (!activeTripId) return;
     const unsubscribe = subscribeToTripChannel(activeTripId, {
       onMessage: (msg) => {
-        setMessages((prev) => [...prev, msg]);
+        setMessages((prev) => {
+          if (msg.id && prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
       },
     });
+
+    apiClient
+      .get(`/trips/${activeTripId}/messages`)
+      .then((res) => {
+        const rows = res.data?.data ?? res.data;
+        if (Array.isArray(rows)) setMessages(rows);
+      })
+      .catch(() => {});
+
     return () => {
       unsubscribe();
     };
@@ -83,19 +93,19 @@ export const WaitingPassengerScreen: React.FC = () => {
 
   const handleSend = async () => {
     const text = inputText.trim();
-    if (!text || !activeTripId || !driverId) return;
+    if (!text || !activeTripId) return;
 
     setInputText('');
 
     const optimistic = {
-      sender_id: driverId,
+      sender_role: 'driver',
       text,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimistic]);
 
     try {
-      await sendMessage(activeTripId, driverId, text);
+      await sendMessage(activeTripId, text);
     } catch {
       Alert.alert('Error', 'No se pudo enviar el mensaje.');
     }
@@ -246,7 +256,11 @@ export const WaitingPassengerScreen: React.FC = () => {
           onContentSizeChange={() => chatScrollRef.current?.scrollToEnd({ animated: true })}
         >
           {messages.map((msg, index) => (
-            <ChatBubble key={index} message={msg.text} isDriver={msg.sender_id === driverId} />
+            <ChatBubble
+              key={msg.id ?? index}
+              message={msg.text}
+              isDriver={msg.sender_role === 'driver'}
+            />
           ))}
         </ScrollView>
       </View>
