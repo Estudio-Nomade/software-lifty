@@ -94,8 +94,13 @@ export function VehicleSelectScreen() {
       });
 
       navigate('ConnectingDriver', { tripId: trip.id });
-    } catch {
-      Alert.alert('No se pudo solicitar el viaje', 'Intentalo de nuevo.');
+    } catch (err) {
+      const data = (
+        err as { response?: { data?: { error?: { message?: string }; message?: string } } }
+      )?.response?.data;
+      const message = data?.error?.message ?? data?.message ?? (err as Error).message;
+      console.error('[VehicleSelect] request failed', message, err);
+      Alert.alert('No se pudo solicitar el viaje', message || 'Intentalo de nuevo.');
     } finally {
       setLoading(false);
     }
