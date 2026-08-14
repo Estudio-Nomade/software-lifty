@@ -101,6 +101,13 @@ export async function cancelRide(rideId: string, reason?: string): Promise<void>
   await api.post(`/passenger/trips/${rideId}/cancel`, { reason });
 }
 
+export async function retryRide(rideId: string): Promise<{ drivers_found: number; trip: Trip }> {
+  const { data } = await api.post<{ drivers_found: number; trip: Trip }>(
+    `/passenger/trips/${rideId}/retry`,
+  );
+  return data;
+}
+
 export async function rateRide(rideId: string, rating: number, comment?: string): Promise<void> {
   await api.post(`/passenger/trips/${rideId}/rate`, { rating, comment });
 }

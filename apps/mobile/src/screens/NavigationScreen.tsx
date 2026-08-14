@@ -3,6 +3,7 @@ import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Dimensions,
   LayoutAnimation,
   Linking,
   Platform,
@@ -23,10 +24,14 @@ import { useDynamicRouting } from '../hooks/useDynamicRouting';
 import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
 import { haversineDistance } from '../lib/geo';
 import { startTracking, stopTracking } from '../lib/location';
+import { subscribeToDriverChannel } from '../lib/realtime';
+import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export const NavigationScreen: React.FC = () => {
   const navigation = useAppNavigation();
@@ -34,6 +39,8 @@ export const NavigationScreen: React.FC = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const trip = useTripStore((s) => s.trip);
   const tripStatus = useTripStore((s) => s.tripStatus);
+  const clearTrip = useTripStore((s) => s.clearTrip);
+  const driverId = useAuthStore((s) => s.driverId);
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
   const iconType = useVehicleStore((s) => s.iconType);
@@ -71,6 +78,18 @@ export const NavigationScreen: React.FC = () => {
       stopTracking();
     };
   }, []);
+
+  useEffect(() => {
+    if (!driverId) return;
+    return subscribeToDriverChannel(
+      driverId,
+      () => {},
+      () => {
+        clearTrip();
+        navigation.replace('Online');
+      },
+    );
+  }, [driverId, clearTrip, navigation]);
 
   useEffect(() => {
     if (!trip) return;
@@ -213,6 +232,26 @@ export const NavigationScreen: React.FC = () => {
     setRecenterKey((k) => k + 1);
   };
 
+  const handleCancelTrip = () => {
+    if (!trip) return;
+    Alert.alert('Cancelar viaje', 'El pasajero sera notificado. Confirmas?', [
+      { text: 'No', style: 'cancel' },
+      {
+        text: 'Si, cancelar',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await apiClient.post(`/trips/${trip.id}/cancel`);
+            clearTrip();
+            navigation.replace('Online');
+          } catch (err: any) {
+            Alert.alert('Error', err?.error?.message ?? 'No se pudo cancelar el viaje.');
+          }
+        },
+      },
+    ]);
+  };
+
   const isPrimaryNav = activeRoute === 'primary';
   const activeCoords = isPrimaryNav ? routeCoords : altRouteCoords;
   const activeEta = isPrimaryNav ? etaMinutes : altEtaMinutes;
@@ -294,8 +333,10 @@ export const NavigationScreen: React.FC = () => {
       <View style={styles.bottomCard}>
         <ScrollView
           style={styles.bottomCardContent}
-          contentContainerStyle={{ gap: theme.spacing.sm }}
+          contentContainerStyle={styles.bottomCardInner}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
         >
           <Text style={styles.label}>Rumbo al pasajero</Text>
           <Text style={styles.address}>{displayAddress ?? trip?.origin_address ?? 'Origen'}</Text>
@@ -391,6 +432,9 @@ export const NavigationScreen: React.FC = () => {
               />
             </>
           )}
+          <TouchableOpacity onPress={handleCancelTrip} style={styles.cancelLinkWrap}>
+            <Text style={styles.cancelLink}>Cancelar viaje</Text>
+          </TouchableOpacity>
         </ScrollView>
       </View>
     </View>
@@ -407,6 +451,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.lightGray,
   },
   bottomCard: {
+    maxHeight: SCREEN_HEIGHT * 0.48,
     backgroundColor: theme.colors.white,
     borderTopLeftRadius: theme.radius.lg,
     borderTopRightRadius: theme.radius.lg,
@@ -417,9 +462,22 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   bottomCardContent: {
+    flexGrow: 0,
+  },
+  bottomCardInner: {
     padding: theme.spacing.md,
     paddingTop: theme.spacing.lg,
+    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing.md,
     gap: theme.spacing.sm,
+  },
+  cancelLinkWrap: {
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+  },
+  cancelLink: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.dangerRed,
   },
   label: {
     fontSize: theme.fontSize.xs,

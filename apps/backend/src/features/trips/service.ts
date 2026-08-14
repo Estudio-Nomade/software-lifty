@@ -19,8 +19,8 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   request_received: ['accepted', 'rejected', 'cancelled'],
   accepted: ['en_route', 'cancelled'],
   en_route: ['waiting', 'cancelled'],
-  waiting: ['in_trip', 'cancelled_early', 'cancelled_late'],
-  in_trip: ['completed', 'cancelled'],
+  waiting: ['in_trip'],
+  in_trip: ['completed'],
   completed: ['rated'],
 };
 
@@ -54,6 +54,24 @@ export function broadcastTripRequest(driverId: string, trip: any) {
   })
     .then((res) => logger.info('[BROADCAST] Response:', res.status))
     .catch((err) => logger.error('[BROADCAST] Error:', (err as Error).message));
+}
+
+export function broadcastTripCancelled(driverId: string, trip: any) {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !key) return;
+
+  fetch(`${url}/realtime/v1/api/broadcast`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      messages: [{ topic: `driver:${driverId}`, event: 'trip:cancelled', payload: trip }],
+    }),
+  }).catch((err) => logger.error('[BROADCAST] cancel error:', (err as Error).message));
 }
 
 const TERMINAL_STATUSES = [
@@ -596,7 +614,11 @@ export const tripService = {
 
   async cancelTrip(user: AuthUser, tripId: string) {
     const driverId = await getDriverId(user);
-    return transitionTrip(driverId, tripId, 'cancelled');
+    const result = await transitionTrip(driverId, tripId, 'cancelled');
+    if (result.passenger_id) {
+      broadcastToPassenger(result.passenger_id, result);
+    }
+    return result;
   },
 
   async getActiveTrip(user: AuthUser) {

@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { cancelRide, getRideDetails } from '../api/passenger';
+import { cancelRide, getRideDetails, retryRide } from '../api/passenger';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { subscribeToPassengerChannel } from '../lib/realtime';
@@ -11,41 +11,69 @@ import { theme } from '../theme';
 
 const SEARCH_TIMEOUT_MS = 30_000;
 
+const LIVE_STATUSES = new Set(['accepted', 'en_route', 'waiting', 'in_trip']);
+
 export function ConnectingDriverScreen() {
   const { navigate, replace } = useAppNavigation();
   const { tripId } = useLocalSearchParams<{ tripId?: string }>();
   const userId = useAuthStore((s) => s.userId);
   const setActiveTrip = useRideStore((s) => s.setActiveTrip);
   const [timedOut, setTimedOut] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
-  useEffect(() => {
-    let unsubscribe: (() => void) | null = null;
-
-    const proceedToTrip = async (id: string) => {
+  const proceedToTrip = useCallback(
+    async (id: string, statusHint?: string) => {
+      if (statusHint && !LIVE_STATUSES.has(statusHint)) return;
       const full = await getRideDetails(id).catch(() => null);
-      if (!full?.driver_id) return;
+      if (!full || !LIVE_STATUSES.has(full.status)) return;
       setActiveTrip(full);
       replace('TripInProgress');
-    };
+    },
+    [setActiveTrip, replace],
+  );
 
-    if (userId) {
-      unsubscribe = subscribeToPassengerChannel(userId, async (trip: any) => {
-        if (!tripId || trip?.id !== tripId || !trip?.driver_id) return;
-        await proceedToTrip(tripId);
-      });
-    }
+  useEffect(() => {
+    if (!userId) return;
+    const unsubscribe = subscribeToPassengerChannel(userId, async (trip: any) => {
+      if (!tripId || trip?.id !== tripId) return;
+      if (
+        trip?.status === 'cancelled' ||
+        trip?.status === 'cancelled_early' ||
+        trip?.status === 'cancelled_late'
+      ) {
+        replace('Home');
+        return;
+      }
+      await proceedToTrip(tripId, trip?.status);
+    });
+    return () => unsubscribe?.();
+  }, [userId, tripId, proceedToTrip]);
 
-    if (tripId) {
-      proceedToTrip(tripId);
-    }
+  useEffect(() => {
+    if (tripId) proceedToTrip(tripId);
+  }, [tripId, proceedToTrip]);
 
+  useEffect(() => {
+    setTimedOut(false);
     const timeout = setTimeout(() => setTimedOut(true), SEARCH_TIMEOUT_MS);
+    return () => clearTimeout(timeout);
+  }, [attempt]);
 
-    return () => {
-      unsubscribe?.();
-      clearTimeout(timeout);
-    };
-  }, [userId, tripId, setActiveTrip, replace]);
+  const handleRetry = async () => {
+    if (!tripId) return;
+    setRetrying(true);
+    try {
+      const res = await retryRide(tripId);
+      if (res.drivers_found > 0) {
+        setAttempt((a) => a + 1);
+      }
+    } catch {
+      // keep the timeout screen so the passenger can retry again
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const handleCancel = async () => {
     if (tripId) {
@@ -59,8 +87,11 @@ export function ConnectingDriverScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
           <Text style={styles.title}>No hay conductores disponibles cerca</Text>
-          <Text style={styles.subtitle}>Intentá de nuevo en unos minutos.</Text>
-          <Button variant="primary" onPress={handleCancel} style={styles.button}>
+          <Text style={styles.subtitle}>Intentá buscar de nuevo en unos minutos.</Text>
+          <Button variant="primary" onPress={handleRetry} loading={retrying} style={styles.button}>
+            Buscar conductor de nuevo
+          </Button>
+          <Button variant="secondary" onPress={handleCancel} style={styles.button}>
             Cancelar
           </Button>
         </View>

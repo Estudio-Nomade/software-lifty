@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -13,8 +14,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { geocodeAddress } from '../api/passenger';
+import { geocodeAddress, getActiveRide } from '../api/passenger';
 import type { PlaceSuggestion } from '../api/types';
+import { BottomTabBar } from '../components/BottomTabBar';
 import { HomeHeader } from '../components/HomeHeader';
 import { HowItWorks } from '../components/HowItWorks';
 import { PassengerMap } from '../components/Map/PassengerMap';
@@ -22,19 +24,52 @@ import { QuickChips } from '../components/QuickChips';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useLocation } from '../hooks/useLocation';
 import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
+import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 
 export function HomeScreen() {
-  const { navigate } = useAppNavigation();
+  const { navigate, replace } = useAppNavigation();
   const { current } = useLocation();
+  const setActiveTrip = useRideStore((s) => s.setActiveTrip);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        const trip = await getActiveRide().catch(() => null);
+        if (cancelled || !trip) return;
+        if (trip.status === 'pending' || trip.status === 'offered') {
+          replace('ConnectingDriver', { tripId: trip.id });
+          return;
+        }
+        if (['accepted', 'en_route', 'waiting', 'in_trip'].includes(trip.status)) {
+          setActiveTrip(trip);
+          replace('TripInProgress');
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [replace, setActiveTrip]),
+  );
 
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [pickupAddress, setPickupAddress] = useState('');
   const [destAddress, setDestAddress] = useState('');
   const [recenterKey, setRecenterKey] = useState(0);
+  const [pickupCoord, setPickupCoord] = useState<{ lat: number; lng: number } | null>(null);
   const [destCoord, setDestCoord] = useState<{ lat: number; lng: number } | null>(null);
+  const [focusedField, setFocusedField] = useState<'pickup' | 'dest' | null>('dest');
+  const [pickupPicked, setPickupPicked] = useState(false);
+  const [destPicked, setDestPicked] = useState(false);
 
-  const suggestions = usePlaceAutocomplete(destAddress);
+  const pickupSuggestions = usePlaceAutocomplete(
+    focusedField === 'pickup' && !pickupPicked ? pickupAddress : '',
+  );
+  const destSuggestions = usePlaceAutocomplete(
+    focusedField === 'dest' && !destPicked ? destAddress : '',
+  );
+  const visibleSuggestions = focusedField === 'pickup' ? pickupSuggestions : destSuggestions;
 
   useEffect(() => {
     if (!searchExpanded) return;
@@ -56,6 +91,8 @@ export function HomeScreen() {
       setPickupAddress(
         name || `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`,
       );
+      setPickupCoord({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      setPickupPicked(true);
     })();
     return () => {
       cancelled = true;
@@ -75,22 +112,50 @@ export function HomeScreen() {
     setSearchExpanded(false);
     setDestAddress('');
     setDestCoord(null);
+    setPickupPicked(false);
+    setDestPicked(false);
+    setFocusedField('dest');
   };
 
   const handleChipSelect = (address: string) => {
     setDestAddress(address);
     setDestCoord(null);
+    setDestPicked(true);
+    setFocusedField(null);
+    Keyboard.dismiss();
   };
 
   const handleSelectSuggestion = (suggestion: PlaceSuggestion) => {
-    setDestAddress(suggestion.description);
-    setDestCoord({ lat: suggestion.lat, lng: suggestion.lng });
+    if (focusedField === 'pickup') {
+      setPickupAddress(suggestion.description);
+      setPickupCoord({ lat: suggestion.lat, lng: suggestion.lng });
+      setPickupPicked(true);
+    } else {
+      setDestAddress(suggestion.description);
+      setDestCoord({ lat: suggestion.lat, lng: suggestion.lng });
+      setDestPicked(true);
+    }
+    setFocusedField(null);
+    Keyboard.dismiss();
   };
 
   const handleConfirmDestination = async () => {
     const dest = destAddress.trim();
     if (!dest) return;
     Keyboard.dismiss();
+
+    let resolvedPickup = pickupCoord;
+    if (!resolvedPickup && pickupAddress.trim()) {
+      try {
+        const g = await geocodeAddress(pickupAddress.trim());
+        resolvedPickup = { lat: g.lat, lng: g.lng };
+      } catch {
+        resolvedPickup = null;
+      }
+    }
+    if (!resolvedPickup && current) {
+      resolvedPickup = { lat: current.lat, lng: current.lng };
+    }
 
     let resolvedDest = destCoord;
     if (!resolvedDest) {
@@ -105,8 +170,8 @@ export function HomeScreen() {
     navigate('VehicleSelect', {
       pickup: pickupAddress,
       destination: dest,
-      pickupLat: current ? String(current.lat) : '',
-      pickupLng: current ? String(current.lng) : '',
+      pickupLat: resolvedPickup ? String(resolvedPickup.lat) : current ? String(current.lat) : '',
+      pickupLng: resolvedPickup ? String(resolvedPickup.lng) : current ? String(current.lng) : '',
       destLat: resolvedDest ? String(resolvedDest.lat) : '',
       destLng: resolvedDest ? String(resolvedDest.lng) : '',
     });
@@ -141,7 +206,13 @@ export function HomeScreen() {
                     placeholder="Desde"
                     placeholderTextColor={theme.colors.mediumGray}
                     value={pickupAddress}
-                    onChangeText={setPickupAddress}
+                    onFocus={() => setFocusedField('pickup')}
+                    onChangeText={(text) => {
+                      setPickupAddress(text);
+                      setPickupCoord(null);
+                      setPickupPicked(false);
+                      setFocusedField('pickup');
+                    }}
                   />
                 </View>
 
@@ -154,9 +225,12 @@ export function HomeScreen() {
                     placeholder="Hacia"
                     placeholderTextColor={theme.colors.mediumGray}
                     value={destAddress}
+                    onFocus={() => setFocusedField('dest')}
                     onChangeText={(text) => {
                       setDestAddress(text);
                       setDestCoord(null);
+                      setDestPicked(false);
+                      setFocusedField('dest');
                     }}
                     autoFocus
                     returnKeyType="search"
@@ -165,9 +239,9 @@ export function HomeScreen() {
                 </View>
               </View>
 
-              {suggestions.length > 0 ? (
+              {visibleSuggestions.length > 0 ? (
                 <View style={styles.suggestions}>
-                  {suggestions.map((suggestion) => (
+                  {visibleSuggestions.map((suggestion) => (
                     <TouchableOpacity
                       key={suggestion.place_id}
                       style={styles.suggestionItem}
@@ -235,32 +309,7 @@ export function HomeScreen() {
           </ScrollView>
         )}
 
-        <View style={styles.tabBar}>
-          <TouchableOpacity style={styles.tab} activeOpacity={0.8}>
-            <Ionicons name="home" size={20} color={theme.colors.primary} />
-            <Text style={styles.tabActive}>Inicio</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tab} onPress={handleOpenSearch} activeOpacity={0.8}>
-            <Ionicons name="search" size={20} color={theme.colors.mediumGray} />
-            <Text style={styles.tabLabel}>Buscar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.tab}
-            onPress={() => navigate('TripHistory')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="list" size={20} color={theme.colors.mediumGray} />
-            <Text style={styles.tabLabel}>Viajes</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.tab}
-            onPress={() => navigate('Profile')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="person-outline" size={20} color={theme.colors.mediumGray} />
-            <Text style={styles.tabLabel}>Perfil</Text>
-          </TouchableOpacity>
-        </View>
+        <BottomTabBar activeTab="home" onSearchPress={handleOpenSearch} />
       </View>
     </SafeAreaView>
   );
@@ -424,31 +473,5 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.white,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    height: theme.dimensions.tabBarHeight,
-    alignItems: 'center',
-    backgroundColor: theme.colors.white,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.lightGray,
-    paddingBottom: theme.spacing.sm,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-    paddingVertical: theme.spacing.sm,
-  },
-  tabActive: {
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.primary,
-  },
-  tabLabel: {
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
-    color: theme.colors.mediumGray,
   },
 });

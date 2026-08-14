@@ -338,7 +338,7 @@ describe('Trip State Machine', () => {
     expect(events[5].to_status).toBe('completed');
   });
 
-  test('7. cancel from waiting < 5min → cancelled_early', async () => {
+  test('7. cancel from waiting is rejected after driver arrived', async () => {
     const token = await registerAndGetToken(phone, password);
     await createDriverRow(token);
 
@@ -353,9 +353,6 @@ describe('Trip State Machine', () => {
     await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
     await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
 
-    const db = getDb();
-    await db.update(trips).set({ waiting_since: new Date() }).where(eq(trips.id, trip.id));
-
     const { status, data } = await request(
       'POST',
       `/api/trips/${trip.id}/cancel`,
@@ -363,13 +360,13 @@ describe('Trip State Machine', () => {
       token,
     );
 
-    expect(status).toBe(200);
-    expect(data.status).toBe('cancelled_early');
+    expect(status).toBe(400);
+    expect(data.error.message).toContain('waiting');
   });
 
-  test('8. cancel from waiting >= 5min → cancelled_late', async () => {
+  test('8. cancel from waiting after 5min is still rejected', async () => {
     const token = await registerAndGetToken(phone, password);
-    const driverId = await createDriverRow(token);
+    await createDriverRow(token);
 
     const { data: trip } = await request(
       'POST',
@@ -399,15 +396,8 @@ describe('Trip State Machine', () => {
       token,
     );
 
-    expect(status).toBe(200);
-    expect(data.status).toBe('cancelled_late');
-    expect(data.total_fare).toBeGreaterThan(0);
-    expect(data.platform_fee).toBeGreaterThan(0);
-    expect(data.driver_earnings).toBeGreaterThan(0);
-    expect(data.driver_earnings).toBeLessThan(data.total_fare);
-
-    const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
-    expect(driver.platform_debt).toBeGreaterThan(0);
+    expect(status).toBe(400);
+    expect(data.error.message).toContain('waiting');
   });
 
   test('9. GET /active returns active trip', async () => {

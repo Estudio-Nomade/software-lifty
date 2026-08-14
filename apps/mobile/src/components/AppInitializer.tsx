@@ -32,8 +32,17 @@ function SessionRestore() {
       try {
         const response = await apiClient.get('/auth/me');
         const user = response.data;
-        if (user?.id) {
-          useAuthStore.getState().setDriverId(user.id);
+
+        try {
+          const meRes = await apiClient.get('/drivers/me');
+          const me = meRes.data?.data ?? meRes.data;
+          if (me?.id) {
+            useAuthStore.getState().setDriverId(me.id);
+          }
+        } catch {
+          if (user?.id) {
+            useAuthStore.getState().setDriverId(user.id);
+          }
         }
 
         try {
@@ -93,6 +102,7 @@ function ActiveTripRecovery() {
             if (cancelled) return;
             switch (trip.status) {
               case 'request_received':
+              case 'offered':
                 routerRef.current.replace('/incoming-request');
                 break;
               case 'accepted':

@@ -19,6 +19,7 @@ jest.mock('../../hooks/useAppNavigation', () => ({
 jest.mock('../../api/passenger', () => ({
   getRideDetails: jest.fn().mockResolvedValue(null),
   cancelRide: jest.fn().mockResolvedValue(undefined),
+  retryRide: jest.fn().mockResolvedValue({ drivers_found: 0, trip: null }),
 }));
 
 describe('ConnectingDriverScreen', () => {
@@ -55,20 +56,56 @@ describe('ConnectingDriverScreen', () => {
     expect(mockReplace).toHaveBeenCalledWith('Home');
   });
 
-  test('navigates to trip-in-progress when a driver claims the trip', async () => {
+  test('stays waiting when trip is only offered', async () => {
     useAuthStore.setState({ userId: 'passenger-1' });
     const { getRideDetails } = require('../../api/passenger');
     const { subscribeToPassengerChannel } = require('../../lib/realtime');
-    getRideDetails.mockResolvedValue({ id: 'trip-123', driver_id: 'd-1' });
+    getRideDetails.mockResolvedValue({ id: 'trip-123', driver_id: 'd-1', status: 'offered' });
+
+    const { getByText } = await render(<ConnectingDriverScreen />);
+
+    const onTripStatus = subscribeToPassengerChannel.mock.calls[0][1];
+    await act(async () => {
+      await onTripStatus({ id: 'trip-123', driver_id: 'd-1', status: 'offered' });
+    });
+
+    expect(mockReplace).not.toHaveBeenCalledWith('TripInProgress');
+    expect(getByText('Conectando con el conductor...')).toBeTruthy();
+  });
+
+  test('navigates to trip-in-progress when driver accepts', async () => {
+    useAuthStore.setState({ userId: 'passenger-1' });
+    const { getRideDetails } = require('../../api/passenger');
+    const { subscribeToPassengerChannel } = require('../../lib/realtime');
+    getRideDetails.mockResolvedValue({ id: 'trip-123', driver_id: 'd-1', status: 'accepted' });
 
     await render(<ConnectingDriverScreen />);
 
     const onTripStatus = subscribeToPassengerChannel.mock.calls[0][1];
     await act(async () => {
-      await onTripStatus({ id: 'trip-123', driver_id: 'd-1' });
+      await onTripStatus({ id: 'trip-123', driver_id: 'd-1', status: 'accepted' });
     });
 
     expect(getRideDetails).toHaveBeenCalledWith('trip-123');
     expect(mockReplace).toHaveBeenCalledWith('TripInProgress');
+  });
+
+  test('retry calls retryRide and returns to searching state', async () => {
+    const { retryRide } = require('../../api/passenger');
+    retryRide.mockResolvedValue({ drivers_found: 1, trip: { id: 'trip-123', driver_id: 'd-1' } });
+
+    const { getByText, queryByText } = await render(<ConnectingDriverScreen />);
+
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+    });
+    expect(getByText('No hay conductores disponibles cerca')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(getByText('Buscar conductor de nuevo'));
+    });
+
+    expect(retryRide).toHaveBeenCalledWith('trip-123');
+    expect(queryByText('Conectando con el conductor...')).toBeTruthy();
   });
 });

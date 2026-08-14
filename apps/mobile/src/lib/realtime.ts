@@ -3,12 +3,19 @@ import { supabase } from './supabase';
 export function subscribeToDriverChannel(
   driverId: string,
   onTripRequest: (trip: any) => void,
+  onTripCancelled?: (trip: any) => void,
 ): () => void {
   const channel = supabase.channel(`driver:${driverId}`);
 
   channel.on('broadcast', { event: 'trip:request' }, ({ payload }) => {
     onTripRequest(payload);
   });
+
+  if (onTripCancelled) {
+    channel.on('broadcast', { event: 'trip:cancelled' }, ({ payload }) => {
+      onTripCancelled(payload);
+    });
+  }
 
   channel.subscribe((status) => {
     if (status === 'SUBSCRIBED') {

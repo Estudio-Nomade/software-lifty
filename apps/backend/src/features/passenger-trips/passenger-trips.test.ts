@@ -11,6 +11,7 @@ import {
   driverLocations,
   drivers,
   fuelPriceLog,
+  passengerProfiles,
   platformConfig,
   ratings,
   tripEvents,
@@ -31,6 +32,7 @@ async function truncateTables() {
   await db.delete(driverLocations);
   await db.delete(vehicles);
   await db.delete(drivers);
+  await db.delete(passengerProfiles);
   await db.delete(users);
   await db.delete(fuelPriceLog);
   await db.delete(commissionPhases);
@@ -154,14 +156,14 @@ describe('Passenger Trips', () => {
     expect(data.error).toBeTruthy();
   });
 
-  test('POST /request rejected for driver role', async () => {
+  test('POST /request succeeds for driver role (dual-role)', async () => {
     const db = getDb();
     testId++;
     const userId = `00000000-0000-4000-8000-${String(testId).padStart(12, '0')}`;
     await db.insert(users).values({ id: userId, phone: `+549261${String(testId).padStart(6, '0')}`, full_name: 'Test Driver', role: 'driver' });
     const token = createTestToken(userId);
 
-    const { status } = await request('POST', '/api/passenger/trips/request', {
+    const { status, data } = await request('POST', '/api/passenger/trips/request', {
       origin_lat: origin.lat,
       origin_lng: origin.lng,
       dest_lat: dest.lat,
@@ -171,7 +173,9 @@ describe('Passenger Trips', () => {
       duration_minutes: 12,
     }, token);
 
-    expect(status).toBe(403);
+    expect(status).toBe(200);
+    expect(data.id).toBeTruthy();
+    expect(data.passenger_id).toBe(userId);
   });
 
   test('GET /active returns null when no active trip', async () => {
@@ -254,6 +258,44 @@ describe('Passenger Trips', () => {
     expect(data.status).toBe('cancelled');
   });
 
+  test('POST /:id/cancel cancels an en_route trip', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    const db = getDb();
+    await db.update(trips).set({ status: 'en_route', driver_id: driverId }).where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/cancel`,
+      undefined,
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.status).toBe('cancelled');
+  });
+
+  test('POST /:id/cancel cannot cancel after driver arrived', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    const db = getDb();
+    await db.update(trips).set({ status: 'waiting', driver_id: driverId }).where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/cancel`,
+      undefined,
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error.message).toContain('waiting');
+  });
+
   test('POST /:id/cancel cannot cancel completed trip', async () => {
     const token = await createPassengerToken();
     const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
@@ -268,16 +310,17 @@ describe('Passenger Trips', () => {
     expect(data.error.message).toContain('cancel');
   });
 
-  test('GET /active returns 403 for non-passenger role', async () => {
+  test('GET /active succeeds for driver role (dual-role)', async () => {
     const db = getDb();
     testId++;
     const userId = `00000000-0000-4000-8000-${String(testId).padStart(12, '0')}`;
     await db.insert(users).values({ id: userId, phone: `+549261${String(testId).padStart(6, '0')}`, full_name: 'Test Driver', role: 'driver' });
     const token = createTestToken(userId);
 
-    const { status } = await request('GET', '/api/passenger/trips/active', undefined, token);
+    const { status, data } = await request('GET', '/api/passenger/trips/active', undefined, token);
 
-    expect(status).toBe(403);
+    expect(status).toBe(200);
+    expect(data).toBeNull();
   });
 
   test('GET /history returns paginated trips', async () => {
@@ -358,6 +401,47 @@ describe('Passenger Trips', () => {
     expect(assigned?.driver_id).toBe(driverId);
     expect(assigned?.status).toBe('offered');
     expect(assigned?.expires_at).toBeTruthy();
+  });
+
+  test('POST /:id/retry re-runs matching and assigns a driver', async () => {
+    const token = await createPassengerToken();
+    const { data: trip } = await createTrip(token);
+
+    // Let the initial (no-driver) broadcast settle so the trip stays pending.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    await createDriverWithLocation(token, origin.lat, origin.lng);
+
+    const { status, data } = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/retry`,
+      undefined,
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.drivers_found).toBe(1);
+    expect(data.trip.driver_id).toBeTruthy();
+    expect(data.trip.status).toBe('offered');
+  });
+
+  test('POST /:id/retry returns 400 when trip is not pending', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    const db = getDb();
+    await db.update(trips).set({ status: 'offered', driver_id: driverId }).where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/retry`,
+      undefined,
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error).toBeTruthy();
   });
 
   test('POST /:id/rate rates driver and marks trip rated', async () => {
