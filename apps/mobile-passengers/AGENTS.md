@@ -356,12 +356,10 @@ GET    /api/passenger/promotions/available
 POST   /api/passenger/promotions/validate
 GET    /api/passenger/promotions/history
 
-// Chat
-GET    /api/passenger/chat/messages/:tripId
-POST   /api/passenger/chat/messages/:tripId
-GET    /api/passenger/chat/unread/:tripId
-WS     /ws/passenger/chat/:tripId
-WS     /ws/passenger/tracking/:tripId
+// Chat (compartido con el conductor)
+GET    /api/passenger/trips/:id/messages
+POST   /api/passenger/trips/:id/messages
+// Realtime: Supabase Broadcast topic `trip:{tripId}` event `message:sent`
 ```
 
 ## Base de Datos

@@ -547,4 +547,147 @@ describe('Passenger Trips', () => {
 
     expect(status).toBe(404);
   });
+
+  test('passenger can send and list trip messages', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ status: 'accepted', driver_id: driverId })
+      .where(eq(trips.id, trip.id));
+
+    const sent = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/messages`,
+      { text: 'Hola conductor' },
+      token,
+    );
+    expect(sent.status).toBe(200);
+    expect(sent.data.text).toBe('Hola conductor');
+    expect(sent.data.sender_role).toBe('passenger');
+
+    const listed = await request('GET', `/api/passenger/trips/${trip.id}/messages`, undefined, token);
+    expect(listed.status).toBe(200);
+    expect(listed.data.length).toBe(1);
+    expect(listed.data[0].text).toBe('Hola conductor');
+  });
+
+  test('stranger cannot read or send trip messages', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ status: 'accepted', driver_id: driverId })
+      .where(eq(trips.id, trip.id));
+
+    const stranger = await createPassengerToken();
+    const list = await request('GET', `/api/passenger/trips/${trip.id}/messages`, undefined, stranger);
+    expect(list.status).toBe(403);
+    expect(list.data.error.code).toBe('FORBIDDEN');
+
+    const send = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/messages`,
+      { text: 'hola' },
+      stranger,
+    );
+    expect(send.status).toBe(403);
+    expect(send.data.error.code).toBe('FORBIDDEN');
+  });
+
+  test('messages require auth', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ status: 'accepted', driver_id: driverId })
+      .where(eq(trips.id, trip.id));
+
+    const list = await request('GET', `/api/passenger/trips/${trip.id}/messages`);
+    expect(list.status).toBe(401);
+
+    const send = await request('POST', `/api/passenger/trips/${trip.id}/messages`, { text: 'hola' });
+    expect(send.status).toBe(401);
+  });
+
+  test('messages for non-existent trip return 404', async () => {
+    const token = await createPassengerToken();
+    const { status } = await request(
+      'GET',
+      '/api/passenger/trips/00000000-0000-0000-0000-000000000000/messages',
+      undefined,
+      token,
+    );
+    expect(status).toBe(404);
+  });
+
+  test('send rejects empty/whitespace message', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ status: 'accepted', driver_id: driverId })
+      .where(eq(trips.id, trip.id));
+
+    const { status } = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/messages`,
+      { text: '   ' },
+      token,
+    );
+    expect(status).toBe(400);
+  });
+
+  test('send rejects message over 1000 chars', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ status: 'accepted', driver_id: driverId })
+      .where(eq(trips.id, trip.id));
+
+    const { status } = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/messages`,
+      { text: 'a'.repeat(1001) },
+      token,
+    );
+    expect(status).toBe(400);
+  });
+
+  test('cannot send message on completed trip', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ status: 'completed', driver_id: driverId })
+      .where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/messages`,
+      { text: 'hola' },
+      token,
+    );
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('CHAT_CLOSED');
+  });
 });

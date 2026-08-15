@@ -1,4 +1,5 @@
 import { apiClient } from '../api/client';
+import type { TripMessage } from '../api/types';
 import { supabase } from './supabase';
 
 export function subscribeToDriverChannel(
@@ -102,6 +103,7 @@ export function subscribeToTripChannel(
   };
 }
 
-export async function sendMessage(tripId: string, text: string): Promise<void> {
-  await apiClient.post(`/trips/${tripId}/messages`, { text });
+export async function sendMessage(tripId: string, text: string): Promise<TripMessage> {
+  const res = await apiClient.post(`/trips/${tripId}/messages`, { text });
+  return res.data?.data ?? res.data;
 }

@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
@@ -12,10 +11,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { listTripMessages, sendTripMessage } from '../api/passenger';
-import type { TripMessage } from '../api/types';
+import { ChatBubble } from '../components/ChatBubble';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { subscribeToTripChannel } from '../lib/realtime';
+import { useTripChat } from '../hooks/useTripChat';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 
@@ -23,53 +21,21 @@ export function ChatScreen() {
   const { goBack } = useAppNavigation();
   const trip = useRideStore((s) => s.activeTrip);
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<TripMessage[]>([]);
   const scrollRef = useRef<ScrollView>(null);
 
   const tripId = trip?.id;
+  const { messages, sendMessage } = useTripChat(tripId, 'passenger');
 
   const scrollToEnd = useCallback(() => {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
   }, []);
 
-  useEffect(() => {
-    if (!tripId) return;
-
-    listTripMessages(tripId)
-      .then((rows) => setMessages(rows))
-      .catch(() => {});
-
-    const unsubscribe = subscribeToTripChannel(tripId, (incoming) => {
-      setMessages((prev) => {
-        if (incoming?.id && prev.some((m) => m.id === incoming.id)) return prev;
-        return [...prev, incoming];
-      });
-    });
-
-    return unsubscribe;
-  }, [tripId]);
-
-  const handleSend = async () => {
+  const handleSend = () => {
     const text = message.trim();
-    if (!text || !tripId) return;
+    if (!text) return;
     setMessage('');
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `local-${Date.now()}`,
-        trip_id: tripId,
-        sender_id: 'me',
-        sender_role: 'passenger',
-        text,
-        created_at: new Date().toISOString(),
-      },
-    ]);
+    sendMessage(text);
     scrollToEnd();
-    try {
-      await sendTripMessage(tripId, text);
-    } catch {
-      Alert.alert('Error', 'No se pudo enviar el mensaje.');
-    }
   };
 
   return (
@@ -101,16 +67,13 @@ export function ChatScreen() {
               <Text style={styles.emptyText}>Envía un mensaje a tu conductor</Text>
             </View>
           ) : (
-            messages.map((msg) => {
-              const mine = msg.sender_role === 'passenger';
-              return (
-                <View key={msg.id} style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
-                  <Text style={[styles.bubbleText, mine ? styles.mineText : styles.theirsText]}>
-                    {msg.text}
-                  </Text>
-                </View>
-              );
-            })
+            messages.map((msg) => (
+              <ChatBubble
+                key={msg.id}
+                message={msg.text}
+                isMine={msg.sender_role === 'passenger'}
+              />
+            ))
           )}
         </ScrollView>
 
@@ -163,26 +126,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
   },
-  bubble: {
-    maxWidth: '75%',
-    borderRadius: theme.radius.md,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  mine: {
-    alignSelf: 'flex-end',
-    backgroundColor: theme.colors.primary,
-  },
-  theirs: {
-    alignSelf: 'flex-start',
-    backgroundColor: theme.colors.lightGray,
-  },
-  bubbleText: {
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
-  },
-  mineText: { color: theme.colors.white },
-  theirsText: { color: theme.colors.deepBlue },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -236,3 +236,12 @@ export const directionsResponseSchema = z.object({
 });
 
 export type DirectionsResponse = z.infer<typeof directionsResponseSchema>;
+
+export interface TripMessage {
+  id: string;
+  trip_id: string;
+  sender_id: string;
+  sender_role: 'driver' | 'passenger';
+  text: string;
+  created_at: string;
+}

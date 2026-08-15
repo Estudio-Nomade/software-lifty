@@ -176,6 +176,12 @@ export const TripInProgressScreen: React.FC = () => {
           loading={completing}
           style={styles.button}
         />
+        <Button
+          title="💬 Chat"
+          variant="secondary"
+          onPress={() => navigation.navigate('Chat')}
+          style={styles.button}
+        />
         <TouchableOpacity
           onPress={() => {
             if (!trip) return;
