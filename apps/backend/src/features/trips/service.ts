@@ -816,7 +816,15 @@ export const tripService = {
     if (!trimmed) throw new AppError('Message cannot be empty', 400, 'BAD_REQUEST');
     if (trimmed.length > 1000) throw new AppError('Message too long', 400, 'BAD_REQUEST');
 
-    const { role, senderId } = await this.assertTripParticipant(user, tripId);
+    const { trip, role, senderId } = await this.assertTripParticipant(user, tripId);
+
+    if (TERMINAL_STATUSES.includes(trip.status)) {
+      throw new AppError('Chat is closed for this trip', 409, 'CHAT_CLOSED');
+    }
+    if (trip.status === 'pending' && !trip.driver_id) {
+      throw new AppError('Trip is not active', 403, 'TRIP_NOT_ACTIVE');
+    }
+
     const [row] = await db
       .insert(tripMessages)
       .values({

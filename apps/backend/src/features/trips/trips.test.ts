@@ -924,4 +924,66 @@ describe('Trip State Machine', () => {
     expect(status).toBe(403);
     expect(data.error.code).toBe('FORBIDDEN');
   });
+
+  test('25. driver cannot send message on completed trip', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+    const { data: trip } = await request(
+      'POST',
+      '/api/trips',
+      {
+        origin_lat: -31.9,
+        origin_lng: -65.0,
+        dest_lat: -31.88,
+        dest_lng: -65.02,
+        vehicle_type: 'car',
+        distance_km: 5,
+        duration_minutes: 15,
+      },
+      token,
+    );
+
+    const db = getDb();
+    await db.update(trips).set({ status: 'completed' }).where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'POST',
+      `/api/trips/${trip.id}/messages`,
+      { text: 'hola' },
+      token,
+    );
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('CHAT_CLOSED');
+  });
+
+  test('26. driver cannot send message on cancelled trip', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+    const { data: trip } = await request(
+      'POST',
+      '/api/trips',
+      {
+        origin_lat: -31.9,
+        origin_lng: -65.0,
+        dest_lat: -31.88,
+        dest_lng: -65.02,
+        vehicle_type: 'car',
+        distance_km: 5,
+        duration_minutes: 15,
+      },
+      token,
+    );
+
+    const db = getDb();
+    await db.update(trips).set({ status: 'cancelled' }).where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'POST',
+      `/api/trips/${trip.id}/messages`,
+      { text: 'hola' },
+      token,
+    );
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('CHAT_CLOSED');
+  });
 });

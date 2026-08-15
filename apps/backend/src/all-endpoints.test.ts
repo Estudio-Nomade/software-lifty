@@ -19,6 +19,7 @@ let app: any;
 async function truncateAll() {
   const db = getDb();
   await db.execute('DELETE FROM trip_events');
+  await db.execute('DELETE FROM trip_messages');
   await db.execute('DELETE FROM trips');
   await db.execute('DELETE FROM driver_locations');
   await db.execute('DELETE FROM sos_events');
@@ -454,6 +455,32 @@ describe('Trips', () => {
     const { status } = await req('POST', `/api/trips/${trip.id}/start`, { verification_code: a.data.verification_code }, token);
     expect(status).toBe(400);
   });
+  test('messages send + list → 200', async () => {
+    const token = await register('+54926100309');
+    await driver(token);
+    const { data: trip } = await req(
+      'POST',
+      '/api/trips/',
+      {
+        origin_lat: -31.9,
+        origin_lng: -65.0,
+        dest_lat: -31.88,
+        dest_lng: -65.02,
+        vehicle_type: 'car',
+        distance_km: 5,
+        duration_minutes: 15,
+      },
+      token,
+    );
+    const sent = await req('POST', `/api/trips/${trip.id}/messages`, { text: 'hola' }, token);
+    expect(sent.status).toBe(200);
+    expect(sent.data.text).toBe('hola');
+    const listed = await req('GET', `/api/trips/${trip.id}/messages`, undefined, token);
+    expect(listed.status).toBe(200);
+    expect(Array.isArray(listed.data)).toBe(true);
+    expect(listed.data.length).toBe(1);
+  });
+
   test('all trip mutations require auth → 401', async () => {
     const fid = '00000000-0000-0000-0000-000000000000';
     const bodies: Record<string, object | undefined> = {

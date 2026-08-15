@@ -1,7 +1,6 @@
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,24 +10,24 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { apiClient } from '../api/client';
 import { ChatBackground } from '../components/ChatBackground';
 import { ChatBubble } from '../components/ChatBubble';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { sendMessage, subscribeToTripChannel } from '../lib/realtime';
+import { useTripChat } from '../hooks/useTripChat';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
 export const ChatScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const [inputText, setInputText] = useState('');
-  const [messages, setMessages] = useState<any[]>([]);
   const chatScrollRef = useRef<ScrollView>(null);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeTripId = useTripStore((s) => s.activeTripId);
   const trip = useTripStore((s) => s.trip);
+
+  const { messages, sendMessage } = useTripChat(activeTripId, 'driver');
 
   const scrollToEnd = useCallback(() => {
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
@@ -37,49 +36,12 @@ export const ChatScreen: React.FC = () => {
     }, 100);
   }, []);
 
-  useEffect(() => {
-    if (!activeTripId) return;
-    const unsubscribe = subscribeToTripChannel(activeTripId, {
-      onMessage: (msg) => {
-        setMessages((prev) => {
-          if (msg.id && prev.some((m) => m.id === msg.id)) return prev;
-          return [...prev, msg];
-        });
-      },
-    });
-
-    apiClient
-      .get(`/trips/${activeTripId}/messages`)
-      .then((res) => {
-        const rows = res.data?.data ?? res.data;
-        if (Array.isArray(rows)) setMessages(rows);
-      })
-      .catch(() => {});
-
-    return () => {
-      unsubscribe();
-    };
-  }, [activeTripId]);
-
-  const handleSend = async () => {
+  const handleSend = () => {
     const text = inputText.trim();
-    if (!text || !activeTripId) return;
-
+    if (!text) return;
     setInputText('');
-
-    const optimistic = {
-      sender_role: 'driver',
-      text,
-      created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, optimistic]);
+    sendMessage(text);
     scrollToEnd();
-
-    try {
-      await sendMessage(activeTripId, text);
-    } catch {
-      Alert.alert('Error', 'No se pudo enviar el mensaje.');
-    }
   };
 
   return (
@@ -109,12 +71,8 @@ export const ChatScreen: React.FC = () => {
             onContentSizeChange={scrollToEnd}
             showsVerticalScrollIndicator={false}
           >
-            {messages.map((msg, index) => (
-              <ChatBubble
-                key={msg.id ?? index}
-                message={msg.text}
-                isDriver={msg.sender_role === 'driver'}
-              />
+            {messages.map((msg) => (
+              <ChatBubble key={msg.id} message={msg.text} isDriver={msg.sender_role === 'driver'} />
             ))}
           </ScrollView>
         </View>
