@@ -20,6 +20,7 @@ import {
   users,
   vehicles,
 } from '../../shared/db/schema';
+import { tripService } from '../trips/service';
 import { createTestAuthPlugin, createTestToken } from '../../shared/testing/utils';
 
 let app: any;
@@ -92,6 +93,30 @@ async function createDriverWithLocation(passengerToken: string, lat: number, lng
   });
 
   return driverId;
+}
+
+async function createDriverWithLocationAndToken(
+  lat: number,
+  lng: number,
+): Promise<{ driverId: string; token: string }> {
+  const db = getDb();
+  testId++;
+  const driverId = `00000000-0000-4001-8000-${String(testId).padStart(12, '0')}`;
+  const userId = `00000000-0000-4002-8000-${String(testId).padStart(12, '0')}`;
+
+  await db.insert(users).values({ id: userId, phone: `+549261${String(testId + 100).padStart(6, '0')}`, full_name: 'Test Driver', role: 'driver' });
+  await db.insert(drivers).values({ id: driverId, user_id: userId, is_online: true, status: 'approved' });
+  await db.insert(driverLocations).values({ driver_id: driverId, lat, lng });
+  await db.insert(vehicles).values({
+    driver_id: driverId,
+    brand: 'Toyota',
+    model: 'Corolla',
+    year: 2024,
+    color: 'Blanco',
+    plate: 'ABC123',
+  });
+
+  return { driverId, token: createTestToken(userId) };
 }
 
 beforeAll(() => {
@@ -444,6 +469,151 @@ describe('Passenger Trips', () => {
 
     expect(status).toBe(400);
     expect(data.error).toBeTruthy();
+  });
+
+  test('driver reject rematches to the next nearby driver', async () => {
+    const passengerToken = await createPassengerToken();
+    const near = await createDriverWithLocationAndToken(origin.lat, origin.lng);
+    const farther = await createDriverWithLocationAndToken(origin.lat + 0.002, origin.lng);
+
+    const { data: trip } = await createTrip(passengerToken);
+
+    const db = getDb();
+    const pollDriver = async (): Promise<(typeof trips.$inferSelect) | null> => {
+      for (let i = 0; i < 40; i++) {
+        const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+        if (row?.driver_id) return row;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return null;
+    };
+
+    const assigned = await pollDriver();
+    expect(assigned).toBeTruthy();
+    expect(assigned?.driver_id).toBe(near.driverId);
+    expect(assigned?.status).toBe('offered');
+
+    const { status: rejectStatus } = await request(
+      'POST',
+      `/api/trips/${trip.id}/reject`,
+      undefined,
+      near.token,
+    );
+    expect(rejectStatus).toBe(200);
+
+    let rematched: (typeof trips.$inferSelect) | null = null;
+    for (let i = 0; i < 40; i++) {
+      const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+      if (row?.driver_id === farther.driverId) {
+        rematched = row;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    expect(rematched).toBeTruthy();
+    expect(rematched?.driver_id).toBe(farther.driverId);
+    expect(rematched?.status).toBe('offered');
+  });
+
+  test('retry from expired reopens to pending and rematches', async () => {
+    const passengerToken = await createPassengerToken();
+    const { data: trip } = await createTrip(passengerToken);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ status: 'expired', driver_id: null, expires_at: null })
+      .where(eq(trips.id, trip.id));
+
+    await createDriverWithLocation(passengerToken, origin.lat, origin.lng);
+
+    const { status, data } = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/retry`,
+      undefined,
+      passengerToken,
+    );
+
+    expect(status).toBe(200);
+    expect(data.drivers_found).toBe(1);
+    expect(data.trip.driver_id).toBeTruthy();
+    expect(data.trip.status).toBe('offered');
+  });
+
+  test('expireStaleOffers rematches a passenger trip to another driver', async () => {
+    const passengerToken = await createPassengerToken();
+    const first = await createDriverWithLocationAndToken(origin.lat, origin.lng);
+    const second = await createDriverWithLocationAndToken(origin.lat + 0.002, origin.lng);
+
+    const { data: trip } = await createTrip(passengerToken);
+
+    const db = getDb();
+    let assigned: (typeof trips.$inferSelect) | null = null;
+    for (let i = 0; i < 40; i++) {
+      const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+      if (row?.driver_id) {
+        assigned = row;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(assigned?.driver_id).toBe(first.driverId);
+
+    await db
+      .update(trips)
+      .set({ expires_at: new Date(Date.now() - 1000) })
+      .where(eq(trips.id, trip.id));
+
+    await tripService.expireStaleOffers();
+
+    let rematched: (typeof trips.$inferSelect) | null = null;
+    for (let i = 0; i < 40; i++) {
+      const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+      if (row?.driver_id === second.driverId && row?.status === 'offered') {
+        rematched = row;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    expect(rematched).toBeTruthy();
+    expect(rematched?.driver_id).toBe(second.driverId);
+  });
+
+  test('reject after accept does not rematch', async () => {
+    const passengerToken = await createPassengerToken();
+    const driver = await createDriverWithLocationAndToken(origin.lat, origin.lng);
+
+    const { data: trip } = await createTrip(passengerToken);
+
+    const db = getDb();
+    for (let i = 0; i < 40; i++) {
+      const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+      if (row?.driver_id) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    const { status: acceptStatus } = await request(
+      'POST',
+      `/api/trips/${trip.id}/accept`,
+      undefined,
+      driver.token,
+    );
+    expect(acceptStatus).toBe(200);
+
+    const { status: rejectStatus } = await request(
+      'POST',
+      `/api/trips/${trip.id}/reject`,
+      undefined,
+      driver.token,
+    );
+    expect(rejectStatus).toBe(400);
+
+    const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+    expect(row?.status).toBe('accepted');
+    expect(row?.driver_id).toBe(driver.driverId);
   });
 
   test('POST /:id/rate rates driver and marks trip rated', async () => {

@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, notInArray, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { driverLocations, drivers, tripEvents, trips, users } from '../../shared/db/schema';
 import { haversineDistance } from '../../shared/lib/geo';
@@ -15,11 +15,25 @@ interface NearbyDriver {
   fullName: string;
 }
 
+export interface MatchOptions {
+  excludeDriverIds?: string[];
+}
+
 export async function findNearbyDrivers(
   originLat: number,
   originLng: number,
   radiusKm = 5,
+  excludeDriverIds: string[] = [],
 ): Promise<NearbyDriver[]> {
+  const conditions = [
+    eq(drivers.is_online, true),
+    sql`${driverLocations.lat} IS NOT NULL`,
+    sql`${driverLocations.lng} IS NOT NULL`,
+  ];
+  if (excludeDriverIds.length > 0) {
+    conditions.push(notInArray(drivers.id, excludeDriverIds));
+  }
+
   const rows = await db
     .select({
       driverId: drivers.id,
@@ -31,13 +45,7 @@ export async function findNearbyDrivers(
     .from(drivers)
     .innerJoin(users, eq(drivers.user_id, users.id))
     .innerJoin(driverLocations, eq(drivers.id, driverLocations.driver_id))
-    .where(
-      and(
-        eq(drivers.is_online, true),
-        sql`${driverLocations.lat} IS NOT NULL`,
-        sql`${driverLocations.lng} IS NOT NULL`,
-      ),
-    );
+    .where(and(...conditions));
 
   return rows
     .map((d) => ({
@@ -51,19 +59,28 @@ export async function findNearbyDrivers(
     .slice(0, 5);
 }
 
-export async function matchAndBroadcast(trip: {
-  id: string;
-  origin_address?: string | null;
-  dest_address?: string | null;
-  total_fare?: number | null;
-  origin_lat: number;
-  origin_lng: number;
-  dest_lat: number;
-  dest_lng: number;
-  distance_km?: number | null;
-  duration_minutes?: number | null;
-}) {
-  const nearby = await findNearbyDrivers(trip.origin_lat, trip.origin_lng);
+export async function matchAndBroadcast(
+  trip: {
+    id: string;
+    passenger_id?: string | null;
+    origin_address?: string | null;
+    dest_address?: string | null;
+    total_fare?: number | null;
+    origin_lat: number;
+    origin_lng: number;
+    dest_lat: number;
+    dest_lng: number;
+    distance_km?: number | null;
+    duration_minutes?: number | null;
+  },
+  options: MatchOptions = {},
+) {
+  const nearby = await findNearbyDrivers(
+    trip.origin_lat,
+    trip.origin_lng,
+    5,
+    options.excludeDriverIds ?? [],
+  );
 
   if (nearby.length === 0) {
     logger.info('[matchAndBroadcast] No nearby drivers found', { tripId: trip.id });

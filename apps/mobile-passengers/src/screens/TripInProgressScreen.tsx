@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect } from 'react';
-import { Alert, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { cancelRide, getActiveRide } from '../api/passenger';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
@@ -32,12 +32,19 @@ export function TripInProgressScreen() {
     if (!userId) return;
     return subscribeToPassengerChannel(userId, (incoming) => {
       const status = incoming?.status;
+      if (!status) return;
       if (status === 'cancelled' || status === 'cancelled_early' || status === 'cancelled_late') {
         reset();
         replace('Home');
+        return;
+      }
+      const merged = { ...(useRideStore.getState().activeTrip ?? {}), ...incoming };
+      setActiveTrip(merged);
+      if (status === 'completed') {
+        replace('TripComplete');
       }
     });
-  }, [userId, reset, replace]);
+  }, [userId, reset, replace, setActiveTrip]);
 
   const trip = activeTrip;
 
@@ -71,6 +78,10 @@ export function TripInProgressScreen() {
         return 'Tu conductor viene en camino';
       case 'accepted':
         return 'Conductor asignado';
+      case 'in_trip':
+        return 'Viaje en curso';
+      case 'completed':
+        return 'Viaje completado';
       case 'request_received':
       case 'offered':
         return 'Buscando conductor';
@@ -125,7 +136,15 @@ export function TripInProgressScreen() {
           <Button variant="secondary" onPress={() => navigate('Chat')} style={styles.actionBtn}>
             💬 Chat
           </Button>
-          <Button variant="secondary" onPress={() => {}} style={styles.actionBtn}>
+          <Button
+            variant="secondary"
+            onPress={() => {
+              if (trip?.driver_phone) {
+                Linking.openURL(`tel:${trip.driver_phone}`).catch(() => {});
+              }
+            }}
+            style={styles.actionBtn}
+          >
             📞 Llamar
           </Button>
         </View>
