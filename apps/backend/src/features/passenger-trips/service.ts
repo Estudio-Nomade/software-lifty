@@ -109,9 +109,27 @@ export const passengerTripService = {
     await recordEvent(trip.id, null, 'pending');
 
     setImmediate(() => {
-      matchAndBroadcast(trip).catch((err) =>
-        logger.error('[requestTrip] broadcast failed', { error: (err as Error).message }),
-      );
+      matchAndBroadcast({
+        id: trip.id,
+        passenger_id: trip.passenger_id,
+        origin_address: trip.origin_address,
+        dest_address: trip.dest_address,
+        total_fare: trip.total_fare,
+        origin_lat: trip.origin_lat,
+        origin_lng: trip.origin_lng,
+        dest_lat: trip.dest_lat,
+        dest_lng: trip.dest_lng,
+        distance_km: trip.distance_km,
+        duration_minutes: trip.duration_minutes,
+      })
+        .then((result) => {
+          if (result.drivers_found === 0 && trip.passenger_id) {
+            broadcastPassengerNoDrivers(trip.passenger_id, trip);
+          }
+        })
+        .catch((err) =>
+          logger.error('[requestTrip] broadcast failed', { error: (err as Error).message }),
+        );
     });
 
     return trip;
@@ -125,12 +143,25 @@ export const passengerTripService = {
       .limit(1);
 
     if (!trip) throw new NotFoundError('Trip not found');
-    if (trip.status !== 'pending') {
-      throw new AppError(`Trip is not pending, current status: ${trip.status}`, 400, 'BAD_REQUEST');
+    if (trip.status !== 'pending' && trip.status !== 'expired') {
+      throw new AppError(
+        `Trip is not retryable, current status: ${trip.status}`,
+        400,
+        'BAD_REQUEST',
+      );
+    }
+
+    if (trip.status === 'expired') {
+      await db
+        .update(trips)
+        .set({ status: 'pending', driver_id: null, expires_at: null, updated_at: new Date() })
+        .where(eq(trips.id, tripId));
+      await recordEvent(tripId, 'expired', 'pending');
     }
 
     const result = await matchAndBroadcast({
       id: trip.id,
+      passenger_id: trip.passenger_id,
       origin_address: trip.origin_address,
       dest_address: trip.dest_address,
       total_fare: trip.total_fare,
@@ -141,6 +172,60 @@ export const passengerTripService = {
       distance_km: trip.distance_km,
       duration_minutes: trip.duration_minutes,
     });
+
+    const [updated] = await db.select().from(trips).where(eq(trips.id, tripId));
+    if (result.drivers_found === 0 && trip.passenger_id) {
+      broadcastPassengerNoDrivers(trip.passenger_id, updated);
+    }
+    return { drivers_found: result.drivers_found, trip: updated };
+  },
+
+  async releaseAndRematch(tripId: string, excludedDriverId: string) {
+    const [trip] = await db.select().from(trips).where(eq(trips.id, tripId)).limit(1);
+    if (!trip) return { drivers_found: 0, trip: null };
+
+    if (!trip.passenger_id) return { drivers_found: 0, trip };
+
+    const rematchable = ['offered', 'expired', 'rejected'].includes(trip.status);
+    if (!rematchable || trip.driver_id !== excludedDriverId) {
+      return { drivers_found: 0, trip };
+    }
+
+    await db
+      .update(trips)
+      .set({ driver_id: null, status: 'pending', expires_at: null, updated_at: new Date() })
+      .where(
+        and(
+          eq(trips.id, tripId),
+          eq(trips.driver_id, excludedDriverId),
+          inArray(trips.status, ['offered', 'expired', 'rejected']),
+        ),
+      );
+
+    await recordEvent(tripId, trip.status, 'pending');
+
+    const [reopened] = await db.select().from(trips).where(eq(trips.id, tripId));
+
+    const result = await matchAndBroadcast(
+      {
+        id: reopened.id,
+        passenger_id: reopened.passenger_id,
+        origin_address: reopened.origin_address,
+        dest_address: reopened.dest_address,
+        total_fare: reopened.total_fare,
+        origin_lat: reopened.origin_lat,
+        origin_lng: reopened.origin_lng,
+        dest_lat: reopened.dest_lat,
+        dest_lng: reopened.dest_lng,
+        distance_km: reopened.distance_km,
+        duration_minutes: reopened.duration_minutes,
+      },
+      { excludeDriverIds: [excludedDriverId] },
+    );
+
+    if (result.drivers_found === 0 && reopened.passenger_id) {
+      broadcastPassengerNoDrivers(reopened.passenger_id, reopened);
+    }
 
     const [updated] = await db.select().from(trips).where(eq(trips.id, tripId));
     return { drivers_found: result.drivers_found, trip: updated };
@@ -405,7 +490,11 @@ export const passengerTripService = {
   },
 };
 
-export function broadcastToPassenger(passengerId: string, trip: any) {
+export function broadcastToPassenger(
+  passengerId: string,
+  trip: any,
+  extra?: Record<string, unknown>,
+) {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) {
@@ -413,7 +502,7 @@ export function broadcastToPassenger(passengerId: string, trip: any) {
     return;
   }
   const topic = `passenger:${passengerId}`;
-  logger.info('[BROADCAST] Sending to', topic, 'tripId:', trip.id);
+  logger.info('[BROADCAST] Sending to', topic, 'tripId:', trip?.id ?? trip?.trip_id);
   fetch(`${url}/realtime/v1/api/broadcast`, {
     method: 'POST',
     headers: {
@@ -422,9 +511,13 @@ export function broadcastToPassenger(passengerId: string, trip: any) {
       Authorization: `Bearer ${key}`,
     },
     body: JSON.stringify({
-      messages: [{ topic, event: 'trip:status', payload: trip }],
+      messages: [{ topic, event: 'trip:status', payload: { ...trip, ...(extra ?? {}) } }],
     }),
   })
     .then((res) => logger.info('[BROADCAST] Passenger broadcast response:', res.status))
     .catch((err) => logger.error('[BROADCAST] Passenger broadcast error:', (err as Error).message));
+}
+
+export function broadcastPassengerNoDrivers(passengerId: string, trip: any) {
+  broadcastToPassenger(passengerId, trip, { drivers_found: 0 });
 }

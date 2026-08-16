@@ -1,10 +1,16 @@
-import { render } from '@testing-library/react-native';
+import { act, render } from '@testing-library/react-native';
 import React from 'react';
 import { TripInProgressScreen } from '../../screens/TripInProgressScreen';
+import { useAuthStore } from '../../store/authStore';
 import { useRideStore } from '../../store/rideStore';
 
+jest.mock('../../lib/realtime', () => ({
+  subscribeToPassengerChannel: jest.fn(() => () => {}),
+}));
+
+const mockReplace = jest.fn();
 jest.mock('../../hooks/useAppNavigation', () => ({
-  useAppNavigation: () => ({ navigate: jest.fn() }),
+  useAppNavigation: () => ({ navigate: jest.fn(), replace: mockReplace }),
 }));
 
 jest.mock('../../components/Map/PassengerMap', () => ({
@@ -18,7 +24,9 @@ jest.mock('../../api/passenger', () => ({
 
 describe('TripInProgressScreen', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     useRideStore.setState({ activeTrip: null });
+    useAuthStore.setState({ userId: null });
   });
 
   test('renders real driver name and vehicle from the active trip', async () => {
@@ -84,5 +92,50 @@ describe('TripInProgressScreen', () => {
 
     const { queryByText } = await render(<TripInProgressScreen />);
     expect(queryByText('Código de verificación')).toBeNull();
+  });
+
+  test('shows in-trip status label', async () => {
+    useRideStore.getState().setActiveTrip({
+      id: 'trip-4',
+      passenger_id: 'p-1',
+      status: 'in_trip',
+      origin_lat: -34.6,
+      origin_lng: -58.38,
+      dest_lat: -34.7,
+      dest_lng: -58.4,
+      driver_name: 'María López',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    const { getByText } = await render(<TripInProgressScreen />);
+    expect(getByText('Viaje en curso')).toBeTruthy();
+  });
+
+  test('navigates to TripComplete when trip completes', async () => {
+    useAuthStore.setState({ userId: 'passenger-1' });
+    useRideStore.getState().setActiveTrip({
+      id: 'trip-5',
+      passenger_id: 'passenger-1',
+      status: 'in_trip',
+      origin_lat: -34.6,
+      origin_lng: -58.38,
+      dest_lat: -34.7,
+      dest_lng: -58.4,
+      driver_name: 'María López',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    const { subscribeToPassengerChannel } = require('../../lib/realtime');
+    await render(<TripInProgressScreen />);
+
+    const onTripStatus = subscribeToPassengerChannel.mock.calls[0][1];
+    await act(async () => {
+      await onTripStatus({ id: 'trip-5', status: 'completed' });
+    });
+
+    expect(mockReplace).toHaveBeenCalledWith('TripComplete');
+    expect(useRideStore.getState().activeTrip?.status).toBe('completed');
   });
 });

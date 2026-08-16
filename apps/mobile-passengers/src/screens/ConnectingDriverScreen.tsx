@@ -19,6 +19,7 @@ export function ConnectingDriverScreen() {
   const userId = useAuthStore((s) => s.userId);
   const setActiveTrip = useRideStore((s) => s.setActiveTrip);
   const [timedOut, setTimedOut] = useState(false);
+  const [noDrivers, setNoDrivers] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -45,6 +46,10 @@ export function ConnectingDriverScreen() {
         replace('Home');
         return;
       }
+      if (trip?.drivers_found === 0 || trip?.status === 'expired' || trip?.status === 'rejected') {
+        setNoDrivers(true);
+        return;
+      }
       await proceedToTrip(tripId, trip?.status);
     });
     return () => unsubscribe?.();
@@ -66,6 +71,7 @@ export function ConnectingDriverScreen() {
     try {
       const res = await retryRide(tripId);
       if (res.drivers_found > 0) {
+        setNoDrivers(false);
         setAttempt((a) => a + 1);
       }
     } catch {
@@ -82,7 +88,7 @@ export function ConnectingDriverScreen() {
     replace('Home');
   };
 
-  if (timedOut) {
+  if (timedOut || noDrivers) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>

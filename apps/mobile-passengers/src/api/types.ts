@@ -13,6 +13,7 @@ export type TripStatus =
   | 'accepted'
   | 'en_route'
   | 'waiting'
+  | 'in_trip'
   | 'completed'
   | 'cancelled'
   | 'cancelled_early'
@@ -39,6 +40,7 @@ export interface Trip {
   driver_name?: string | null;
   driver_avatar_url?: string | null;
   driver_rating?: number | null;
+  driver_phone?: string | null;
   vehicle_brand?: string | null;
   vehicle_model?: string | null;
   vehicle_color?: string | null;

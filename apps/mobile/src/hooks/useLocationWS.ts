@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { getWsUrl } from '../lib/wsUrl';
 import { useLocationStore } from '../store/locationStore';
-import { useOnlineStore } from '../store/onlineStore';
 
 const SEND_INTERVAL_MS = 5000;
 const INITIAL_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 30000;
 
-export function useLocationWS() {
-  const isOnline = useOnlineStore((s) => s.isOnline);
+export function useLocationWS(enabled = true) {
   const wsRef = useRef<WebSocket | null>(null);
   const sendIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const backoffRef = useRef(INITIAL_BACKOFF_MS);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
 
   const cleanup = useCallback(() => {
     if (sendIntervalRef.current) {
@@ -54,7 +54,7 @@ export function useLocationWS() {
 
     ws.onclose = () => {
       if (!mountedRef.current) return;
-      if (!useOnlineStore.getState().isOnline) return;
+      if (!enabledRef.current) return;
 
       reconnectTimeoutRef.current = setTimeout(() => {
         connect();
@@ -70,7 +70,7 @@ export function useLocationWS() {
   useEffect(() => {
     mountedRef.current = true;
 
-    if (isOnline) {
+    if (enabled) {
       connect();
     } else {
       cleanup();
@@ -80,5 +80,5 @@ export function useLocationWS() {
       mountedRef.current = false;
       cleanup();
     };
-  }, [isOnline, connect, cleanup]);
+  }, [enabled, connect, cleanup]);
 }

@@ -12,7 +12,7 @@ import { logger } from '../../shared/lib/logger';
 import { calculatePlatformFee } from '../../shared/lib/pricing';
 import { sendPushToUser } from '../../shared/lib/push';
 import type { AuthUser } from '../../shared/middleware/auth';
-import { broadcastToPassenger } from '../passenger-trips/service';
+import { broadcastToPassenger, passengerTripService } from '../passenger-trips/service';
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   pending: ['offered'],
@@ -295,8 +295,9 @@ export const tripService = {
 
   async respondToTrip(user: AuthUser, tripId: string, action: 'accept' | 'reject') {
     const driverId = await getDriverId(user);
+    let rematchAfterReject = false;
 
-    return db.transaction(async (tx) => {
+    const updated = await db.transaction(async (tx) => {
       const trip = await findTrip(driverId, tripId, tx);
 
       if (trip.status !== 'offered' && trip.status !== 'request_received') {
@@ -333,7 +334,7 @@ export const tripService = {
 
         await recordEvent(tripId, trip.status, 'accepted', tx);
 
-        const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
+        const [result] = await tx.select().from(trips).where(eq(trips.id, tripId));
 
         if (trip.passenger_id) {
           sendPushToUser(trip.passenger_id, {
@@ -345,9 +346,10 @@ export const tripService = {
               verification_code: verificationCode,
             },
           });
+          broadcastToPassenger(trip.passenger_id, result);
         }
 
-        return updated;
+        return result;
       }
 
       await tx
@@ -357,9 +359,20 @@ export const tripService = {
 
       await recordEvent(tripId, trip.status, 'rejected', tx);
 
-      const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
-      return updated;
+      const [result] = await tx.select().from(trips).where(eq(trips.id, tripId));
+
+      if (trip.status === 'offered' && trip.passenger_id) {
+        rematchAfterReject = true;
+      }
+
+      return result;
     });
+
+    if (action === 'reject' && rematchAfterReject) {
+      return passengerTripService.releaseAndRematch(tripId, driverId);
+    }
+
+    return updated;
   },
 
   async expireStaleOffers() {
@@ -385,6 +398,10 @@ export const tripService = {
           await recordEvent(trip.id, 'offered', 'expired', tx);
         });
         logger.info('[expireStaleOffers] Expired trip', { tripId: trip.id });
+
+        if (trip.passenger_id && trip.driver_id) {
+          await passengerTripService.releaseAndRematch(trip.id, trip.driver_id);
+        }
       } catch (err) {
         logger.error('[expireStaleOffers] Failed to expire trip', {
           tripId: trip.id,
@@ -520,6 +537,17 @@ export const tripService = {
 
   async rejectTrip(user: AuthUser, tripId: string) {
     const driverId = await getDriverId(user);
+
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(and(eq(trips.id, tripId), eq(trips.driver_id, driverId)))
+      .limit(1);
+
+    if (trip?.passenger_id && trip.status === 'offered') {
+      return passengerTripService.releaseAndRematch(tripId, driverId);
+    }
+
     return transitionTrip(driverId, tripId, 'rejected');
   },
 

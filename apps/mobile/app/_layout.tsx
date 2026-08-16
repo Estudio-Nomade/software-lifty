@@ -11,6 +11,7 @@ import { useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppInitializer } from '../src/components/AppInitializer';
+import { LocationSync } from '../src/components/LocationSync';
 import { TabBar, type TabKey } from '../src/components/TabBar';
 import { ConnectivityBanner } from '../src/components/feedback/ConnectivityBanner';
 import { ErrorBoundary } from '../src/components/feedback/ErrorBoundary';
@@ -27,6 +28,16 @@ function TabBarShell() {
   const { activeTab, setActiveTab } = useTabBar();
   const navigation = useAppNavigation();
   const isOnline = useOnlineStore((s) => s.isOnline);
+  const pathname = usePathname();
+
+  const hiddenRoutes = new Set([
+    '/incoming-request',
+    '/navigation',
+    '/waiting-passenger',
+    '/trip-in-progress',
+    '/trip-complete',
+    '/chat',
+  ]);
 
   const handleTabPress = (tab: TabKey) => {
     setActiveTab(tab);
@@ -35,6 +46,8 @@ function TabBarShell() {
     if (tab === 'trips') navigation.navigate('TripHistory');
     if (tab === 'profile') navigation.navigate('Profile');
   };
+
+  if (hiddenRoutes.has(pathname)) return null;
 
   return <TabBar activeTab={activeTab} onTabPress={handleTabPress} />;
 }
@@ -93,6 +106,7 @@ export default function RootLayout() {
               <TabBarShell />
               <RouteSync />
               <AppInitializer />
+              <LocationSync />
               <ConnectivityBanner />
             </SafeAreaView>
           </TabBarProvider>

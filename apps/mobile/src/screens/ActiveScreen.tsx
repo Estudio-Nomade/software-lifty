@@ -24,12 +24,12 @@ import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
-import { useLocationWS } from '../hooks/useLocationWS';
-import { startTracking, stopTracking } from '../lib/location';
+import { stopTracking } from '../lib/location';
 import { subscribeToDriverChannel } from '../lib/realtime';
 import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
+import { useTripStore } from '../store/tripStore';
 import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
@@ -76,7 +76,6 @@ export const ActiveScreen: React.FC = () => {
   const signOut = useSignOut();
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
-  useLocationWS();
 
   const profileSchema = z.object({
     full_name: z.string(),
@@ -101,31 +100,19 @@ export const ActiveScreen: React.FC = () => {
   }, [profile?.vehicle?.vehicle_type]);
 
   useEffect(() => {
-    if (!isOnline) return;
-
-    const heartbeatInterval = setInterval(() => {
-      const { lat, lng, heading } = useLocationStore.getState();
-      apiClient.put('/drivers/me/heartbeat', { lat, lng, heading }).catch(() => {});
-    }, 30_000);
-    useOnlineStore.getState().setHeartbeatRef(heartbeatInterval);
-
-    startTracking();
-
-    return () => {
-      clearInterval(heartbeatInterval);
-      useOnlineStore.getState().setHeartbeatRef(null);
-      stopTracking();
-    };
-  }, [isOnline]);
-
-  useEffect(() => {
     if (!driverId || !isOnline) return;
 
     let navigated = false;
 
-    const unsubscribe = subscribeToDriverChannel(driverId, () => {
+    const unsubscribe = subscribeToDriverChannel(driverId, (payload: any) => {
       if (!navigated) {
         navigated = true;
+        if (
+          payload?.id &&
+          (payload.status === 'request_received' || payload.status === 'offered')
+        ) {
+          useTripStore.getState().setActiveTrip(payload);
+        }
         navigation.navigate('IncomingRequest');
       }
     });

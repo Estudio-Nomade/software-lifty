@@ -11,9 +11,7 @@ import { RatingStars } from '../components/RatingStars';
 import { SponsorBanner } from '../components/SponsorBanner';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { stopTracking } from '../lib/location';
 import { useLocationStore } from '../store/locationStore';
-import { useOnlineStore } from '../store/onlineStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
@@ -30,7 +28,6 @@ const formatDistance = (value: number | null | undefined) => {
 export const IncomingRequestScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const { setActiveTrip } = useTripStore();
-  const setOnline = useOnlineStore((s) => s.setOnline);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [seconds, setSeconds] = useState(RESPONSE_SECONDS);
   const [accepted, setAccepted] = useState(false);
@@ -41,13 +38,6 @@ export const IncomingRequestScreen: React.FC = () => {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lat = useLocationStore((s) => s.lat);
   const lng = useLocationStore((s) => s.lng);
-
-  const disconnect = () => {
-    const ref = useOnlineStore.getState().heartbeatIntervalRef;
-    if (ref) clearInterval(ref);
-    useOnlineStore.getState().setHeartbeatRef(null);
-    stopTracking();
-  };
 
   const handleActiveTrip = (active: Trip | null) => {
     if (!active) {
@@ -78,6 +68,13 @@ export const IncomingRequestScreen: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     let retries = 0;
+
+    const stored = useTripStore.getState().trip;
+    if (stored && (stored.status === 'request_received' || stored.status === 'offered')) {
+      setTrip(stored);
+      setActiveTrip(stored);
+      setLoading(false);
+    }
 
     const loadTrip = async () => {
       try {
@@ -227,11 +224,6 @@ export const IncomingRequestScreen: React.FC = () => {
     try {
       await apiClient.post(`/trips/${trip.id}/reject`);
     } catch {}
-    try {
-      await apiClient.put('/drivers/me/online', { is_online: false });
-      setOnline(false);
-    } catch {}
-    disconnect();
     navigation.navigate('Online');
   };
 
