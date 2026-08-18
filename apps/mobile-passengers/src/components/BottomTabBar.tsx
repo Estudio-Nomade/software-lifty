@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { theme } from '../theme';
 
@@ -24,6 +25,7 @@ const TABS: {
 
 export function BottomTabBar({ activeTab, onSearchPress }: BottomTabBarProps) {
   const { navigate } = useAppNavigation();
+  const insets = useSafeAreaInsets();
 
   const handlePress = (tab: (typeof TABS)[number]) => {
     if (tab.key === activeTab) return;
@@ -35,7 +37,10 @@ export function BottomTabBar({ activeTab, onSearchPress }: BottomTabBarProps) {
   };
 
   return (
-    <View style={styles.tabBar}>
+    <View
+      testID="bottom-tab-bar"
+      style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, theme.spacing.sm) }]}
+    >
       {TABS.map((tab) => {
         const isActive = tab.key === activeTab;
         return (
@@ -61,12 +66,11 @@ export function BottomTabBar({ activeTab, onSearchPress }: BottomTabBarProps) {
 const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
-    height: theme.dimensions.tabBarHeight,
+    minHeight: theme.dimensions.tabBarHeight,
     alignItems: 'center',
     backgroundColor: theme.colors.white,
     borderTopWidth: 1,
     borderTopColor: theme.colors.lightGray,
-    paddingBottom: theme.spacing.sm,
   },
   tab: {
     flex: 1,
