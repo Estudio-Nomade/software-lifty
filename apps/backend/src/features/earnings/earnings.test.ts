@@ -270,7 +270,7 @@ describe('Earnings + Stats + TVF', () => {
     const db = getDb();
 
     const oldDate = new Date();
-    oldDate.setDate(oldDate.getDate() - 10);
+    oldDate.setDate(oldDate.getDate() - 31);
 
     await db.insert(trips).values({
       driver_id: driverId,

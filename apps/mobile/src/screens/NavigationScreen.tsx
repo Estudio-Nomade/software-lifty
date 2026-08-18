@@ -241,7 +241,7 @@ export const NavigationScreen: React.FC = () => {
         style: 'destructive',
         onPress: async () => {
           try {
-            await apiClient.post(`/trips/${trip.id}/cancel`);
+            await apiClient.post(`/trips/${trip.id}/cancel`, { reason: 'driver_cancel' });
             clearTrip();
             navigation.replace('Online');
           } catch (err: any) {

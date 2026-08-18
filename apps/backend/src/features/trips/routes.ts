@@ -68,13 +68,18 @@ const acceptRoute = new Elysia()
     { params: tripIdParams, requireAuth: true },
   );
 
-const cancelRoute = new Elysia()
-  .use(cancelRateLimit)
-  .post(
-    '/:id/cancel',
-    ({ user, params, set }) => safeCall(() => tripService.cancelTrip(user, params.id), set),
-    { params: tripIdParams, requireAuth: true },
-  );
+const cancelRoute = new Elysia().use(cancelRateLimit).post(
+  '/:id/cancel',
+  ({ user, params, body, set }) =>
+    safeCall(() => {
+      const reason =
+        (body as { reason?: string } | undefined)?.reason === 'no_show'
+          ? 'no_show'
+          : 'driver_cancel';
+      return tripService.cancelTrip(user, params.id, reason);
+    }, set),
+  { params: tripIdParams, requireAuth: true },
+);
 
 const claimRoute = new Elysia()
   .use(claimRateLimit)

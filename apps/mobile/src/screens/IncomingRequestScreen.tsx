@@ -296,6 +296,13 @@ export const IncomingRequestScreen: React.FC = () => {
           ) : null}
         </View>
 
+        {trip?.passenger_cancel_visible && trip.passenger_cancel_count_30d != null ? (
+          <Text style={styles.cancelRate}>
+            Este pasajero tiene un {trip.passenger_cancel_rate_pct}% de cancelación en los últimos
+            30 días ({trip.passenger_cancel_count_30d} cancelaciones).
+          </Text>
+        ) : null}
+
         <Text style={styles.earningsLabel}>Ganaras</Text>
         <Text style={styles.earningsAmount}>{formatCurrency(trip?.driver_earnings)}</Text>
 
@@ -387,6 +394,12 @@ const styles = StyleSheet.create({
   distanceText: {
     fontSize: 13,
     color: theme.colors.mediumGray,
+  },
+  cancelRate: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.mediumGray,
+    textAlign: 'center',
+    paddingHorizontal: theme.spacing.md,
   },
   earningsLabel: {
     fontSize: theme.fontSize.md,

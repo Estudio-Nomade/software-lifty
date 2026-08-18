@@ -304,7 +304,7 @@ describe('Passenger Trips', () => {
     expect(data.status).toBe('cancelled');
   });
 
-  test('POST /:id/cancel cannot cancel after driver arrived', async () => {
+  test('POST /:id/cancel can cancel after driver arrived with fee', async () => {
     const token = await createPassengerToken();
     const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
     const { data: trip } = await createTrip(token);
@@ -319,8 +319,8 @@ describe('Passenger Trips', () => {
       token,
     );
 
-    expect(status).toBe(400);
-    expect(data.error.message).toContain('waiting');
+    expect(status).toBe(200);
+    expect(data.status).toBe('cancelled');
   });
 
   test('POST /:id/cancel cannot cancel completed trip', async () => {
@@ -333,8 +333,8 @@ describe('Passenger Trips', () => {
 
     const { status, data } = await request('POST', `/api/passenger/trips/${trip.id}/cancel`, undefined, token);
 
-    expect(status).toBe(400);
-    expect(data.error.message).toContain('cancel');
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('CANCEL_NOT_ALLOWED');
   });
 
   test('GET /active succeeds for driver role (dual-role)', async () => {

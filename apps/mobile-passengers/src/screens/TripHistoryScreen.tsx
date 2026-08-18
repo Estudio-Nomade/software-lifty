@@ -52,8 +52,9 @@ function shortAddress(address: string) {
   return parts[0]?.trim() || address;
 }
 
-function TripCard({ trip }: { trip: Trip }) {
+function TripCard({ trip, onSupport }: { trip: Trip; onSupport: () => void }) {
   const status = STATUS_MAP[trip.status] ?? { label: trip.status, color: theme.colors.mediumGray };
+  const cancelled = trip.status.startsWith('cancelled');
 
   return (
     <View style={styles.tripCard}>
@@ -85,12 +86,17 @@ function TripCard({ trip }: { trip: Trip }) {
         </Text>
         {trip.driver_name && <Text style={styles.driverName}>{trip.driver_name}</Text>}
       </View>
+      {cancelled ? (
+        <TouchableOpacity onPress={onSupport}>
+          <Text style={styles.supportLink}>Contactar soporte</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }
 
 export function TripHistoryScreen() {
-  const { goBack } = useAppNavigation();
+  const { goBack, navigate } = useAppNavigation();
   const [page, setPage] = useState(1);
   const [allTrips, setAllTrips] = useState<Trip[]>([]);
 
@@ -170,7 +176,7 @@ export function TripHistoryScreen() {
         style={styles.list}
         data={allTrips}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <TripCard trip={item} />}
+        renderItem={({ item }) => <TripCard trip={item} onSupport={() => navigate('Support')} />}
         contentContainerStyle={styles.listContent}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
@@ -282,6 +288,11 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.deepBlue,
+  },
+  supportLink: {
+    marginTop: 8,
+    color: theme.colors.primary,
+    fontWeight: '600',
   },
   driverName: {
     fontSize: theme.fontSize.xs,

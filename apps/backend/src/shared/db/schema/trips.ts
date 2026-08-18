@@ -36,6 +36,7 @@ export const trips = pgTable('trips', {
   is_collected: boolean('is_collected').default(false).notNull(),
   tolerance_minutes: integer('tolerance_minutes').default(5),
   waiting_since: timestamp('waiting_since'),
+  assigned_at: timestamp('assigned_at'),
   verification_code: char('verification_code', { length: 4 }),
   expires_at: timestamp('expires_at'),
   created_at: timestamp('created_at').defaultNow().notNull(),

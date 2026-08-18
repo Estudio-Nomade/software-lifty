@@ -101,6 +101,21 @@ export async function cancelRide(rideId: string, reason?: string): Promise<void>
   await api.post(`/passenger/trips/${rideId}/cancel`, { reason });
 }
 
+export async function getCancelPreview(rideId: string) {
+  const { data } = await api.get(`/passenger/trips/${rideId}/cancel-preview`);
+  return data as {
+    can_cancel: boolean;
+    fee_ars: number;
+    copy: string;
+    collection_phase: 1 | 2;
+  };
+}
+
+export async function getPassengerDebt() {
+  const { data } = await api.get('/passenger/trips/debt');
+  return data as { amount_ars: number; status: string };
+}
+
 export async function retryRide(rideId: string): Promise<{ drivers_found: number; trip: Trip }> {
   const { data } = await api.post<{ drivers_found: number; trip: Trip }>(
     `/passenger/trips/${rideId}/retry`,

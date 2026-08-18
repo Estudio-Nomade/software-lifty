@@ -339,7 +339,7 @@ describe('Trip State Machine', () => {
     expect(events[5].to_status).toBe('completed');
   });
 
-  test('7. cancel from waiting is rejected after driver arrived', async () => {
+  test('7. no-show from waiting before 5min is rejected', async () => {
     const token = await registerAndGetToken(phone, password);
     await createDriverRow(token);
 
@@ -357,15 +357,15 @@ describe('Trip State Machine', () => {
     const { status, data } = await request(
       'POST',
       `/api/trips/${trip.id}/cancel`,
-      undefined,
+      { reason: 'no_show' },
       token,
     );
 
     expect(status).toBe(400);
-    expect(data.error.message).toContain('waiting');
+    expect(data.error.code).toBe('NO_SHOW_TOO_EARLY');
   });
 
-  test('8. cancel from waiting after 5min is still rejected', async () => {
+  test('8. no-show from waiting after 5min succeeds', async () => {
     const token = await registerAndGetToken(phone, password);
     await createDriverRow(token);
 
@@ -393,12 +393,12 @@ describe('Trip State Machine', () => {
     const { status, data } = await request(
       'POST',
       `/api/trips/${trip.id}/cancel`,
-      undefined,
+      { reason: 'no_show' },
       token,
     );
 
-    expect(status).toBe(400);
-    expect(data.error.message).toContain('waiting');
+    expect(status).toBe(200);
+    expect(data.status).toBe('cancelled');
   });
 
   test('9. GET /active returns active trip', async () => {
@@ -691,7 +691,7 @@ describe('Trip State Machine', () => {
     expect(await callCancel()).toBe(200);
 
     for (let i = 0; i < 4; i++) {
-      expect(await callCancel()).toBe(400);
+      expect(await callCancel()).toBe(409);
     }
 
     expect(await callCancel()).toBe(429);

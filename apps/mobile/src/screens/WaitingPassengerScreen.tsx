@@ -246,6 +246,31 @@ export const WaitingPassengerScreen: React.FC = () => {
             <Text style={styles.sendIcon}>→</Text>
           </TouchableOpacity>
         </View>
+        {seconds === 0 ? (
+          <Button
+            title="Cancelar por no-show"
+            variant="danger"
+            onPress={async () => {
+              if (!trip?.id) return;
+              try {
+                await apiClient.post(`/trips/${trip.id}/cancel`, { reason: 'no_show' });
+                Alert.alert(
+                  'Viaje cancelado',
+                  'Has recibido $600 por concepto de cancelación. Lifty te transferirá $600.',
+                );
+                clearTrip();
+                navigation.replace('Online');
+              } catch (err: unknown) {
+                const message =
+                  err && typeof err === 'object' && 'error' in err
+                    ? String((err as { error?: { message?: string } }).error?.message)
+                    : 'No se pudo cancelar.';
+                Alert.alert('Error', message);
+              }
+            }}
+            style={styles.button}
+          />
+        ) : null}
         <Button title="INICIAR VIAJE" onPress={handleStartTripPress} style={styles.button} />
       </View>
     </KeyboardAvoidingView>

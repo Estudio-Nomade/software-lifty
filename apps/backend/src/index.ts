@@ -3,6 +3,7 @@ import { Elysia } from 'elysia';
 import { fuelPriceRoutes } from './features/admin/fuel-price/routes';
 import { adminApproveRoute, adminRoutes } from './features/admin/routes';
 import { authRoutes } from './features/auth/routes';
+import { cancellationService } from './features/cancellations/service';
 import { districtsRoutes } from './features/districts/routes';
 import { driversRoutes } from './features/drivers/routes';
 import { driverStatsRoutes, earningsRoutes } from './features/earnings/routes';
@@ -229,6 +230,9 @@ if (process.env.NODE_ENV !== 'test') {
   const offerExpirer = setInterval(() => {
     tripService.expireStaleOffers().catch((err) => {
       logger.error('[offerExpirer] Error:', (err as Error).message);
+    });
+    cancellationService.expireSearchTimeouts().catch((err) => {
+      logger.error('[searchTimeout] Error:', (err as Error).message);
     });
   }, 5_000);
 

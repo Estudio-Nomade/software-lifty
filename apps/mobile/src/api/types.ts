@@ -125,6 +125,9 @@ export const tripSchema = z.object({
   passenger_phone: z.string().nullable(),
   passenger_rating: z.number().nullable(),
   verification_code: z.string().length(4).nullable(),
+  passenger_cancel_visible: z.boolean().optional(),
+  passenger_cancel_rate_pct: z.number().nullable().optional(),
+  passenger_cancel_count_30d: z.number().nullable().optional(),
 });
 
 export const earningsTripSchema = z.object({

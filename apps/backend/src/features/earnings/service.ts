@@ -10,8 +10,6 @@ const COMPLETED_STATUSES = ['completed', 'rated'] as const;
 const today = sql`CURRENT_DATE`;
 const weekStart = sql`date_trunc('week', CURRENT_DATE)`;
 const monthStart = sql`date_trunc('month', CURRENT_DATE)`;
-const sevenDaysAgo = sql`CURRENT_DATE - INTERVAL '7 days'`;
-
 async function sumDriverEarnings(driverId: string, since?: SQL): Promise<number> {
   const conditions = [eq(trips.driver_id, driverId), inArray(trips.status, COMPLETED_STATUSES)];
   if (since) conditions.push(gte(trips.created_at, since));
@@ -181,7 +179,12 @@ export const earningsService = {
         cancelled_early: sql<number>`count(*) filter (where ${trips.status} = 'cancelled_early')::int`,
       })
       .from(trips)
-      .where(and(eq(trips.driver_id, driverId), gte(trips.created_at, sevenDaysAgo)));
+      .where(
+        and(
+          eq(trips.driver_id, driverId),
+          gte(trips.created_at, sql`CURRENT_DATE - INTERVAL '30 days'`),
+        ),
+      );
 
     const completed7d = tvfStats?.completed ?? 0;
     const cancelledEarly7d = tvfStats?.cancelled_early ?? 0;
