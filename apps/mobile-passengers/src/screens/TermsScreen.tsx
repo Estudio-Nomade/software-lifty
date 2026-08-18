@@ -1,9 +1,10 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { useRegistrationDraftStore } from '../store/registrationDraftStore';
+import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
 const TERMS_TEXT = [
@@ -28,14 +29,22 @@ const TERMS_TEXT = [
 
 export function TermsScreen() {
   const { goBack, replace } = useAppNavigation();
-  const fullName = useRegistrationDraftStore((s) => s.fullName);
+  const params = useLocalSearchParams<{ from?: string }>();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [accepted, setAccepted] = useState(false);
-  const isFromRegistration = (fullName?.length ?? 0) > 0;
+
+  const fromProfile = params.from === 'profile';
+  const fromRegister = params.from === 'register';
+  const isReadMode = fromProfile || isAuthenticated;
 
   const handleAccept = () => {
+    if (isReadMode || isAuthenticated) {
+      goBack();
+      return;
+    }
     if (accepted) return;
     setAccepted(true);
-    if (isFromRegistration) {
+    if (fromRegister) {
       replace('LoginCredentials');
     } else {
       goBack();
@@ -70,11 +79,11 @@ export function TermsScreen() {
 
       <View style={styles.footer}>
         <Button
-          variant={accepted ? 'secondary' : 'primary'}
+          variant={isReadMode ? 'secondary' : accepted ? 'secondary' : 'primary'}
           onPress={handleAccept}
-          loading={accepted}
+          loading={!isReadMode && accepted}
         >
-          {accepted ? 'Redirigiendo...' : 'Aceptar'}
+          {isReadMode ? 'Volver' : accepted ? 'Redirigiendo...' : 'Aceptar'}
         </Button>
       </View>
     </SafeAreaView>

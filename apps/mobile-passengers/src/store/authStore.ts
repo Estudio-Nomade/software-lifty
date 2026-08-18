@@ -19,6 +19,7 @@ interface AuthState {
   clearAuth: () => void;
   resetRedirect: () => void;
   setSessionRestored: (restored: boolean) => void;
+  setFullName: (fullName: string | null) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -51,6 +52,7 @@ export const useAuthStore = create<AuthState>()(
         }),
       resetRedirect: () => set({ needsRedirect: false }),
       setSessionRestored: (sessionRestored) => set({ sessionRestored }),
+      setFullName: (fullName) => set({ fullName }),
     }),
     {
       name: 'lifty-passenger-auth',
