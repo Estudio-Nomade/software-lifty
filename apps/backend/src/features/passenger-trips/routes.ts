@@ -2,6 +2,7 @@ import { Elysia } from 'elysia';
 import { safeCall } from '../../shared/lib/route-utils';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { authGuard } from '../../shared/middleware/require-auth';
+import { cancellationService } from '../cancellations/service';
 import { passengersService } from '../passengers/service';
 import { tripService } from '../trips/service';
 import { rateTripBody, requestTripBody, sendMessageBody, tripIdParams } from './schema';
@@ -41,6 +42,15 @@ export const passengerTripRoutes = new Elysia({ prefix: '/passenger/trips' })
     { params: tripIdParams, requireAuth: true },
   )
   .get(
+    '/debt',
+    ({ user, set }) =>
+      safeCall(async () => {
+        await asPassenger(user);
+        return cancellationService.getPassengerDebt(user.id);
+      }, set),
+    { requireAuth: true },
+  )
+  .get(
     '/history',
     ({ user, query, set }) =>
       safeCall(async () => {
@@ -59,6 +69,15 @@ export const passengerTripRoutes = new Elysia({ prefix: '/passenger/trips' })
       safeCall(async () => {
         await asPassenger(user);
         return passengerTripService.getTripById(user, params.id);
+      }, set),
+    { params: tripIdParams, requireAuth: true },
+  )
+  .get(
+    '/:id/cancel-preview',
+    ({ user, params, set }) =>
+      safeCall(async () => {
+        await asPassenger(user);
+        return cancellationService.previewForPassenger(user, params.id);
       }, set),
     { params: tripIdParams, requireAuth: true },
   )

@@ -1,7 +1,10 @@
 import { Elysia } from 'elysia';
+import { t } from 'elysia';
 import { safeCall } from '../../shared/lib/route-utils';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { authGuard } from '../../shared/middleware/require-auth';
+import { clearBlock } from '../cancellations/blocks';
+import { cancellationService, getCancellationConfig } from '../cancellations/service';
 import { approveDriver } from './approve';
 import { driverIdParams, reviewBody, updatePhaseSchema, updateStartDateSchema } from './schema';
 import { adminService } from './service';
@@ -98,6 +101,49 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
     ({ user, set }) => {
       if (!isAdmin(user, set)) return { error: 'Forbidden' };
       return safeCall(() => adminService.getCurrentCommission(), set);
+    },
+    { requireAuth: true },
+  )
+  .get(
+    '/cancellations/config',
+    ({ user, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => getCancellationConfig(), set);
+    },
+    { requireAuth: true },
+  )
+  .put(
+    '/cancellations/config',
+    ({ user, body, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => cancellationService.putConfig(body.key, body.value), set);
+    },
+    {
+      body: t.Object({ key: t.String(), value: t.String() }),
+      requireAuth: true,
+    },
+  )
+  .post(
+    '/cancellations/debt/:userId/clear',
+    ({ user, params, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => cancellationService.clearDebt(params.userId), set);
+    },
+    { requireAuth: true },
+  )
+  .post(
+    '/cancellations/blocks/:id/clear',
+    ({ user, params, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => clearBlock(params.id), set);
+    },
+    { requireAuth: true },
+  )
+  .post(
+    '/cancellations/payouts/:id/paid',
+    ({ user, params, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => cancellationService.markPayoutPaid(params.id), set);
     },
     { requireAuth: true },
   );

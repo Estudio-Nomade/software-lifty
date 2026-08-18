@@ -44,6 +44,11 @@ export const webhookTripRequestBody = t.Object({
 export const arrivedBody = t.Object({
   lat: t.Number(),
   lng: t.Number(),
+  gps_accuracy_m: t.Optional(t.Number()),
+});
+
+export const cancelTripBody = t.Object({
+  reason: t.Optional(t.Union([t.Literal('driver_cancel'), t.Literal('no_show')])),
 });
 
 export const completeBody = t.Object({

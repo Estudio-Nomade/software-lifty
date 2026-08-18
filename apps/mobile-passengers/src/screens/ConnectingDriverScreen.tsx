@@ -9,7 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 
-const SEARCH_TIMEOUT_MS = 30_000;
+const SEARCH_TIMEOUT_MS = 300_000;
 
 const LIVE_STATUSES = new Set(['accepted', 'en_route', 'waiting', 'in_trip']);
 
@@ -43,7 +43,7 @@ export function ConnectingDriverScreen() {
         trip?.status === 'cancelled_early' ||
         trip?.status === 'cancelled_late'
       ) {
-        replace('Home');
+        setTimedOut(true);
         return;
       }
       if (trip?.drivers_found === 0 || trip?.status === 'expired' || trip?.status === 'rejected') {

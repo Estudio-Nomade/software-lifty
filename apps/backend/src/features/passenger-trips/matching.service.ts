@@ -4,6 +4,9 @@ import { driverLocations, drivers, tripEvents, trips, users } from '../../shared
 import { haversineDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
+import { listBlockedDriverIds } from '../cancellations/blocks';
+import { getPassengerVisibility } from '../cancellations/metrics';
+import { getCancellationConfig } from '../cancellations/service';
 import { broadcastTripRequest } from '../trips/service';
 
 const OFFER_TIMEOUT_MS = 20_000;
@@ -30,8 +33,10 @@ export async function findNearbyDrivers(
     sql`${driverLocations.lat} IS NOT NULL`,
     sql`${driverLocations.lng} IS NOT NULL`,
   ];
-  if (excludeDriverIds.length > 0) {
-    conditions.push(notInArray(drivers.id, excludeDriverIds));
+  const blocked = await listBlockedDriverIds();
+  const excluded = [...new Set([...excludeDriverIds, ...blocked])];
+  if (excluded.length > 0) {
+    conditions.push(notInArray(drivers.id, excluded));
   }
 
   const rows = await db
@@ -118,7 +123,19 @@ export async function matchAndBroadcast(
     return { drivers_found: 0 };
   }
 
-  broadcastTripRequest(driver.driverId, assigned);
+  let offerPayload: Record<string, unknown> = assigned;
+  if (trip.passenger_id) {
+    const config = await getCancellationConfig();
+    const vis = await getPassengerVisibility(trip.passenger_id, config);
+    offerPayload = {
+      ...assigned,
+      passenger_cancel_visible: vis.visible,
+      passenger_cancel_rate_pct: vis.ratePct,
+      passenger_cancel_count_30d: vis.count,
+    };
+  }
+
+  broadcastTripRequest(driver.driverId, offerPayload);
 
   sendPushToUser(driver.userId, {
     title: 'Nuevo viaje',

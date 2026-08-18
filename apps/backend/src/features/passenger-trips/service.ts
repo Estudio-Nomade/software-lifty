@@ -16,6 +16,7 @@ import { geocode } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
 import type { AuthUser } from '../../shared/middleware/auth';
+import { cancellationService } from '../cancellations/service';
 import { matchAndBroadcast } from './matching.service';
 
 const TERMINAL_STATUSES = [
@@ -52,6 +53,7 @@ export const passengerTripService = {
       duration_minutes: number;
     },
   ) {
+    const gate = await cancellationService.assertPassengerCanRequest(user.id);
     const commissionRate = await getCommissionRate(getDb());
 
     const fare = await calculateFare({
@@ -132,7 +134,7 @@ export const passengerTripService = {
         );
     });
 
-    return trip;
+    return gate.warning ? { ...trip, debt_warning: true, debt_ars: gate.debtArs } : trip;
   },
 
   async retryTrip(user: AuthUser, tripId: string) {
@@ -301,73 +303,7 @@ export const passengerTripService = {
   },
 
   async cancelTrip(user: AuthUser, tripId: string) {
-    return db.transaction(async (tx) => {
-      const [trip] = await tx
-        .select()
-        .from(trips)
-        .where(and(eq(trips.id, tripId), eq(trips.passenger_id, user.id)))
-        .for('update')
-        .limit(1);
-
-      if (!trip) throw new NotFoundError('Trip not found');
-
-      const allowedStatuses = ['pending', 'offered', 'accepted', 'en_route'];
-      if (!allowedStatuses.includes(trip.status)) {
-        throw new AppError(`Cannot cancel trip in status: ${trip.status}`, 400, 'BAD_REQUEST');
-      }
-
-      await tx
-        .update(trips)
-        .set({ status: 'cancelled', updated_at: new Date() })
-        .where(eq(trips.id, tripId));
-
-      await tx.insert(tripEvents).values({
-        trip_id: tripId,
-        from_status: trip.status,
-        to_status: 'cancelled',
-      });
-
-      if (trip.driver_id) {
-        const [driver] = await tx
-          .select({ userId: drivers.user_id })
-          .from(drivers)
-          .where(eq(drivers.id, trip.driver_id))
-          .limit(1);
-
-        if (driver?.userId) {
-          sendPushToUser(driver.userId, {
-            title: 'Viaje cancelado',
-            body: 'El pasajero ha cancelado el viaje.',
-            data: { trip_id: tripId, type: 'trip:cancelled' },
-          });
-        }
-      }
-
-      const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
-      if (trip.driver_id && updated) {
-        const url = process.env.SUPABASE_URL;
-        const key = process.env.SUPABASE_SECRET_KEY;
-        if (url && key) {
-          fetch(`${url}/realtime/v1/api/broadcast`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              apikey: key,
-              Authorization: `Bearer ${key}`,
-            },
-            body: JSON.stringify({
-              messages: [
-                { topic: `driver:${trip.driver_id}`, event: 'trip:cancelled', payload: updated },
-              ],
-            }),
-          }).catch((err) => logger.error('[BROADCAST] passenger cancel:', (err as Error).message));
-        }
-      }
-      if (updated) {
-        broadcastToPassenger(user.id, updated);
-      }
-      return updated;
-    });
+    return cancellationService.cancelByPassenger(user, tripId);
   },
 
   async getTripHistory(user: AuthUser, page: number, limit: number) {

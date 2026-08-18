@@ -9,9 +9,10 @@ import { AppError, BadRequestError, NotFoundError } from '../../shared/lib/error
 import { calculateFare } from '../../shared/lib/fuel-pricing';
 import { geocode, haversineDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
-import { calculatePlatformFee } from '../../shared/lib/pricing';
 import { sendPushToUser } from '../../shared/lib/push';
 import type { AuthUser } from '../../shared/middleware/auth';
+import { notifyArrived } from '../cancellations/notifications';
+import { cancellationService, getCancellationConfig } from '../cancellations/service';
 import { broadcastToPassenger, passengerTripService } from '../passenger-trips/service';
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -20,7 +21,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   request_received: ['accepted', 'rejected', 'cancelled'],
   accepted: ['en_route', 'cancelled'],
   en_route: ['waiting', 'cancelled'],
-  waiting: ['in_trip'],
+  waiting: ['in_trip', 'cancelled'],
   in_trip: ['completed'],
   completed: ['rated'],
 };
@@ -105,20 +106,10 @@ async function findTrip(driverId: string, tripId: string, tx = db) {
 }
 
 async function transitionTrip(driverId: string, tripId: string, targetStatus: string) {
-  const commissionRate = await getCommissionRate(getDb());
   return db.transaction(async (tx) => {
     const trip = await findTrip(driverId, tripId, tx);
 
-    let actualTarget = targetStatus;
-
-    if (targetStatus === 'cancelled' && trip.status === 'waiting') {
-      const waitingSince = trip.waiting_since;
-      if (!waitingSince)
-        throw new AppError('Cannot cancel: waiting_since not set', 400, 'BAD_REQUEST');
-      const elapsed = (Date.now() - waitingSince.getTime()) / 60000;
-      const tolerance = trip.tolerance_minutes ?? 5;
-      actualTarget = elapsed < tolerance ? 'cancelled_early' : 'cancelled_late';
-    }
+    const actualTarget = targetStatus;
 
     const allowed = VALID_TRANSITIONS[trip.status];
     if (!allowed || !allowed.includes(actualTarget)) {
@@ -138,23 +129,8 @@ async function transitionTrip(driverId: string, tripId: string, targetStatus: st
       updateData.waiting_since = new Date();
     }
 
-    if (actualTarget === 'cancelled_late') {
-      const compensationTotal = trip.base_fare ?? 0;
-
-      const compensationPlatformFee = calculatePlatformFee(compensationTotal, commissionRate);
-      const compensationDriverEarnings = compensationTotal - compensationPlatformFee;
-
-      updateData.total_fare = compensationTotal;
-      updateData.platform_fee = compensationPlatformFee;
-      updateData.driver_earnings = compensationDriverEarnings;
-
-      await tx
-        .update(drivers)
-        .set({
-          platform_debt: sql`${drivers.platform_debt} + ${compensationPlatformFee}`,
-          updated_at: new Date(),
-        })
-        .where(eq(drivers.id, driverId));
+    if (actualTarget === 'accepted' && !trip.assigned_at) {
+      updateData.assigned_at = new Date();
     }
 
     await tx.update(trips).set(updateData).where(eq(trips.id, tripId));
@@ -328,6 +304,7 @@ export const tripService = {
             status: 'accepted',
             verification_code: verificationCode,
             expires_at: null,
+            assigned_at: trip.assigned_at ?? new Date(),
             updated_at: new Date(),
           })
           .where(eq(trips.id, tripId));
@@ -514,6 +491,7 @@ export const tripService = {
         .set({
           status: 'accepted',
           verification_code: verificationCode,
+          assigned_at: trip.assigned_at ?? new Date(),
           updated_at: new Date(),
         })
         .where(eq(trips.id, tripId));
@@ -560,8 +538,13 @@ export const tripService = {
     return result;
   },
 
-  async arrivedTrip(user: AuthUser, tripId: string, body: { lat: number; lng: number }) {
+  async arrivedTrip(
+    user: AuthUser,
+    tripId: string,
+    body: { lat: number; lng: number; gps_accuracy_m?: number },
+  ) {
     const driverId = await getDriverId(user);
+    const config = await getCancellationConfig();
 
     const [trip] = await db
       .select()
@@ -570,8 +553,12 @@ export const tripService = {
       .limit(1);
     if (!trip) throw new NotFoundError('Trip not found');
 
+    if (body.gps_accuracy_m != null && body.gps_accuracy_m > config.gpsAccuracyMaxM) {
+      throw new AppError('La precisión del GPS no es suficiente', 400, 'GPS_ACCURACY');
+    }
+
     const distance = haversineDistance(body.lat, body.lng, trip.origin_lat, trip.origin_lng);
-    if (distance > 0.05) {
+    if (distance > config.arrivalRadiusM / 1000) {
       throw new AppError(
         'Debes estar a menos de 50 metros del pasajero para confirmar la llegada',
         400,
@@ -582,6 +569,7 @@ export const tripService = {
     const result = await transitionTrip(driverId, tripId, 'waiting');
     if (result.passenger_id) {
       broadcastToPassenger(result.passenger_id, result);
+      notifyArrived(result.passenger_id, tripId);
     }
     return result;
   },
@@ -641,13 +629,12 @@ export const tripService = {
     return result;
   },
 
-  async cancelTrip(user: AuthUser, tripId: string) {
-    const driverId = await getDriverId(user);
-    const result = await transitionTrip(driverId, tripId, 'cancelled');
-    if (result.passenger_id) {
-      broadcastToPassenger(result.passenger_id, result);
-    }
-    return result;
+  async cancelTrip(
+    user: AuthUser,
+    tripId: string,
+    reason: 'driver_cancel' | 'no_show' = 'driver_cancel',
+  ) {
+    return cancellationService.cancelByDriver(user, tripId, reason);
   },
 
   async getActiveTrip(user: AuthUser) {
@@ -746,7 +733,12 @@ export const tripService = {
           .where(eq(drivers.id, driverId));
       }
 
-      return updated;
+      const debt =
+        trip.passenger_id != null
+          ? await cancellationService.attachDebtOnCollect(tx, trip.passenger_id, trip.total_fare)
+          : { debt_applied_ars: 0, total_due_ars: trip.total_fare ?? 0 };
+
+      return { ...updated, ...debt };
     });
   },
 
@@ -781,6 +773,7 @@ export const tripService = {
           status: 'accepted',
           verification_code: verificationCode,
           expires_at: null,
+          assigned_at: trip.assigned_at ?? new Date(),
           updated_at: new Date(),
         })
         .where(eq(trips.id, tripId));

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect } from 'react';
 import { Alert, Linking, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { cancelRide, getActiveRide } from '../api/passenger';
+import { cancelRide, getActiveRide, getCancelPreview } from '../api/passenger';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -54,9 +54,26 @@ export function TripInProgressScreen() {
       return;
     }
     try {
-      await cancelRide(trip.id);
-      reset();
-      replace('Home');
+      const preview = await getCancelPreview(trip.id).catch(() => ({
+        copy: '¿Confirmas la cancelación?',
+        can_cancel: true,
+      }));
+      Alert.alert('Cancelar viaje', preview.copy, [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Sí, cancelar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cancelRide(trip.id);
+              reset();
+              replace('Home');
+            } catch {
+              Alert.alert('Error', 'No se pudo cancelar el viaje. Intentalo de nuevo.');
+            }
+          },
+        },
+      ]);
     } catch {
       Alert.alert('Error', 'No se pudo cancelar el viaje. Intentalo de nuevo.');
     }
@@ -149,7 +166,9 @@ export function TripInProgressScreen() {
           </Button>
         </View>
 
-        {trip?.status === 'accepted' || trip?.status === 'en_route' ? (
+        {trip?.status === 'accepted' ||
+        trip?.status === 'en_route' ||
+        trip?.status === 'waiting' ? (
           <Button variant="danger" onPress={handleCancel} style={styles.cancelBtn}>
             CANCELAR VIAJE
           </Button>
