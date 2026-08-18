@@ -4,12 +4,12 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { getRideHistory } from '../api/passenger';
 import type { Trip } from '../api/types';
 import { BottomTabBar } from '../components/BottomTabBar';
@@ -191,7 +191,7 @@ export function TripHistoryScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       {renderHeader()}
       <View style={styles.body}>{content}</View>
       <BottomTabBar activeTab="trips" />

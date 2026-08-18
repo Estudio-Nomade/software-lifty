@@ -6,7 +6,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { geocodeAddress, getActiveRide } from '../api/passenger';
 import type { PlaceSuggestion } from '../api/types';
 import { BottomTabBar } from '../components/BottomTabBar';
@@ -192,7 +192,7 @@ export function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.bodyWrap}>
         {searchExpanded ? (
           <KeyboardAvoidingView
