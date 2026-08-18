@@ -20,13 +20,17 @@ const SCREEN_TO_ROUTE = {
   TripHistory: '/trip-history',
   Profile: '/profile',
   PaymentMethod: '/payment-method',
+  Support: '/support',
   Chat: '/chat',
   Notifications: '/notifications',
 } as const;
 
 export type ScreenName = keyof typeof SCREEN_TO_ROUTE;
 
-const BACK_FALLBACK: Record<string, string> = {};
+const BACK_FALLBACK: Record<string, string> = {
+  terms: 'Profile',
+  support: 'Profile',
+};
 
 export function useAppNavigation() {
   const router = useRouter();

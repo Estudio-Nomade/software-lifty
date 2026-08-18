@@ -15,4 +15,17 @@ export const passengersRoutes = new Elysia({ prefix: '/passenger' })
   )
   .get('/profile', ({ user, set }) => safeCall(() => passengersService.getProfile(user), set), {
     requireAuth: true,
-  });
+  })
+  .put(
+    '/profile',
+    ({ user, body, set }) => safeCall(() => passengersService.updateProfile(user, body), set),
+    {
+      requireAuth: true,
+      body: t.Optional(
+        t.Object({
+          full_name: t.Optional(t.String()),
+          phone: t.Optional(t.String()),
+        }),
+      ),
+    },
+  );

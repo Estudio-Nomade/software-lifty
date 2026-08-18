@@ -11,7 +11,6 @@ const PUBLIC_ROUTES = [
   'register',
   'forgot-password',
   'auth',
-  'terms',
   'login-credentials',
   'verify-email',
   'location-permissions',

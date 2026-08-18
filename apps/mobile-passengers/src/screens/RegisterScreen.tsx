@@ -34,7 +34,7 @@ export function RegisterScreen() {
     setError(null);
     setFullName(`${name} ${surname}`);
     setLoading(true);
-    navigate('Terms');
+    navigate('Terms', { from: 'register' });
     setLoading(false);
   };
 
