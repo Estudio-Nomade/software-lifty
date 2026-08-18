@@ -1,5 +1,8 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
+import { Alert } from 'react-native';
+import { geocodeAddress } from '../../api/passenger';
+import { useLocation } from '../../hooks/useLocation';
 import { HomeScreen } from '../../screens/HomeScreen';
 
 jest.mock('expo-router', () => ({
@@ -13,7 +16,7 @@ jest.mock('expo-location', () => ({
 }));
 
 jest.mock('../../hooks/useLocation', () => ({
-  useLocation: () => ({ current: null }),
+  useLocation: jest.fn(),
 }));
 
 jest.mock('../../hooks/usePlaceAutocomplete', () => ({
@@ -29,9 +32,13 @@ jest.mock('../../components/Map/PassengerMap', () => ({
   PassengerMap: () => null,
 }));
 
+const mockNavigate = jest.fn();
 jest.mock('../../hooks/useAppNavigation', () => ({
-  useAppNavigation: () => ({ navigate: jest.fn(), replace: jest.fn() }),
+  useAppNavigation: () => ({ navigate: mockNavigate, replace: jest.fn() }),
 }));
+
+const mockUseLocation = useLocation as unknown as jest.Mock;
+const mockGeocodeAddress = geocodeAddress as unknown as jest.Mock;
 
 async function openSearch() {
   const utils = await render(<HomeScreen />);
@@ -40,6 +47,11 @@ async function openSearch() {
 }
 
 describe('HomeScreen address clear', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUseLocation.mockReturnValue({ current: null });
+  });
+
   test('no clear button when destination is empty', async () => {
     const { queryByLabelText } = await openSearch();
 
@@ -74,5 +86,53 @@ describe('HomeScreen address clear', () => {
 
     expect(queryByDisplayValue('Mi casa')).toBeNull();
     expect(getByDisplayValue('Trabajo')).toBeTruthy();
+  });
+});
+
+describe('HomeScreen destination confirmation', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUseLocation.mockReturnValue({ current: { lat: -34.5, lng: -58.4 } });
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  });
+
+  test('geocodes destination and navigates with its coords', async () => {
+    mockGeocodeAddress.mockResolvedValue({
+      lat: -34.6,
+      lng: -58.5,
+      formatted_address: 'Calle Falsa 123',
+    });
+
+    const { getByPlaceholderText, getByText } = await openSearch();
+    await fireEvent.changeText(getByPlaceholderText('Hacia'), 'Calle Falsa 123');
+
+    await act(async () => {
+      fireEvent.press(getByText('Buscar destino'));
+    });
+
+    expect(mockGeocodeAddress).toHaveBeenCalledWith('Calle Falsa 123');
+    expect(mockNavigate).toHaveBeenCalledWith(
+      'VehicleSelect',
+      expect.objectContaining({
+        destLat: '-34.6',
+        destLng: '-58.5',
+        pickupLat: '-34.5',
+        pickupLng: '-58.4',
+      }),
+    );
+  });
+
+  test('does not navigate when destination geocode fails', async () => {
+    mockGeocodeAddress.mockRejectedValue(new Error('not found'));
+
+    const { getByPlaceholderText, getByText } = await openSearch();
+    await fireEvent.changeText(getByPlaceholderText('Hacia'), 'Dirección Inexistente');
+
+    await act(async () => {
+      fireEvent.press(getByText('Buscar destino'));
+    });
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalled();
   });
 });

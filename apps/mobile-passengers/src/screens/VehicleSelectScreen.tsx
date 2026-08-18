@@ -1,40 +1,26 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { getDirections, requestRide } from '../api/passenger';
+import { estimateFare, requestRide } from '../api/passenger';
+import type { FareEstimate } from '../api/types';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useLocationStore } from '../store/locationStore';
 import { theme } from '../theme';
+import { formatCurrency } from '../utils/formatters';
 
 interface Vehicle {
   id: 'auto' | 'moto';
   name: string;
   icon: keyof typeof Ionicons.glyphMap;
-  eta: string;
   capacity: string;
-  price: string;
 }
 
 const VEHICLES: Vehicle[] = [
-  {
-    id: 'auto',
-    name: 'Auto',
-    icon: 'car',
-    eta: '15 min',
-    capacity: '4 pasajeros',
-    price: '$3.500',
-  },
-  {
-    id: 'moto',
-    name: 'Moto',
-    icon: 'bicycle',
-    eta: '12 min',
-    capacity: '1 pasajero',
-    price: '$2.100',
-  },
+  { id: 'auto', name: 'Auto', icon: 'car', capacity: '4 pasajeros' },
+  { id: 'moto', name: 'Moto', icon: 'bicycle', capacity: '1 pasajero' },
 ];
 
 export function VehicleSelectScreen() {
@@ -50,47 +36,73 @@ export function VehicleSelectScreen() {
   }>();
   const [selected, setSelected] = useState<Vehicle['id']>('auto');
   const [loading, setLoading] = useState(false);
+  const [fares, setFares] = useState<Partial<Record<Vehicle['id'], FareEstimate>>>({});
 
-  const handleRequest = async () => {
-    if (!pickupLat || !pickupLng || !destLat || !destLng) {
+  const coords = useMemo(() => {
+    const origin_lat = Number(pickupLat);
+    const origin_lng = Number(pickupLng);
+    const dest_lat = Number(destLat);
+    const dest_lng = Number(destLng);
+    if ([origin_lat, origin_lng, dest_lat, dest_lng].some(Number.isNaN)) return null;
+    return { origin_lat, origin_lng, dest_lat, dest_lng };
+  }, [pickupLat, pickupLng, destLat, destLng]);
+
+  useEffect(() => {
+    if (!coords) {
+      setFares({});
       Alert.alert('Ubicación no disponible', 'No pudimos obtener tu ubicación. Reintentá.');
       return;
     }
 
-    const originLat = Number(pickupLat);
-    const originLng = Number(pickupLng);
-    const destLatNum = Number(destLat);
-    const destLngNum = Number(destLng);
+    let cancelled = false;
+    setFares({});
 
-    if (
-      Number.isNaN(originLat) ||
-      Number.isNaN(originLng) ||
-      Number.isNaN(destLatNum) ||
-      Number.isNaN(destLngNum)
-    ) {
-      Alert.alert('Ubicación no disponible', 'No pudimos obtener tu ubicación. Reintentá.');
-      return;
-    }
+    (async () => {
+      const results = await Promise.allSettled([
+        estimateFare({ ...coords, vehicle_type: 'auto' }),
+        estimateFare({ ...coords, vehicle_type: 'moto' }),
+      ]);
+      if (cancelled) return;
 
-    setLoading(true);
-    try {
-      const dir = await getDirections({
-        origin_lat: originLat,
-        origin_lng: originLng,
-        dest_lat: destLatNum,
-        dest_lng: destLngNum,
+      const next: Partial<Record<Vehicle['id'], FareEstimate>> = {};
+      let anyFailed = false;
+      results.forEach((result, index) => {
+        const id: Vehicle['id'] = index === 0 ? 'auto' : 'moto';
+        if (result.status === 'fulfilled') {
+          next[id] = result.value;
+        } else {
+          anyFailed = true;
+          console.error('[VehicleSelect] fare estimate failed', result.reason);
+        }
       });
 
+      setFares(next);
+      if (anyFailed) {
+        Alert.alert('No pudimos calcular la tarifa', 'Reintentá más tarde.');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [coords]);
+
+  const selectedEstimate = fares[selected];
+
+  const handleRequest = async () => {
+    if (!coords || !selectedEstimate) return;
+    setLoading(true);
+    try {
       const trip = await requestRide({
-        origin_lat: originLat,
-        origin_lng: originLng,
-        dest_lat: destLatNum,
-        dest_lng: destLngNum,
+        origin_lat: coords.origin_lat,
+        origin_lng: coords.origin_lng,
+        dest_lat: coords.dest_lat,
+        dest_lng: coords.dest_lng,
         origin_address: pickup || '',
         dest_address: destination || '',
         vehicle_type: selected,
-        distance_km: dir.distance_km,
-        duration_minutes: dir.duration_minutes,
+        distance_km: selectedEstimate.distance_km,
+        duration_minutes: selectedEstimate.duration_min,
       });
 
       navigate('ConnectingDriver', { tripId: trip.id });
@@ -137,23 +149,30 @@ export function VehicleSelectScreen() {
       <View style={styles.content}>
         <Text style={styles.sectionTitle}>Selecciona tu vehículo</Text>
 
-        {VEHICLES.map((v) => (
-          <TouchableOpacity
-            key={v.id}
-            style={[styles.vehicleCard, selected === v.id && styles.vehicleSelected]}
-            onPress={() => setSelected(v.id)}
-          >
-            <Ionicons name={v.icon} size={28} color={theme.colors.deepBlue} />
-            <View style={styles.vehicleInfo}>
-              <Text style={styles.vehicleName}>{v.name}</Text>
-              <View style={styles.vehicleMeta}>
-                <Text style={styles.vehicleDetail}>⏱ {v.eta}</Text>
-                <Text style={styles.vehicleDetail}>{v.capacity}</Text>
+        {VEHICLES.map((v) => {
+          const estimate = fares[v.id];
+          return (
+            <TouchableOpacity
+              key={v.id}
+              style={[styles.vehicleCard, selected === v.id && styles.vehicleSelected]}
+              onPress={() => setSelected(v.id)}
+            >
+              <Ionicons name={v.icon} size={28} color={theme.colors.deepBlue} />
+              <View style={styles.vehicleInfo}>
+                <Text style={styles.vehicleName}>{v.name}</Text>
+                <View style={styles.vehicleMeta}>
+                  <Text style={styles.vehicleDetail}>
+                    ⏱ {estimate ? `${estimate.duration_min} min` : '—'}
+                  </Text>
+                  <Text style={styles.vehicleDetail}>{v.capacity}</Text>
+                </View>
               </View>
-            </View>
-            <Text style={styles.vehiclePrice}>{v.price}</Text>
-          </TouchableOpacity>
-        ))}
+              <Text style={styles.vehiclePrice}>
+                {estimate ? formatCurrency(estimate.fare) : '—'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
 
         <View style={styles.footer}>
           <View style={styles.footerRow}>
@@ -166,9 +185,10 @@ export function VehicleSelectScreen() {
             variant="cta"
             onPress={handleRequest}
             loading={loading}
+            disabled={!selectedEstimate}
             style={styles.solicitarBtn}
           >
-            SOLICITAR {VEHICLES.find((v) => v.id === selected)?.price}
+            {selectedEstimate ? `SOLICITAR ${formatCurrency(selectedEstimate.fare)}` : 'SOLICITAR'}
           </Button>
         </View>
       </View>

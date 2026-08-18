@@ -3,6 +3,7 @@ import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -181,13 +182,18 @@ export function HomeScreen() {
       }
     }
 
+    if (!resolvedPickup || !resolvedDest) {
+      Alert.alert('No encontramos esa dirección', 'Revisá la dirección e intentá de nuevo.');
+      return;
+    }
+
     navigate('VehicleSelect', {
       pickup: pickupAddress,
       destination: dest,
-      pickupLat: resolvedPickup ? String(resolvedPickup.lat) : current ? String(current.lat) : '',
-      pickupLng: resolvedPickup ? String(resolvedPickup.lng) : current ? String(current.lng) : '',
-      destLat: resolvedDest ? String(resolvedDest.lat) : '',
-      destLng: resolvedDest ? String(resolvedDest.lng) : '',
+      pickupLat: String(resolvedPickup.lat),
+      pickupLng: String(resolvedPickup.lng),
+      destLat: String(resolvedDest.lat),
+      destLng: String(resolvedDest.lng),
     });
   };
 
