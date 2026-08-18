@@ -139,6 +139,20 @@ export function HomeScreen() {
     Keyboard.dismiss();
   };
 
+  const clearPickup = () => {
+    setPickupAddress('');
+    setPickupCoord(null);
+    setPickupPicked(false);
+    setFocusedField('pickup');
+  };
+
+  const clearDest = () => {
+    setDestAddress('');
+    setDestCoord(null);
+    setDestPicked(false);
+    setFocusedField('dest');
+  };
+
   const handleConfirmDestination = async () => {
     const dest = destAddress.trim();
     if (!dest) return;
@@ -214,6 +228,16 @@ export function HomeScreen() {
                       setFocusedField('pickup');
                     }}
                   />
+                  {pickupAddress.trim().length > 0 ? (
+                    <TouchableOpacity
+                      style={styles.fieldClear}
+                      onPress={clearPickup}
+                      accessibilityLabel="Borrar origen"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="close-circle" size={20} color={theme.colors.mediumGray} />
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
 
                 <View style={styles.fieldDivider} />
@@ -236,6 +260,16 @@ export function HomeScreen() {
                     returnKeyType="search"
                     onSubmitEditing={handleConfirmDestination}
                   />
+                  {destAddress.trim().length > 0 ? (
+                    <TouchableOpacity
+                      style={styles.fieldClear}
+                      onPress={clearDest}
+                      accessibilityLabel="Borrar destino"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="close-circle" size={20} color={theme.colors.mediumGray} />
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               </View>
 
@@ -432,6 +466,12 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.deepBlue,
     padding: 0,
+  },
+  fieldClear: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   suggestions: {
     backgroundColor: theme.colors.white,
