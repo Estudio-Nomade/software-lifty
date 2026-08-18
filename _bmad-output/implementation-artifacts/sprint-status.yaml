@@ -1,5 +1,5 @@
 # generated: 2026-08-10
-# last_updated: 2026-08-13
+# last_updated: 2026-08-18
 # project: software-lifty
 # project_key: NOKEY
 # tracking_system: file-system
@@ -34,7 +34,7 @@
 #   - done: Completed
 
 generated: 2026-08-10
-last_updated: 2026-08-13
+last_updated: 2026-08-18
 project: software-lifty
 project_key: NOKEY
 tracking_system: file-system
@@ -99,7 +99,7 @@ development_status:
   epic-6: in-progress
   6-1-trip-complete: in-progress
   6-2-rating: in-progress
-  6-3-payment-cash: backlog
+  6-3-payment-cash: done
   6-4-completion-flow: backlog
   epic-6-retrospective: optional
 
@@ -181,9 +181,10 @@ action_items:
 
   - id: ai-8
     action: "Cash payment MVP + payment method screen beyond empty state"
-    status: open
+    status: done
     epic: 6
     owner: mobile+backend
+    note: "paymentStore (cash default + transfer add/remove/setDefault) + PaymentMethodScreen form. Backend passenger payments table still wontfix."
 
   - id: ai-9
     action: "Trip detail screen from history"
@@ -209,3 +210,31 @@ action_items:
     status: open
     epic: 6
     owner: product+backend
+
+  - id: ai-13
+    action: "Passenger avatar upload (expo-image-picker + users.avatar_url storage)"
+    status: open
+    epic: 8
+    owner: mobile+backend
+    note: "Left out of perfil-pasajero pass. avatar_url shows read-only today."
+
+  - id: ai-14
+    action: "Support backend: tickets / chat / canonical support email"
+    status: open
+    epic: 8
+    owner: backend
+    note: "Support screen is static mailto + FAQ; no ticket endpoint."
+
+  - id: ai-15
+    action: "Mercado Pago / card tokenization for passengers"
+    status: open
+    epic: 6
+    owner: backend+mobile
+    note: "Out of scope. Only cash + transfer in paymentStore."
+
+  - id: ai-16
+    action: "ActiveTripRecovery router.replace('/home') on session restore"
+    status: open
+    epic: 5
+    owner: mobile
+    note: "Collateral risk noted during Términos fix; not the Profile tap cause. Annotate as debt."

@@ -1,6 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
-import { passengerProfiles } from '../../shared/db/schema';
+import { passengerProfiles, users } from '../../shared/db/schema';
+import { logger } from '../../shared/lib/logger';
 import type { AuthUser } from '../../shared/middleware/auth';
 
 export const passengersService = {
@@ -32,12 +33,74 @@ export const passengersService = {
   },
 
   async getProfile(user: AuthUser) {
-    const [profile] = await db
-      .select()
+    const rows = await db
+      .select({
+        id: passengerProfiles.id,
+        full_name: users.full_name,
+        phone: users.phone,
+        email: users.email,
+        avatar_url: users.avatar_url,
+        profile_phone: passengerProfiles.phone,
+      })
       .from(passengerProfiles)
+      .innerJoin(users, eq(passengerProfiles.user_id, users.id))
       .where(eq(passengerProfiles.user_id, user.id))
       .limit(1);
 
-    return profile ?? null;
+    const row = rows[0];
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      full_name: row.full_name,
+      phone: row.phone ?? row.profile_phone,
+      email: row.email,
+      avatar_url: row.avatar_url,
+    };
+  },
+
+  async updateProfile(user: AuthUser, data: { full_name?: string; phone?: string }) {
+    if (data.full_name) {
+      await db
+        .update(users)
+        .set({ full_name: data.full_name.trim(), updated_at: new Date() })
+        .where(eq(users.id, user.id));
+    }
+
+    if (data.phone) {
+      const phone = data.phone.trim();
+
+      const [existingPhoneOwner] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.phone, phone), ne(users.id, user.id)))
+        .limit(1);
+
+      if (existingPhoneOwner) {
+        logger.warn(
+          `Phone ${phone} already belongs to user ${existingPhoneOwner.id}; skipping save for user ${user.id}`,
+        );
+      } else {
+        const [currentUser] = await db
+          .select({ phone: users.phone })
+          .from(users)
+          .where(eq(users.id, user.id))
+          .limit(1);
+
+        if (currentUser?.phone !== phone) {
+          await db
+            .update(users)
+            .set({ phone, updated_at: new Date() })
+            .where(eq(users.id, user.id));
+        }
+
+        await db
+          .update(passengerProfiles)
+          .set({ phone, updated_at: new Date() })
+          .where(eq(passengerProfiles.user_id, user.id));
+      }
+    }
+
+    return this.getProfile(user);
   },
 };

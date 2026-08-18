@@ -1,7 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -9,9 +13,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { getProfile, updateProfile } from '../api/passenger';
+import { Button } from '../components/Button';
+import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { buildSosWhatsAppUrl } from '../lib/supportContact';
 import { useAuthStore } from '../store/authStore';
+import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 
 interface MenuItem {
@@ -26,7 +35,24 @@ export function ProfileScreen() {
   const { signOut } = useAuth();
   const fullName = useAuthStore((s) => s.fullName);
   const email = useAuthStore((s) => s.email);
+  const setFullName = useAuthStore((s) => s.setFullName);
+  const activeTrip = useRideStore((s) => s.activeTrip);
+  const [phone, setPhone] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const [editVisible, setEditVisible] = useState(false);
+  const [editFullName, setEditFullName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getProfile()
+      .then((profile) => {
+        setPhone(profile.phone ?? '');
+        if (profile.full_name) setFullName(profile.full_name);
+      })
+      .catch(() => {});
+  }, [setFullName]);
 
   const displayName = fullName || email?.split('@')[0] || 'Usuario';
   const initials = displayName
@@ -45,11 +71,34 @@ export function ProfileScreen() {
     }
   };
 
+  const openEdit = () => {
+    setEditFullName(fullName ?? '');
+    setEditPhone(phone);
+    setEditVisible(true);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const updated = await updateProfile({
+        full_name: editFullName.trim(),
+        phone: editPhone.trim(),
+      });
+      if (updated.full_name) setFullName(updated.full_name);
+      setPhone(updated.phone ?? '');
+      setEditVisible(false);
+    } catch {
+      Alert.alert('Error', 'No se pudo guardar el perfil.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const primaryMenu: MenuItem[] = [
     {
       icon: 'create-outline',
       label: 'Editar perfil',
-      onPress: () => Alert.alert('Editar perfil', 'Próximamente'),
+      onPress: openEdit,
     },
     {
       icon: 'card-outline',
@@ -67,12 +116,18 @@ export function ProfileScreen() {
     {
       icon: 'document-text-outline',
       label: 'Términos y condiciones',
-      onPress: () => navigate('Terms'),
+      onPress: () => navigate('Terms', { from: 'profile' }),
     },
     {
       icon: 'help-circle-outline',
       label: 'Soporte',
-      onPress: () => Alert.alert('Soporte', 'Próximamente'),
+      onPress: () => navigate('Support'),
+    },
+    {
+      icon: 'shield-checkmark-outline',
+      label: 'SOS',
+      onPress: () => Linking.openURL(buildSosWhatsAppUrl({ fullName, trip: activeTrip })),
+      danger: true,
     },
   ];
 
@@ -130,6 +185,44 @@ export function ProfileScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <Modal visible={editVisible} animationType="slide" transparent>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Editar perfil</Text>
+              <TouchableOpacity onPress={() => setEditVisible(false)}>
+                <Ionicons name="close" size={24} color={theme.colors.mediumGray} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+            >
+              <Input placeholder="Nombre" value={editFullName} onChangeText={setEditFullName} />
+              <Input
+                placeholder="Teléfono"
+                value={editPhone}
+                onChangeText={setEditPhone}
+                keyboardType="phone-pad"
+              />
+              <View style={styles.emailRow}>
+                <Text style={styles.emailLabel}>Email</Text>
+                <Text style={styles.emailValue}>{email ?? '—'}</Text>
+              </View>
+
+              <Button onPress={handleSave} loading={saving} disabled={saving}>
+                Guardar
+              </Button>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -231,5 +324,48 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.semibold,
     color: theme.colors.dangerRed,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: theme.colors.white,
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+    padding: theme.spacing.lg,
+    maxHeight: '90%',
+  },
+  modalScrollContent: {
+    gap: theme.spacing.md,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.md,
+  },
+  modalTitle: {
+    fontSize: theme.fontSize.lg,
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.deepBlue,
+  },
+  emailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+  },
+  emailLabel: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+  },
+  emailValue: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.deepBlue,
   },
 });
