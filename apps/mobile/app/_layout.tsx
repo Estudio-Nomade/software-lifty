@@ -19,6 +19,7 @@ import { AuthProvider } from '../src/context/AuthContext';
 import { TabBarProvider, useTabBar } from '../src/context/TabBarContext';
 import { useAppNavigation } from '../src/hooks/useAppNavigation';
 import { queryClient } from '../src/lib/queryClient';
+import { isTabBarRoute } from '../src/lib/tabBarRoutes';
 import { useOnlineStore } from '../src/store/onlineStore';
 import { theme } from '../src/theme';
 
@@ -30,15 +31,6 @@ function TabBarShell() {
   const isOnline = useOnlineStore((s) => s.isOnline);
   const pathname = usePathname();
 
-  const hiddenRoutes = new Set([
-    '/incoming-request',
-    '/navigation',
-    '/waiting-passenger',
-    '/trip-in-progress',
-    '/trip-complete',
-    '/chat',
-  ]);
-
   const handleTabPress = (tab: TabKey) => {
     setActiveTab(tab);
     if (tab === 'home') navigation.navigate(isOnline ? 'Active' : 'Online');
@@ -47,7 +39,7 @@ function TabBarShell() {
     if (tab === 'profile') navigation.navigate('Profile');
   };
 
-  if (hiddenRoutes.has(pathname)) return null;
+  if (!isTabBarRoute(pathname)) return null;
 
   return <TabBar activeTab={activeTab} onTabPress={handleTabPress} />;
 }
@@ -63,7 +55,7 @@ function RouteSync() {
       setActiveTab('earnings');
     } else if (pathname === '/trip-history') {
       setActiveTab('trips');
-    } else if (pathname === '/profile') {
+    } else if (pathname === '/profile' || pathname === '/cancellation-policy') {
       setActiveTab('profile');
     }
   }, [pathname, setActiveTab]);

@@ -19,6 +19,7 @@ interface AuthState {
   setSession: (token: string | null, userId?: string | null) => void;
   setDriverId: (driverId: string) => void;
   clearAuth: () => void;
+  clearAuthState: () => void;
   resetRedirect: () => void;
   setPhone: (phone: string) => void;
   setDriverStatus: (status: DriverStatusValue) => void;
@@ -48,12 +49,23 @@ export const useAuthStore = create<AuthState>()(
         })),
       setDriverId: (driverId) => set({ driverId }),
       clearAuth: () =>
+        set((state) => ({
+          token: null,
+          driverId: null,
+          isAuthenticated: false,
+          needsRedirect: state.isAuthenticated,
+          phone: null,
+          driverStatus: null,
+          onboardingStep: null,
+          kycSessionId: null,
+          termsAccepted: false,
+        })),
+      clearAuthState: () =>
         set({
           token: null,
           driverId: null,
           isAuthenticated: false,
-          needsRedirect: true,
-          sessionRestored: false,
+          needsRedirect: false,
           phone: null,
           driverStatus: null,
           onboardingStep: null,

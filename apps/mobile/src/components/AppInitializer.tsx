@@ -24,7 +24,7 @@ function SessionRestore() {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token ?? null;
       if (!token) {
-        useAuthStore.getState().clearAuth();
+        useAuthStore.getState().clearAuthState();
         useAuthStore.getState().setSessionRestored(true);
         return;
       }
