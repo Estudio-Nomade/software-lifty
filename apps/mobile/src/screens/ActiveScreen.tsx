@@ -24,6 +24,7 @@ import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
+import { isLiveTrip } from '../lib/isLiveTrip';
 import { stopTracking } from '../lib/location';
 import { subscribeToDriverChannel } from '../lib/realtime';
 import { useAuthStore } from '../store/authStore';
@@ -145,6 +146,7 @@ export const ActiveScreen: React.FC = () => {
         const { data } = await apiClient.get('/trips/active');
         const trip = data?.data ?? data;
         if (cancelled || !trip?.status) return;
+        if (!isLiveTrip(trip)) return;
         if (trip.status === 'request_received' || trip.status === 'offered') {
           navigation.navigate('IncomingRequest');
         } else if (trip.status === 'accepted' || trip.status === 'en_route') {
