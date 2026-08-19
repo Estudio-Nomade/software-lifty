@@ -971,6 +971,35 @@ bun run db:seed:passenger                     # Seedear datos de prueba
 9. Manejar errores de manera graceful
 10. Pensar en la escalabilidad desde el inicio
 
+## Troubleshooting Dev (Linux — ENOSPC file watchers)
+
+**Síntoma:** al escanear el QR de Expo Go, Metro crashea con:
+
+```
+Error: ENOSPC: System limit for number of file watchers reached, watch '.../node_modules/.bun/...'
+errno: -28
+```
+
+**Causa:** Bun hoistea los packages en `node_modules/.bun/` (~36k directorios). Metro usa `FallbackWatcher` (no hay Watchman) que consume un inotify watch por directorio. Con `turbo dev` levantando 3 apps a la vez se agota `fs.inotify.max_user_watches`.
+
+**Fix (máquina local, NO es código del repo):**
+
+```bash
+# temporal
+sudo sysctl -w fs.inotify.max_user_watches=524288
+sudo sysctl -w fs.inotify.max_user_instances=1024
+
+# permanente
+echo -e 'fs.inotify.max_user_watches=524288\nfs.inotify.max_user_instances=1024' | sudo tee /etc/sysctl.d/99-inotify.conf
+sudo sysctl --system
+```
+
+Alternativa: instalar Watchman (`sudo apt install watchman`) para que Metro deje de usar `FallbackWatcher`.
+
+**No hacer:** no agregues `node_modules/.bun` a `blockList` en `metro.config.js`. Bun guarda los packages reales dentro de `.bun` (no hay symlinks top-level), así que bloquearlo rompe la resolución de módulos. `metro.config.js` ya maneja `.bun` correctamente vía `rewriteRequestUrl`.
+
+Cuando solo se testea passengers, preferí correr `bun --filter @lifty/mobile-passengers dev` en vez de `bun run dev` (levanta un solo Metro).
+
 ## Proximos Pasos
 
 ### Sprint 1: Setup y Onboarding (3 dias)

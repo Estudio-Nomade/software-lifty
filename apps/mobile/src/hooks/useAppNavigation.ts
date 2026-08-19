@@ -31,6 +31,7 @@ const SCREEN_TO_ROUTE = {
   TripComplete: '/trip-complete',
   Earnings: '/earnings',
   Profile: '/profile',
+  CancellationPolicy: '/cancellation-policy',
   PaymentMethod: '/payment-method',
   SelectProvince: '/select-province',
   SelectDistrict: '/select-district',
