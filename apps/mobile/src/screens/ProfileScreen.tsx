@@ -119,6 +119,12 @@ function docsStatusIcon(docs: DriverDocument[]): React.JSX.Element {
   return <Ionicons name="time-outline" size={18} color={theme.colors.amber} />;
 }
 
+function tvfTone(pct: number): string {
+  if (pct < 50) return theme.colors.dangerRed;
+  if (pct < 70) return theme.colors.amber;
+  return theme.colors.success;
+}
+
 export const ProfileScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const signOut = useSignOut();
@@ -322,45 +328,24 @@ export const ProfileScreen: React.FC = () => {
         </Card>
 
         {metrics ? (
-          <Card>
-            <Text style={styles.sectionTitle}>Cancelaciones</Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>TVF ({metrics.period_days} días)</Text>
-              <Text style={styles.infoValue}>{metrics.tvf_rate_pct.toFixed(1)}%</Text>
-            </View>
-            <Text style={styles.metricSubline}>
-              {metrics.tvf_completed} viajes / {metrics.tvf_cancels} cancelaciones que cuentan
-            </Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Cancelaciones</Text>
-              <Text style={styles.infoValue}>
-                Cancelaste {metrics.driver_cancels} · No-show {metrics.no_shows}
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`Cancelaciones. TVF ${metrics.tvf_rate_pct.toFixed(1)} por ciento. Abrir explicación`}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('CancellationPolicy')}
+          >
+            <Card style={styles.cancellationCard}>
+              <View style={styles.cancellationHeader}>
+                <Text style={styles.cancellationTitle}>Cancelaciones</Text>
+                <Ionicons name="chevron-forward" size={20} color={theme.colors.mediumGray} />
+              </View>
+              <Text style={[styles.cancellationValue, { color: tvfTone(metrics.tvf_rate_pct) }]}>
+                {metrics.tvf_rate_pct.toFixed(1)}%
               </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Se te debe</Text>
-              <Text style={styles.infoValue}>
-                {metrics.payouts_pending_ars > 0
-                  ? `$${metrics.payouts_pending_ars}`
-                  : 'No hay pagos pendientes'}
-              </Text>
-            </View>
-            {metrics.commission_active ? (
-              <>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Deuda con Lifty</Text>
-                  <Text style={styles.infoValue}>
-                    ${metrics.platform_debt} / ${metrics.debt_cap_ars}
-                  </Text>
-                </View>
-                {metrics.debt_remaining_ars === 0 ? (
-                  <Text style={styles.debtWarning}>
-                    Alcanzaste el tope. Regularizá tu saldo o cobrá por transferencia.
-                  </Text>
-                ) : null}
-              </>
-            ) : null}
-          </Card>
+              <Text style={styles.metricSubline}>TVF · últimos {metrics.period_days} días</Text>
+              <Text style={styles.cancellationHint}>Tocá para ver cómo funciona</Text>
+            </Card>
+          </TouchableOpacity>
         ) : null}
 
         <Card>
@@ -567,6 +552,27 @@ const styles = StyleSheet.create({
     color: theme.colors.deepBlue,
     marginBottom: theme.spacing.sm,
   },
+  cancellationCard: {
+    gap: theme.spacing.xs,
+  },
+  cancellationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cancellationTitle: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.deepBlue,
+  },
+  cancellationValue: {
+    fontSize: theme.fontSize['3xl'],
+    fontWeight: theme.fontWeight.bold,
+  },
+  cancellationHint: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.mediumGray,
+  },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -586,12 +592,6 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
     marginTop: -4,
     marginBottom: theme.spacing.xs,
-  },
-  debtWarning: {
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.dangerRed,
-    fontWeight: theme.fontWeight.medium,
-    marginTop: theme.spacing.xs,
   },
   vehicleInfo: {
     fontSize: theme.fontSize.md,
