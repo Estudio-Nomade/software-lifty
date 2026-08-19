@@ -15,6 +15,7 @@ await migrate(db, { migrationsFolder: './src/shared/db/migrations' });
 const COLUMNS_REQUIRED: Record<string, string[]> = {
   users: ['kyc_status', 'verified_name', 'verified_document_hash', 'document_number_last4'],
   drivers: ['admin_review_status', 'admin_reviewed_by', 'admin_reviewed_at', 'admin_review_notes'],
+  trips: ['assigned_at'],
 };
 
 for (const [table, columns] of Object.entries(COLUMNS_REQUIRED)) {
