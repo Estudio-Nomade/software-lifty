@@ -34,7 +34,7 @@ This document decomposes the PRD (`_bmad-output/planning-artifacts/passenger-app
 - **FR-19**: Trip history list
 - **FR-20**: Trip detail
 - **FR-21**: Profile view
-- **FR-22**: Edit profile (deferred, v2)
+- **FR-22**: Edit profile (deferred, v2) — name+phone shipped #263; photo still open
 - **FR-23**: Sign out
 
 ### Non-functional Requirements
@@ -67,13 +67,13 @@ This document decomposes the PRD (`_bmad-output/planning-artifacts/passenger-app
 2. **Epic 2** — Auth (Phase 1) [DONE]
 3. **Epic 3** — Home + Map Shell [DONE]
 4. **Epic 4** — Trip Request [DONE]
-5. **Epic 5** — Trip Lifecycle + SOS [IN PROGRESS] — verification done; SOS backend ready (#255); SOS UI + live tracking open
-6. **Epic 6** — Post-Trip (Rating + Payment) [IN PROGRESS] — rate API ready (#254); TripComplete/payment open
+5. **Epic 5** — Trip Lifecycle + SOS [IN PROGRESS] — verification done; SOS backend ready (#255); chat/call wired; SOS POST /sos + live tracking open
+6. **Epic 6** — Post-Trip (Rating + Payment) [IN PROGRESS] — TripComplete + rateRide wired (no longer mock); tags/comment + payment-confirm open
 7. **Epic 7** — Trip History + Detail [IN PROGRESS] — list done; detail open
-8. **Epic 8** — Profile + Sign Out [DONE]
-9. **Epic 9** — Polish + Tests (Buffer) [IN PROGRESS]
+8. **Epic 8** — Profile + Sign Out [DONE] — edit name/phone #263
+9. **Epic 9** — Polish + Tests (Buffer) [IN PROGRESS] — #264 clear address, #265 tabbar inset, #266 fare-by-geo on main
 
-> **Status SoT:** `_bmad-output/implementation-artifacts/sprint-status.yaml` (last resync 2026-08-13, PRs #254–#255).
+> **Status SoT:** `_bmad-output/implementation-artifacts/sprint-status.yaml` (last resync 2026-08-19, PRs #254–#267).
 
 ---
 
@@ -459,6 +459,8 @@ So that trips are persisted.
 
 **Progress (2026-08-13):** 5.1–5.3 + 5.6 largely shipped; 5.2 verification UI done (#254); SOS backend passenger-capable (#255); 5.5 SOS UI + 5.4 live tracking still open.
 
+**Progress (2026-08-19):** Chat + `tel:` wired from TripInProgress (#260/#261). #263 WhatsApp SOS prefill on Profile is not story 5.5. #267 cancellation engine on main; in-trip uses cancel-preview. 5.4 still missing live `driver:location`, route polyline, Emergencia button.
+
 ### Story 5.1: DriverFound card
 
 As a passenger,
@@ -509,6 +511,8 @@ So that I know when I'll arrive.
 - **And** a "Emergencia" button is visible
 - **And** the location updates every 5s
 
+**[PARTIAL 2026-08-19]** — Chat, call, cancel-preview, status realtime exist. Missing live `driver:location`, route polyline, ETA, Emergencia/SOS button.
+
 ### Story 5.5: SOS screen with 4 types
 
 As a passenger,
@@ -523,6 +527,8 @@ So that I can get help quickly.
 - **And** a "Llamar al 911" button is available
 - **And** tapping the SOS confirmation calls `POST /api/sos` with trip_id and type
 
+**[OPEN 2026-08-19]** — Backend `POST /api/sos` ready (#255). Profile WhatsApp SOS (#263) is not this story.
+
 ### Story 5.6: Cancel trip with rule
 
 As a passenger,
@@ -536,11 +542,15 @@ So that I can cancel if the driver is taking too long.
 - **And** if cancelled within 5 minutes of request, no fee
 - **And** if cancelled after 5 minutes, a cancellation fee is shown
 
+**[DONE engine 2026-08-19 / leftover UI]** — #267 replaced the 5-min early/late model. In-trip uses cancel-preview. ConnectingDriver still blind cancel; driver no-show amount still hardcoded. Do not delete this AC; new policy lives in `docs/superpowers/specs/2026-08-18-cancellation-policy-design.md`.
+
 ---
 
 ## Epic 6: Post-Trip (Rating + Payment) [IN PROGRESS]
 
 **Progress (2026-08-13):** `POST /passenger/trips/:id/rate` shipped (#254). TripComplete still mock; payment cash open.
+
+**Progress (2026-08-19):** TripComplete is no longer mock (real trip + `rateRide`). Cash paymentStore done. 6.1 missing map/breakdown/payment method. 6.2 stars only (no tags/comment). 6.4 payment-confirm still open.
 
 **Goal**: After the trip completes, show the summary, collect rating, and process payment.
 
@@ -556,6 +566,8 @@ So that I can review what I paid for.
 - **Then** I see the route map, distance, time, fare breakdown, payment method
 - **And** a "Calificar conductor" button is visible
 
+**[PARTIAL 2026-08-19]** — Real trip + fare/distance/duration/driver. Missing route map, fare breakdown, payment method. Rating is inline stars, not a separate screen.
+
 ### Story 6.2: Rating screen
 
 As a passenger,
@@ -570,6 +582,8 @@ So that I can give feedback.
 - **And** I can add a comment
 - **And** "Enviar calificación" calls `POST /api/ratings/trips/:trip_id`
 
+**[PARTIAL 2026-08-19]** — Stars + `POST /passenger/trips/:id/rate`. Tags, comment, required-to-leave still missing.
+
 ### Story 6.3: Payment method selection (cash only in MVP)
 
 As a passenger,
@@ -582,6 +596,8 @@ So that I don't need to enter card details.
 - **Then** "Efectivo" is the default payment method
 - **And** "MercadoPago" is shown as "próximamente"
 - **And** tapping "Confirmar pago" marks the trip as paid
+
+**[DONE local 2026-08-19]** — paymentStore cash default + transfer form. No passenger payments table. MP still ai-15.
 
 ### Story 6.4: Trip completion flow
 
@@ -601,6 +617,8 @@ So that I can return to Home and the trip appears in history.
 ## Epic 7: Trip History + Detail [IN PROGRESS]
 
 **Progress (2026-08-13):** History list wired; trip detail open.
+
+**Progress (2026-08-19):** Still no trip-detail route; history cards not pressable. Backend `GET /passenger/trips/:id` exists.
 
 **Goal**: Implement the trip history list and trip detail screens so users can review past trips.
 
@@ -648,6 +666,8 @@ So that I can verify my info.
 - **Then** I see avatar, name, phone, email
 - **And** a menu: Editar perfil, Métodos de pago, Historial de viajes, Términos y condiciones, Cerrar sesión
 
+**[DONE + extra 2026-08-19]** — #263: edit name/phone, Support, WhatsApp SOS prefill. Avatar upload still open.
+
 ### Story 8.2: Sign out
 
 As a passenger,
@@ -666,6 +686,8 @@ So that I can log in with a different account.
 ## Epic 9: Polish + Tests (Buffer) [IN PROGRESS]
 
 **Progress (2026-08-13):** Partial component/screen tests (favorites, ConnectingDriver, TripInProgress).
+
+**Progress (2026-08-19):** #264 clear address, #265 tab bar safe-area, #266 fare-by-geo shipped on main.
 
 **Goal**: Polish the app, add tests, and address edge cases.
 
