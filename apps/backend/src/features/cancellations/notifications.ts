@@ -57,11 +57,33 @@ export function notifyTvfWarning(driverUserId: string) {
   });
 }
 
-export function notifyPassengerCancelled(driverUserId: string, tripId: string) {
+export function notifyPassengerCancelled(
+  driverUserId: string,
+  tripId: string,
+  log?: {
+    reason?: string | null;
+    actor?: string | null;
+    counts_for_tvf?: boolean | null;
+    credit_driver?: boolean | null;
+    fee_applied?: number | null;
+  },
+) {
   sendPushToUser(driverUserId, {
     title: 'Viaje cancelado',
     body: 'El pasajero ha cancelado el viaje.',
-    data: { trip_id: tripId, type: 'trip:cancelled' },
+    data: {
+      trip_id: tripId,
+      type: 'trip:cancelled',
+      ...(log
+        ? {
+            cancel_reason: String(log.reason ?? ''),
+            cancel_actor: String(log.actor ?? ''),
+            counts_for_tvf: String(log.counts_for_tvf ?? false),
+            credit_driver: String(log.credit_driver ?? false),
+            fee_applied: String(log.fee_applied ?? 0),
+          }
+        : {}),
+    },
   });
 }
 

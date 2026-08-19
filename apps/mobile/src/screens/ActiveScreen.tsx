@@ -24,6 +24,7 @@ import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
+import { buildTripCancelledParams } from '../lib/cancellation';
 import { stopTracking } from '../lib/location';
 import { subscribeToDriverChannel } from '../lib/realtime';
 import { useAuthStore } from '../store/authStore';
@@ -104,18 +105,25 @@ export const ActiveScreen: React.FC = () => {
 
     let navigated = false;
 
-    const unsubscribe = subscribeToDriverChannel(driverId, (payload: any) => {
-      if (!navigated) {
-        navigated = true;
-        if (
-          payload?.id &&
-          (payload.status === 'request_received' || payload.status === 'offered')
-        ) {
-          useTripStore.getState().setActiveTrip(payload);
+    const unsubscribe = subscribeToDriverChannel(
+      driverId,
+      (payload: any) => {
+        if (!navigated) {
+          navigated = true;
+          if (
+            payload?.id &&
+            (payload.status === 'request_received' || payload.status === 'offered')
+          ) {
+            useTripStore.getState().setActiveTrip(payload);
+          }
+          navigation.navigate('IncomingRequest');
         }
-        navigation.navigate('IncomingRequest');
-      }
-    });
+      },
+      (payload: any) => {
+        useTripStore.getState().clearTrip();
+        navigation.replace('TripCancelled', buildTripCancelledParams(payload));
+      },
+    );
 
     const pollInterval = setInterval(async () => {
       try {

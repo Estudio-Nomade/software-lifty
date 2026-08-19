@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { apiClient } from '../api/client';
-import { reportTags } from '../api/types';
+import { ApiError, reportTags } from '../api/types';
 import { Button } from '../components/Button';
 import { StarRating } from '../components/StarRating';
 import { Text } from '../components/ui/Text';
@@ -37,6 +37,10 @@ export const TripCompleteScreen: React.FC = () => {
   const [comment, setComment] = React.useState('');
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [submitting, setSubmitting] = React.useState(false);
+  const [metrics, setMetrics] = React.useState<{
+    commission_active: boolean;
+    debt_remaining_ars: number;
+  } | null>(null);
 
   const { amount, commission, driverEarnings, tipAmount } = useLocalSearchParams<{
     amount?: string;
@@ -49,6 +53,10 @@ export const TripCompleteScreen: React.FC = () => {
   const tripCommission = commission != null ? Number(commission) : 0;
   const tripDriverEarnings = driverEarnings != null ? Number(driverEarnings) : 0;
   const tip = tipAmount != null ? Number(tipAmount) : 0;
+
+  const platformFee = Number(trip?.platform_fee ?? 0);
+  const cashBlocked =
+    metrics?.commission_active === true && (metrics?.debt_remaining_ars ?? 0) < platformFee;
 
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -69,6 +77,19 @@ export const TripCompleteScreen: React.FC = () => {
     ]).start();
   }, [fadeAnim, scaleAnim]);
 
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .get('/drivers/me/cancellation-metrics')
+      .then((res) => {
+        if (!cancelled) setMetrics(res.data?.data ?? res.data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const goOnline = () => {
     clearTrip();
     navigation.navigate('Online');
@@ -81,7 +102,12 @@ export const TripCompleteScreen: React.FC = () => {
       await apiClient.put(`/trips/${activeTripId}/collect`, { payment_method: 'cash' });
       setStep('rate');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'No se pudo registrar el cobro.';
+      const message =
+        err instanceof ApiError && err.code === 'DEBT_CAP_REACHED'
+          ? 'Alcanzaste el límite de $6000 de deuda con Lifty. Regularizá tu saldo o cobrá por transferencia.'
+          : err instanceof Error
+            ? err.message
+            : 'No se pudo registrar el cobro.';
       Alert.alert('Error', message);
     } finally {
       setCollecting(false);
@@ -165,10 +191,17 @@ export const TripCompleteScreen: React.FC = () => {
         </Text>
       </View>
 
+      {cashBlocked ? (
+        <Text style={styles.debtWarning}>
+          Alcanzaste el límite de $6000 de deuda con Lifty. Regularizá tu saldo o cobrá por
+          transferencia.
+        </Text>
+      ) : null}
       <Button
         title="Cobre en efectivo"
         onPress={handleCollect}
         loading={collecting}
+        disabled={cashBlocked}
         style={styles.button}
       />
       <Button
@@ -374,6 +407,13 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     fontSize: theme.fontSize.sm,
     color: theme.colors.deepBlue,
+  },
+  debtWarning: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.dangerRed,
+    fontWeight: theme.fontWeight.medium,
+    textAlign: 'center',
+    paddingHorizontal: theme.spacing.md,
   },
   button: {
     width: 300,

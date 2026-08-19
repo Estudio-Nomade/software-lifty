@@ -2,9 +2,17 @@ import { and, desc, eq, getTableColumns, inArray, not, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { getDb } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
-import { drivers, ratings, tripEvents, tripMessages, trips, users } from '../../shared/db/schema';
+import {
+  cancelationLog,
+  drivers,
+  ratings,
+  tripEvents,
+  tripMessages,
+  trips,
+  users,
+} from '../../shared/db/schema';
 import { broadcastTripMessage } from '../../shared/lib/broadcast';
-import { getCommissionRate } from '../../shared/lib/commission';
+import { getCommissionRate, getDebtCapArs } from '../../shared/lib/commission';
 import { AppError, BadRequestError, NotFoundError } from '../../shared/lib/errors';
 import { calculateFare } from '../../shared/lib/fuel-pricing';
 import { geocode, haversineDistance } from '../../shared/lib/geo';
@@ -663,8 +671,15 @@ export const tripService = {
     const driverId = await getDriverId(user);
     const offset = (page - 1) * limit;
     return db
-      .select()
+      .select({
+        ...getTableColumns(trips),
+        cancel_reason: cancelationLog.reason,
+        cancel_actor: cancelationLog.actor,
+        counts_for_tvf: cancelationLog.counts_for_tvf,
+        credit_driver: cancelationLog.credit_driver,
+      })
       .from(trips)
+      .leftJoin(cancelationLog, eq(cancelationLog.trip_id, trips.id))
       .where(eq(trips.driver_id, driverId))
       .orderBy(desc(trips.created_at))
       .limit(limit)
@@ -684,9 +699,14 @@ export const tripService = {
           FROM ${ratings} r
           WHERE r.ratee_id = ${trips.passenger_id}
         )`,
+        cancel_reason: cancelationLog.reason,
+        cancel_actor: cancelationLog.actor,
+        counts_for_tvf: cancelationLog.counts_for_tvf,
+        credit_driver: cancelationLog.credit_driver,
       })
       .from(trips)
       .leftJoin(users, eq(trips.passenger_id, users.id))
+      .leftJoin(cancelationLog, eq(cancelationLog.trip_id, trips.id))
       .where(and(eq(trips.id, tripId), eq(trips.driver_id, driverId)))
       .limit(1);
     if (!trip) throw new NotFoundError('Trip not found');
@@ -695,6 +715,8 @@ export const tripService = {
 
   async collectTrip(user: AuthUser, tripId: string, paymentMethod: 'cash' | 'transfer') {
     const driverId = await getDriverId(user);
+    const commissionRate = await getCommissionRate(getDb());
+    const debtCapArs = await getDebtCapArs(getDb());
 
     const [preCheck] = await db
       .select({ is_collected: trips.is_collected })
@@ -717,17 +739,36 @@ export const tripService = {
         throw new AppError('Payment already collected for this trip', 400, 'BAD_REQUEST');
       }
 
+      const platformFee = Number(trip.platform_fee ?? 0);
+
+      if (paymentMethod === 'cash' && platformFee > 0) {
+        const [driverRow] = await tx
+          .select({ platform_debt: drivers.platform_debt })
+          .from(drivers)
+          .where(eq(drivers.id, driverId))
+          .for('update')
+          .limit(1);
+        const currentDebt = Number(driverRow?.platform_debt ?? 0);
+        if (commissionRate > 0 && currentDebt + platformFee > debtCapArs) {
+          throw new AppError(
+            `Alcanzaste el límite de $${debtCapArs} de deuda con Lifty. Regularizá tu saldo o cobrá por transferencia.`,
+            409,
+            'DEBT_CAP_REACHED',
+          );
+        }
+      }
+
       const [updated] = await tx
         .update(trips)
         .set({ is_collected: true, payment_method: paymentMethod, updated_at: new Date() })
         .where(eq(trips.id, tripId))
         .returning();
 
-      if (trip.platform_fee) {
+      if (paymentMethod === 'cash' && platformFee > 0) {
         await tx
           .update(drivers)
           .set({
-            platform_debt: sql`${drivers.platform_debt} + ${trip.platform_fee}`,
+            platform_debt: sql`${drivers.platform_debt} + ${platformFee}`,
             updated_at: new Date(),
           })
           .where(eq(drivers.id, driverId));

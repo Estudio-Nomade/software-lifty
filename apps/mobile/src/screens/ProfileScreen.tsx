@@ -57,6 +57,22 @@ interface ProfileData {
   created_at: string;
 }
 
+interface CancellationMetrics {
+  tvf_rate_pct: number;
+  tvf_completed: number;
+  tvf_cancels: number;
+  period_days: number;
+  total_cancels: number;
+  driver_cancels: number;
+  no_shows: number;
+  payouts_pending_ars: number;
+  payouts_paid_ars: number;
+  platform_debt: number;
+  debt_cap_ars: number;
+  debt_remaining_ars: number;
+  commission_active: boolean;
+}
+
 // Maps a backend doc_type back to the UploadDocument screen's docType param.
 const DOC_TYPE_TO_UPLOAD: Record<string, string> = {
   license_front: 'drivers_license',
@@ -111,6 +127,7 @@ export const ProfileScreen: React.FC = () => {
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [documents, setDocuments] = useState<DriverDocument[]>([]);
+  const [metrics, setMetrics] = useState<CancellationMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
   const [editFirstName, setEditFirstName] = useState('');
@@ -123,12 +140,14 @@ export const ProfileScreen: React.FC = () => {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [profileRes, docsRes] = await Promise.all([
+      const [profileRes, docsRes, metricsRes] = await Promise.all([
         apiClient.get('/drivers/me'),
         getValidated('/drivers/me/documents', z.array(documentSchema)),
+        apiClient.get('/drivers/me/cancellation-metrics'),
       ]);
       setProfile(profileRes.data);
       setDocuments(docsRes);
+      setMetrics(metricsRes.data?.data ?? metricsRes.data);
     } catch {
     } finally {
       setLoading(false);
@@ -301,6 +320,48 @@ export const ProfileScreen: React.FC = () => {
           </View>
           <Button title="EDITAR PERFIL" variant="outline" onPress={openEdit} />
         </Card>
+
+        {metrics ? (
+          <Card>
+            <Text style={styles.sectionTitle}>Cancelaciones</Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>TVF ({metrics.period_days} días)</Text>
+              <Text style={styles.infoValue}>{metrics.tvf_rate_pct.toFixed(1)}%</Text>
+            </View>
+            <Text style={styles.metricSubline}>
+              {metrics.tvf_completed} viajes / {metrics.tvf_cancels} cancelaciones que cuentan
+            </Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Cancelaciones</Text>
+              <Text style={styles.infoValue}>
+                Cancelaste {metrics.driver_cancels} · No-show {metrics.no_shows}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Se te debe</Text>
+              <Text style={styles.infoValue}>
+                {metrics.payouts_pending_ars > 0
+                  ? `$${metrics.payouts_pending_ars}`
+                  : 'No hay pagos pendientes'}
+              </Text>
+            </View>
+            {metrics.commission_active ? (
+              <>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Deuda con Lifty</Text>
+                  <Text style={styles.infoValue}>
+                    ${metrics.platform_debt} / ${metrics.debt_cap_ars}
+                  </Text>
+                </View>
+                {metrics.debt_remaining_ars === 0 ? (
+                  <Text style={styles.debtWarning}>
+                    Alcanzaste el tope. Regularizá tu saldo o cobrá por transferencia.
+                  </Text>
+                ) : null}
+              </>
+            ) : null}
+          </Card>
+        ) : null}
 
         <Card>
           <Text style={styles.sectionTitle}>Contacto</Text>
@@ -519,6 +580,18 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.deepBlue,
     fontWeight: theme.fontWeight.medium,
+  },
+  metricSubline: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.mediumGray,
+    marginTop: -4,
+    marginBottom: theme.spacing.xs,
+  },
+  debtWarning: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.dangerRed,
+    fontWeight: theme.fontWeight.medium,
+    marginTop: theme.spacing.xs,
   },
   vehicleInfo: {
     fontSize: theme.fontSize.md,

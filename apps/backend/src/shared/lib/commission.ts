@@ -32,6 +32,14 @@ export async function getCommissionRate(
   return config.rate;
 }
 
+export const DEFAULT_DEBT_CAP_ARS = 6000;
+
+export async function getDebtCapArs(db: NodePgDatabase): Promise<number> {
+  const value = await getConfig(db, 'platform.debt_cap_ars');
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? DEFAULT_DEBT_CAP_ARS : parsed;
+}
+
 export async function getCommissionConfig(
   db: NodePgDatabase,
   now: Date = new Date(),

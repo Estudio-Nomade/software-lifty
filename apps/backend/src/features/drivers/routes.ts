@@ -15,6 +15,7 @@ import {
 import { driversService } from './service';
 
 import { safeCall } from '../../shared/lib/route-utils';
+import { cancellationService } from '../cancellations/service';
 
 const publicProfileRateLimit = rateLimit({
   name: 'rate-limit-public-profile',
@@ -48,6 +49,11 @@ export const driversRoutes = new Elysia({ prefix: '/drivers' })
   .get('/me/status', ({ user, set }) => safeCall(() => driversService.getMyStatus(user), set), {
     requireAuth: true,
   })
+  .get(
+    '/me/cancellation-metrics',
+    ({ user, set }) => safeCall(() => cancellationService.getDriverCancellationMetrics(user), set),
+    { requireAuth: true },
+  )
   .put(
     '/me/online',
     ({ user, body, set }) => safeCall(() => driversService.toggleOnline(user, body.is_online), set),
