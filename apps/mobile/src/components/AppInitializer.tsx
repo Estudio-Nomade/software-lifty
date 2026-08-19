@@ -5,6 +5,7 @@ import { InteractionManager, Platform } from 'react-native';
 import { apiClient } from '../api/client';
 import { driverStatusSchema } from '../api/types';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { isLiveTrip } from '../lib/isLiveTrip';
 import { getCurrentPosition } from '../lib/location';
 import {
   handleNotificationResponse,
@@ -95,7 +96,7 @@ function ActiveTripRecovery() {
         const response = await apiClient.get('/trips/active');
         if (cancelled) return;
         const trip = response.data?.data ?? response.data;
-        if (trip) {
+        if (trip && isLiveTrip(trip)) {
           useTripStore.getState().setActiveTrip(trip);
           navigatedRef.current = true;
           InteractionManager.runAfterInteractions(() => {

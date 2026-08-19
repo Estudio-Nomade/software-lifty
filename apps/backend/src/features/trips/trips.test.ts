@@ -422,6 +422,40 @@ describe('Trip State Machine', () => {
     expect(data.status).toBe('accepted');
   });
 
+  test('9b. GET /active does not return a stale waiting trip', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+
+    const { data: trip } = await request(
+      'POST',
+      '/api/trips',
+      { origin_lat: -31.9, origin_lng: -65.0, dest_lat: -31.88, dest_lng: -65.02, vehicle_type: 'car', distance_km: 5, duration_minutes: 15 },
+      token,
+    );
+
+    await request('POST', `/api/trips/${trip.id}/accept`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
+
+    const db = getDb();
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    await db
+      .update(trips)
+      .set({ waiting_since: fiveDaysAgo, updated_at: fiveDaysAgo })
+      .where(eq(trips.id, trip.id));
+
+    const res = await app.handle(
+      new Request('http://localhost/api/trips/active', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body === '' || body === 'null').toBe(true);
+  });
+
   test('10. GET /history returns paginated trips', async () => {
     const token = await registerAndGetToken(phone, password);
     await createDriverRow(token);

@@ -2,8 +2,10 @@ import { useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import type { DriverStatus } from '../api/types';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { isLiveTrip } from '../lib/isLiveTrip';
 import { STEP_ROUTE, routeForDriverStatus } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
+import { useTripStore } from '../store/tripStore';
 
 const PUBLIC_ROUTES = ['', 'register', 'forgot-password'];
 
@@ -27,6 +29,7 @@ export function AuthRedirectWatcher() {
   const router = useRouter();
   const segments = useSegments();
   const { replace } = useAppNavigation();
+  const trip = useTripStore((s) => s.trip);
 
   useEffect(() => {
     if (needsRedirect) {
@@ -64,6 +67,15 @@ export function AuthRedirectWatcher() {
     replace,
     needsRedirect,
   ]);
+
+  useEffect(() => {
+    if (!sessionRestored) return;
+    if (!isAuthenticated || driverStatus !== 'approved') return;
+    const current = segments[0] ?? '';
+    if (!TRIP_ROUTES.includes(current)) return;
+    if (isLiveTrip(trip)) return;
+    replace('Online');
+  }, [sessionRestored, isAuthenticated, driverStatus, segments, trip, replace]);
 
   return null;
 }
