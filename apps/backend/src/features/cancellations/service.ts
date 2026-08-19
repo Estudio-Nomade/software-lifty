@@ -4,12 +4,14 @@ import { getDriverId } from '../../shared/db/queries';
 import {
   cancelationLog,
   driverFeePayouts,
+  driverTvfMetrics,
   drivers,
   platformConfig,
   tripEvents,
   trips,
   userDebt,
 } from '../../shared/db/schema';
+import { getCommissionRate, getDebtCapArs } from '../../shared/lib/commission';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { hasActiveBlock } from './blocks';
@@ -171,20 +173,24 @@ async function applyCancel(params: {
       to_status: 'cancelled',
     });
 
+    let log: typeof cancelationLog.$inferSelect;
     try {
-      await tx.insert(cancelationLog).values({
-        trip_id: params.trip.id,
-        user_id: params.passengerUserId,
-        driver_id: params.trip.driver_id,
-        stage: decision.stage,
-        reason: decision.reason,
-        actor: params.actor,
-        fee_applied: decision.feeArs,
-        credit_driver: decision.creditDriver,
-        counts_for_tvf: decision.countsForTvf,
-        collection_phase: config.collectionPhase,
-        cancelation_time: new Date(),
-      });
+      [log] = await tx
+        .insert(cancelationLog)
+        .values({
+          trip_id: params.trip.id,
+          user_id: params.passengerUserId,
+          driver_id: params.trip.driver_id,
+          stage: decision.stage,
+          reason: decision.reason,
+          actor: params.actor,
+          fee_applied: decision.feeArs,
+          credit_driver: decision.creditDriver,
+          counts_for_tvf: decision.countsForTvf,
+          collection_phase: config.collectionPhase,
+          cancelation_time: new Date(),
+        })
+        .returning();
     } catch {
       throw new AppError('Fee already applied for this trip', 409, 'FEE_ALREADY_APPLIED');
     }
@@ -200,7 +206,7 @@ async function applyCancel(params: {
     }
 
     const [updated] = await tx.select().from(trips).where(eq(trips.id, params.trip.id));
-    return { updated, decision, config };
+    return { updated, decision, config, log };
   };
 
   const result = params.tx ? await run(params.tx) : await db.transaction((tx) => run(tx));
@@ -215,6 +221,21 @@ async function applyCancel(params: {
   }
 
   return result;
+}
+
+export function enrichTripWithCancel(
+  trip: typeof trips.$inferSelect | null | undefined,
+  log?: typeof cancelationLog.$inferSelect | null,
+) {
+  if (!trip || !log) return trip;
+  return {
+    ...trip,
+    cancel_reason: log.reason,
+    cancel_actor: log.actor,
+    counts_for_tvf: log.counts_for_tvf,
+    credit_driver: log.credit_driver,
+    fee_applied: log.fee_applied,
+  };
 }
 
 export const cancellationService = {
@@ -287,21 +308,22 @@ export const cancellationService = {
       .limit(1);
     if (!trip) throw new NotFoundError('Trip not found');
 
-    const { updated, decision } = await applyCancel({
+    const { updated, decision, log } = await applyCancel({
       trip,
       actor: 'passenger',
       reason: 'user_cancel',
       passengerUserId: user.id,
     });
 
+    const enriched = enrichTripWithCancel(updated, log);
     if (trip.driver_id) {
       const [driver] = await db
         .select({ userId: drivers.user_id })
         .from(drivers)
         .where(eq(drivers.id, trip.driver_id))
         .limit(1);
-      if (driver?.userId) notifyPassengerCancelled(driver.userId, tripId);
-      if (updated) broadcastDriverCancelled(trip.driver_id, updated);
+      if (driver?.userId) notifyPassengerCancelled(driver.userId, tripId, log);
+      if (enriched) broadcastDriverCancelled(trip.driver_id, enriched);
     }
     if (updated) broadcastToPassengerChannel(user.id, updated);
     if (decision.feeArs > 0) notifyFeeApplied(user.id, tripId);
@@ -317,19 +339,20 @@ export const cancellationService = {
       .limit(1);
     if (!trip) throw new NotFoundError('Trip not found');
 
-    const { updated, decision } = await applyCancel({
+    const { updated, decision, log } = await applyCancel({
       trip,
       actor: 'driver',
       reason,
       passengerUserId: trip.passenger_id ?? user.id,
     });
 
+    const enriched = enrichTripWithCancel(updated, log);
     if (updated && trip.passenger_id) {
       broadcastToPassengerChannel(trip.passenger_id, updated);
       if (decision.reason === 'no_show') notifyNoShow(trip.passenger_id, tripId);
       else notifyDriverCancelled(trip.passenger_id, tripId);
     }
-    return updated;
+    return enriched;
   },
 
   async expireSearchTimeouts() {
@@ -395,6 +418,69 @@ export const cancellationService = {
       .returning();
     if (!row) throw new NotFoundError('Payout not found');
     return row;
+  },
+
+  async getDriverCancellationMetrics(user: AuthUser) {
+    const driverId = await getDriverId(user);
+    const config = await getCancellationConfig();
+    const commissionRate = await getCommissionRate(db);
+    const debtCapArs = await getDebtCapArs(db);
+
+    const [driver] = await db
+      .select({ platform_debt: drivers.platform_debt })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+
+    let [snapshot] = await db
+      .select()
+      .from(driverTvfMetrics)
+      .where(eq(driverTvfMetrics.driver_id, driverId))
+      .limit(1);
+    if (!snapshot) {
+      await recalcDriverTvf(driverId, config);
+      [snapshot] = await db
+        .select()
+        .from(driverTvfMetrics)
+        .where(eq(driverTvfMetrics.driver_id, driverId))
+        .limit(1);
+    }
+
+    const [cancelAgg] = await db
+      .select({
+        total: sql<number>`count(*)::int`,
+        driver_cancels: sql<number>`count(*) filter (where ${cancelationLog.reason} = 'driver_cancel')::int`,
+        no_shows: sql<number>`count(*) filter (where ${cancelationLog.reason} = 'no_show')::int`,
+      })
+      .from(cancelationLog)
+      .where(eq(cancelationLog.driver_id, driverId));
+
+    const [payoutAgg] = await db
+      .select({
+        pending: sql<number>`coalesce(sum(${driverFeePayouts.amount_ars}) filter (where ${driverFeePayouts.status} in ('pending','ready')), 0)::int`,
+        paid: sql<number>`coalesce(sum(${driverFeePayouts.amount_ars}) filter (where ${driverFeePayouts.status} = 'paid'), 0)::int`,
+      })
+      .from(driverFeePayouts)
+      .where(eq(driverFeePayouts.driver_id, driverId));
+
+    const tvfRateBp = snapshot?.tvf_rate_bp ?? 10000;
+    const debt = Number(driver?.platform_debt ?? 0);
+
+    return {
+      tvf_rate_pct: Math.round(tvfRateBp / 10) / 10,
+      tvf_completed: snapshot?.total_completed ?? 0,
+      tvf_cancels: snapshot?.total_tvf_cancels ?? 0,
+      period_days: config.tvfWindowDays,
+      total_cancels: cancelAgg?.total ?? 0,
+      driver_cancels: cancelAgg?.driver_cancels ?? 0,
+      no_shows: cancelAgg?.no_shows ?? 0,
+      payouts_pending_ars: payoutAgg?.pending ?? 0,
+      payouts_paid_ars: payoutAgg?.paid ?? 0,
+      platform_debt: debt,
+      debt_cap_ars: debtCapArs,
+      debt_remaining_ars: Math.max(0, debtCapArs - debt),
+      commission_active: commissionRate > 0,
+    };
   },
 
   async putConfig(key: string, value: string) {

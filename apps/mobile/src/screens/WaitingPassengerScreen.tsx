@@ -21,6 +21,7 @@ import { OTPInput } from '../components/OTPInput';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTripChat } from '../hooks/useTripChat';
+import { buildTripCancelledParams } from '../lib/cancellation';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
@@ -253,13 +254,12 @@ export const WaitingPassengerScreen: React.FC = () => {
             onPress={async () => {
               if (!trip?.id) return;
               try {
-                await apiClient.post(`/trips/${trip.id}/cancel`, { reason: 'no_show' });
-                Alert.alert(
-                  'Viaje cancelado',
-                  'Has recibido $600 por concepto de cancelación. Lifty te transferirá $600.',
-                );
+                const res = await apiClient.post(`/trips/${trip.id}/cancel`, {
+                  reason: 'no_show',
+                });
+                const payload = res.data?.data ?? res.data;
                 clearTrip();
-                navigation.replace('Online');
+                navigation.replace('TripCancelled', buildTripCancelledParams(payload));
               } catch (err: unknown) {
                 const message =
                   err && typeof err === 'object' && 'error' in err

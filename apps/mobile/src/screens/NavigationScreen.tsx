@@ -22,6 +22,7 @@ import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useDynamicRouting } from '../hooks/useDynamicRouting';
 import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
+import { buildTripCancelledParams } from '../lib/cancellation';
 import { haversineDistance } from '../lib/geo';
 import { startTracking, stopTracking } from '../lib/location';
 import { subscribeToDriverChannel } from '../lib/realtime';
@@ -84,9 +85,9 @@ export const NavigationScreen: React.FC = () => {
     return subscribeToDriverChannel(
       driverId,
       () => {},
-      () => {
+      (payload: any) => {
         clearTrip();
-        navigation.replace('Online');
+        navigation.replace('TripCancelled', buildTripCancelledParams(payload));
       },
     );
   }, [driverId, clearTrip, navigation]);
@@ -241,9 +242,12 @@ export const NavigationScreen: React.FC = () => {
         style: 'destructive',
         onPress: async () => {
           try {
-            await apiClient.post(`/trips/${trip.id}/cancel`, { reason: 'driver_cancel' });
+            const res = await apiClient.post(`/trips/${trip.id}/cancel`, {
+              reason: 'driver_cancel',
+            });
+            const payload = res.data?.data ?? res.data;
             clearTrip();
-            navigation.replace('Online');
+            navigation.replace('TripCancelled', buildTripCancelledParams(payload));
           } catch (err: any) {
             Alert.alert('Error', err?.error?.message ?? 'No se pudo cancelar el viaje.');
           }

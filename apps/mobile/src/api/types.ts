@@ -128,6 +128,10 @@ export const tripSchema = z.object({
   passenger_cancel_visible: z.boolean().optional(),
   passenger_cancel_rate_pct: z.number().nullable().optional(),
   passenger_cancel_count_30d: z.number().nullable().optional(),
+  cancel_reason: z.string().nullable().optional(),
+  cancel_actor: z.string().nullable().optional(),
+  counts_for_tvf: z.boolean().nullable().optional(),
+  credit_driver: z.boolean().nullable().optional(),
 });
 
 export const earningsTripSchema = z.object({

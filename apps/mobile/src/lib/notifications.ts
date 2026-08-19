@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { buildTripCancelledParams } from './cancellation';
 
 interface PermStatus {
   status: string;
@@ -49,13 +50,32 @@ export async function registerForPush(): Promise<string | null> {
 
 export function handleNotificationResponse(
   response: Notifications.NotificationResponse,
-  navigate: (screen: string) => void,
+  navigate: (screen: string, params?: Record<string, string>) => void,
 ): void {
-  const type = response.notification.request.content.data?.type as string | undefined;
+  const data = response.notification.request.content.data as
+    | Record<string, string | undefined>
+    | undefined;
+  const type = data?.type;
 
   switch (type) {
     case 'trip:request':
       navigate('IncomingRequest');
+      break;
+    case 'trip:cancelled':
+      navigate(
+        'TripCancelled',
+        buildTripCancelledParams({
+          id: data?.trip_id,
+          cancel_reason: data?.cancel_reason,
+          cancel_actor: data?.cancel_actor,
+          counts_for_tvf: data?.counts_for_tvf,
+          credit_driver: data?.credit_driver,
+          fee_applied: data?.fee_applied,
+        }),
+      );
+      break;
+    case 'tvf:warning':
+      navigate('Profile');
       break;
     case 'kyc:approved':
       navigate('Online');

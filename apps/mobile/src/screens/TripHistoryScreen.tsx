@@ -61,12 +61,24 @@ const paymentLabel = (method: string | null) => {
   return method;
 };
 
+const CANCELLED_STATUSES = ['cancelled', 'cancelled_early', 'cancelled_late'];
+
+const cancelLine = (trip: Trip): string | null => {
+  if (!CANCELLED_STATUSES.includes(trip.status)) return null;
+  if (trip.cancel_reason === 'driver_cancel') return 'Cancelaste · cuenta para TVF';
+  if (trip.cancel_reason === 'no_show') return 'No-show · no cuenta';
+  if (trip.cancel_reason === 'user_cancel') return 'Canceló el pasajero';
+  if (trip.cancel_reason === 'auto_timeout') return 'No se encontró pasajero';
+  return null;
+};
+
 interface TripCardProps {
   trip: Trip;
 }
 
 const TripCard: React.FC<TripCardProps> = ({ trip }) => {
   const statusInfo = STATUS_MAP[trip.status as TripStatus];
+  const cancelInfo = cancelLine(trip);
 
   return (
     <Card style={styles.tripCard} padding={theme.spacing.md}>
@@ -89,6 +101,7 @@ const TripCard: React.FC<TripCardProps> = ({ trip }) => {
         <Text style={styles.tripFare}>{formatCurrency(trip.total_fare ?? 0)}</Text>
         <Text style={styles.tripPayment}>{paymentLabel(trip.payment_method)}</Text>
       </View>
+      {cancelInfo ? <Text style={styles.cancelLine}>{cancelInfo}</Text> : null}
     </Card>
   );
 };
@@ -262,6 +275,12 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xs,
     color: theme.colors.turquoise,
     fontWeight: theme.fontWeight.medium,
+  },
+  cancelLine: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.dangerRed,
+    fontWeight: theme.fontWeight.medium,
+    marginTop: 2,
   },
   loadMoreContainer: {
     paddingVertical: theme.spacing.md,

@@ -55,6 +55,21 @@ async function createDriverRow(token: string): Promise<string> {
   return driver!.id;
 }
 
+async function completeTrip(token: string): Promise<{ tripId: string; platformFee: number }> {
+  const { data: trip } = await request(
+    'POST',
+    '/api/trips',
+    { origin_lat: -31.9, origin_lng: -65.0, dest_lat: -31.88, dest_lng: -65.02, vehicle_type: 'car', distance_km: 5, duration_minutes: 15 },
+    token,
+  );
+  const { data: accepted } = await request('POST', `/api/trips/${trip.id}/accept`, undefined, token);
+  await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
+  await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
+  await request('POST', `/api/trips/${trip.id}/start`, { verification_code: accepted.verification_code }, token);
+  await request('POST', `/api/trips/${trip.id}/complete`, { lat: -31.88, lng: -65.02 }, token);
+  return { tripId: trip.id, platformFee: Number(trip.platform_fee ?? 0) };
+}
+
 beforeAll(() => {
   app = createApp(createTestAuthPlugin());
 });
@@ -584,7 +599,7 @@ describe('Trip State Machine', () => {
     expect(driver.platform_debt).toBeGreaterThan(0);
   });
 
-  test('15. collect transfer trip sets is_collected and accumulates platform_debt', async () => {
+  test('15. collect transfer trip sets is_collected and does NOT accumulate platform_debt', async () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);
 
@@ -614,7 +629,7 @@ describe('Trip State Machine', () => {
 
     const db = getDb();
     const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
-    expect(driver.platform_debt).toBeGreaterThan(0);
+    expect(driver.platform_debt).toBe(0);
   });
 
   test('16. collect already collected trip returns error', async () => {
@@ -646,6 +661,123 @@ describe('Trip State Machine', () => {
     expect(status).toBe(400);
     expect(data.error.code).toBe('BAD_REQUEST');
     expect(data.error.message).toContain('already collected');
+  });
+
+  test('cap-1. rate 0 + cash collect does not accumulate debt', async () => {
+    const token = await registerAndGetToken(phone, password);
+    const driverId = await createDriverRow(token);
+
+    const db = getDb();
+    await db
+      .update(platformConfig)
+      .set({ value: '2026-08-01' })
+      .where(eq(platformConfig.key, 'commission_start_date'));
+
+    const { tripId } = await completeTrip(token);
+    const { status, data } = await request(
+      'PUT',
+      `/api/trips/${tripId}/collect`,
+      { payment_method: 'cash' },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.is_collected).toBe(true);
+
+    const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
+    expect(driver.platform_debt).toBe(0);
+  });
+
+  test('cap-2. rate > 0 + cash under cap accumulates platform_debt', async () => {
+    const token = await registerAndGetToken(phone, password);
+    const driverId = await createDriverRow(token);
+
+    const { tripId } = await completeTrip(token);
+    const db = getDb();
+    await db.update(trips).set({ platform_fee: 200 }).where(eq(trips.id, tripId));
+
+    const { status, data } = await request(
+      'PUT',
+      `/api/trips/${tripId}/collect`,
+      { payment_method: 'cash' },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.is_collected).toBe(true);
+
+    const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
+    expect(driver.platform_debt).toBe(200);
+  });
+
+  test('cap-3. rate > 0 + cash that would exceed 6000 returns DEBT_CAP_REACHED', async () => {
+    const token = await registerAndGetToken(phone, password);
+    const driverId = await createDriverRow(token);
+
+    const { tripId } = await completeTrip(token);
+    const db = getDb();
+    await db.update(drivers).set({ platform_debt: 5900 }).where(eq(drivers.id, driverId));
+    await db.update(trips).set({ platform_fee: 200 }).where(eq(trips.id, tripId));
+
+    const { status, data } = await request(
+      'PUT',
+      `/api/trips/${tripId}/collect`,
+      { payment_method: 'cash' },
+      token,
+    );
+
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('DEBT_CAP_REACHED');
+
+    const [tripAfter] = await db.select().from(trips).where(eq(trips.id, tripId));
+    expect(tripAfter.is_collected).toBe(false);
+    const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
+    expect(driver.platform_debt).toBe(5900);
+  });
+
+  test('cap-4. rate > 0 + transfer does not change platform_debt', async () => {
+    const token = await registerAndGetToken(phone, password);
+    const driverId = await createDriverRow(token);
+
+    const { tripId } = await completeTrip(token);
+    const db = getDb();
+    await db.update(drivers).set({ platform_debt: 1200 }).where(eq(drivers.id, driverId));
+
+    const { status, data } = await request(
+      'PUT',
+      `/api/trips/${tripId}/collect`,
+      { payment_method: 'transfer' },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.is_collected).toBe(true);
+
+    const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
+    expect(driver.platform_debt).toBe(1200);
+  });
+
+  test('cap-5. debt + fee exactly at cap is allowed', async () => {
+    const token = await registerAndGetToken(phone, password);
+    const driverId = await createDriverRow(token);
+
+    const { tripId } = await completeTrip(token);
+    const db = getDb();
+    await db.update(drivers).set({ platform_debt: 5800 }).where(eq(drivers.id, driverId));
+    await db.update(trips).set({ platform_fee: 200 }).where(eq(trips.id, tripId));
+
+    const { status, data } = await request(
+      'PUT',
+      `/api/trips/${tripId}/collect`,
+      { payment_method: 'cash' },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.is_collected).toBe(true);
+
+    const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
+    expect(driver.platform_debt).toBe(6000);
   });
 
   test('17. accept endpoint enforces rate limit (5 req/min)', async () => {

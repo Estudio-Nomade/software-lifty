@@ -27,6 +27,7 @@ const SCREEN_TO_ROUTE = {
   Navigation: '/navigation',
   WaitingPassenger: '/waiting-passenger',
   TripInProgress: '/trip-in-progress',
+  TripCancelled: '/trip-cancelled',
   TripComplete: '/trip-complete',
   Earnings: '/earnings',
   Profile: '/profile',
