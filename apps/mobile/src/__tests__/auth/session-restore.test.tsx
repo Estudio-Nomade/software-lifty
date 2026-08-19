@@ -135,4 +135,43 @@ describe('AuthRedirectWatcher', () => {
 
     expect(mockRouterReplace).not.toHaveBeenCalledWith('/online');
   });
+
+  test('redirects to / exactly once when needsRedirect is set', async () => {
+    mockNeedsRedirect = true;
+    mockSegments = ['profile'];
+
+    await act(async () => {
+      render(React.createElement(AuthRedirectWatcher));
+    });
+
+    expect(mockRouterReplace).toHaveBeenCalledWith('/');
+    expect(mockRouterReplace).toHaveBeenCalledTimes(1);
+    expect(mockResetRedirect).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not redirect to / when needsRedirect is set on an auth flow route', async () => {
+    mockNeedsRedirect = true;
+    mockSegments = ['login-credentials'];
+
+    await act(async () => {
+      render(React.createElement(AuthRedirectWatcher));
+    });
+
+    expect(mockRouterReplace).not.toHaveBeenCalledWith('/');
+    expect(mockResetRedirect).toHaveBeenCalledTimes(1);
+  });
+
+  test('redirects an authenticated user on / exactly once', async () => {
+    mockIsAuthenticated = true;
+    mockSegments = [''];
+    mockDriverStatus = 'approved';
+    mockOnboardingStep = 'approved';
+
+    await act(async () => {
+      render(React.createElement(AuthRedirectWatcher));
+    });
+
+    expect(mockRouterReplace).toHaveBeenCalledWith('/online');
+    expect(mockRouterReplace).toHaveBeenCalledTimes(1);
+  });
 });
