@@ -1,4 +1,4 @@
-import { and, desc, eq, getTableColumns, inArray, not, sql } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, inArray, lt, not, or, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { getDb } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
@@ -647,6 +647,22 @@ export const tripService = {
 
   async getActiveTrip(user: AuthUser) {
     const driverId = await getDriverId(user);
+    const config = await getCancellationConfig();
+    const noShowCutoff = new Date(Date.now() - config.waitS * 1000);
+    const searchCutoff = new Date(Date.now() - config.searchTimeoutS * 1000);
+
+    const staleTrip = or(
+      and(
+        eq(trips.status, 'waiting'),
+        lt(sql`COALESCE(${trips.waiting_since}, ${trips.updated_at})`, noShowCutoff),
+      ),
+      and(eq(trips.status, 'offered'), lt(trips.expires_at, new Date())),
+      and(
+        inArray(trips.status, ['pending', 'request_received']),
+        lt(trips.created_at, searchCutoff),
+      ),
+    )!;
+
     const result = await db
       .select({
         ...getTableColumns(trips),
@@ -661,7 +677,13 @@ export const tripService = {
       })
       .from(trips)
       .leftJoin(users, eq(trips.passenger_id, users.id))
-      .where(and(eq(trips.driver_id, driverId), not(inArray(trips.status, TERMINAL_STATUSES))))
+      .where(
+        and(
+          eq(trips.driver_id, driverId),
+          not(inArray(trips.status, TERMINAL_STATUSES)),
+          not(staleTrip),
+        ),
+      )
       .orderBy(desc(trips.created_at))
       .limit(1);
     return result[0] ?? null;
