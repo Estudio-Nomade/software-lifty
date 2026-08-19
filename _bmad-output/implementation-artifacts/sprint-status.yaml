@@ -1,5 +1,5 @@
 # generated: 2026-08-10
-# last_updated: 2026-08-18
+# last_updated: 2026-08-19
 # project: software-lifty
 # project_key: NOKEY
 # tracking_system: file-system
@@ -9,6 +9,14 @@
 # - #254 dual-role passenger access, rate/estimate paths, verification UI
 # - #255 passenger SOS backend (no getDriverId)
 # This file is SoT for story status. epics-and-stories.md markers synced same day.
+#
+# Resync 2026-08-19 (post #263–#267 on main, no entries removed):
+# - #263 profile menu + edit name/phone + Support/SOS WhatsApp prefill
+# - #264 clear pickup/dest buttons
+# - #265 tab bar safe-area inset
+# - #266 fare from real coords via POST /maps/fare-estimate
+# - #267 cancellation policy engine (backend) + partial app surfaces
+# Status-only updates: ai-3/ai-7 done; 6-1 → review. Stories/AIs not deleted.
 
 # STATUS DEFINITIONS:
 # ==================
@@ -34,7 +42,7 @@
 #   - done: Completed
 
 generated: 2026-08-10
-last_updated: 2026-08-18
+last_updated: 2026-08-19
 project: software-lifty
 project_key: NOKEY
 tracking_system: file-system
@@ -83,8 +91,9 @@ development_status:
   epic-4-retrospective: optional
 
   # ===== Epic 5: Trip Lifecycle + SOS — IN PROGRESS =====
-  # Backend SOS passenger-ready (#255). UI SOS still open.
-  # Verification code UI shipped (#254). Cancel done. Tracking partial.
+  # Backend SOS passenger-ready (#255). UI SOS still open (WhatsApp prefill ≠ POST /sos).
+  # Verification code UI shipped (#254). Cancel done (#267 engine on main).
+  # 5-4: chat + tel: + cancel preview wired; no live driver:location / route / SOS button.
   epic-5: in-progress
   5-1-driver-found: done
   5-2-verification-code: done
@@ -95,9 +104,10 @@ development_status:
   epic-5-retrospective: optional
 
   # ===== Epic 6: Post-Trip (Rating + Payment) — IN PROGRESS =====
-  # Passenger→driver rate API exists (#254). TripComplete UI still mock / not wired.
+  # Rate API (#254). TripComplete uses real trip + rateRide (no longer mock).
+  # 6-1 missing map/breakdown/payment method. 6-2 stars only (no tags/comment).
   epic-6: in-progress
-  6-1-trip-complete: in-progress
+  6-1-trip-complete: review
   6-2-rating: in-progress
   6-3-payment-cash: done
   6-4-completion-flow: backlog
@@ -142,9 +152,10 @@ action_items:
 
   - id: ai-3
     action: "Wire TripComplete to real trip data + rateRide; completion flow after driver completes"
-    status: open
+    status: done
     epic: 6
     owner: mobile
+    note: "TripComplete reads activeTrip + rateRide. Gaps (map/breakdown/tags) stay on 6-1/6-2. Payment-confirm step remains 6-4."
 
   - id: ai-4
     action: "Show verification_code on passenger in-trip UI"
@@ -158,7 +169,7 @@ action_items:
     status: open
     epic: 5
     owner: mobile
-    note: "Backend ready PR #255 (passenger + trip ownership). UI not started."
+    note: "Backend ready PR #255. #263 added Profile WhatsApp SOS prefill — that is NOT POST /sos. Story 5.5 still missing."
 
   - id: ai-5b
     action: "SOS backend passenger-capable (remove getDriverId gate)"
@@ -175,9 +186,10 @@ action_items:
 
   - id: ai-7
     action: "Chat + call driver (shells only today)"
-    status: open
+    status: done
     epic: 5
     owner: mobile
+    note: "ChatScreen + useTripChat + tel:driver_phone from TripInProgress. No empty-phone UX."
 
   - id: ai-8
     action: "Cash payment MVP + payment method screen beyond empty state"
@@ -238,3 +250,31 @@ action_items:
     epic: 5
     owner: mobile
     note: "Collateral risk noted during Términos fix; not the Profile tap cause. Annotate as debt."
+
+  - id: ai-17
+    action: "Passenger edit profile name + phone (PUT /passenger/profile)"
+    status: done
+    epic: 8
+    owner: mobile+backend
+    note: "PR #263. Photo still ai-13. PRD FR-22 was NON-GOAL; name/phone shipped anyway."
+
+  - id: ai-18
+    action: "Cancellation policy engine (#267)"
+    status: done
+    epic: 5
+    owner: backend
+    note: "evaluate/service/metrics/blocks + migrations 0039 / 20260818220000. Passenger in-trip uses cancel-preview."
+
+  - id: ai-19
+    action: "Cancellation policy leftover UI (debt banner, connecting preview, driver preview, no-show amount)"
+    status: open
+    epic: 5
+    owner: mobile
+    note: "Engine on main. ConnectingDriver cancel is blind; driver WaitingPassenger no-show still hardcoded $600; getPassengerDebt unused."
+
+  - id: ai-20
+    action: "Passenger polish already on main: clear address, tabbar safe-area, fare-by-geo"
+    status: done
+    epic: 9
+    owner: mobile
+    note: "PRs #264 #265 #266. No dedicated story keys."

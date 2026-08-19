@@ -5,7 +5,8 @@
 ## Stack
 - **Monorepo**: Bun Workspaces + Turborepo
 - **Backend**: Bun + Elysia + Drizzle ORM + PostgreSQL (Supabase) — `apps/backend`
-- **Mobile**: Expo SDK 54 + React 19 + react-native 0.81 — `apps/mobile`
+- **Mobile (driver)**: Expo SDK 54 + React 19 + react-native 0.81 — `apps/mobile`
+- **Mobile (passenger)**: Expo SDK 54 + React 19 + react-native 0.81 — `apps/mobile-passengers`
 - **Pre-commit**: Lefthook (biome on staged files) + Commitlint (conventional commits)
 - **CI**: GitHub Actions (lint, typecheck, test via turbo)
 
@@ -52,14 +53,16 @@ bun run clean          # turbo clean
 ```bash
 bun --filter @lifty/backend dev
 bun --filter @lifty/mobile dev
+bun --filter @lifty/mobile-passengers dev
 ```
 
 ## Directory layout
 ```
 software-lifty/
 ├── apps/
-│   ├── backend/       # @lifty/backend — Elysia API
-│   └── mobile/        # @lifty/mobile — Expo app
+│   ├── backend/            # @lifty/backend — Elysia API
+│   ├── mobile/             # @lifty/mobile — Expo driver app
+│   └── mobile-passengers/  # @lifty/mobile-passengers — Expo passenger app
 ├── specs/             # Product specs
 ├── turbo.json         # Turborepo pipeline
 ├── biome.json         # Linter + formatter config
@@ -94,13 +97,20 @@ Quick ref:
 - Redis para rate limiting y cache de ubicacion
 - Resend para emails
 
-### Mobile (`apps/mobile`)
+### Mobile driver (`apps/mobile`)
 See `apps/mobile/AGENTS.md` for full mobile docs.
 Quick ref:
 - Expo SDK 54, React 19.2, react-native 0.81, TypeScript 6.0
 - expo-router (file-based routing)
 - React Compiler enabled
 - Theme: `src/theme/index.ts`, usar siempre `theme.colors.*`, etc.
+
+### Mobile passenger (`apps/mobile-passengers`)
+See `apps/mobile-passengers/AGENTS.md` for full passenger docs.
+Quick ref:
+- Same Expo SDK 54 family as the driver app
+- expo-router (file-based routing)
+- Theme tokens from `App-pasajeros.pen` via `src/theme/index.ts`
 
 ## Tech Debt
 1. ~~**Backend test script**: `"test": "echo \"Error: no test specified\"` — arreglar para que corra los 194 tests existentes~~ ✅ arreglado (`"test": "bun test"`, 206 tests)
