@@ -17,6 +17,7 @@ import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
+import { shouldShowPlatformDebt } from '../lib/commission';
 import { stopTracking } from '../lib/location';
 import { useLocationStore } from '../store/locationStore';
 import { useOnlineStore } from '../store/onlineStore';
@@ -222,7 +223,7 @@ export const OnlineScreen: React.FC = () => {
             <Text style={styles.breakdownValue}>{formatCurrency(earnings.transfer)}</Text>
           </View>
         </View>
-        {earnings.platform_debt ? (
+        {shouldShowPlatformDebt(earnings.platform_debt) ? (
           <View style={[styles.earningsBreakdown, { marginTop: theme.spacing.sm }]}>
             <Text style={[styles.breakdownLabel, { color: theme.colors.dangerRed }]}>
               Deuda pendiente

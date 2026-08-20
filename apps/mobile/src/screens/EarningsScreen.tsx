@@ -12,6 +12,7 @@ import { Text } from '../components/ui/Text';
 import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
+import { shouldShowPlatformDebt } from '../lib/commission';
 import { useOnlineStore } from '../store/onlineStore';
 import { theme } from '../theme';
 
@@ -152,7 +153,7 @@ export const EarningsScreen: React.FC = () => {
                   {formatCurrency(earnings.total)}
                 </Text>
               </View>
-              {earnings.platform_debt ? (
+              {shouldShowPlatformDebt(earnings.platform_debt) ? (
                 <View style={styles.row}>
                   <Text style={[styles.rowLabel, { color: theme.colors.dangerRed }]}>
                     Deuda pendiente
