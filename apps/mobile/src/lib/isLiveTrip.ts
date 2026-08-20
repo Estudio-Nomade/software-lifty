@@ -20,6 +20,7 @@ export function isLiveTrip(trip: Trip | null | undefined, now: number = Date.now
     case 'accepted':
     case 'en_route':
     case 'in_trip':
+    case 'completed':
       return age < IN_PROGRESS_LIVE_MS;
     default:
       return false;
