@@ -240,6 +240,73 @@ describe('Passenger Trips', () => {
     expect(data.driver_lng).toBe(origin.lng);
   });
 
+  test('GET /active returns a completed (uncollected) trip for rating', async () => {
+    const passengerToken = await createPassengerToken();
+    const driverId = await createDriverWithLocation(passengerToken, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(passengerToken);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ driver_id: driverId, status: 'completed', is_collected: false })
+      .where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'GET',
+      '/api/passenger/trips/active',
+      undefined,
+      passengerToken,
+    );
+
+    expect(status).toBe(200);
+    expect(data.id).toBe(trip.id);
+    expect(data.status).toBe('completed');
+  });
+
+  test('GET /active returns null once the completed trip is collected', async () => {
+    const passengerToken = await createPassengerToken();
+    const driverId = await createDriverWithLocation(passengerToken, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(passengerToken);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ driver_id: driverId, status: 'completed', is_collected: true })
+      .where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'GET',
+      '/api/passenger/trips/active',
+      undefined,
+      passengerToken,
+    );
+
+    expect(status).toBe(200);
+    expect(data).toBeNull();
+  });
+
+  test('GET /active returns null once the trip is rated', async () => {
+    const passengerToken = await createPassengerToken();
+    const driverId = await createDriverWithLocation(passengerToken, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(passengerToken);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ driver_id: driverId, status: 'rated' })
+      .where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'GET',
+      '/api/passenger/trips/active',
+      undefined,
+      passengerToken,
+    );
+
+    expect(status).toBe(200);
+    expect(data).toBeNull();
+  });
+
   test('GET /:id returns trip with events', async () => {
     const token = await createPassengerToken();
     const { data: trip } = await createTrip(token);

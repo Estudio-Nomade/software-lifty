@@ -1,4 +1,4 @@
-import { and, desc, eq, getTableColumns, inArray, not, sql } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, inArray, not, or, sql } from 'drizzle-orm';
 import { db, getDb } from '../../shared/db/client';
 import {
   driverLocations,
@@ -268,7 +268,15 @@ export const passengerTripService = {
       .leftJoin(users, eq(drivers.user_id, users.id))
       .leftJoin(vehicles, eq(drivers.id, vehicles.driver_id))
       .leftJoin(driverLocations, eq(drivers.id, driverLocations.driver_id))
-      .where(and(eq(trips.passenger_id, user.id), not(inArray(trips.status, TERMINAL_STATUSES))))
+      .where(
+        and(
+          eq(trips.passenger_id, user.id),
+          or(
+            not(inArray(trips.status, TERMINAL_STATUSES)),
+            and(eq(trips.status, 'completed'), eq(trips.is_collected, false)),
+          ),
+        ),
+      )
       .orderBy(desc(trips.created_at))
       .limit(1);
 

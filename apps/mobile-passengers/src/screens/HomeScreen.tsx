@@ -47,6 +47,10 @@ export function HomeScreen() {
           setActiveTrip(trip);
           replace('TripInProgress');
         }
+        if (trip.status === 'completed') {
+          setActiveTrip(trip);
+          replace('TripComplete');
+        }
       })();
       return () => {
         cancelled = true;
