@@ -73,6 +73,8 @@ async function insertCompletedTrip(driverId: string, driverEarnings = 1200): Pro
       origin_lng: -65.0,
       dest_lat: -31.88,
       dest_lng: -65.02,
+      total_fare: driverEarnings,
+      platform_fee: 0,
       driver_earnings: driverEarnings,
       created_at: now,
       updated_at: now,
@@ -219,6 +221,9 @@ describe('Earnings + Stats + TVF', () => {
       origin_lng: -65.0,
       dest_lat: -31.88,
       dest_lng: -65.02,
+      total_fare: 0,
+      platform_fee: 0,
+      driver_earnings: 0,
       created_at: now,
       updated_at: now,
     });
@@ -230,6 +235,9 @@ describe('Earnings + Stats + TVF', () => {
       origin_lng: -65.0,
       dest_lat: -31.88,
       dest_lng: -65.02,
+      total_fare: 0,
+      platform_fee: 0,
+      driver_earnings: 0,
       created_at: now,
       updated_at: now,
     });
@@ -241,6 +249,9 @@ describe('Earnings + Stats + TVF', () => {
       origin_lng: -65.0,
       dest_lat: -31.88,
       dest_lng: -65.02,
+      total_fare: 0,
+      platform_fee: 0,
+      driver_earnings: 0,
       created_at: now,
       updated_at: now,
     });
@@ -252,6 +263,9 @@ describe('Earnings + Stats + TVF', () => {
       origin_lng: -65.0,
       dest_lat: -31.88,
       dest_lng: -65.02,
+      total_fare: 0,
+      platform_fee: 0,
+      driver_earnings: 0,
       created_at: now,
       updated_at: now,
     });
@@ -279,6 +293,9 @@ describe('Earnings + Stats + TVF', () => {
       origin_lng: -65.0,
       dest_lat: -31.88,
       dest_lng: -65.02,
+      total_fare: 0,
+      platform_fee: 0,
+      driver_earnings: 0,
       created_at: oldDate,
       updated_at: oldDate,
     });
@@ -290,6 +307,9 @@ describe('Earnings + Stats + TVF', () => {
       origin_lng: -65.0,
       dest_lat: -31.88,
       dest_lng: -65.02,
+      total_fare: 0,
+      platform_fee: 0,
+      driver_earnings: 0,
       created_at: oldDate,
       updated_at: oldDate,
     });

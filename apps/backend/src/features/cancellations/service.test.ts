@@ -108,6 +108,9 @@ describe('cancellationService', () => {
         origin_lng: -65,
         dest_lat: -31.88,
         dest_lng: -65.02,
+        total_fare: 0,
+        platform_fee: 0,
+        driver_earnings: 0,
         created_at: new Date(Date.now() - 301_000),
         updated_at: new Date(Date.now() - 301_000),
       })

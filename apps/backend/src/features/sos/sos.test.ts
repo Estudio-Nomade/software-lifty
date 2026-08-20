@@ -280,6 +280,9 @@ describe('SOS', () => {
         origin_lng: -65.0,
         dest_lat: -31.88,
         dest_lng: -65.02,
+        total_fare: 0,
+        platform_fee: 0,
+        driver_earnings: 0,
         status: 'en_route',
       })
       .returning({ id: trips.id });
@@ -319,6 +322,9 @@ describe('SOS', () => {
         origin_lng: -65.0,
         dest_lat: -31.88,
         dest_lng: -65.02,
+        total_fare: 0,
+        platform_fee: 0,
+        driver_earnings: 0,
         status: 'pending',
       })
       .returning({ id: trips.id });

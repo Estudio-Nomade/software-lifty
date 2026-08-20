@@ -12,7 +12,7 @@ import {
 import { getCommissionRate } from '../../shared/lib/commission';
 import { AppError, ConflictError, NotFoundError } from '../../shared/lib/errors';
 import { calculateFare } from '../../shared/lib/fuel-pricing';
-import { geocode } from '../../shared/lib/geo';
+import { geocode, resolveRouteDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
 import type { AuthUser } from '../../shared/middleware/auth';
@@ -56,10 +56,21 @@ export const passengerTripService = {
     const gate = await cancellationService.assertPassengerCanRequest(user.id);
     const commissionRate = await getCommissionRate(getDb());
 
+    // Server-side route resolution: never trust the client-provided distance,
+    // recompute from origin/destination and keep the maximum.
+    const resolved = await resolveRouteDistance(
+      data.distance_km,
+      data.duration_minutes,
+      data.origin_lat,
+      data.origin_lng,
+      data.dest_lat,
+      data.dest_lng,
+    );
+
     const fare = await calculateFare({
       vehicle_type: data.vehicle_type,
-      distance_km: data.distance_km,
-      duration_minutes: data.duration_minutes,
+      distance_km: resolved.distance_km,
+      duration_minutes: resolved.duration_minutes,
       commission_rate: commissionRate,
     });
 
@@ -96,8 +107,8 @@ export const passengerTripService = {
         origin_address: originAddress,
         dest_address: destAddress,
         pickup_instructions: data.pickup_instructions ?? null,
-        distance_km: data.distance_km,
-        duration_minutes: data.duration_minutes,
+        distance_km: resolved.distance_km,
+        duration_minutes: resolved.duration_minutes,
         base_fare: fare.base_fare,
         distance_fare: fare.distance_fare,
         time_fare: fare.time_fare,

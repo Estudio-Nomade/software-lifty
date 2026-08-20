@@ -164,6 +164,9 @@ describe('GET /api/drivers/me/cancellation-metrics', () => {
         origin_lng: -65.0,
         dest_lat: -31.88,
         dest_lng: -65.02,
+        total_fare: 0,
+        platform_fee: 0,
+        driver_earnings: 0,
         assigned_at: new Date(),
       })
       .returning();
@@ -214,6 +217,9 @@ describe('GET /api/drivers/me/cancellation-metrics', () => {
         origin_lng: -65.0,
         dest_lat: -31.88,
         dest_lng: -65.02,
+        total_fare: 0,
+        platform_fee: 0,
+        driver_earnings: 0,
         waiting_since: new Date(Date.now() - 301_000),
       })
       .returning();
