@@ -455,5 +455,5 @@ export function broadcastToPassenger(
 }
 
 export function broadcastPassengerNoDrivers(passengerId: string, trip: any) {
-  broadcastToPassenger(passengerId, trip, { drivers_found: 0 });
+  broadcastToPassenger(passengerId, trip, { drivers_found: 0, reason: 'NO_NEARBY_DRIVERS' });
 }

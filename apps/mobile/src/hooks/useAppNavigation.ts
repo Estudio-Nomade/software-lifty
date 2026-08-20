@@ -1,5 +1,5 @@
 import { useRouter, useSegments } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 
 const SCREEN_TO_ROUTE = {
   Welcome: '/',
@@ -66,8 +66,10 @@ const BACK_FALLBACK: Record<string, string> = {
 export function useAppNavigation() {
   const router = useRouter();
   const segments = useSegments();
+  const segmentsRef = useRef(segments);
+  segmentsRef.current = segments;
 
-  const push = useCallback(
+  const navigate = useCallback(
     (screen: string, params?: Record<string, string>) => {
       const route = SCREEN_TO_ROUTE[screen as ScreenName];
       if (!route) return;
@@ -99,18 +101,15 @@ export function useAppNavigation() {
       return;
     }
 
-    const currentRoute = segments[segments.length - 1] ?? '';
+    const current = segmentsRef.current;
+    const currentRoute = current[current.length - 1] ?? '';
     const fallback = BACK_FALLBACK[currentRoute];
     if (fallback) {
       replace(fallback);
     } else {
       console.log('[nav] goBack blocked: nothing to go back to');
     }
-  }, [router, segments, replace]);
+  }, [router, replace]);
 
-  return {
-    navigate: push,
-    goBack,
-    replace,
-  };
+  return useMemo(() => ({ navigate, goBack, replace }), [navigate, goBack, replace]);
 }

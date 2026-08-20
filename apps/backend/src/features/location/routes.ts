@@ -8,7 +8,7 @@ import { getSupabaseClient } from '../../shared/lib/supabase';
 import { getDriverActiveTrip, invalidateTripCache } from '../../shared/lib/trip-utils';
 import { authGuard } from '../../shared/middleware/require-auth';
 import { locationUpdateBody } from './schema';
-import { getDriverIdByUserId, markDriverOffline, upsertLocation } from './service';
+import { getDriverIdByUserId, markDriverSeen, upsertLocation } from './service';
 
 async function resolveUserIdFromToken(token: string): Promise<string | null> {
   if (process.env.NODE_ENV === 'test') {
@@ -102,7 +102,13 @@ export const locationWsPlugin = new Elysia().ws('/ws/location', {
     const driverId = (ws.data as any).driverId as string | undefined;
     if (driverId) {
       invalidateTripCache(driverId);
-      await markDriverOffline(driverId);
+      // Graceful offline: a transient disconnect (e.g. app backgrounded → WS
+      // dropped) must NOT take the driver offline immediately. We record the
+      // last-seen timestamp and leave `is_online` untouched; the stale-driver
+      // cleanup job flips it offline only after DRIVER_OFFLINE_GRACE_MS with no
+      // activity. An explicit "Desconectarse" (toggleOnline(false)) still takes
+      // the driver offline right away.
+      await markDriverSeen(driverId);
     }
   },
 });

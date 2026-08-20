@@ -13,11 +13,8 @@ export async function getDriverIdByUserId(userId: string): Promise<string> {
   return driver.id;
 }
 
-export async function markDriverOffline(driverId: string) {
-  await db
-    .update(drivers)
-    .set({ is_online: false, updated_at: new Date() })
-    .where(eq(drivers.id, driverId));
+export async function markDriverSeen(driverId: string) {
+  await db.update(drivers).set({ last_heartbeat: new Date() }).where(eq(drivers.id, driverId));
 }
 
 export async function upsertLocation(driverId: string, lat: number, lng: number, heading?: number) {

@@ -34,7 +34,11 @@ describe('cleanupStaleDrivers', () => {
       .returning({ id: users.id });
     const [driver] = await db
       .insert(drivers)
-      .values({ user_id: user.id, is_online: true, last_heartbeat: new Date(Date.now() - 120_000) })
+      .values({
+        user_id: user.id,
+        is_online: true,
+        last_heartbeat: new Date(Date.now() - 11 * 60 * 1000),
+      })
       .returning({ id: drivers.id });
 
     const result = await cleanupStaleDrivers();
@@ -118,11 +122,15 @@ describe('cleanupStaleDrivers', () => {
       .returning({ id: users.id });
     const [driver] = await db
       .insert(drivers)
-      .values({ user_id: user.id, is_online: true, last_heartbeat: new Date(Date.now() - 120_000) })
+      .values({
+        user_id: user.id,
+        is_online: true,
+        last_heartbeat: new Date(Date.now() - 11 * 60 * 1000),
+      })
       .returning({ id: drivers.id });
     await db.insert(trips).values({
       driver_id: driver.id,
-      status: 'in_progress',
+      status: 'in_trip',
       origin_lat: 0,
       origin_lng: 0,
       dest_lat: 0,

@@ -348,7 +348,7 @@ describe('Location WebSocket', () => {
   );
 
   test(
-    'WS close sets driver offline',
+    'WS close does not immediately set driver offline (grace period)',
     async () => {
       const { token, driverId } = await registerAndCreateDriver(phone, password);
 
@@ -366,12 +366,16 @@ describe('Location WebSocket', () => {
       await new Promise((r) => setTimeout(r, 500));
 
       const [driver] = await getDb()
-        .select({ is_online: drivers.is_online })
+        .select({ is_online: drivers.is_online, last_heartbeat: drivers.last_heartbeat })
         .from(drivers)
         .where(eq(drivers.id, driverId))
         .limit(1);
 
-      expect(driver!.is_online).toBe(false);
+      // A transient disconnect keeps the driver online; only the last-seen
+      // timestamp is refreshed. Offline now happens via explicit toggle or the
+      // stale-driver cleanup after the grace period.
+      expect(driver!.is_online).toBe(true);
+      expect(driver!.last_heartbeat).not.toBeNull();
     },
     { timeout: 15000 },
   );
