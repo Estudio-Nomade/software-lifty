@@ -15,7 +15,7 @@ import { broadcastTripMessage } from '../../shared/lib/broadcast';
 import { getCommissionRate, getDebtCapArs } from '../../shared/lib/commission';
 import { AppError, BadRequestError, NotFoundError } from '../../shared/lib/errors';
 import { calculateFare } from '../../shared/lib/fuel-pricing';
-import { geocode, haversineDistance } from '../../shared/lib/geo';
+import { geocode, haversineDistance, resolveRouteDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
 import type { AuthUser } from '../../shared/middleware/auth';
@@ -173,10 +173,19 @@ export const tripService = {
   }) {
     const commissionRate = await getCommissionRate(getDb());
 
+    const resolved = await resolveRouteDistance(
+      data.distance_km,
+      data.duration_minutes,
+      data.origin_lat,
+      data.origin_lng,
+      data.dest_lat,
+      data.dest_lng,
+    );
+
     const fare = await calculateFare({
       vehicle_type: data.vehicle_type,
-      distance_km: data.distance_km,
-      duration_minutes: data.duration_minutes,
+      distance_km: resolved.distance_km,
+      duration_minutes: resolved.duration_minutes,
       commission_rate: commissionRate,
     });
 
@@ -213,8 +222,8 @@ export const tripService = {
         origin_address: originAddress,
         dest_address: destAddress,
         pickup_instructions: data.pickup_instructions ?? null,
-        distance_km: data.distance_km,
-        duration_minutes: data.duration_minutes,
+        distance_km: resolved.distance_km,
+        duration_minutes: resolved.duration_minutes,
         base_fare: fare.base_fare,
         distance_fare: fare.distance_fare,
         time_fare: fare.time_fare,
@@ -414,10 +423,22 @@ export const tripService = {
 
     const commissionRate = await getCommissionRate(getDb());
 
+    // Server-side route resolution: never trust the client-provided distance,
+    // recompute from origin/destination and keep the maximum. This guarantees
+    // the fare is never based on an under-reported distance.
+    const resolved = await resolveRouteDistance(
+      data.distance_km,
+      data.duration_minutes,
+      data.origin_lat,
+      data.origin_lng,
+      data.dest_lat,
+      data.dest_lng,
+    );
+
     const fare = await calculateFare({
       vehicle_type: data.vehicle_type,
-      distance_km: data.distance_km,
-      duration_minutes: data.duration_minutes,
+      distance_km: resolved.distance_km,
+      duration_minutes: resolved.duration_minutes,
       commission_rate: commissionRate,
     });
 
@@ -453,8 +474,8 @@ export const tripService = {
         dest_lng: data.dest_lng,
         origin_address: originAddress,
         dest_address: destAddress,
-        distance_km: data.distance_km,
-        duration_minutes: data.duration_minutes,
+        distance_km: resolved.distance_km,
+        duration_minutes: resolved.duration_minutes,
         base_fare: fare.base_fare,
         distance_fare: fare.distance_fare,
         time_fare: fare.time_fare,
@@ -638,6 +659,36 @@ export const tripService = {
       );
     }
 
+    // Strict reconciliation: the fare is frozen at trip creation from the
+    // estimated route distance. A real route is never shorter than the
+    // straight-line distance between origin and destination, so if the stored
+    // distance is far below that minimum it means the estimate (and therefore
+    // the charge) was under-reported. Fail explicitly instead of silently
+    // undercharging the passenger.
+    const storedDistanceKm = Number(trip.distance_km);
+    // Treat a missing/non-positive distance as 0 so a far destination with no
+    // recorded distance is also flagged as inconsistent.
+    const effectiveDistanceKm =
+      Number.isFinite(storedDistanceKm) && storedDistanceKm > 0 ? storedDistanceKm : 0;
+    const straightLineKm = haversineDistance(
+      trip.origin_lat,
+      trip.origin_lng,
+      trip.dest_lat,
+      trip.dest_lng,
+    );
+    if (straightLineKm > effectiveDistanceKm * 1.25 + 1) {
+      logger.error('[completeTrip] Distance mismatch', {
+        tripId,
+        storedDistanceKm,
+        straightLineKm,
+      });
+      throw new AppError(
+        'La distancia registrada del viaje es inconsistente con el destino. Contacta a soporte.',
+        409,
+        'DISTANCE_MISMATCH',
+      );
+    }
+
     const result = await transitionTrip(driverId, tripId, 'completed');
     if (result.passenger_id) {
       broadcastToPassenger(result.passenger_id, result);
@@ -761,12 +812,26 @@ export const tripService = {
     return db.transaction(async (tx) => {
       const trip = await findTrip(driverId, tripId, tx);
 
-      if (trip.status !== 'completed') {
+      // A trip must be completed to be collected, but it may already have been
+      // rated by the passenger (completed → rated). Rating is independent of
+      // payment, so a rated trip must still be collectable — otherwise the
+      // platform fee would never be accrued for trips rated before collection.
+      if (trip.status !== 'completed' && trip.status !== 'rated') {
         throw new AppError('Trip must be completed before collecting payment', 400, 'BAD_REQUEST');
       }
 
       if (trip.is_collected) {
         throw new AppError('Payment already collected for this trip', 400, 'BAD_REQUEST');
+      }
+
+      // Never collect a trip with a missing/invalid fare: the passenger must
+      // always be charged the frozen fare agreed at trip creation. If for any
+      // reason the stored fare is absent or non-positive, fail loudly instead
+      // of charging zero (which would undercharge the passenger).
+      const totalFare = Number(trip.total_fare);
+      if (!Number.isFinite(totalFare) || totalFare <= 0) {
+        logger.error('[collectTrip] Trip has no valid total_fare', { tripId });
+        throw new AppError('Trip has no valid fare. Cannot collect payment.', 500, 'INVALID_FARE');
       }
 
       const platformFee = Number(trip.platform_fee ?? 0);
@@ -806,8 +871,8 @@ export const tripService = {
 
       const debt =
         trip.passenger_id != null
-          ? await cancellationService.attachDebtOnCollect(tx, trip.passenger_id, trip.total_fare)
-          : { debt_applied_ars: 0, total_due_ars: trip.total_fare ?? 0 };
+          ? await cancellationService.attachDebtOnCollect(tx, trip.passenger_id, totalFare)
+          : { debt_applied_ars: 0, total_due_ars: totalFare };
 
       return { ...updated, ...debt };
     });

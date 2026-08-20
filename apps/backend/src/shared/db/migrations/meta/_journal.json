@@ -288,6 +288,13 @@
       "when": 1787400000000,
       "tag": "0039_cancellation_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1787500000000,
+      "tag": "0040_trip_fare_not_null",
+      "breakpoints": true
     }
   ]
 }

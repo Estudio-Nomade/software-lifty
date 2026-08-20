@@ -322,7 +322,7 @@ export async function directions(
     logger.error('[geo] directions failed:', (err as Error).message);
     const distance_km =
       Math.round(haversineDistance(origin_lat, origin_lng, dest_lat, dest_lng) * 100) / 100;
-    const duration_minutes = Math.round(distance_km * 3);
+    const duration_minutes = Math.max(1, Math.round(distance_km * 3));
     return { distance_km, duration_minutes, polyline: '', steps: [], alternatives: [] };
   }
 }
@@ -340,7 +340,28 @@ export async function distanceMatrix(
     logger.error('[geo] distanceMatrix failed:', (err as Error).message);
     const distance_km =
       Math.round(haversineDistance(origin_lat, origin_lng, dest_lat, dest_lng) * 100) / 100;
-    const duration_minutes = Math.round(distance_km * 3);
+    const duration_minutes = Math.max(1, Math.round(distance_km * 3));
     return { distance_km, duration_minutes };
   }
+}
+
+// Authoritative route resolution for trip creation. The server recomputes the
+// route distance/duration from the actual origin/destination and takes the
+// maximum against the client-provided values. This removes the "client
+// under-reports distance" undercharge vector: even a malicious/buggy client
+// cannot push the fare below the real route length. `distanceMatrix` never
+// throws (it falls back to the haversine distance), so this always resolves.
+export async function resolveRouteDistance(
+  clientDistanceKm: number,
+  clientDurationMinutes: number,
+  origin_lat: number,
+  origin_lng: number,
+  dest_lat: number,
+  dest_lng: number,
+): Promise<{ distance_km: number; duration_minutes: number }> {
+  const matrix = await distanceMatrix(origin_lat, origin_lng, dest_lat, dest_lng);
+  return {
+    distance_km: Math.max(clientDistanceKm, matrix.distance_km),
+    duration_minutes: Math.max(clientDurationMinutes, matrix.duration_minutes),
+  };
 }

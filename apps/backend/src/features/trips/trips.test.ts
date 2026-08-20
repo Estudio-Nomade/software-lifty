@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
-import { commissionPhases, drivers, platformConfig, ratings, tripEvents, tripMessages, trips, users } from '../../shared/db/schema';
+import { commissionPhases, drivers, fuelPriceLog, platformConfig, ratings, tripEvents, tripMessages, trips, users } from '../../shared/db/schema';
 import { createTestAuthPlugin, createTestToken } from '../../shared/testing/utils';
 
 let app: any;
@@ -21,6 +21,7 @@ async function truncateTables() {
   await db.delete(users);
   await db.delete(commissionPhases);
   await db.delete(platformConfig);
+  await db.delete(fuelPriceLog);
 }
 
 async function request(method: string, path: string, body?: object, token?: string) {
@@ -1151,5 +1152,198 @@ describe('Trip State Machine', () => {
     );
     expect(status).toBe(409);
     expect(data.error.code).toBe('CHAT_CLOSED');
+  });
+
+  test('27. collect refuses trip with non-positive total_fare (no undercharge)', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+
+    const { tripId } = await completeTrip(token);
+    const db = getDb();
+    await db.update(trips).set({ total_fare: 0 }).where(eq(trips.id, tripId));
+
+    const { status, data } = await request(
+      'PUT',
+      `/api/trips/${tripId}/collect`,
+      { payment_method: 'cash' },
+      token,
+    );
+
+    expect(status).toBe(500);
+    expect(data.error.code).toBe('INVALID_FARE');
+  });
+
+  test('28. collect charges the frozen fare regardless of later fuel price changes', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+
+    const { data: trip } = await request(
+      'POST',
+      '/api/trips',
+      {
+        origin_lat: -31.9,
+        origin_lng: -65.0,
+        dest_lat: -31.88,
+        dest_lng: -65.02,
+        vehicle_type: 'car',
+        distance_km: 5,
+        duration_minutes: 15,
+      },
+      token,
+    );
+    const frozenTotal = Number(trip.total_fare);
+
+    const db = getDb();
+    await db.insert(fuelPriceLog).values({ price: 5000, updated_by: 'test' });
+
+    const { data: accepted } = await request(
+      'POST',
+      `/api/trips/${trip.id}/accept`,
+      undefined,
+      token,
+    );
+    await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
+    await request('POST', `/api/trips/${trip.id}/start`, { verification_code: accepted.verification_code }, token);
+    await request('POST', `/api/trips/${trip.id}/complete`, { lat: -31.88, lng: -65.02 }, token);
+
+    const { status, data } = await request(
+      'PUT',
+      `/api/trips/${trip.id}/collect`,
+      { payment_method: 'cash' },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.total_due_ars).toBe(frozenTotal);
+  });
+
+  test('29. complete rejects trip whose stored distance is inconsistent with destination', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+
+    const { data: trip } = await request(
+      'POST',
+      '/api/trips',
+      {
+        origin_lat: -31.9,
+        origin_lng: -65.0,
+        dest_lat: -31.7,
+        dest_lng: -64.5,
+        vehicle_type: 'car',
+        distance_km: 1,
+        duration_minutes: 5,
+      },
+      token,
+    );
+
+    const { data: accepted } = await request(
+      'POST',
+      `/api/trips/${trip.id}/accept`,
+      undefined,
+      token,
+    );
+    await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
+    await request('POST', `/api/trips/${trip.id}/start`, { verification_code: accepted.verification_code }, token);
+
+    const { status, data } = await request(
+      'POST',
+      `/api/trips/${trip.id}/complete`,
+      { lat: -31.7, lng: -64.5 },
+      token,
+    );
+
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('DISTANCE_MISMATCH');
+  });
+
+  test('30. complete rejects trip with null distance and far destination', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+
+    const { data: trip } = await request(
+      'POST',
+      '/api/trips',
+      {
+        origin_lat: -31.9,
+        origin_lng: -65.0,
+        dest_lat: -31.7,
+        dest_lng: -64.5,
+        vehicle_type: 'car',
+        distance_km: 1,
+        duration_minutes: 5,
+      },
+      token,
+    );
+
+    const db = getDb();
+    await db.update(trips).set({ distance_km: null }).where(eq(trips.id, trip.id));
+
+    const { data: accepted } = await request(
+      'POST',
+      `/api/trips/${trip.id}/accept`,
+      undefined,
+      token,
+    );
+    await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
+    await request('POST', `/api/trips/${trip.id}/start`, { verification_code: accepted.verification_code }, token);
+
+    const { status, data } = await request(
+      'POST',
+      `/api/trips/${trip.id}/complete`,
+      { lat: -31.7, lng: -64.5 },
+      token,
+    );
+
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('DISTANCE_MISMATCH');
+  });
+
+  test('31. create trip overrides client distance with server-computed distance', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+
+    const { status, data } = await request(
+      'POST',
+      '/api/trips',
+      {
+        origin_lat: -31.9,
+        origin_lng: -65.0,
+        dest_lat: -31.7,
+        dest_lng: -64.5,
+        vehicle_type: 'car',
+        distance_km: 0,
+        duration_minutes: 5,
+      },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.distance_km).toBeGreaterThan(0);
+    expect(data.total_fare).toBeGreaterThan(0);
+  });
+
+  test('32. collect still works after passenger rating (rated status)', async () => {
+    const token = await registerAndGetToken(phone, password);
+    const driverId = await createDriverRow(token);
+
+    const { tripId } = await completeTrip(token);
+    const db = getDb();
+    await db.update(trips).set({ status: 'rated' }).where(eq(trips.id, tripId));
+
+    const { status, data } = await request(
+      'PUT',
+      `/api/trips/${tripId}/collect`,
+      { payment_method: 'cash' },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.is_collected).toBe(true);
+
+    const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
+    expect(driver.platform_debt).toBeGreaterThan(0);
   });
 });

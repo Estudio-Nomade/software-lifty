@@ -135,6 +135,9 @@ describe('cleanupStaleDrivers', () => {
       origin_lng: 0,
       dest_lat: 0,
       dest_lng: 0,
+      total_fare: 0,
+      platform_fee: 0,
+      driver_earnings: 0,
     });
 
     const result = await cleanupStaleDrivers();

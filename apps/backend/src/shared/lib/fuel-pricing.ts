@@ -2,12 +2,7 @@ import { desc, eq } from 'drizzle-orm';
 import { db } from '../db/client';
 import { fuelPriceLog } from '../db/schema';
 import { AppError } from './errors';
-import {
-  type FareInput,
-  type FareResult,
-  calculatePlatformFee,
-  calculateFare as calculateStaticFare,
-} from './pricing';
+import { type FareInput, type FareResult, calculatePlatformFee } from './pricing';
 
 export type { FareResult } from './pricing';
 
@@ -251,21 +246,39 @@ function mapToVehicleType(inputType: string): VehicleType {
 
 export async function calculateFare(input: FareInput): Promise<FareResult> {
   const vehicleType = mapToVehicleType(input.vehicle_type);
-  const rates = await getEffectiveRates(vehicleType);
 
-  if (!rates?.changed) {
-    return calculateStaticFare({
-      ...input,
-      vehicle_type: vehicleType === 'auto' ? 'car' : 'motorcycle',
-    });
+  // Defensive validation: a non-positive distance would produce a fare that is
+  // floored at the minimum and, worse, would make the completion-time distance
+  // reconciliation skip (it only runs for positive distances), leaving room to
+  // undercharge the passenger on a long trip. Reject early.
+  if (!Number.isFinite(input.distance_km) || input.distance_km <= 0) {
+    throw new AppError('Distance must be positive', 400, 'BAD_REQUEST');
+  }
+  if (!Number.isFinite(input.duration_minutes) || input.duration_minutes <= 0) {
+    throw new AppError('Duration must be positive', 400, 'BAD_REQUEST');
   }
 
+  const rates = await getEffectiveRates(vehicleType);
   const config = RATE_CONFIG[vehicleType];
   const commissionRate = input.commission_rate ?? 0.2; // dynamic rate passed by caller
 
+  // The fare is ALWAYS computed with the same tiered (per-tramo) model.
+  // When the fuel variation is below the threshold we use the base config
+  // rates; when it is above we use the fuel-indexed rates. Fuel only scales
+  // the rates, it never changes the shape of the calculation. This keeps the
+  // total monotonic w.r.t. the fuel price and removes a discontinuity where a
+  // fuel-price change could previously switch the calculation to a cheaper
+  // single-rate model (charging the passenger less than before).
+  const porKm = rates?.changed
+    ? rates.porKm
+    : config.porKm.map((t) => ({ min: t.min, max: t.max, tarifa: t.base }));
+  const tarifaBase = rates?.changed ? rates.tarifaBase : config.tarifaBase.base;
+  const tarifaMinima = rates?.changed ? rates.tarifaMinima : config.tarifaMinima.base;
+  const porMinuto = rates?.changed ? rates.porMinuto : config.porMinuto.base;
+
   let kmCost = 0;
   let remaining = input.distance_km;
-  for (const tramo of rates.porKm) {
+  for (const tramo of porKm) {
     const tramoWidth = (tramo.max === Number.POSITIVE_INFINITY ? remaining : tramo.max) - tramo.min;
     const kmEnTramo = Math.max(0, Math.min(remaining, tramoWidth));
     kmCost += kmEnTramo * tramo.tarifa;
@@ -273,13 +286,13 @@ export async function calculateFare(input: FareInput): Promise<FareResult> {
     if (remaining <= 0) break;
   }
 
-  const base_fare = rates.tarifaBase;
+  const base_fare = tarifaBase;
   const distance_fare = Math.round(kmCost * 100) / 100;
-  const time_fare = Math.round(input.duration_minutes * rates.porMinuto * 100) / 100;
+  const time_fare = Math.round(input.duration_minutes * porMinuto * 100) / 100;
   let total = Math.round(base_fare + distance_fare + time_fare);
 
-  if (total < rates.tarifaMinima) {
-    total = rates.tarifaMinima;
+  if (total < tarifaMinima) {
+    total = tarifaMinima;
   }
 
   const platform_fee = calculatePlatformFee(total, commissionRate);

@@ -158,6 +158,9 @@ describe('getDriverActiveTrip', () => {
         origin_lng: -68.84,
         dest_lat: -32.90,
         dest_lng: -68.85,
+        total_fare: 0,
+        platform_fee: 0,
+        driver_earnings: 0,
       })
       .returning({ id: trips.id });
 
@@ -184,6 +187,9 @@ describe('getDriverActiveTrip', () => {
       origin_lng: -68.84,
       dest_lat: -32.90,
       dest_lng: -68.85,
+      total_fare: 0,
+      platform_fee: 0,
+      driver_earnings: 0,
     });
 
     invalidateTripCache(driver.id);
@@ -210,6 +216,9 @@ describe('getDriverActiveTrip', () => {
         origin_lng: -68.84,
         dest_lat: -32.90,
         dest_lng: -68.85,
+        total_fare: 0,
+        platform_fee: 0,
+        driver_earnings: 0,
       })
       .returning({ id: trips.id });
 
@@ -555,6 +564,9 @@ describe('Broadcast on location update', () => {
       origin_lng: -68.84,
       dest_lat: -32.90,
       dest_lng: -68.85,
+      total_fare: 0,
+      platform_fee: 0,
+      driver_earnings: 0,
     });
 
     invalidateTripCache(driverId);
