@@ -12,9 +12,20 @@ import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview/lib/WebViewTypes';
 import { theme } from '../../theme';
 
+interface MarkerData {
+  id: string;
+  coordinate: [number, number];
+  title?: string;
+  color?: string;
+  icon?: 'car' | 'moto' | 'camioneta' | 'person';
+  avatarUrl?: string;
+}
+
 interface PassengerMapProps {
   centerCoordinate: [number, number];
   zoom?: number;
+  markers?: MarkerData[];
+  routeLine?: Array<[number, number]>;
   userLocation?: [number, number] | null;
   followUserLocation?: boolean;
   recenterKey?: number;
@@ -42,6 +53,41 @@ function generateMapHtml(colors: { primary: string; lightGray: string }) {
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body, #map { width: 100%; height: 100%; overflow: hidden; }
   body { background: ${colors.lightGray}; }
+  .marker-dot {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 2px solid #FFFFFF;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+  }
+  .marker-icon {
+    width: 36px; height: 36px;
+    background: white;
+    border: 2px solid #FFFFFF;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .marker-icon ion-icon {
+    font-size: 24px;
+    color: ${colors.primary};
+  }
+  .marker-avatar {
+    width: 44px; height: 44px;
+    background: white;
+    border: 2px solid ${colors.primary};
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    overflow: hidden;
+  }
+  .marker-avatar img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
   .user-marker {
     width: 44px; height: 44px;
     background: white;
@@ -92,12 +138,91 @@ function generateMapHtml(colors: { primary: string; lightGray: string }) {
 
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
+  var mapLoaded = false;
+  var markers = [];
   var userMarker = null;
+  var pendingRoute = null;
   var followRequested = false;
   var hasPerformedInitialCenter = false;
+  var userManuallyMoved = false;
+
+  var USER_ICONS = {
+    car: 'car-outline',
+    moto: 'bicycle-outline',
+    camioneta: 'car-sport-outline',
+    person: 'person-outline',
+  };
 
   function setView(center, zoom) {
     map.jumpTo({ center: center, zoom: zoom });
+  }
+
+  function updateMarkers(newMarkers) {
+    markers.forEach(function (m) { m.remove(); });
+    markers = [];
+    newMarkers.forEach(function (mk) {
+      var el = document.createElement('div');
+      if (mk.avatarUrl) {
+        el.className = 'marker-avatar';
+        el.innerHTML = '<img src="' + mk.avatarUrl + '" alt="" />';
+      } else if (mk.icon) {
+        var iconEmoji = USER_ICONS[mk.icon] || USER_ICONS['car'];
+        el.className = 'marker-icon';
+        el.innerHTML = '<ion-icon name="' + iconEmoji + '"></ion-icon>';
+      } else {
+        var color = mk.color || '${colors.primary}';
+        el.className = 'marker-dot';
+        el.style.background = color;
+      }
+
+      var marker = new maplibregl.Marker({ element: el })
+        .setLngLat([mk.coordinate[0], mk.coordinate[1]]);
+
+      if (mk.title) {
+        marker.setPopup(new maplibregl.Popup({ offset: 16, closeButton: false }).setText(mk.title));
+      }
+
+      marker.addTo(map);
+      markers.push(marker);
+    });
+  }
+
+  var ROUTE_SOURCE_ID = 'route-line';
+  var ROUTE_LAYER_ID = 'route-line-layer';
+
+  function applyRoute(coordinates) {
+    var geojson = {
+      type: 'Feature',
+      properties: {},
+      geometry: { type: 'LineString', coordinates: coordinates || [] },
+    };
+
+    var existing = map.getSource(ROUTE_SOURCE_ID);
+    if (existing) {
+      existing.setData(geojson);
+    } else {
+      map.addSource(ROUTE_SOURCE_ID, { type: 'geojson', data: geojson });
+      map.addLayer({
+        id: ROUTE_LAYER_ID,
+        type: 'line',
+        source: ROUTE_SOURCE_ID,
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '${colors.primary}', 'line-width': 4, 'line-opacity': 0.9 },
+      });
+    }
+  }
+
+  function updateRoute(coordinates) {
+    if (!coordinates || coordinates.length < 2) {
+      if (map.getLayer(ROUTE_LAYER_ID)) map.removeLayer(ROUTE_LAYER_ID);
+      if (map.getSource(ROUTE_SOURCE_ID)) map.removeSource(ROUTE_SOURCE_ID);
+      return;
+    }
+    if (!mapLoaded) {
+      pendingRoute = coordinates;
+      return;
+    }
+    applyRoute(coordinates);
   }
 
   function updateUserLocation(lat, lng) {
@@ -120,7 +245,21 @@ function generateMapHtml(colors: { primary: string; lightGray: string }) {
   }
 
   map.on('load', function () {
+    mapLoaded = true;
+    if (pendingRoute) {
+      applyRoute(pendingRoute);
+      pendingRoute = null;
+    }
     postToHost(JSON.stringify({ type: 'ready' }));
+  });
+
+  map.on('moveend', function () {
+    var c = map.getCenter();
+    postToHost(JSON.stringify({
+      type: 'moved',
+      center: { lng: c.lng, lat: c.lat },
+      zoom: map.getZoom(),
+    }));
   });
 
   map.on('error', function (e) {
@@ -142,6 +281,19 @@ function generateMapHtml(colors: { primary: string; lightGray: string }) {
       case 'init':
         setView(msg.center, msg.zoom || DEFAULT_ZOOM);
         break;
+      case 'markers':
+        updateMarkers(msg.markers || []);
+        break;
+      case 'route':
+        updateRoute(msg.coordinates || []);
+        break;
+      case 'fitRoute':
+        if (msg.coordinates && msg.coordinates.length >= 2) {
+          var b = msg.coordinates.reduce(function (bb, c) { return bb.extend(c); },
+            new maplibregl.LngLatBounds(msg.coordinates[0], msg.coordinates[0]));
+          map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 600 });
+        }
+        break;
       case 'followUser':
         followRequested = !!msg.enabled;
         if (followRequested) {
@@ -159,6 +311,7 @@ function generateMapHtml(colors: { primary: string; lightGray: string }) {
         break;
       case 'recenter':
         if (msg.lat != null && msg.lng != null) {
+          userManuallyMoved = false;
           map.flyTo({ center: [msg.lng, msg.lat], zoom: 15, duration: 600 });
         }
         break;
@@ -179,6 +332,8 @@ function generateMapHtml(colors: { primary: string; lightGray: string }) {
 export const PassengerMap: React.FC<PassengerMapProps> = ({
   centerCoordinate,
   zoom = DEFAULT_ZOOM,
+  markers = [],
+  routeLine,
   userLocation,
   followUserLocation = true,
   recenterKey,
@@ -199,10 +354,15 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
   const userLocationRef = useRef(userLocation);
   userLocationRef.current = userLocation;
 
+  const initCenterRef = useRef(centerCoordinate);
+  initCenterRef.current = centerCoordinate;
+
   const webViewRef = useRef<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const retryKey = useRef(0);
+  const [userManuallyMoved, setUserManuallyMoved] = useState(false);
+  const programmaticMoveRef = useRef(false);
 
   const handleRetry = useCallback(() => {
     setHasError(false);
@@ -217,10 +377,29 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
 
   useEffect(() => {
     if (!isLoaded || !webViewRef.current) return;
+    programmaticMoveRef.current = true;
     webViewRef.current.postMessage(
-      JSON.stringify({ type: 'init', center: centerCoordinate, zoom }),
+      JSON.stringify({ type: 'init', center: initCenterRef.current, zoom }),
     );
-  }, [isLoaded, centerCoordinate, zoom]);
+  }, [isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded || !webViewRef.current) return;
+    webViewRef.current.postMessage(JSON.stringify({ type: 'markers', markers }));
+  }, [markers, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded || !webViewRef.current) return;
+    webViewRef.current.postMessage(JSON.stringify({ type: 'route', coordinates: routeLine || [] }));
+  }, [routeLine, isLoaded]);
+
+  useEffect(() => {
+    if (!isLoaded || !webViewRef.current || !routeLine || routeLine.length < 2) return;
+    if (userManuallyMoved) return;
+
+    programmaticMoveRef.current = true;
+    webViewRef.current.postMessage(JSON.stringify({ type: 'fitRoute', coordinates: routeLine }));
+  }, [isLoaded, routeLine, userManuallyMoved]);
 
   useEffect(() => {
     if (!isLoaded || !webViewRef.current) return;
@@ -243,6 +422,8 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
   useEffect(() => {
     if (!isLoaded || !webViewRef.current || recenterKey == null) return;
     const loc = userLocationRef.current;
+    setUserManuallyMoved(false);
+    programmaticMoveRef.current = true;
     webViewRef.current.postMessage(
       JSON.stringify({
         type: 'recenter',
@@ -256,7 +437,14 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     (event: WebViewMessageEvent) => {
       try {
         const data = JSON.parse(event.nativeEvent.data);
-        if (data.type === 'error') {
+        if (data.type === 'moved') {
+          if (programmaticMoveRef.current) {
+            programmaticMoveRef.current = false;
+            setUserManuallyMoved(false);
+          } else {
+            setUserManuallyMoved(true);
+          }
+        } else if (data.type === 'error') {
           setHasError(true);
           onError?.();
         }

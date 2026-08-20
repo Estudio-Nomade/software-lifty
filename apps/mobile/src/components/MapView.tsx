@@ -18,6 +18,7 @@ interface MarkerData {
   title?: string;
   color?: string;
   icon?: 'car' | 'moto' | 'camioneta' | 'person';
+  avatarUrl?: string;
 }
 
 interface HeatmapPoint {
@@ -91,6 +92,18 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
     font-size: 24px;
     color: ${colors.turquoise};
   }
+  .marker-avatar {
+    width: 44px; height: 44px;
+    background: white;
+    border: 2px solid ${colors.turquoise};
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    overflow: hidden;
+  }
+  .marker-avatar img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
   .user-marker {
     width: 44px; height: 44px;
     background: white;
@@ -152,7 +165,10 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
     markers = [];
     newMarkers.forEach(function (mk) {
       var el = document.createElement('div');
-      if (mk.icon) {
+      if (mk.avatarUrl) {
+        el.className = 'marker-avatar';
+        el.innerHTML = '<img src="' + mk.avatarUrl + '" alt="" />';
+      } else if (mk.icon) {
         var iconEmoji = USER_ICONS[mk.icon] || USER_ICONS['car'];
         el.className = 'marker-icon';
         el.innerHTML = '<ion-icon name="' + iconEmoji + '"></ion-icon>';

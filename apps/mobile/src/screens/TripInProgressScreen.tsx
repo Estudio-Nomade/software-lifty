@@ -9,8 +9,10 @@ import {
   View,
 } from 'react-native';
 import { apiClient } from '../api/client';
+import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { MapView } from '../components/MapView';
+import { RatingStars } from '../components/RatingStars';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useDynamicRouting } from '../hooks/useDynamicRouting';
@@ -29,6 +31,10 @@ export const TripInProgressScreen: React.FC = () => {
   const iconType = useVehicleStore((s) => s.iconType);
   const [completing, setCompleting] = React.useState(false);
   const [recenterKey, setRecenterKey] = useState(0);
+  const [completeError, setCompleteError] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
 
   const { routeCoords, etaMinutes, distKm, steps, altRouteCoords } = useDynamicRouting(
     trip?.dest_lat ?? null,
@@ -88,8 +94,14 @@ export const TripInProgressScreen: React.FC = () => {
         setCompleting(false);
         return;
       }
-      const message = err?.error?.message || err?.message || 'No se pudo finalizar el viaje';
-      Alert.alert('Error', message);
+      const code = err?.error?.code;
+      const isTooFar = code === 'TOO_FAR_FROM_DESTINATION';
+      setCompleteError({
+        title: isTooFar ? 'Todavía no llegaste al destino' : 'No se pudo finalizar el viaje',
+        message: isTooFar
+          ? 'Acercate al destino para poder finalizar el viaje.'
+          : err?.error?.message || err?.message || 'No se pudo finalizar el viaje',
+      });
     } finally {
       setCompleting(false);
     }
@@ -135,7 +147,9 @@ export const TripInProgressScreen: React.FC = () => {
                     id: 'destination',
                     coordinate: [trip.dest_lng, trip.dest_lat] as [number, number],
                     title: 'Destino',
-                    icon: 'person' as const,
+                    ...(trip.passenger_avatar_url
+                      ? { avatarUrl: trip.passenger_avatar_url }
+                      : { icon: 'person' as const }),
                   },
                 ]
               : []),
@@ -158,14 +172,33 @@ export const TripInProgressScreen: React.FC = () => {
         <Text style={styles.recenterButtonText}>⟳</Text>
       </TouchableOpacity>
       <View style={styles.bottomCard}>
-        <Text style={styles.label}>En viaje</Text>
-        <Text style={styles.destination}>{trip?.dest_address ?? 'Destino'}</Text>
-        {etaMinutes !== null && distKm !== null ? (
-          <Text style={styles.eta}>
-            ~{Math.round(etaMinutes)} min ·{' '}
-            {distKm < 1 ? `${Math.round(distKm * 1000)} m` : `${distKm} km`}
-          </Text>
-        ) : null}
+        <View style={styles.passengerCard}>
+          <Avatar
+            uri={trip?.passenger_avatar_url ?? null}
+            name={trip?.passenger_name ?? 'Pasajero'}
+            size={56}
+          />
+          <View style={styles.passengerInfo}>
+            <Text style={styles.passengerLabel}>Llevando a</Text>
+            <View style={styles.passengerNameRow}>
+              <Text style={styles.passengerName} numberOfLines={1}>
+                {trip?.passenger_name ?? 'Pasajero'}
+              </Text>
+              {trip?.passenger_rating != null ? (
+                <RatingStars rating={trip.passenger_rating} />
+              ) : null}
+            </View>
+            <Text style={styles.passengerDest} numberOfLines={1}>
+              {trip?.dest_address ?? 'Destino'}
+            </Text>
+            {etaMinutes !== null && distKm !== null ? (
+              <Text style={styles.passengerEta}>
+                ~{Math.round(etaMinutes)} min ·{' '}
+                {distKm < 1 ? `${Math.round(distKm * 1000)} m` : `${distKm} km`}
+              </Text>
+            ) : null}
+          </View>
+        </View>
         {instruction ? <Text style={styles.instruction}>{instruction}</Text> : null}
         <View style={styles.progressBar}>
           <View style={[styles.progressFill, { width: `${progress}%` }]} />
@@ -197,6 +230,21 @@ export const TripInProgressScreen: React.FC = () => {
           <Text style={styles.mapsLink}>Abrir en Maps</Text>
         </TouchableOpacity>
       </View>
+
+      {completeError ? (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modal}>
+            <Text style={styles.modalIcon}>📍</Text>
+            <Text style={styles.modalTitle}>{completeError.title}</Text>
+            <Text style={styles.modalText}>{completeError.message}</Text>
+            <Button
+              title="ENTENDIDO"
+              onPress={() => setCompleteError(null)}
+              style={styles.modalButton}
+            />
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -225,18 +273,39 @@ const styles = StyleSheet.create({
     elevation: 8,
     flexShrink: 0,
   },
-  label: {
+  passengerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  passengerInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  passengerLabel: {
     fontSize: theme.fontSize.xs,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.mediumGray,
   },
-  destination: {
-    fontSize: theme.fontSize.md,
+  passengerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  passengerName: {
+    flexShrink: 1,
+    fontSize: theme.fontSize.xl,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
   },
-  eta: {
-    fontSize: theme.fontSize.lg,
+  passengerDest: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.mediumGray,
+  },
+  passengerEta: {
+    fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.deepBlue,
   },
@@ -293,5 +362,48 @@ const styles = StyleSheet.create({
   recenterButtonText: {
     fontSize: 20,
     color: theme.colors.deepBlue,
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  modal: {
+    width: 310,
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.lg,
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 16,
+  },
+  modalIcon: {
+    fontSize: 32,
+  },
+  modalTitle: {
+    fontSize: theme.fontSize.lg,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.deepBlue,
+    textAlign: 'center',
+  },
+  modalText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.mediumGray,
+    textAlign: 'center',
+    width: 270,
+    lineHeight: 20,
+  },
+  modalButton: {
+    width: 270,
   },
 });

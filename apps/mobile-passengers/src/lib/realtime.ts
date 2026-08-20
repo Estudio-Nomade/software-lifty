@@ -37,3 +37,30 @@ export function subscribeToPassengerChannel(
     supabase.removeChannel(channel);
   };
 }
+
+export function subscribeToDriverLocation(
+  tripId: string,
+  onDriverLocation: (location: {
+    lat: number;
+    lng: number;
+    heading?: number;
+    driver_id: string;
+    timestamp?: string;
+  }) => void,
+): () => void {
+  const channel = supabase.channel(`trip:${tripId}`);
+
+  channel.on('broadcast', { event: 'driver:location' }, ({ payload }) => {
+    onDriverLocation(payload);
+  });
+
+  channel.subscribe((status) => {
+    if (status === 'SUBSCRIBED') {
+      // connected
+    }
+  });
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
