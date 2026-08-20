@@ -621,8 +621,16 @@ export const tripService = {
       .limit(1);
     if (!trip) throw new NotFoundError('Trip not found');
 
+    // TODO(dev): remove in production — temporary bypass so the full
+    // "in_trip → completed" flow can be tested from any distance.
+    // Enable locally with BYPASS_DISTANCE_CHECK=true (apps/backend/.env).
+    // Hard-gated by NODE_ENV so it can never activate in production.
+    const bypassDistanceCheck =
+      process.env.NODE_ENV !== 'production' &&
+      (process.env.BYPASS_DISTANCE_CHECK ?? '').toLowerCase() === 'true';
+
     const distance = haversineDistance(body.lat, body.lng, trip.dest_lat, trip.dest_lng);
-    if (distance > 0.05) {
+    if (!bypassDistanceCheck && distance > 0.05) {
       throw new AppError(
         'Debes estar a menos de 50 metros del destino para finalizar el viaje',
         400,

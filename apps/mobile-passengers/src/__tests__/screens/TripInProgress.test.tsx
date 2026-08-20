@@ -6,6 +6,15 @@ import { useRideStore } from '../../store/rideStore';
 
 jest.mock('../../lib/realtime', () => ({
   subscribeToPassengerChannel: jest.fn(() => () => {}),
+  subscribeToDriverLocation: jest.fn(() => () => {}),
+}));
+
+jest.mock('../../hooks/useLocation', () => ({
+  useLocation: () => ({ current: null, permissionGranted: true }),
+}));
+
+jest.mock('../../hooks/useDriverRoute', () => ({
+  useDriverRoute: () => [],
 }));
 
 const mockReplace = jest.fn();

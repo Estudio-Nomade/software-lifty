@@ -271,7 +271,9 @@ export const NavigationScreen: React.FC = () => {
                     id: 'pickup',
                     coordinate: pickupCoord,
                     title: 'Pasajero',
-                    icon: 'person' as const,
+                    ...(trip?.passenger_avatar_url
+                      ? { avatarUrl: trip.passenger_avatar_url }
+                      : { icon: 'person' as const }),
                   },
                 ]
               : []),

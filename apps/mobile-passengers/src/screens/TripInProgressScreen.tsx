@@ -1,23 +1,38 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect } from 'react';
-import { Alert, Linking, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  Alert,
+  Linking,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { cancelRide, getActiveRide, getCancelPreview } from '../api/passenger';
+import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { subscribeToPassengerChannel } from '../lib/realtime';
+import { useDriverRoute } from '../hooks/useDriverRoute';
+import { useLocation } from '../hooks/useLocation';
+import { subscribeToDriverLocation, subscribeToPassengerChannel } from '../lib/realtime';
 import { useAuthStore } from '../store/authStore';
-import { useLocationStore } from '../store/locationStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 
+const LIVE_STATUSES = ['accepted', 'en_route', 'waiting', 'in_trip'];
+
 export function TripInProgressScreen() {
   const { navigate, replace } = useAppNavigation();
-  const current = useLocationStore((s) => s.current);
+  const { current } = useLocation();
   const userId = useAuthStore((s) => s.userId);
   const activeTrip = useRideStore((s) => s.activeTrip);
   const setActiveTrip = useRideStore((s) => s.setActiveTrip);
+  const driverLocation = useRideStore((s) => s.driverLocation);
+  const setDriverLocation = useRideStore((s) => s.setDriverLocation);
   const reset = useRideStore((s) => s.reset);
+  const [recenterKey, setRecenterKey] = useState(0);
 
   useEffect(() => {
     if (activeTrip) return;
@@ -45,6 +60,28 @@ export function TripInProgressScreen() {
       }
     });
   }, [userId, reset, replace, setActiveTrip]);
+
+  useEffect(() => {
+    if (!activeTrip?.id) return;
+    const tripId = activeTrip.id;
+    const unsubscribe = subscribeToDriverLocation(tripId, (loc) => {
+      const t = useRideStore.getState().activeTrip;
+      if (t?.driver_id && loc?.driver_id && t.driver_id !== loc.driver_id) return;
+      useRideStore.getState().setDriverLocation({
+        lat: loc.lat,
+        lng: loc.lng,
+        heading: loc.heading ?? null,
+      });
+    });
+    return () => unsubscribe?.();
+  }, [activeTrip?.id]);
+
+  useEffect(() => {
+    const live = LIVE_STATUSES.includes(activeTrip?.status ?? '');
+    if (!live || !activeTrip?.driver_id) {
+      setDriverLocation(null);
+    }
+  }, [activeTrip?.status, activeTrip?.driver_id, setDriverLocation]);
 
   const trip = activeTrip;
 
@@ -79,10 +116,63 @@ export function TripInProgressScreen() {
     }
   };
 
+  const driverLat = driverLocation?.lat ?? trip?.driver_lat ?? null;
+  const driverLng = driverLocation?.lng ?? trip?.driver_lng ?? null;
+
   const driverCoord: [number, number] | null =
-    trip?.driver_lat != null && trip?.driver_lng != null
-      ? [trip.driver_lng, trip.driver_lat]
-      : null;
+    driverLat != null && driverLng != null ? [driverLng, driverLat] : null;
+
+  const passengerCoord: [number, number] | null = current ? [current.lng, current.lat] : null;
+
+  const routeTargetLat =
+    trip?.status === 'in_trip'
+      ? trip.dest_lat
+      : trip?.status === 'accepted' || trip?.status === 'en_route'
+        ? trip.origin_lat
+        : null;
+  const routeTargetLng =
+    trip?.status === 'in_trip'
+      ? trip.dest_lng
+      : trip?.status === 'accepted' || trip?.status === 'en_route'
+        ? trip.origin_lng
+        : null;
+
+  const routeCoords = useDriverRoute(driverLat, driverLng, routeTargetLat, routeTargetLng);
+
+  const markers = [
+    ...(passengerCoord
+      ? [
+          {
+            id: 'my-location',
+            coordinate: passengerCoord,
+            title: 'Tu ubicación',
+            color: theme.colors.deepBlue,
+          },
+        ]
+      : []),
+    ...(driverCoord
+      ? [
+          {
+            id: 'driver',
+            coordinate: driverCoord,
+            title: 'Conductor',
+            ...(trip?.driver_avatar_url
+              ? { avatarUrl: trip.driver_avatar_url }
+              : { icon: 'car' as const }),
+          },
+        ]
+      : []),
+    ...(trip?.status === 'in_trip' && trip.dest_lat != null && trip.dest_lng != null
+      ? [
+          {
+            id: 'destination',
+            coordinate: [trip.dest_lng, trip.dest_lat] as [number, number],
+            title: 'Destino',
+            color: theme.colors.dangerRed,
+          },
+        ]
+      : []),
+  ];
 
   const vehicleLabel =
     [trip?.vehicle_brand, trip?.vehicle_model].filter(Boolean).join(' ') || 'Vehículo';
@@ -113,18 +203,28 @@ export function TripInProgressScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.mapArea}>
         <PassengerMap
-          centerCoordinate={
-            driverCoord ?? (current ? [current.lng, current.lat] : [-58.3816, -34.6037])
-          }
+          centerCoordinate={driverCoord ?? passengerCoord ?? [-58.3816, -34.6037]}
           followUserLocation={false}
+          userLocation={passengerCoord}
+          markers={markers}
+          routeLine={routeCoords.length > 0 ? routeCoords : undefined}
+          recenterKey={recenterKey}
           style={styles.mapFill}
         />
       </View>
 
+      <TouchableOpacity
+        style={styles.recenterButton}
+        onPress={() => setRecenterKey((k) => k + 1)}
+        accessibilityLabel="Centrar mi ubicación"
+      >
+        <Ionicons name="locate-outline" size={22} color={theme.colors.deepBlue} />
+      </TouchableOpacity>
+
       <View style={styles.content}>
         <View style={styles.driverCard}>
           <View style={styles.driverAvatar}>
-            <Ionicons name="person" size={28} color={theme.colors.mediumGray} />
+            <Avatar uri={trip?.driver_avatar_url} name={trip?.driver_name ?? ''} size={56} />
           </View>
           <View style={styles.driverInfo}>
             <Text style={styles.statusText}>{statusLabel}</Text>
@@ -186,6 +286,19 @@ const styles = StyleSheet.create({
   },
   mapFill: {
     flex: 1,
+  },
+  recenterButton: {
+    position: 'absolute',
+    top: theme.spacing.md,
+    right: theme.spacing.md,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...theme.shadows.card,
+    zIndex: 10,
   },
   content: {
     backgroundColor: theme.colors.white,
