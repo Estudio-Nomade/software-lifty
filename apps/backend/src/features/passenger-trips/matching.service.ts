@@ -1,6 +1,7 @@
-import { and, eq, notInArray, sql } from 'drizzle-orm';
+import { and, eq, gt, notInArray, or, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { driverLocations, drivers, tripEvents, trips, users } from '../../shared/db/schema';
+import { DRIVER_OFFLINE_GRACE_MS } from '../../shared/lib/cleanup';
 import { haversineDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
@@ -10,6 +11,8 @@ import { getCancellationConfig } from '../cancellations/service';
 import { broadcastTripRequest } from '../trips/service';
 
 const OFFER_TIMEOUT_MS = 20_000;
+const DEFAULT_MATCH_RADIUS_KM = 8;
+const DRIVER_LOCATION_FRESHNESS_MS = 5 * 60 * 1000;
 
 interface NearbyDriver {
   driverId: string;
@@ -25,13 +28,19 @@ export interface MatchOptions {
 export async function findNearbyDrivers(
   originLat: number,
   originLng: number,
-  radiusKm = 5,
+  radiusKm = DEFAULT_MATCH_RADIUS_KM,
   excludeDriverIds: string[] = [],
 ): Promise<NearbyDriver[]> {
   const conditions = [
-    eq(drivers.is_online, true),
+    eq(drivers.status, 'approved'),
     sql`${driverLocations.lat} IS NOT NULL`,
     sql`${driverLocations.lng} IS NOT NULL`,
+    gt(driverLocations.updated_at, new Date(Date.now() - DRIVER_LOCATION_FRESHNESS_MS)),
+    // Online (explicit) OR recently seen (grace period for a backgrounded app).
+    or(
+      eq(drivers.is_online, true),
+      gt(drivers.last_heartbeat, new Date(Date.now() - DRIVER_OFFLINE_GRACE_MS)),
+    ),
   ];
   const blocked = await listBlockedDriverIds();
   const excluded = [...new Set([...excludeDriverIds, ...blocked])];
@@ -83,7 +92,7 @@ export async function matchAndBroadcast(
   const nearby = await findNearbyDrivers(
     trip.origin_lat,
     trip.origin_lng,
-    5,
+    DEFAULT_MATCH_RADIUS_KM,
     options.excludeDriverIds ?? [],
   );
 
@@ -143,9 +152,10 @@ export async function matchAndBroadcast(
     data: { trip_id: trip.id, type: 'trip:request' },
   });
 
-  logger.info('[matchAndBroadcast] Assigned nearest driver', {
+  logger.info(`[MATCH] Assigned trip ${trip.id} to driver ${driver.driverId}`, {
     tripId: trip.id,
     driverId: driver.driverId,
+    distanceKm: Math.round(driver.distance * 100) / 100,
   });
 
   return { drivers_found: 1, driver_id: driver.driverId };

@@ -4,13 +4,25 @@ import { driverLocations, drivers, trips } from '../db/schema';
 import { logger } from './logger';
 
 const ADVISORY_LOCK_KEY = 42;
-const STALE_THRESHOLD_MS = 60_000;
 
+// Grace period before a driver with a stale heartbeat is considered offline.
+// A backgrounded app stops sending heartbeats (and drops its WebSocket), so we
+// only flip `is_online` to false after this window of no activity. Transient
+// disconnects within the window keep the driver eligible for matching + push.
+export const DRIVER_OFFLINE_GRACE_MS = 10 * 60 * 1000;
+
+// Trip statuses that mean a driver is actively on a trip and must never be
+// marked offline by the stale-heartbeat cleanup. Mirrors the state machine in
+// features/trips/service.ts and the client's isLiveTrip() — note the legacy
+// `driver_arrived` / `in_progress` names were removed in favour of the current
+// ones (`offered`, `en_route`, `waiting`, `in_trip`).
 const ACTIVE_TRIP_STATUSES = [
+  'offered',
   'request_received',
   'accepted',
-  'driver_arrived',
-  'in_progress',
+  'en_route',
+  'waiting',
+  'in_trip',
 ] as const;
 
 const LOCATION_STALE_HOURS = 24;
@@ -30,7 +42,7 @@ export async function cleanupStaleDrivers(): Promise<{
     }
 
     try {
-      const cutoff = new Date(Date.now() - STALE_THRESHOLD_MS);
+      const cutoff = new Date(Date.now() - DRIVER_OFFLINE_GRACE_MS);
 
       const activeTripDriverIds = await db
         .select({ driver_id: trips.driver_id })

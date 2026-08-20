@@ -188,6 +188,7 @@ export const driversService = {
     const [driver] = await db
       .select({
         id: drivers.id,
+        status: drivers.status,
         is_online: drivers.is_online,
         documents_pending_review: drivers.documents_pending_review,
         district_id: drivers.district_id,
@@ -206,6 +207,10 @@ export const driversService = {
       );
     }
 
+    if (isOnline && driver.status !== 'approved') {
+      throw new AppError('Todavia no estas aprobado para conectarte.', 403, 'DRIVER_NOT_APPROVED');
+    }
+
     if (isOnline && !driver.district_id) {
       throw new AppError(
         'Debes seleccionar un municipio antes de conectarte.',
@@ -216,7 +221,14 @@ export const driversService = {
 
     await db
       .update(drivers)
-      .set({ is_online: isOnline, updated_at: new Date() })
+      .set({
+        is_online: isOnline,
+        // Explicit "Desconectarse" clears the last-seen signal so the
+        // grace-period branch in findNearbyDrivers can't keep matching this
+        // driver after they went offline on purpose.
+        ...(isOnline ? {} : { last_heartbeat: null }),
+        updated_at: new Date(),
+      })
       .where(eq(drivers.id, driver.id));
 
     return {

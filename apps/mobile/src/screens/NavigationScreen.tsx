@@ -25,8 +25,6 @@ import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
 import { buildTripCancelledParams } from '../lib/cancellation';
 import { haversineDistance } from '../lib/geo';
 import { startTracking, stopTracking } from '../lib/location';
-import { subscribeToDriverChannel } from '../lib/realtime';
-import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -41,7 +39,6 @@ export const NavigationScreen: React.FC = () => {
   const trip = useTripStore((s) => s.trip);
   const tripStatus = useTripStore((s) => s.tripStatus);
   const clearTrip = useTripStore((s) => s.clearTrip);
-  const driverId = useAuthStore((s) => s.driverId);
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
   const iconType = useVehicleStore((s) => s.iconType);
@@ -79,18 +76,6 @@ export const NavigationScreen: React.FC = () => {
       stopTracking();
     };
   }, []);
-
-  useEffect(() => {
-    if (!driverId) return;
-    return subscribeToDriverChannel(
-      driverId,
-      () => {},
-      (payload: any) => {
-        clearTrip();
-        navigation.replace('TripCancelled', buildTripCancelledParams(payload));
-      },
-    );
-  }, [driverId, clearTrip, navigation]);
 
   useEffect(() => {
     if (!trip) return;

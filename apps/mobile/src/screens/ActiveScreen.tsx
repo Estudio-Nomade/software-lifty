@@ -24,14 +24,9 @@ import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
-import { buildTripCancelledParams } from '../lib/cancellation';
-import { isLiveTrip } from '../lib/isLiveTrip';
 import { stopTracking } from '../lib/location';
-import { subscribeToDriverChannel } from '../lib/realtime';
-import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
-import { useTripStore } from '../store/tripStore';
 import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
@@ -66,7 +61,6 @@ export const ActiveScreen: React.FC = () => {
   const setOnline = useOnlineStore((s) => s.setOnline);
   const onlineSince = useOnlineStore((s) => s.onlineSince);
   const setOnlineSince = useOnlineStore((s) => s.setOnlineSince);
-  const driverId = useAuthStore((s) => s.driverId);
   const [toggleError, setToggleError] = useState<string | null>(null);
   const heatmapPoints = useHeatmapPolling();
   const [menuVisible, setMenuVisible] = useState(false);
@@ -100,77 +94,6 @@ export const ActiveScreen: React.FC = () => {
       useVehicleStore.getState().setVehicleType(profile.vehicle.vehicle_type);
     }
   }, [profile?.vehicle?.vehicle_type]);
-
-  useEffect(() => {
-    if (!driverId || !isOnline) return;
-
-    let navigated = false;
-
-    const unsubscribe = subscribeToDriverChannel(
-      driverId,
-      (payload: any) => {
-        if (!navigated) {
-          navigated = true;
-          if (
-            payload?.id &&
-            (payload.status === 'request_received' || payload.status === 'offered')
-          ) {
-            useTripStore.getState().setActiveTrip(payload);
-          }
-          navigation.navigate('IncomingRequest');
-        }
-      },
-      (payload: any) => {
-        useTripStore.getState().clearTrip();
-        navigation.replace('TripCancelled', buildTripCancelledParams(payload));
-      },
-    );
-
-    const pollInterval = setInterval(async () => {
-      try {
-        const { data } = await apiClient.get('/trips/active');
-        const trip = data?.data ?? data;
-        if (
-          !navigated &&
-          trip &&
-          (trip.status === 'request_received' || trip.status === 'offered')
-        ) {
-          navigated = true;
-          navigation.navigate('IncomingRequest');
-        }
-      } catch {}
-    }, 5_000);
-
-    return () => {
-      unsubscribe();
-      clearInterval(pollInterval);
-    };
-  }, [driverId, isOnline, navigation]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const resume = async () => {
-      try {
-        const { data } = await apiClient.get('/trips/active');
-        const trip = data?.data ?? data;
-        if (cancelled || !trip?.status) return;
-        if (!isLiveTrip(trip)) return;
-        if (trip.status === 'request_received' || trip.status === 'offered') {
-          navigation.navigate('IncomingRequest');
-        } else if (trip.status === 'accepted' || trip.status === 'en_route') {
-          navigation.replace('Navigation');
-        } else if (trip.status === 'waiting') {
-          navigation.replace('WaitingPassenger');
-        } else if (trip.status === 'in_trip') {
-          navigation.replace('TripInProgress');
-        }
-      } catch {}
-    };
-    resume();
-    return () => {
-      cancelled = true;
-    };
-  }, [navigation]);
 
   useEffect(() => {
     if (!onlineSince) return;

@@ -16,6 +16,7 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { useTripStore } from '../store/tripStore';
 import { AuthRedirectWatcher } from './AuthRedirectWatcher';
+import { DriverRealtimeProvider } from './DriverRealtimeProvider';
 import { LoadingOverlay } from './feedback/LoadingOverlay';
 
 function SessionRestore() {
@@ -182,6 +183,7 @@ export function AppInitializer() {
       <LocationInit />
       <ActiveTripRecovery />
       <NotificationSetup />
+      <DriverRealtimeProvider />
     </>
   );
 }
