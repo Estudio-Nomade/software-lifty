@@ -1,5 +1,6 @@
 import { apiClient } from '../api/client';
 import type { TripMessage } from '../api/types';
+import { isTripMessage } from './chatMessages';
 import { supabase } from './supabase';
 
 export function subscribeToDriverChannel(
@@ -30,65 +31,23 @@ export function subscribeToDriverChannel(
   };
 }
 
-export function subscribeToTripChannel(
-  tripId: string,
-  callbacks: {
-    onMessage?: (message: any) => void;
-    onTripAccepted?: () => void;
-    onTripArrived?: () => void;
-    onTripStarted?: () => void;
-    onTripCompleted?: () => void;
-    onTripCancelled?: () => void;
-    onDriverLocation?: (location: {
-      lat: number;
-      lng: number;
-      heading?: number;
-      driver_id: string;
-      timestamp: string;
-    }) => void;
-  },
-): () => void {
+export interface TripChatCallbacks {
+  onMessage?: (message: TripMessage) => void;
+}
+
+/**
+ * Subscribes to the `trip:{tripId}` Supabase Realtime channel and forwards
+ * `message:sent` broadcasts (emitted by the backend after persisting a chat
+ * message). Returns an unsubscribe function that removes the channel.
+ */
+export function subscribeToTripChannel(tripId: string, callbacks: TripChatCallbacks): () => void {
   const channel = supabase.channel(`trip:${tripId}`);
 
   if (callbacks.onMessage) {
     channel.on('broadcast', { event: 'message:sent' }, ({ payload }) => {
-      callbacks.onMessage?.(payload);
-    });
-  }
-
-  if (callbacks.onTripAccepted) {
-    channel.on('broadcast', { event: 'trip:accepted' }, () => {
-      callbacks.onTripAccepted?.();
-    });
-  }
-
-  if (callbacks.onTripArrived) {
-    channel.on('broadcast', { event: 'trip:arrived' }, () => {
-      callbacks.onTripArrived?.();
-    });
-  }
-
-  if (callbacks.onTripStarted) {
-    channel.on('broadcast', { event: 'trip:started' }, () => {
-      callbacks.onTripStarted?.();
-    });
-  }
-
-  if (callbacks.onTripCompleted) {
-    channel.on('broadcast', { event: 'trip:completed' }, () => {
-      callbacks.onTripCompleted?.();
-    });
-  }
-
-  if (callbacks.onTripCancelled) {
-    channel.on('broadcast', { event: 'trip:cancelled' }, () => {
-      callbacks.onTripCancelled?.();
-    });
-  }
-
-  if (callbacks.onDriverLocation) {
-    channel.on('broadcast', { event: 'driver:location' }, ({ payload }) => {
-      callbacks.onDriverLocation?.(payload);
+      if (isTripMessage(payload)) {
+        callbacks.onMessage?.(payload);
+      }
     });
   }
 
