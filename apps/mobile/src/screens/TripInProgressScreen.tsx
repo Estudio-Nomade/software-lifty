@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -33,6 +34,7 @@ export const TripInProgressScreen: React.FC = () => {
   const iconType = useVehicleStore((s) => s.iconType);
   const [completing, setCompleting] = React.useState(false);
   const [recenterKey, setRecenterKey] = useState(0);
+  const [isFollowingUser, setIsFollowingUser] = useState(true);
   const [completeError, setCompleteError] = useState<{
     title: string;
     message: string;
@@ -148,6 +150,7 @@ export const TripInProgressScreen: React.FC = () => {
         <MapView
           followUserLocation
           recenterKey={recenterKey}
+          onFollowingChange={setIsFollowingUser}
           centerCoordinate={
             trip
               ? [trip.dest_lng, trip.dest_lat]
@@ -186,8 +189,19 @@ export const TripInProgressScreen: React.FC = () => {
           alternativeRouteLine={altRouteCoords.length > 0 ? altRouteCoords : undefined}
         />
       </View>
-      <TouchableOpacity style={styles.recenterButton} onPress={handleRecenter}>
-        <Text style={styles.recenterButtonText}>⟳</Text>
+      <TouchableOpacity
+        style={[styles.recenterButton, isFollowingUser && styles.recenterButtonInactive]}
+        onPress={handleRecenter}
+        activeOpacity={0.8}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        accessibilityRole="button"
+        accessibilityLabel="Centrar mapa en mi ubicación"
+      >
+        <Ionicons
+          name="navigate"
+          size={24}
+          color={isFollowingUser ? theme.colors.mediumGray : theme.colors.turquoise}
+        />
       </TouchableOpacity>
       <View style={styles.bottomCard}>
         <View style={styles.passengerCard}>
@@ -360,21 +374,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: theme.spacing.md,
     right: theme.spacing.md,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: theme.spacing['2xl'],
+    height: theme.spacing['2xl'],
+    borderRadius: theme.radius.full,
     backgroundColor: theme.colors.white,
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
+    ...theme.shadows.card,
     zIndex: 10,
   },
-  recenterButtonText: {
-    fontSize: 20,
-    color: theme.colors.deepBlue,
+  recenterButtonInactive: {
+    opacity: 0.55,
   },
 });
