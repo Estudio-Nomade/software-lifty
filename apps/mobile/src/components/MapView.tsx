@@ -40,6 +40,7 @@ interface MapViewProps {
   onError?: () => void;
   onMoveEnd?: (center: { lat: number; lng: number }) => void;
   recenterKey?: number;
+  onFollowingChange?: (following: boolean) => void;
 }
 
 const DEFAULT_ZOOM = 15;
@@ -139,7 +140,7 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
     attributionControl: true,
   });
 
-  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 
   var mapLoaded = false;
   var markers = [];
@@ -412,6 +413,7 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
         if (followRequested && msg.lat != null && msg.lng != null) {
           updateUserLocation(msg.lat, msg.lng, msg.icon || null);
           if (!hasPerformedInitialCenter) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'followCentered' }));
             setView([msg.lng, msg.lat], map.getZoom());
             hasPerformedInitialCenter = true;
           }
@@ -462,6 +464,7 @@ export const MapView: React.FC<MapViewProps> = ({
   onError,
   onMoveEnd,
   recenterKey,
+  onFollowingChange,
 }) => {
   const mapHtml = useMemo(
     () =>
@@ -486,7 +489,12 @@ export const MapView: React.FC<MapViewProps> = ({
   const [hasError, setHasError] = useState(false);
   const retryKey = useRef(0);
   const [userManuallyMoved, setUserManuallyMoved] = useState(false);
+  const [isFollowingUser, setIsFollowingUser] = useState(followUserLocation);
   const programmaticMoveRef = useRef(false);
+  const userManuallyMovedRef = useRef(false);
+  userManuallyMovedRef.current = userManuallyMoved;
+  const onFollowingChangeRef = useRef(onFollowingChange);
+  onFollowingChangeRef.current = onFollowingChange;
 
   const handleRetry = useCallback(() => {
     setHasError(false);
@@ -547,8 +555,9 @@ export const MapView: React.FC<MapViewProps> = ({
 
   useEffect(() => {
     if (!isLoaded || !webViewRef.current || !routeLine || routeLine.length < 2) return;
-    if (userManuallyMoved) return;
+    if (userManuallyMovedRef.current) return;
 
+    setIsFollowingUser(false);
     programmaticMoveRef.current = true;
     webViewRef.current.postMessage(
       JSON.stringify({
@@ -556,9 +565,10 @@ export const MapView: React.FC<MapViewProps> = ({
         coordinates: routeLine,
       }),
     );
-  }, [isLoaded, routeLine, userManuallyMoved]);
+  }, [isLoaded, routeLine]);
 
   useEffect(() => {
+    setIsFollowingUser(followUserLocation);
     if (!isLoaded || !webViewRef.current) return;
 
     webViewRef.current.postMessage(
@@ -596,6 +606,7 @@ export const MapView: React.FC<MapViewProps> = ({
   useEffect(() => {
     if (!isLoaded || !webViewRef.current || recenterKey == null) return;
     const loc = userLocationRef.current;
+    setIsFollowingUser(true);
     setUserManuallyMoved(false);
     programmaticMoveRef.current = true;
     webViewRef.current.postMessage(
@@ -606,6 +617,10 @@ export const MapView: React.FC<MapViewProps> = ({
       }),
     );
   }, [recenterKey, isLoaded]);
+
+  useEffect(() => {
+    onFollowingChangeRef.current?.(isFollowingUser);
+  }, [isFollowingUser]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -624,10 +639,16 @@ export const MapView: React.FC<MapViewProps> = ({
               setUserManuallyMoved(false);
             } else {
               setUserManuallyMoved(true);
+              setIsFollowingUser(false);
             }
             if (data.center && onMoveEnd) {
               onMoveEnd(data.center);
             }
+            break;
+          case 'followCentered':
+            setIsFollowingUser(true);
+            setUserManuallyMoved(false);
+            programmaticMoveRef.current = true;
             break;
           case 'markerClick':
             break;
