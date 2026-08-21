@@ -2,41 +2,51 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { listTripMessages, sendTripMessage } from '../api/passenger';
 import type { TripMessage } from '../api/types';
+import {
+  createOptimisticMessage,
+  mergeHistory,
+  mergeMessages,
+  replaceOptimistic,
+} from '../lib/chatMessages';
 import { subscribeToTripChannel } from '../lib/realtime';
-
-const isTempId = (id: string) => id.startsWith('local-');
 
 export function useTripChat(
   tripId: string | null | undefined,
   senderRole: TripMessage['sender_role'],
 ) {
   const [messages, setMessages] = useState<TripMessage[]>([]);
+  const messagesRef = useRef<TripMessage[]>([]);
   const tripIdRef = useRef(tripId);
   tripIdRef.current = tripId;
 
+  const commitMessages = useCallback((updater: (prev: TripMessage[]) => TripMessage[]) => {
+    setMessages((prev) => {
+      const next = updater(prev);
+      messagesRef.current = next;
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
-    if (!tripId) return;
+    if (!tripId) {
+      commitMessages(() => []);
+      return;
+    }
     let cancelled = false;
 
-    const unsubscribe = subscribeToTripChannel(tripId, (msg: TripMessage) => {
-      if (cancelled) return;
-      setMessages((prev) => {
-        if (msg.id && prev.some((m) => m.id === msg.id)) return prev;
-        const tempIndex = prev.findIndex(
-          (m) => isTempId(m.id) && m.text === msg.text && m.sender_role === msg.sender_role,
-        );
-        if (tempIndex !== -1) {
-          const next = [...prev];
-          next[tempIndex] = msg;
-          return next;
-        }
-        return [...prev, msg];
-      });
+    // Start fresh so messages from a previous trip never leak into this one.
+    commitMessages(() => []);
+
+    const unsubscribe = subscribeToTripChannel(tripId, {
+      onMessage: (msg) => {
+        if (cancelled) return;
+        commitMessages((prev) => mergeMessages(prev, msg));
+      },
     });
 
     listTripMessages(tripId)
       .then((rows) => {
-        if (!cancelled) setMessages(rows);
+        if (!cancelled) commitMessages((prev) => mergeHistory(prev, rows));
       })
       .catch(() => {});
 
@@ -44,7 +54,7 @@ export function useTripChat(
       cancelled = true;
       unsubscribe();
     };
-  }, [tripId]);
+  }, [tripId, commitMessages]);
 
   const send = useCallback(
     async (text: string) => {
@@ -52,27 +62,23 @@ export function useTripChat(
       const trimmed = text.trim();
       if (!trimmed || !id) return;
 
-      const tempId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const optimistic: TripMessage = {
-        id: tempId,
-        trip_id: id,
-        sender_id: 'me',
-        sender_role: senderRole,
-        text: trimmed,
-        created_at: new Date().toISOString(),
-      };
-
-      setMessages((prev) => [...prev, optimistic]);
+      const optimistic = createOptimisticMessage(id, senderRole, trimmed);
+      commitMessages((prev) => [...prev, optimistic]);
 
       try {
         const row = await sendTripMessage(id, trimmed);
-        setMessages((prev) => prev.map((m) => (m.id === tempId ? row : m)));
+        commitMessages((prev) => replaceOptimistic(prev, optimistic.id, row));
       } catch {
-        setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        Alert.alert('Error', 'No se pudo enviar el mensaje.');
+        // Only surface an error if the optimistic bubble is still pending. If
+        // the broadcast already confirmed the message (the request may have
+        // timed out after the server committed), skip the misleading alert.
+        if (messagesRef.current.some((m) => m.id === optimistic.id)) {
+          commitMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+          Alert.alert('Error', 'No se pudo enviar el mensaje.');
+        }
       }
     },
-    [senderRole],
+    [senderRole, commitMessages],
   );
 
   return { messages, sendMessage: send };

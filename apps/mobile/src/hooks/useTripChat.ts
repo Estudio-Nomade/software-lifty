@@ -2,34 +2,45 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { apiClient } from '../api/client';
 import type { TripMessage } from '../api/types';
+import {
+  createOptimisticMessage,
+  mergeHistory,
+  mergeMessages,
+  replaceOptimistic,
+} from '../lib/chatMessages';
 import { sendMessage, subscribeToTripChannel } from '../lib/realtime';
 
-const isTempId = (id: string) => id.startsWith('local-');
-
-export function useTripChat(activeTripId: string | null, senderRole: TripMessage['sender_role']) {
+export function useTripChat(
+  activeTripId: string | null | undefined,
+  senderRole: TripMessage['sender_role'],
+) {
   const [messages, setMessages] = useState<TripMessage[]>([]);
+  const messagesRef = useRef<TripMessage[]>([]);
   const activeTripIdRef = useRef(activeTripId);
   activeTripIdRef.current = activeTripId;
 
+  const commitMessages = useCallback((updater: (prev: TripMessage[]) => TripMessage[]) => {
+    setMessages((prev) => {
+      const next = updater(prev);
+      messagesRef.current = next;
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
-    if (!activeTripId) return;
+    if (!activeTripId) {
+      commitMessages(() => []);
+      return;
+    }
     let cancelled = false;
 
+    // Start fresh so messages from a previous trip never leak into this one.
+    commitMessages(() => []);
+
     const unsubscribe = subscribeToTripChannel(activeTripId, {
-      onMessage: (msg: TripMessage) => {
+      onMessage: (msg) => {
         if (cancelled) return;
-        setMessages((prev) => {
-          if (msg.id && prev.some((m) => m.id === msg.id)) return prev;
-          const tempIndex = prev.findIndex(
-            (m) => isTempId(m.id) && m.text === msg.text && m.sender_role === msg.sender_role,
-          );
-          if (tempIndex !== -1) {
-            const next = [...prev];
-            next[tempIndex] = msg;
-            return next;
-          }
-          return [...prev, msg];
-        });
+        commitMessages((prev) => mergeMessages(prev, msg));
       },
     });
 
@@ -38,7 +49,7 @@ export function useTripChat(activeTripId: string | null, senderRole: TripMessage
       .then((res) => {
         if (cancelled) return;
         const rows = res.data?.data ?? res.data;
-        if (Array.isArray(rows)) setMessages(rows);
+        if (Array.isArray(rows)) commitMessages((prev) => mergeHistory(prev, rows));
       })
       .catch(() => {});
 
@@ -46,7 +57,7 @@ export function useTripChat(activeTripId: string | null, senderRole: TripMessage
       cancelled = true;
       unsubscribe();
     };
-  }, [activeTripId]);
+  }, [activeTripId, commitMessages]);
 
   const send = useCallback(
     async (text: string) => {
@@ -54,27 +65,23 @@ export function useTripChat(activeTripId: string | null, senderRole: TripMessage
       const trimmed = text.trim();
       if (!trimmed || !tripId) return;
 
-      const tempId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const optimistic: TripMessage = {
-        id: tempId,
-        trip_id: tripId,
-        sender_id: 'me',
-        sender_role: senderRole,
-        text: trimmed,
-        created_at: new Date().toISOString(),
-      };
-
-      setMessages((prev) => [...prev, optimistic]);
+      const optimistic = createOptimisticMessage(tripId, senderRole, trimmed);
+      commitMessages((prev) => [...prev, optimistic]);
 
       try {
         const row = await sendMessage(tripId, trimmed);
-        setMessages((prev) => prev.map((m) => (m.id === tempId ? row : m)));
+        commitMessages((prev) => replaceOptimistic(prev, optimistic.id, row));
       } catch {
-        setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        Alert.alert('Error', 'No se pudo enviar el mensaje.');
+        // Only surface an error if the optimistic bubble is still pending. If
+        // the broadcast already confirmed the message (the request may have
+        // timed out after the server committed), skip the misleading alert.
+        if (messagesRef.current.some((m) => m.id === optimistic.id)) {
+          commitMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+          Alert.alert('Error', 'No se pudo enviar el mensaje.');
+        }
       }
     },
-    [senderRole],
+    [senderRole, commitMessages],
   );
 
   return { messages, sendMessage: send };
