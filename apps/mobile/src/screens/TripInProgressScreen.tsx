@@ -388,4 +388,8 @@ const styles = StyleSheet.create({
   recenterButtonInactive: {
     opacity: 0.55,
   },
+  recenterButtonText: {
+    fontSize: 20,
+    color: theme.colors.deepBlue,
+  },
 });
