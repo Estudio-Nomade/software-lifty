@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
@@ -34,6 +35,7 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export const NavigationScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const trip = useTripStore((s) => s.trip);
@@ -324,7 +326,10 @@ export const NavigationScreen: React.FC = () => {
       <View style={styles.bottomCard}>
         <ScrollView
           style={styles.bottomCardContent}
-          contentContainerStyle={styles.bottomCardInner}
+          contentContainerStyle={[
+            styles.bottomCardInner,
+            { paddingBottom: theme.spacing['2xl'] + theme.spacing.lg + insets.bottom },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           nestedScrollEnabled
@@ -458,7 +463,6 @@ const styles = StyleSheet.create({
   bottomCardInner: {
     padding: theme.spacing.md,
     paddingTop: theme.spacing.lg,
-    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing.md,
     gap: theme.spacing.sm,
   },
   cancelLinkWrap: {
