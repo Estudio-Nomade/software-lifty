@@ -185,15 +185,6 @@ export const WaitingPassengerScreen: React.FC = () => {
         </KeyboardAvoidingView>
       )}
 
-      {__DEV__ && (
-        <TouchableOpacity
-          style={styles.devButton}
-          onPress={() => navigation.navigate('PassengerCode')}
-        >
-          <Text style={styles.devButtonText}>Ver código pasajero</Text>
-        </TouchableOpacity>
-      )}
-
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.sm }]}>
         <Text style={styles.arrivedLabel}>Llegaste</Text>
         <View style={[styles.timerCircle, { borderColor: timerColor }]}>
@@ -443,20 +434,5 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
     textAlign: 'center',
-  },
-  devButton: {
-    position: 'absolute',
-    top: 50,
-    right: 16,
-    backgroundColor: theme.colors.turquoise,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.md,
-    zIndex: 5,
-  },
-  devButtonText: {
-    fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.white,
   },
 });
