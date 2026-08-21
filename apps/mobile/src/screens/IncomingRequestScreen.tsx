@@ -371,28 +371,29 @@ const styles = StyleSheet.create({
   },
   routePoint: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: theme.spacing.sm,
   },
   routeIconStart: {
-    fontSize: 16,
+    fontSize: theme.fontSize.md,
   },
   routeIconEnd: {
-    fontSize: 16,
+    fontSize: theme.fontSize.md,
   },
   routeText: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: theme.fontSize.md,
     color: theme.colors.deepBlue,
   },
   routeLine: {
-    height: 24,
-    width: 64,
-    alignItems: 'center',
+    height: theme.spacing.lg,
+    alignSelf: 'flex-start',
     justifyContent: 'center',
-    marginLeft: 6,
+    marginLeft: theme.spacing.sm,
   },
   distanceText: {
-    fontSize: 13,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
   },
   cancelRate: {
@@ -413,15 +414,19 @@ const styles = StyleSheet.create({
   },
   earningsBreakdown: {
     width: 260,
-    gap: 4,
+    gap: theme.spacing.xs,
     alignItems: 'center',
   },
   earningsBreakdownRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
     width: '100%',
   },
   earningsBreakdownLabel: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: theme.fontSize.sm,
     color: theme.colors.white,
     opacity: 0.7,
@@ -467,9 +472,11 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   passengerInfo: {
-    gap: 2,
+    flex: 1,
+    gap: theme.spacing.xs,
   },
   passengerName: {
+    flexShrink: 1,
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.deepBlue,
