@@ -13,10 +13,12 @@ import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { MapView } from '../components/MapView';
 import { RatingStars } from '../components/RatingStars';
+import { Snackbar, type SnackbarTone } from '../components/feedback/Snackbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useDynamicRouting } from '../hooks/useDynamicRouting';
 import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
+import { haversineDistance } from '../lib/geo';
 import { startTracking, stopTracking } from '../lib/location';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
@@ -34,6 +36,8 @@ export const TripInProgressScreen: React.FC = () => {
   const [completeError, setCompleteError] = useState<{
     title: string;
     message: string;
+    tone: SnackbarTone;
+    distanceMeters: number | null;
   } | null>(null);
 
   const { routeCoords, etaMinutes, distKm, steps, altRouteCoords } = useDynamicRouting(
@@ -96,11 +100,25 @@ export const TripInProgressScreen: React.FC = () => {
       }
       const code = err?.error?.code;
       const isTooFar = code === 'TOO_FAR_FROM_DESTINATION';
+      let distanceMeters: number | null = null;
+      if (
+        isTooFar &&
+        locationLat != null &&
+        locationLng != null &&
+        trip?.dest_lat != null &&
+        trip?.dest_lng != null
+      ) {
+        distanceMeters = Math.round(
+          haversineDistance(locationLat, locationLng, trip.dest_lat, trip.dest_lng) * 1000,
+        );
+      }
       setCompleteError({
         title: isTooFar ? 'Todavía no llegaste al destino' : 'No se pudo finalizar el viaje',
         message: isTooFar
-          ? 'Acercate al destino para poder finalizar el viaje.'
+          ? 'Acercate al pin del destino. Necesitas estar a menos de 50 metros para finalizar.'
           : err?.error?.message || err?.message || 'No se pudo finalizar el viaje',
+        tone: isTooFar ? 'warning' : 'error',
+        distanceMeters,
       });
     } finally {
       setCompleting(false);
@@ -232,18 +250,14 @@ export const TripInProgressScreen: React.FC = () => {
       </View>
 
       {completeError ? (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modal}>
-            <Text style={styles.modalIcon}>📍</Text>
-            <Text style={styles.modalTitle}>{completeError.title}</Text>
-            <Text style={styles.modalText}>{completeError.message}</Text>
-            <Button
-              title="ENTENDIDO"
-              onPress={() => setCompleteError(null)}
-              style={styles.modalButton}
-            />
-          </View>
-        </View>
+        <Snackbar
+          visible={completeError !== null}
+          title={completeError.title}
+          message={completeError.message}
+          tone={completeError.tone}
+          distanceMeters={completeError.distanceMeters}
+          onDismiss={() => setCompleteError(null)}
+        />
       ) : null}
     </View>
   );
@@ -362,48 +376,5 @@ const styles = StyleSheet.create({
   recenterButtonText: {
     fontSize: 20,
     color: theme.colors.deepBlue,
-  },
-  modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 20,
-  },
-  modal: {
-    width: 310,
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.lg,
-    alignItems: 'center',
-    gap: theme.spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 16,
-  },
-  modalIcon: {
-    fontSize: 32,
-  },
-  modalTitle: {
-    fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.deepBlue,
-    textAlign: 'center',
-  },
-  modalText: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.mediumGray,
-    textAlign: 'center',
-    width: 270,
-    lineHeight: 20,
-  },
-  modalButton: {
-    width: 270,
   },
 });
