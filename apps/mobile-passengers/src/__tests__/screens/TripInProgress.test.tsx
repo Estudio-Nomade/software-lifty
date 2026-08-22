@@ -28,6 +28,7 @@ jest.mock('../../components/Map/PassengerMap', () => ({
 
 jest.mock('../../api/passenger', () => ({
   getActiveRide: jest.fn().mockResolvedValue(null),
+  getProfile: jest.fn().mockResolvedValue({}),
   cancelRide: jest.fn().mockResolvedValue(undefined),
 }));
 

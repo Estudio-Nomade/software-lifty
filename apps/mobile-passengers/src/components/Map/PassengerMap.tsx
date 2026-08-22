@@ -17,7 +17,7 @@ interface MarkerData {
   coordinate: [number, number];
   title?: string;
   color?: string;
-  icon?: 'car' | 'moto' | 'camioneta' | 'person';
+  icon?: 'car' | 'moto' | 'camioneta' | 'person' | 'destination';
   avatarUrl?: string;
 }
 
@@ -110,6 +110,31 @@ function generateMapHtml(colors: { primary: string; lightGray: string }) {
     border-radius: 50%;
     animation: pulse 2s infinite;
   }
+  .destination-pin {
+    position: relative;
+    width: 32px; height: 32px;
+    border: 2px solid #FFFFFF;
+    border-radius: 50%;
+    background: #FFFFFF center / cover no-repeat;
+    box-shadow: 0 2px 6px rgba(13, 43, 69, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .destination-pin::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top: 10px solid ${colors.primary};
+    border-bottom: 0;
+  }
+  .destination-pin ion-icon {
+    font-size: 18px;
+    color: ${colors.primary};
+  }
   @keyframes pulse {
     0% { transform: scale(0.5); opacity: 0.8; }
     100% { transform: scale(2.5); opacity: 0; }
@@ -162,7 +187,14 @@ function generateMapHtml(colors: { primary: string; lightGray: string }) {
     markers = [];
     newMarkers.forEach(function (mk) {
       var el = document.createElement('div');
-      if (mk.avatarUrl) {
+      if (mk.icon === 'destination') {
+        el.className = 'destination-pin';
+        if (mk.avatarUrl) {
+          el.style.backgroundImage = "url('" + mk.avatarUrl + "')";
+        } else {
+          el.innerHTML = '<ion-icon name="person"></ion-icon>';
+        }
+      } else if (mk.avatarUrl) {
         el.className = 'marker-avatar';
         el.innerHTML = '<img src="' + mk.avatarUrl + '" alt="" />';
       } else if (mk.icon) {
@@ -175,8 +207,11 @@ function generateMapHtml(colors: { primary: string; lightGray: string }) {
         el.style.background = color;
       }
 
-      var marker = new maplibregl.Marker({ element: el })
-        .setLngLat([mk.coordinate[0], mk.coordinate[1]]);
+      var marker = new maplibregl.Marker({
+        element: el,
+        anchor: mk.icon === 'destination' ? 'bottom' : 'center',
+        offset: mk.icon === 'destination' ? [0, -10] : [0, 0],
+      }).setLngLat([mk.coordinate[0], mk.coordinate[1]]);
 
       if (mk.title) {
         marker.setPopup(new maplibregl.Popup({ offset: 16, closeButton: false }).setText(mk.title));

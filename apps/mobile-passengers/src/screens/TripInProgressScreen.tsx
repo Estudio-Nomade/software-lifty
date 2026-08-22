@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { cancelRide, getActiveRide, getCancelPreview } from '../api/passenger';
+import { cancelRide, getActiveRide, getCancelPreview, getProfile } from '../api/passenger';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
@@ -33,6 +33,13 @@ export function TripInProgressScreen() {
   const setDriverLocation = useRideStore((s) => s.setDriverLocation);
   const reset = useRideStore((s) => s.reset);
   const [recenterKey, setRecenterKey] = useState(0);
+  const [passengerAvatar, setPassengerAvatar] = useState<string | null>(null);
+
+  useEffect(() => {
+    getProfile()
+      .then((p) => setPassengerAvatar(p.avatar_url ?? null))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (activeTrip) return;
@@ -168,7 +175,8 @@ export function TripInProgressScreen() {
             id: 'destination',
             coordinate: [trip.dest_lng, trip.dest_lat] as [number, number],
             title: 'Destino',
-            color: theme.colors.dangerRed,
+            icon: 'destination' as const,
+            ...(passengerAvatar ? { avatarUrl: passengerAvatar } : {}),
           },
         ]
       : []),
