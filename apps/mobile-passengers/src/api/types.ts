@@ -36,6 +36,7 @@ export interface Trip {
   distance_km?: number | null;
   duration_minutes?: number | null;
   total_fare?: number | null;
+  platform_fee?: number | null;
   verification_code?: string | null;
   driver_name?: string | null;
   driver_avatar_url?: string | null;
