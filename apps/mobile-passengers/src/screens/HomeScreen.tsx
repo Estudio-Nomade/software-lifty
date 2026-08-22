@@ -405,8 +405,8 @@ const styles = StyleSheet.create({
   },
   locateBtn: {
     position: 'absolute',
-    bottom: 12,
-    right: 12,
+    top: theme.spacing.md,
+    right: theme.spacing.md,
     width: 44,
     height: 44,
     borderRadius: 22,

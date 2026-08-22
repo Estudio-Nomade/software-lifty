@@ -136,7 +136,7 @@ function generateMapHtml(colors: { primary: string; lightGray: string }) {
     attributionControl: true,
   });
 
-  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 
   var mapLoaded = false;
   var markers = [];
