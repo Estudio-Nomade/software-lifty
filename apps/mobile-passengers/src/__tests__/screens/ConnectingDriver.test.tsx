@@ -1,6 +1,6 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
-import { ConnectingDriverScreen } from '../../screens/ConnectingDriverScreen';
+import { ConnectingDriverScreen, SEARCH_TIMEOUT_MS } from '../../screens/ConnectingDriverScreen';
 import { useAuthStore } from '../../store/authStore';
 
 jest.mock('expo-router', () => ({
@@ -38,10 +38,10 @@ describe('ConnectingDriverScreen', () => {
     expect(getByText('Conectando con el conductor...')).toBeTruthy();
   });
 
-  test('shows no-driver message after 30s timeout', async () => {
+  test('shows no-driver message after timeout', async () => {
     const { getByText } = await render(<ConnectingDriverScreen />);
     await act(async () => {
-      jest.advanceTimersByTime(30_000);
+      jest.advanceTimersByTime(SEARCH_TIMEOUT_MS);
     });
     expect(getByText('No hay conductores disponibles cerca')).toBeTruthy();
   });
@@ -97,7 +97,7 @@ describe('ConnectingDriverScreen', () => {
     const { getByText, queryByText } = await render(<ConnectingDriverScreen />);
 
     await act(async () => {
-      jest.advanceTimersByTime(30_000);
+      jest.advanceTimersByTime(SEARCH_TIMEOUT_MS);
     });
     expect(getByText('No hay conductores disponibles cerca')).toBeTruthy();
 

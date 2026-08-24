@@ -40,7 +40,10 @@ Hooks are skipped on merge and rebase.
 ## Commands (from root)
 ```bash
 bun install            # install all deps
-bun run dev            # turbo dev (both apps in parallel)
+bun run dev            # backend (3001) + conductor (8081) + pasajeros (8083), con los 2 QR
+bun run dev:backend    # solo backend
+bun run dev:driver     # solo app conductor (Expo, QR)
+bun run dev:passenger  # solo app pasajeros (Expo, QR)
 bun run typecheck      # turbo typecheck (both apps)
 bun run test           # turbo test (both apps)
 bun run lint           # biome check all
@@ -48,6 +51,12 @@ bun run format         # biome format all
 bun run check          # lint + typecheck
 bun run clean          # turbo clean
 ```
+
+> `bun run dev` usa `scripts/dev-all.ts` (orquestador dedicado), **no** `turbo dev`.
+> Turbo antepone `pkg:task:` a cada línea y pipea el stdout sin TTY, lo que rompe
+> los QR. El orquestador imprime él mismo los dos QR (desde la URL `exp://<ip-lan>:<puerto>`,
+> con `qrcode-terminal`) y arranca los 3 servicios en paralelo con logs etiquetados
+> `[backend]` / `[conductor]` / `[pasajeros]`.
 
 ### Per-app commands
 ```bash

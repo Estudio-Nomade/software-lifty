@@ -1,12 +1,31 @@
 import type React from 'react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { WebView } from 'react-native-webview';
-import type { WebViewMessageEvent } from 'react-native-webview/lib/WebViewTypes';
 import { theme } from '../../theme';
 import { MapErrorFallback } from './MapErrorFallback';
 import { DEFAULT_ZOOM, type PassengerMapProps, generateMapHtml } from './mapHtml';
 import { useMapController } from './useMapController';
+
+interface IframeWindow {
+  postMessage: (message: string, targetOrigin: string) => void;
+}
+
+interface IframeElement {
+  contentWindow?: IframeWindow | null;
+}
+
+interface MessageEventLike {
+  data?: unknown;
+  source?: unknown;
+}
+
+interface MessageListenerTarget {
+  addEventListener: (type: string, listener: (event: MessageEventLike) => void) => void;
+  removeEventListener: (type: string, listener: (event: MessageEventLike) => void) => void;
+}
+
+const win = globalThis as unknown as MessageListenerTarget;
+const LOAD_TIMEOUT_MS = 15_000;
 
 export const PassengerMap: React.FC<PassengerMapProps> = ({
   centerCoordinate,
@@ -28,9 +47,7 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     [],
   );
 
-  const source = useMemo(() => ({ html: mapHtml }), [mapHtml]);
-
-  const webViewRef = useRef<any>(null);
+  const iframeRef = useRef<IframeElement | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const retryKey = useRef(0);
@@ -47,7 +64,7 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
   }, []);
 
   const postMessage = useCallback((message: unknown) => {
-    webViewRef.current?.postMessage(JSON.stringify(message));
+    iframeRef.current?.contentWindow?.postMessage(JSON.stringify(message), '*');
   }, []);
 
   const { handleRawMessage } = useMapController({
@@ -63,38 +80,46 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     postMessage,
   });
 
-  const handleMessage = useCallback(
-    (event: WebViewMessageEvent) => handleRawMessage(event.nativeEvent.data),
-    [handleRawMessage],
-  );
+  // Safety net: if the iframe never fires `onload` (e.g. a CDN script hangs),
+  // stop showing the loading overlay instead of spinning forever.
+  useEffect(() => {
+    if (isLoaded) return;
+    const timeout = setTimeout(() => setIsLoaded(true), LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timeout);
+  }, [isLoaded]);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEventLike) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      handleRawMessage(String(event.data));
+    };
+
+    win.addEventListener('message', handleMessage);
+    return () => win.removeEventListener('message', handleMessage);
+  }, [handleRawMessage]);
 
   if (hasError) {
     return <MapErrorFallback onRetry={handleRetry} style={style} />;
   }
 
+  const iframe = createElement(
+    'iframe',
+    {
+      key: retryKey.current,
+      ref: iframeRef,
+      srcDoc: mapHtml,
+      title: 'map',
+      sandbox: 'allow-scripts allow-same-origin allow-popups',
+      onLoad: () => setIsLoaded(true),
+      onError: handleError,
+      style: styles.iframe,
+    },
+    null,
+  );
+
   return (
     <View style={[styles.container, style]}>
-      <WebView
-        key={retryKey.current}
-        ref={webViewRef}
-        source={source}
-        style={styles.webview}
-        onLoadEnd={() => setIsLoaded(true)}
-        onError={handleError}
-        onMessage={handleMessage}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        geolocationEnabled={true}
-        startInLoadingState={true}
-        renderLoading={() => (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-          </View>
-        )}
-        scrollEnabled={false}
-        bounces={false}
-        overScrollMode="never"
-      />
+      {iframe}
       {!isLoaded && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -108,19 +133,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  webview: {
+  iframe: {
     flex: 1,
+    borderWidth: 0,
     backgroundColor: 'transparent',
-  },
-  loadingContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
   },
   loadingOverlay: {
     ...(StyleSheet.absoluteFillObject as object),

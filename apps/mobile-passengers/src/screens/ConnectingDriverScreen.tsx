@@ -9,7 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 
-const SEARCH_TIMEOUT_MS = 300_000;
+export const SEARCH_TIMEOUT_MS = 300_000;
 
 const LIVE_STATUSES = new Set(['accepted', 'en_route', 'waiting', 'in_trip']);
 
