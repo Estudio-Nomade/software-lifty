@@ -2,7 +2,7 @@ import { useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import type { DriverStatus } from '../api/types';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { isLiveTrip } from '../lib/isLiveTrip';
+import { hasActiveTrip } from '../lib/isLiveTrip';
 import { STEP_ROUTE, routeForDriverStatus } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { useTripStore } from '../store/tripStore';
@@ -73,7 +73,11 @@ export function AuthRedirectWatcher() {
     if (!isAuthenticated || driverStatus !== 'approved') return;
     const current = segments[0] ?? '';
     if (!TRIP_ROUTES.includes(current)) return;
-    if (isLiveTrip(trip)) return;
+    // Use a status-based check (not the time-based `isLiveTrip`) so this guard
+    // never yanks an approved driver off a trip screen mid-transition (e.g.
+    // accepting a trip: `setActiveTrip` → `replace('Navigation')`). A trip in
+    // any active status is authoritative regardless of its `updated_at` age.
+    if (hasActiveTrip(trip)) return;
     replace('Online');
   }, [sessionRestored, isAuthenticated, driverStatus, segments, trip, replace]);
 

@@ -123,6 +123,44 @@ describe('AuthRedirectWatcher', () => {
     expect(mockRouterReplace).not.toHaveBeenCalledWith('/online');
   });
 
+  test('does not redirect after accepting a trip (accepted trip on navigation route)', async () => {
+    mockIsAuthenticated = true;
+    mockDriverStatus = 'approved';
+    mockSegments = ['navigation'];
+    mockTrip = {
+      id: 'trip-1',
+      status: 'accepted',
+      updated_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    };
+
+    await act(async () => {
+      render(React.createElement(AuthRedirectWatcher));
+    });
+
+    expect(mockRouterReplace).not.toHaveBeenCalledWith('/online');
+  });
+
+  test('does not redirect off a trip route when the trip is stale but still active', async () => {
+    mockIsAuthenticated = true;
+    mockDriverStatus = 'approved';
+    mockSegments = ['waiting-passenger'];
+    mockTrip = {
+      id: 'trip-1',
+      status: 'waiting',
+      // Stale updated_at (10 minutes ago) — time-based isLiveTrip would reject
+      // this, but the driver is legitimately waiting and must stay on screen.
+      updated_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+      created_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    };
+
+    await act(async () => {
+      render(React.createElement(AuthRedirectWatcher));
+    });
+
+    expect(mockRouterReplace).not.toHaveBeenCalledWith('/online');
+  });
+
   test('does not redirect a non-approved driver off a trip route', async () => {
     mockIsAuthenticated = true;
     mockDriverStatus = 'under_review';

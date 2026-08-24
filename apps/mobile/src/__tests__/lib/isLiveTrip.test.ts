@@ -1,4 +1,4 @@
-import { isLiveTrip } from '../../lib/isLiveTrip';
+import { hasActiveTrip, isLiveTrip } from '../../lib/isLiveTrip';
 
 const trip = (status: string, updatedAtMsAgo: number) => ({
   id: 'trip-1',
@@ -55,5 +55,34 @@ describe('isLiveTrip', () => {
   test('a terminal status is not live', () => {
     expect(isLiveTrip(trip('completed', 1_000))).toBe(false);
     expect(isLiveTrip(trip('cancelled', 1_000))).toBe(false);
+  });
+});
+
+describe('hasActiveTrip', () => {
+  test('null trip is not active', () => {
+    expect(hasActiveTrip(null)).toBe(false);
+  });
+
+  test('active statuses are active', () => {
+    expect(hasActiveTrip(trip('request_received', 0))).toBe(true);
+    expect(hasActiveTrip(trip('offered', 0))).toBe(true);
+    expect(hasActiveTrip(trip('accepted', 0))).toBe(true);
+    expect(hasActiveTrip(trip('en_route', 0))).toBe(true);
+    expect(hasActiveTrip(trip('waiting', 0))).toBe(true);
+    expect(hasActiveTrip(trip('in_trip', 0))).toBe(true);
+    expect(hasActiveTrip(trip('completed', 0))).toBe(true);
+  });
+
+  test('a stale-but-active trip is still active (no time heuristic)', () => {
+    // A driver waiting >5min for the passenger still holds an active trip and
+    // must not be redirected off the trip screens.
+    expect(hasActiveTrip(trip('waiting', 10 * 60 * 1000))).toBe(true);
+    expect(hasActiveTrip(trip('accepted', 24 * 60 * 60 * 1000))).toBe(true);
+  });
+
+  test('terminal statuses are not active', () => {
+    expect(hasActiveTrip(trip('cancelled', 0))).toBe(false);
+    expect(hasActiveTrip(trip('rejected', 0))).toBe(false);
+    expect(hasActiveTrip(trip('expired', 0))).toBe(false);
   });
 });
