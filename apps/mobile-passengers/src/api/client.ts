@@ -9,6 +9,16 @@ function getApiUrl(): string {
 
   const port = process.env.EXPO_PUBLIC_API_PORT ?? '3000';
 
+  // On web, `Constants.expoConfig?.hostUri` is undefined, so we used to fall
+  // back to `localhost` — which is wrong when the app is opened via LAN IP
+  // (e.g. `http://192.168.x.x:8083` from another device or the QR flow). Use
+  // the page's own hostname so the API resolves to the same machine the
+  // browser loaded the bundle from.
+  const pageHost = (globalThis as { location?: { hostname?: string } }).location?.hostname;
+  if (pageHost && pageHost !== 'localhost' && pageHost !== '127.0.0.1') {
+    return `http://${pageHost}:${port}/api`;
+  }
+
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
     const host = hostUri.split(':')[0];

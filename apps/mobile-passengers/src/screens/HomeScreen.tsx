@@ -24,6 +24,7 @@ import { QuickChips } from '../components/QuickChips';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useLocation } from '../hooks/useLocation';
 import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
+import { useLocationStore } from '../store/locationStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 
@@ -80,30 +81,43 @@ export function HomeScreen() {
     if (!searchExpanded) return;
     let cancelled = false;
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      const pos = await Location.getCurrentPositionAsync({});
-      if (cancelled) return;
-      // reverseGeocodeAsync throws on web (GeocoderError) — fall back to raw coords.
-      let name = '';
       try {
-        const [addr] = await Location.reverseGeocodeAsync({
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-        });
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const pos = await Location.getCurrentPositionAsync({});
         if (cancelled) return;
-        name =
-          addr?.street && addr?.streetNumber
-            ? `${addr.street} ${addr.streetNumber}`
-            : (addr?.name ?? '');
+        // reverseGeocodeAsync throws on web (GeocoderError) — fall back to raw coords.
+        let name = '';
+        try {
+          const [addr] = await Location.reverseGeocodeAsync({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          });
+          if (cancelled) return;
+          name =
+            addr?.street && addr?.streetNumber
+              ? `${addr.street} ${addr.streetNumber}`
+              : (addr?.name ?? '');
+        } catch {
+          name = '';
+        }
+        setPickupAddress(
+          name || `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`,
+        );
+        setPickupCoord({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setPickupPicked(true);
       } catch {
-        name = '';
+        // expo-location throws on web when the context is insecure or the
+        // browser blocks geolocation. Fall back to the already-tracked
+        // location so the user still gets a pickup point.
+        if (cancelled) return;
+        const tracked = useLocationStore.getState().current;
+        if (tracked) {
+          setPickupAddress(`${tracked.lat.toFixed(4)}, ${tracked.lng.toFixed(4)}`);
+          setPickupCoord({ lat: tracked.lat, lng: tracked.lng });
+          setPickupPicked(true);
+        }
       }
-      setPickupAddress(
-        name || `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`,
-      );
-      setPickupCoord({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      setPickupPicked(true);
     })();
     return () => {
       cancelled = true;

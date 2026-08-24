@@ -923,18 +923,39 @@ bun --filter @lifty/mobile-passengers web
 `bun run dev:passenger` (Metro en 8083) también sirve web; la diferencia es que `dev:passenger:web`
 abre el navegador directamente. El puerto 8083 es el mismo que usa el orquestador `dev-all.ts`.
 
+### Cómo se resuelve la URL de la API en web
+
+`src/api/client.ts` (`getApiUrl`) resuelve el host del backend en este orden:
+
+1. `EXPO_PUBLIC_API_URL` si está definido (override manual).
+2. En web, `window.location.hostname` cuando NO es `localhost`/`127.0.0.1`. Esto hace que abrir
+   `http://192.168.x.x:8083` derive la API a `http://192.168.x.x:3001/api` en vez de `localhost`
+   (que apuntaba a la máquina equivocada cuando el browser corría en otro dispositivo).
+3. `Constants.expoConfig?.hostUri` (Expo Go / native).
+4. Fallback `http://localhost:<port>/api`.
+
 ### Limitaciones conocidas
 
-- **CORS del backend**: al correr web, las llamadas a `http://localhost:3001` desde
-  `http://localhost:8083` requieren que el backend exponga CORS. En dev con el backend levantado
-  funciona; sin backend, las pantallas fallan gracefully (`.catch(() => null)`).
+- **CORS del backend**: el backend (Elysia) refleja el `Origin` en dev para `localhost`,
+  `127.0.0.1` **y rangos IPv4 privados** (`10.x`, `192.168.x`, `172.16-31.x`). Ver
+  `apps/backend/src/shared/middleware/security.ts` (`isLocalDevOrigin`). Sin esto, abrir la app web
+  por IP de LAN bloqueaba TODA la API (autocomplete, geocode, active ride) por CORS. En producción
+  la whitelist sigue siendo `CORS_ORIGIN` (explícita).
 - **`Alert.alert`**: en web `react-native-web` no renderiza `Alert` nativo (no-op). No crashea, pero
-  los diálogos de confirmación no se ven. Si hace falta, usar un componente propio.
-- **`expo-location` en web**: `requestForegroundPermissionsAsync` y `watchPositionAsync` funcionan
-  (geolocalización del browser), pero `geocodeAsync`/`reverseGeocodeAsync` lanzan `GeocoderError`.
-  La app ya usa el backend para geocoding, así que esto no afecta el flujo normal.
-- **El mapa carga MapLibre desde CDN** (`unpkg.com`). Sin red, el mapa no renderiza; hay un timeout
-  de carga de 15s en web que evita el spinner infinito.
+  los diálogos de confirmación no se ven. Si hace falta, usar un componente propio (el flujo de
+  búsqueda usa un error inline en vez de `Alert`).
+- **`expo-location` en web**: `requestForegroundPermissionsAsync`/`watchPositionAsync` usan
+  `navigator.geolocation` y funcionan solo en **secure context** (`https` o `localhost`). Por IP de
+  LAN el browser bloquea geolocation. `src/hooks/useLocation.ts` hace fallback a
+  `navigator.geolocation` directo cuando expo-location falla y no deja reject sin manejar; si no hay
+  geolocation disponible, `permissionGranted` queda `false` y la app sigue sin crashear.
+  `geocodeAsync`/`reverseGeocodeAsync` lanzan `GeocoderError` en web → la app usa el backend para
+  geocoding.
+- **El mapa carga MapLibre desde CDN** (`unpkg.com`). Sin red, el mapa no renderiza. Hay un guard en
+  el `<script>` de `mapHtml.ts` que detecta `typeof maplibregl === 'undefined'` y le avisa al host
+  con un mensaje `error` → en web se muestra el `MapErrorFallback` ("No se pudo cargar el mapa" +
+  reintentar) en vez de un mapa en blanco. Además hay un timeout de carga de 15s en web que evita el
+  spinner infinito.
 
 ## Checklist de Desarrollo
 

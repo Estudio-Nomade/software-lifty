@@ -12,9 +12,15 @@ export const securityHeaders = new Elysia({ name: 'security-headers' }).onAfterH
   },
 );
 
+// Private IPv4 ranges (192.168.x.x, 10.x.x.x, 172.16-31.x.x, etc.) — used by
+// devices on the local network to open the dev server via LAN IP. In dev we
+// treat them as trusted so the browser CORS preflight doesn't block the API.
+const PRIVATE_IP_ORIGIN =
+  /^https?:\/\/(?:(?:10|127)\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$/;
+
 const isLocalDevOrigin = (origin: string) =>
   process.env.NODE_ENV !== 'production' &&
-  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) || PRIVATE_IP_ORIGIN.test(origin));
 
 export const cors = new Elysia({ name: 'cors' }).onRequest(({ request, set }) => {
   const origin = request.headers.get('origin') || '*';
