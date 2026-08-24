@@ -951,6 +951,14 @@ abre el navegador directamente. El puerto 8083 es el mismo que usa el orquestado
   geolocation disponible, `permissionGranted` queda `false` y la app sigue sin crashear.
   `geocodeAsync`/`reverseGeocodeAsync` lanzan `GeocoderError` en web → la app usa el backend para
   geocoding.
+- **`expo-location` bug en el cleanup (web)**: `Location.watchPositionAsync()` devuelve una
+  subscription cuyo `.remove()` llama internamente a `LocationEventEmitter.removeSubscription()`. En
+  native `LocationEventEmitter` es un `LegacyEventEmitter` (que SÍ tiene `removeSubscription`), pero en
+  web es el `EventEmitter` nuevo de `expo-modules-core` (que NO lo implementa) → el cleanup del efecto
+  tira `TypeError: removeSubscription is not a function` al desmontar/remontar (p. ej. al navegar).
+  **Fix**: en web `useLocation.ts` usa `navigator.geolocation.watchPosition()` + `clearWatch()`
+  directamente (evitando la subscription rota), y solo usa `Location.watchPositionAsync()` en native.
+  El `subscription.remove()` va envuelto en `try/catch` como defensa extra.
 - **El mapa carga MapLibre desde CDN** (`unpkg.com`). Sin red, el mapa no renderiza. Hay un guard en
   el `<script>` de `mapHtml.ts` que detecta `typeof maplibregl === 'undefined'` y le avisa al host
   con un mensaje `error` → en web se muestra el `MapErrorFallback` ("No se pudo cargar el mapa" +
