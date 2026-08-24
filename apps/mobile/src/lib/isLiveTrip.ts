@@ -4,6 +4,26 @@ const OFFER_LIVE_MS = 60 * 1000;
 const WAITING_LIVE_MS = 5 * 60 * 1000;
 const IN_PROGRESS_LIVE_MS = 6 * 60 * 60 * 1000;
 
+// Statuses that represent a trip the driver is actively working — or has just
+// finished and still needs to collect/rate on the trip-complete screen. Unlike
+// `isLiveTrip`, this is purely status-based (no `updated_at` time heuristic), so
+// it is the right signal for navigation guards: a driver holding a trip in any
+// of these statuses must NOT be redirected away from the trip screens, even if
+// the trip's `updated_at` is momentarily stale during a transition.
+const ACTIVE_TRIP_STATUSES = new Set([
+  'request_received',
+  'offered',
+  'accepted',
+  'en_route',
+  'waiting',
+  'in_trip',
+  'completed',
+]);
+
+export function hasActiveTrip(trip: Trip | null | undefined): boolean {
+  return trip != null && ACTIVE_TRIP_STATUSES.has(trip.status);
+}
+
 export function isLiveTrip(trip: Trip | null | undefined, now: number = Date.now()): boolean {
   if (!trip) return false;
   const updatedAt = Date.parse(trip.updated_at);
@@ -20,7 +40,6 @@ export function isLiveTrip(trip: Trip | null | undefined, now: number = Date.now
     case 'accepted':
     case 'en_route':
     case 'in_trip':
-    case 'completed':
       return age < IN_PROGRESS_LIVE_MS;
     default:
       return false;

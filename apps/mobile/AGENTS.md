@@ -40,6 +40,36 @@ LiftyApp/
 - **Navigating**: screens use `useAppNavigation()` hook → `navigate('ScreenName')` (same API as before). The hook maps old PascalCase names to kebab-case routes.
 - **Never** import from `@react-navigation/*` — removed in SDK 56 migration.
 
+## Trip flow & navigation guards (accept-trip redirect)
+
+The driver trip lifecycle is driven by **multiple independent navigation sources**, and
+they must not fight each other:
+
+- `DriverRealtimeProvider` (global) — realtime `trip:request` + a 5s polling fallback that
+  navigate to `IncomingRequest` when an offer arrives.
+- `ActiveTripRecovery` (in `AppInitializer`) — on cold start, restores a live `/trips/active`
+  trip and routes to the right screen.
+- `AuthRedirectWatcher` — routes by auth/onboarding state and bounces an approved driver off
+  a trip screen back to `Online` when there is no active trip.
+
+**Accept flow**: `IncomingRequestScreen.handleAccept` → `POST /trips/:id/accept` →
+`setActiveTrip(acceptedTrip)` (store is the single source of truth) → `replace('Navigation')`.
+`NavigationScreen` then fires `POST /trips/:id/en-route` and the trip advances
+`accepted → en_route → waiting → in_trip → completed`.
+
+**Recurring bug (fixed)**: after accepting, the app bounced back to `/online`. Root cause: the
+`AuthRedirectWatcher` "no active trip" guard used the time-based `isLiveTrip()` helper, which
+returns `false` for trips whose `updated_at` is older than a hardcoded window (60s offer / 5min
+waiting / 6h in-progress). During the accept transition (and in other legitimate long-lived
+states, e.g. waiting > 5min for the passenger) that produced a false negative and redirected the
+driver home.
+
+**Rule**: the navigation **guard** must use `hasActiveTrip()` (purely status-based — see
+`src/lib/isLiveTrip.ts`), never `isLiveTrip()`. Keep `isLiveTrip()` only for filtering stale trips
+returned by the server (e.g. `ActiveTripRecovery`). A driver holding a trip in an active status
+(`request_received`, `offered`, `accepted`, `en_route`, `waiting`, `in_trip`, `completed`) must
+never be redirected off the trip screens, regardless of `updated_at` age.
+
 ## Theme
 Import from `src/theme/index.ts`. All UI must use `theme.colors.*`, `theme.spacing.*`, `theme.fontSize.*`, `theme.radius.*`, `theme.dimensions.*`. Never hardcode colors or sizes.
 
