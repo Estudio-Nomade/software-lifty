@@ -1,6 +1,5 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
-import { Alert } from 'react-native';
 import { geocodeAddress } from '../../api/passenger';
 import { useLocation } from '../../hooks/useLocation';
 import { HomeScreen } from '../../screens/HomeScreen';
@@ -93,7 +92,6 @@ describe('HomeScreen destination confirmation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseLocation.mockReturnValue({ current: { lat: -34.5, lng: -58.4 } });
-    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   });
 
   test('geocodes destination and navigates with its coords', async () => {
@@ -133,6 +131,6 @@ describe('HomeScreen destination confirmation', () => {
     });
 
     expect(mockNavigate).not.toHaveBeenCalled();
-    expect(Alert.alert).toHaveBeenCalled();
+    expect(getByText('No encontramos esa dirección. Revisá la dirección e intentá de nuevo.')).toBeTruthy();
   });
 });

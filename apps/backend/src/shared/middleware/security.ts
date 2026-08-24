@@ -12,6 +12,10 @@ export const securityHeaders = new Elysia({ name: 'security-headers' }).onAfterH
   },
 );
 
+const isLocalDevOrigin = (origin: string) =>
+  process.env.NODE_ENV !== 'production' &&
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
 export const cors = new Elysia({ name: 'cors' }).onRequest(({ request, set }) => {
   const origin = request.headers.get('origin') || '*';
   const allowed = process.env.CORS_ORIGIN || '*';
@@ -22,7 +26,8 @@ export const cors = new Elysia({ name: 'cors' }).onRequest(({ request, set }) =>
     allowed
       .split(',')
       .map((o) => o.trim())
-      .includes(origin)
+      .includes(origin) ||
+    isLocalDevOrigin(origin)
   ) {
     set.headers['Access-Control-Allow-Origin'] = origin;
   }
