@@ -873,6 +873,69 @@ bun run db:migrate:passenger                  # Migrar tablas de pasajero
 bun run db:seed:passenger                     # Seedear datos de prueba
 ```
 
+## Web Support
+
+La app de pasajeros corre tanto en Expo Go (iOS/Android) como en navegador (web) sin
+cambios en el código de las pantallas. Todo el soporte web se resuelve por convención de
+archivos (`.web.tsx`) y configuración de Metro, no con `Platform.OS` en cada pantalla.
+
+### Cómo funciona el mapa en web
+
+El mapa es un documento HTML autocontenido (MapLibre GL) que se renderiza de forma
+distinta según la plataforma, pero que siempre se comunica con React Native por `postMessage`:
+
+| Archivo | Plataforma | Transporte |
+|---|---|---|
+| `src/components/Map/mapHtml.ts` | — | `generateMapHtml()`: el HTML + tipos compartidos (`MarkerData`, `PassengerMapProps`) + `postToHost()` |
+| `src/components/Map/PassengerMap.tsx` | native | `react-native-webview` → `postToHost` usa `window.ReactNativeWebView.postMessage` |
+| `src/components/Map/PassengerMap.web.tsx` | web | `<iframe srcDoc>` → `postToHost` usa `window.parent.postMessage` |
+| `src/components/Map/useMapController.ts` | — | hook compartido: los 7 effects de envío de mensajes + parseo de respuestas |
+
+El `postToHost` del HTML detecta el entorno en runtime (mismo HTML para ambos). La lógica de
+mensajes (init/markers/route/fitRoute/followUser/userLocation/recenter) vive **una sola vez** en
+`useMapController.ts`, de modo que la versión native y web solo difieren en el transporte.
+
+Reglas:
+- **No duplicar** la lógica de mensajes del mapa. Si se agrega un tipo de mensaje nuevo, editar
+  `useMapController.ts` + el `<script>` de `mapHtml.ts` y listo (ambas plataformas lo heredan).
+- El web usa `createElement('iframe')` con `sandbox="allow-scripts allow-same-origin allow-popups"`.
+- El listener de mensajes en web **filtra por `event.source`** (solo acepta mensajes del propio iframe).
+
+### Configuraciones clave
+
+- **`metro.config.js`**: `unstable_conditionNames: ['react-native']` — obligatorio. Hace que Metro
+  resuelva el build CJS de paquetes que publican ESM con `import.meta` (Zustand v5). Sin esto el
+  bundle web crashea en runtime con `Cannot use 'import.meta' outside a module`.
+- **`app.json`** → `web`: `bundler: metro`, `output: single`, `favicon: ./assets/icon.png`.
+- **`@expo/metro-runtime`** en `dependencies` — requerido para Fast Refresh en web.
+- **`babel.config.js` no existe** (implícito via `babel-preset-expo`, igual que el driver).
+
+### Cómo lanzar web
+
+```bash
+# Desde el root — levanta Metro para web en http://localhost:8083
+bun run dev:passenger:web
+
+# O directo desde la app
+bun --filter @lifty/mobile-passengers web
+```
+
+`bun run dev:passenger` (Metro en 8083) también sirve web; la diferencia es que `dev:passenger:web`
+abre el navegador directamente. El puerto 8083 es el mismo que usa el orquestador `dev-all.ts`.
+
+### Limitaciones conocidas
+
+- **CORS del backend**: al correr web, las llamadas a `http://localhost:3001` desde
+  `http://localhost:8083` requieren que el backend exponga CORS. En dev con el backend levantado
+  funciona; sin backend, las pantallas fallan gracefully (`.catch(() => null)`).
+- **`Alert.alert`**: en web `react-native-web` no renderiza `Alert` nativo (no-op). No crashea, pero
+  los diálogos de confirmación no se ven. Si hace falta, usar un componente propio.
+- **`expo-location` en web**: `requestForegroundPermissionsAsync` y `watchPositionAsync` funcionan
+  (geolocalización del browser), pero `geocodeAsync`/`reverseGeocodeAsync` lanzan `GeocoderError`.
+  La app ya usa el backend para geocoding, así que esto no afecta el flujo normal.
+- **El mapa carga MapLibre desde CDN** (`unpkg.com`). Sin red, el mapa no renderiza; hay un timeout
+  de carga de 15s en web que evita el spinner infinito.
+
 ## Checklist de Desarrollo
 
 ### Backend

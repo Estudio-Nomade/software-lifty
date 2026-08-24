@@ -2,8 +2,9 @@
  * One-shot local dev setup:
  *   1. Starts Postgres (5433) + Redis (6380) via docker-compose.dev.yml
  *   2. Creates apps/backend/.env with required vars if missing
- *   3. Runs migrations on the dev DB (lifty) and the test DB (lifty_test)
- *   4. Seeds districts
+ *   3. Ensures a free backend port and syncs it to the mobile apps
+ *   4. Runs migrations on the dev DB (lifty) and the test DB (lifty_test)
+ *   5. Seeds districts
  *
  * Run from the repo root: bun run setup
  * Idempotent — safe to re-run whenever.
@@ -13,6 +14,7 @@ import { join } from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
+import { ensureBackendPort } from './port';
 
 const BACKEND_DIR = join(import.meta.dir, '..');
 const REPO_ROOT = join(BACKEND_DIR, '..', '..');
@@ -31,21 +33,7 @@ function run(cmd: string[], cwd: string) {
 console.log('🐳 Starting dev infra (postgres:5433, redis:6380)...');
 run(['docker', 'compose', '-f', 'docker-compose.dev.yml', 'up', '-d', '--wait'], REPO_ROOT);
 
-// 2. Pick a free port for the backend (3000 may belong to another project)
-function isPortFree(port: number): boolean {
-  try {
-    const srv = Bun.serve({ port, fetch: () => new Response('') });
-    srv.stop(true);
-    return true;
-  } catch {
-    return false;
-  }
-}
-let apiPort = 3000;
-while (!isPortFree(apiPort) && apiPort < 3020) apiPort++;
-if (apiPort !== 3000) console.log(`⚠️  Port 3000 is taken — backend will use ${apiPort}`);
-
-// 3. Backend .env
+// 2. Backend .env (bootstrap required vars if missing — port is assigned in step 3)
 const envPath = join(BACKEND_DIR, '.env');
 if (!existsSync(envPath)) {
   const secret = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
@@ -56,9 +44,9 @@ if (!existsSync(envPath)) {
       '# docker-compose.dev.yml Postgres (5433/lifty).',
       '# WARNING: never point DATABASE_URL at a DB you care about and then',
       '# run tests — tests truncate every table.',
-      `PORT=${apiPort}`,
       `DATABASE_URL=${PG}/lifty`,
       'REDIS_URL=redis://localhost:6380',
+      `JWT_SECRET=${secret}`,
       'SUPABASE_URL=',
       'SUPABASE_PUBLISHABLE_KEY=sb_publishable_...',
       'SUPABASE_SECRET_KEY=sb_secret_...',
@@ -68,8 +56,6 @@ if (!existsSync(envPath)) {
   console.log('🔑 Created apps/backend/.env');
 } else {
   const current = await Bun.file(envPath).text();
-  const m = current.match(/^PORT=(\d+)$/m);
-  if (m) apiPort = Number(m[1]);
   if (!/^DATABASE_URL=/m.test(current)) {
     await Bun.write(envPath, `${current.trimEnd()}\nDATABASE_URL=${PG}/lifty\n`);
     console.log('🔑 apps/backend/.env: added missing DATABASE_URL (dev Postgres)');
@@ -78,12 +64,8 @@ if (!existsSync(envPath)) {
   }
 }
 
-// Keep the mobile app pointed at the same port (host is auto-detected).
-const mobileEnvPath = join(REPO_ROOT, 'apps', 'mobile', '.env');
-const mobileEnv = existsSync(mobileEnvPath) ? await Bun.file(mobileEnvPath).text() : '';
-if (!mobileEnv.includes('EXPO_PUBLIC_API_PORT')) {
-  await Bun.write(mobileEnvPath, `${mobileEnv}EXPO_PUBLIC_API_PORT=${apiPort}\n`);
-}
+// 3. Pin the backend to :3001 and keep both mobile apps in sync.
+const apiPort = await ensureBackendPort();
 
 // 4. Migrations on both databases
 for (const dbName of ['lifty', 'lifty_test']) {

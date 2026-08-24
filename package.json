@@ -4,7 +4,11 @@
   "workspaces": ["apps/*"],
   "scripts": {
     "setup": "bun run --cwd apps/backend setup",
-    "dev": "turbo dev",
+    "dev": "bun run scripts/dev-all.ts",
+    "dev:backend": "bun run --filter @lifty/backend dev",
+    "dev:driver": "bun run --filter @lifty/mobile dev",
+    "dev:passenger": "bun run --filter @lifty/mobile-passengers dev",
+    "dev:passenger:web": "bun run --filter @lifty/mobile-passengers web",
     "build": "turbo build",
     "test": "turbo test --filter=@lifty/backend",
     "typecheck": "turbo typecheck",
@@ -18,6 +22,7 @@
     "@commitlint/cli": "^21.2.0",
     "@commitlint/config-conventional": "^21.2.0",
     "lefthook": "^2.1.9",
+    "qrcode-terminal": "0.11.0",
     "turbo": "^2.4.0"
   },
   "packageManager": "bun@1.3.14",

@@ -24,6 +24,11 @@
       "package": "com.lifty.passenger",
       "versionCode": 1
     },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/icon.png"
+    },
     "experiments": {
       "reactCompiler": true
     },
