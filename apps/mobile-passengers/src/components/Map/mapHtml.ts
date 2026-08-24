@@ -143,15 +143,34 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     }
   }
 
-  var map = new maplibregl.Map({
-    container: 'map',
-    style: 'https://tiles.openfreemap.org/styles/liberty',
-    center: DEFAULT_CENTER,
-    zoom: DEFAULT_ZOOM,
-    attributionControl: true,
-  });
+  // Guard against a failed CDN load: if the MapLibre script never ran, the
+  // map object below would throw a ReferenceError before any error listener is
+  // registered, leaving the host stuck on a blank map with no feedback.
+  if (typeof maplibregl === 'undefined') {
+    postToHost(JSON.stringify({ type: 'error', message: 'MapLibre GL failed to load from CDN' }));
+    throw new Error('MapLibre GL is not available');
+  }
 
-  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+  // Guard against a synchronous init failure (e.g. WebGL unavailable): the
+  // constructor throws before the async map.on('error') listener below is
+  // registered, so surface it to the host instead of leaving a blank map.
+  var map;
+  try {
+    map = new maplibregl.Map({
+      container: 'map',
+      style: 'https://tiles.openfreemap.org/styles/liberty',
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
+      attributionControl: true,
+    });
+
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+  } catch (e) {
+    postToHost(
+      JSON.stringify({ type: 'error', message: (e && e.message) || 'Failed to initialize the map' }),
+    );
+    throw e;
+  }
 
   var mapLoaded = false;
   var markers = [];
