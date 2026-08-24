@@ -68,27 +68,42 @@ export function useLocation() {
       setPermissionGranted(granted);
       if (!granted || cancelled) return;
 
-      try {
-        subscription = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, timeInterval: 5000 },
-          (loc) => setCurrentSafe(loc.coords.latitude, loc.coords.longitude),
+      if (webGeo) {
+        // Web: watch via the browser Geolocation API directly. expo-location's
+        // `watchPositionAsync` returns a subscription whose `remove()` calls
+        // `LocationEventEmitter.removeSubscription`, which the web EventEmitter
+        // does not implement — so its cleanup throws during unmount/remount.
+        // Using `navigator.geolocation.watchPosition` + `clearWatch` sidesteps
+        // that entirely and is the correct web cleanup.
+        webWatchId = webGeo.watchPosition(
+          (pos) => setCurrentSafe(pos.coords.latitude, pos.coords.longitude),
+          () => {},
+          { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 },
         );
-      } catch {
-        if (webGeo) {
-          webWatchId = webGeo.watchPosition(
-            (pos) => setCurrentSafe(pos.coords.latitude, pos.coords.longitude),
-            () => {},
-            { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 },
+      } else {
+        try {
+          subscription = await Location.watchPositionAsync(
+            { accuracy: Location.Accuracy.High, timeInterval: 5000 },
+            (loc) => setCurrentSafe(loc.coords.latitude, loc.coords.longitude),
           );
+        } catch {
+          // Native watch failed; `current` stays null until a later update.
         }
       }
     })();
 
     return () => {
       cancelled = true;
-      subscription?.remove();
       if (webWatchId != null && webGeo) {
         webGeo.clearWatch(webWatchId);
+      }
+      if (subscription) {
+        try {
+          subscription.remove();
+        } catch {
+          // Defensive: never let a cleanup throw (guards against any platform
+          // where `removeSubscription` is missing).
+        }
       }
     };
   }, [setCurrent, setPermissionGranted]);

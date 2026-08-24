@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../theme';
 import { Button } from '../Button';
 
@@ -22,6 +22,16 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     return { hasError: true, error };
   }
 
+  componentDidCatch(error: Error, info: React.ErrorInfo): void {
+    // Surface the real cause to the browser console (and Metro terminal in dev).
+    console.error(
+      '[ErrorBoundary] caught error:',
+      error?.message,
+      error?.stack,
+      info?.componentStack,
+    );
+  }
+
   handleRetry = () => {
     this.setState({ hasError: false, error: null });
   };
@@ -32,6 +42,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         <View style={styles.container}>
           <Text style={styles.title}>Algo salió mal</Text>
           <Text style={styles.message}>Ocurrió un error inesperado. Reintentá.</Text>
+          {__DEV__ && this.state.error ? (
+            <ScrollView style={styles.debugBox} contentContainerStyle={styles.debugContent}>
+              <Text style={styles.debugText}>{this.state.error.message}</Text>
+              <Text style={styles.debugStack}>{this.state.error.stack}</Text>
+            </ScrollView>
+          ) : null}
           <Button variant="primary" onPress={this.handleRetry}>
             Reintentar
           </Button>
@@ -63,5 +79,26 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.regular,
     textAlign: 'center',
     marginBottom: theme.spacing.lg,
+  },
+  debugBox: {
+    width: '100%',
+    maxHeight: 200,
+    backgroundColor: theme.colors.lightGray,
+    borderRadius: theme.radius.md,
+    marginBottom: theme.spacing.lg,
+  },
+  debugContent: {
+    padding: theme.spacing.md,
+  },
+  debugText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.dangerRed,
+    fontFamily: theme.fontFamily.semibold,
+    marginBottom: theme.spacing.sm,
+  },
+  debugStack: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.mediumGray,
+    fontFamily: theme.fontFamily.regular,
   },
 });
