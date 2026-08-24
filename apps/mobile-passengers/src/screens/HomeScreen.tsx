@@ -3,7 +3,6 @@ import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -67,6 +66,7 @@ export function HomeScreen() {
   const [focusedField, setFocusedField] = useState<'pickup' | 'dest' | null>('dest');
   const [pickupPicked, setPickupPicked] = useState(false);
   const [destPicked, setDestPicked] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const pickupSuggestions = usePlaceAutocomplete(
     focusedField === 'pickup' && !pickupPicked ? pickupAddress : '',
@@ -84,15 +84,21 @@ export function HomeScreen() {
       if (status !== 'granted') return;
       const pos = await Location.getCurrentPositionAsync({});
       if (cancelled) return;
-      const [addr] = await Location.reverseGeocodeAsync({
-        latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude,
-      });
-      if (cancelled) return;
-      const name =
-        addr?.street && addr?.streetNumber
-          ? `${addr.street} ${addr.streetNumber}`
-          : (addr?.name ?? '');
+      // reverseGeocodeAsync throws on web (GeocoderError) — fall back to raw coords.
+      let name = '';
+      try {
+        const [addr] = await Location.reverseGeocodeAsync({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        });
+        if (cancelled) return;
+        name =
+          addr?.street && addr?.streetNumber
+            ? `${addr.street} ${addr.streetNumber}`
+            : (addr?.name ?? '');
+      } catch {
+        name = '';
+      }
       setPickupAddress(
         name || `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`,
       );
@@ -109,6 +115,7 @@ export function HomeScreen() {
   };
 
   const handleOpenSearch = () => {
+    setSearchError(null);
     setSearchExpanded(true);
   };
 
@@ -120,6 +127,7 @@ export function HomeScreen() {
     setPickupPicked(false);
     setDestPicked(false);
     setFocusedField('dest');
+    setSearchError(null);
   };
 
   const handleChipSelect = (address: string) => {
@@ -162,6 +170,7 @@ export function HomeScreen() {
     const dest = destAddress.trim();
     if (!dest) return;
     Keyboard.dismiss();
+    setSearchError(null);
 
     let resolvedPickup = pickupCoord;
     if (!resolvedPickup && pickupAddress.trim()) {
@@ -187,7 +196,7 @@ export function HomeScreen() {
     }
 
     if (!resolvedPickup || !resolvedDest) {
-      Alert.alert('No encontramos esa dirección', 'Revisá la dirección e intentá de nuevo.');
+      setSearchError('No encontramos esa dirección. Revisá la dirección e intentá de nuevo.');
       return;
     }
 
@@ -236,6 +245,7 @@ export function HomeScreen() {
                       setPickupCoord(null);
                       setPickupPicked(false);
                       setFocusedField('pickup');
+                      setSearchError(null);
                     }}
                   />
                   {pickupAddress.trim().length > 0 ? (
@@ -265,6 +275,7 @@ export function HomeScreen() {
                       setDestCoord(null);
                       setDestPicked(false);
                       setFocusedField('dest');
+                      setSearchError(null);
                     }}
                     autoFocus
                     returnKeyType="search"
@@ -302,6 +313,13 @@ export function HomeScreen() {
               ) : null}
 
               <QuickChips onSelect={handleChipSelect} />
+
+              {searchError ? (
+                <View style={styles.searchErrorBox} accessibilityRole="alert">
+                  <Ionicons name="alert-circle" size={16} color={theme.colors.dangerRed} />
+                  <Text style={styles.searchErrorText}>{searchError}</Text>
+                </View>
+              ) : null}
 
               <TouchableOpacity
                 style={[styles.confirmBtn, !destAddress.trim() && styles.confirmBtnDisabled]}
@@ -504,6 +522,22 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.deepBlue,
+  },
+  searchErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.md,
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    backgroundColor: 'rgba(229, 57, 53, 0.08)',
+  },
+  searchErrorText: {
+    flex: 1,
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.dangerRed,
   },
   confirmBtn: {
     flexDirection: 'row',
