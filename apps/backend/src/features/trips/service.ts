@@ -993,6 +993,31 @@ export const tripService = {
       .returning();
 
     broadcastTripMessage(tripId, row);
+
+    // Push notification to the other participant (best-effort, fire-and-forget).
+    if (role === 'driver') {
+      if (trip.passenger_id) {
+        sendPushToUser(trip.passenger_id, {
+          title: 'Nuevo mensaje del conductor',
+          body: trimmed,
+          data: { type: 'trip:message', trip_id: tripId, sender_role: 'driver' },
+        });
+      }
+    } else if (trip.driver_id) {
+      const [tripDriver] = await db
+        .select({ user_id: drivers.user_id })
+        .from(drivers)
+        .where(eq(drivers.id, trip.driver_id))
+        .limit(1);
+      if (tripDriver) {
+        sendPushToUser(tripDriver.user_id, {
+          title: 'Nuevo mensaje del pasajero',
+          body: trimmed,
+          data: { type: 'trip:message', trip_id: tripId, sender_role: 'passenger' },
+        });
+      }
+    }
+
     return row;
   },
 };
