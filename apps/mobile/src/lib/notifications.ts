@@ -21,6 +21,8 @@ export function setupNotificationHandler(): void {
 }
 
 export async function registerForPush(): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+
   const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.expoConfig?.slug;
 
   if (!projectId) {
@@ -34,8 +36,14 @@ export async function registerForPush(): Promise<string | null> {
     }
 
     if (Platform.OS === 'android') {
+      // Backend Expo pushes use channelId "trip-requests" by default.
       await Notifications.setNotificationChannelAsync('trip-requests', {
         name: 'Trip Requests',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+      });
+      await Notifications.setNotificationChannelAsync('trip-chat', {
+        name: 'Chat del viaje',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
       });
@@ -86,9 +94,13 @@ export function handleNotificationResponse(
     case 'payment:deposited':
       navigate('Earnings');
       break;
-    case 'trip:message':
-      navigate('Chat');
+    case 'trip:message': {
+      // Chat reads the active trip from the store (restored by ActiveTripRecovery).
+      // Pass trip_id so deep-links stay explicit if the route ever needs it.
+      const params = data?.trip_id ? { tripId: data.trip_id } : undefined;
+      navigate('Chat', params);
       break;
+    }
     case 'trip:rated':
       navigate('Online');
       break;

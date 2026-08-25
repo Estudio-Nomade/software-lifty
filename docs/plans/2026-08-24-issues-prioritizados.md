@@ -12,7 +12,7 @@ Autor: agente delegado (senior React Native + Elysia)
 | 3 | Pasajero | Envío de calificación de estrellas al conductor | ✅ hecho |
 | 4 | Pasajero | Supabase Realtime completo en el chat (ambos lados) | ✅ hecho |
 | 5 | Conductor | Arreglar UI dropdown de viaje ("RUMBO AL PASAJERO") | ✅ hecho |
-| 6 | Conductor | Push notification cuando el pasajero manda mensaje | ⏳ pendiente |
+| 6 | Conductor | Push notification cuando el pasajero manda mensaje | ✅ hecho |
 | 7 | Conductor | "Viaje completado": error "Rating already exists" | ⏳ pendiente |
 | 8 | Conductor | Push notification cuando el pasajero califica | ✅ hecho (con Issue 3) |
 

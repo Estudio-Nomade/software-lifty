@@ -145,14 +145,27 @@ function ActiveTripRecovery() {
 
 function NotificationSetup() {
   const { navigate } = useAppNavigation();
+  const sessionRestored = useAuthStore((s) => s.sessionRestored);
+  const authToken = useAuthStore((s) => s.token);
+  const coldStartHandled = useRef(false);
 
   useEffect(() => {
     setupNotificationHandler();
 
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      handleNotificationResponse(response, navigate);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!sessionRestored || !authToken) return;
+
     registerForPush().then((token) => {
       if (!token) return;
-      const { token: authToken, sessionRestored } = useAuthStore.getState();
-      if (!authToken || !sessionRestored) return;
       apiClient
         .post('/notifications/token', {
           token,
@@ -163,14 +176,19 @@ function NotificationSetup() {
         });
     });
 
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      handleNotificationResponse(response, navigate);
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);
+    // Cold start: user opened the app by tapping a notification.
+    // Wait for interactions so ActiveTripRecovery can restore the trip first.
+    if (coldStartHandled.current) return;
+    coldStartHandled.current = true;
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (!response) return;
+        InteractionManager.runAfterInteractions(() => {
+          handleNotificationResponse(response, navigate);
+        });
+      })
+      .catch(() => {});
+  }, [sessionRestored, authToken, navigate]);
 
   return null;
 }
