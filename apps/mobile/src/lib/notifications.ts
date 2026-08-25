@@ -86,6 +86,12 @@ export function handleNotificationResponse(
     case 'payment:deposited':
       navigate('Earnings');
       break;
+    case 'trip:message':
+      navigate('Chat');
+      break;
+    case 'trip:rated':
+      navigate('Online');
+      break;
     default:
       break;
   }

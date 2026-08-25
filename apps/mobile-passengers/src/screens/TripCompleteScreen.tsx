@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { rateRide } from '../api/passenger';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -10,6 +10,22 @@ import { theme } from '../theme';
 const formatCurrency = (value: number | null | undefined) =>
   value == null ? '—' : `$${value.toLocaleString('es-AR')}`;
 
+function getErrorMessage(err: unknown): { code?: string; message: string } {
+  const data = (
+    err as {
+      response?: { data?: { error?: { code?: string; message?: string }; message?: string } };
+      message?: string;
+    }
+  )?.response?.data;
+  const code = data?.error?.code;
+  const message =
+    data?.error?.message ??
+    data?.message ??
+    (err as Error)?.message ??
+    'No se pudo enviar la calificación.';
+  return { code, message };
+}
+
 export function TripCompleteScreen() {
   const { replace } = useAppNavigation();
   const trip = useRideStore((s) => s.activeTrip);
@@ -17,16 +33,34 @@ export function TripCompleteScreen() {
   const [rating, setRating] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [rated, setRated] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
 
-  const handleRate = async (stars: number) => {
-    if (!trip?.id) return;
+  const handleSelectStars = (stars: number) => {
+    if (submitting || rated) return;
     setRating(stars);
+    setErrorText(null);
+  };
+
+  const handleSubmitRating = async () => {
+    if (!trip?.id || rating === 0 || submitting || rated) return;
     setSubmitting(true);
+    setErrorText(null);
     try {
-      await rateRide(trip.id, stars);
+      await rateRide(trip.id, rating);
       setRated(true);
-    } catch {
-      // rating is optional; the passenger can still leave
+    } catch (err) {
+      const { code, message } = getErrorMessage(err);
+      // Backend is idempotent, but older servers may still return CONFLICT.
+      if (code === 'CONFLICT') {
+        setRated(true);
+        return;
+      }
+      if (code === 'BAD_REQUEST' && /completed/i.test(message)) {
+        setErrorText('El viaje aún no está listo para calificar. Intentá en un momento.');
+      } else {
+        setErrorText(message);
+      }
+      Alert.alert('No se pudo calificar', message);
     } finally {
       setSubmitting(false);
     }
@@ -72,7 +106,12 @@ export function TripCompleteScreen() {
         </Text>
         <View style={styles.stars}>
           {[1, 2, 3, 4, 5].map((s) => (
-            <TouchableOpacity key={s} disabled={submitting || rated} onPress={() => handleRate(s)}>
+            <TouchableOpacity
+              key={s}
+              disabled={submitting || rated}
+              onPress={() => handleSelectStars(s)}
+              accessibilityLabel={`${s} estrellas`}
+            >
               <Ionicons
                 name={s <= rating ? 'star' : 'star-outline'}
                 size={32}
@@ -82,8 +121,27 @@ export function TripCompleteScreen() {
           ))}
         </View>
 
-        <Button variant="primary" onPress={handleFinish} style={styles.button}>
-          VOLVER AL INICIO
+        {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+
+        {!rated ? (
+          <Button
+            variant="primary"
+            onPress={handleSubmitRating}
+            loading={submitting}
+            disabled={rating === 0 || submitting}
+            style={styles.button}
+          >
+            ENVIAR CALIFICACIÓN
+          </Button>
+        ) : null}
+
+        <Button
+          variant={rated ? 'primary' : 'secondary'}
+          onPress={handleFinish}
+          disabled={submitting}
+          style={styles.button}
+        >
+          {rated ? 'VOLVER AL INICIO' : 'OMITIR'}
         </Button>
       </View>
     </SafeAreaView>
@@ -143,5 +201,11 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
   },
   stars: { flexDirection: 'row', gap: theme.spacing.sm },
-  button: { width: '100%', marginTop: theme.spacing.md },
+  errorText: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.dangerRed,
+    textAlign: 'center',
+  },
+  button: { width: '100%', marginTop: theme.spacing.sm },
 });

@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
 import { drivers, ratings, tripEvents, trips } from '../../shared/db/schema';
-import { AppError, ConflictError, NotFoundError } from '../../shared/lib/errors';
+import { AppError, NotFoundError } from '../../shared/lib/errors';
 import type { AuthUser } from '../../shared/middleware/auth';
 
 export const ratingsService = {
@@ -32,22 +32,29 @@ export const ratingsService = {
         .where(and(eq(ratings.trip_id, tripId), eq(ratings.rater_id, user.id)))
         .for('update')
         .limit(1);
-      if (existing) throw new ConflictError('Rating already exists for this trip');
+      // Idempotent: double-submit after success is not an error.
+      if (existing) {
+        return { rating_id: existing.id, message: 'Rating already submitted' };
+      }
 
-      if (trip.status !== 'completed') {
+      // Bidirectional ratings: accept completed or rated so either party can
+      // rate first without blocking the other.
+      if (trip.status !== 'completed' && trip.status !== 'rated') {
         throw new AppError('Trip is not in completed status', 400, 'BAD_REQUEST');
       }
 
-      await tx
-        .update(trips)
-        .set({ status: 'rated', updated_at: new Date() })
-        .where(eq(trips.id, tripId));
+      if (trip.status === 'completed') {
+        await tx
+          .update(trips)
+          .set({ status: 'rated', updated_at: new Date() })
+          .where(eq(trips.id, tripId));
 
-      await tx.insert(tripEvents).values({
-        trip_id: tripId,
-        from_status: 'completed',
-        to_status: 'rated',
-      });
+        await tx.insert(tripEvents).values({
+          trip_id: tripId,
+          from_status: 'completed',
+          to_status: 'rated',
+        });
+      }
 
       if (!trip.passenger_id) {
         return { rating_id: null, message: 'Trip completed (no passenger to rate)' };

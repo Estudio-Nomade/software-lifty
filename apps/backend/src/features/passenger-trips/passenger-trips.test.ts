@@ -718,7 +718,7 @@ describe('Passenger Trips', () => {
     expect(ratingRow.ratee_id).toBe(driver.user_id);
   });
 
-  test('POST /:id/rate duplicate returns 409', async () => {
+  test('POST /:id/rate duplicate is idempotent', async () => {
     const token = await createPassengerToken();
     const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
     const { data: trip } = await createTrip(token);
@@ -729,7 +729,14 @@ describe('Passenger Trips', () => {
       .set({ status: 'completed', driver_id: driverId, updated_at: new Date() })
       .where(eq(trips.id, trip.id));
 
-    await request('POST', `/api/passenger/trips/${trip.id}/rate`, { rating: 4 }, token);
+    const first = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/rate`,
+      { rating: 4 },
+      token,
+    );
+    expect(first.status).toBe(200);
+
     const { status, data } = await request(
       'POST',
       `/api/passenger/trips/${trip.id}/rate`,
@@ -737,8 +744,37 @@ describe('Passenger Trips', () => {
       token,
     );
 
-    expect(status).toBe(409);
-    expect(data.error.code).toBe('CONFLICT');
+    expect(status).toBe(200);
+    expect(data.rating_id).toBe(first.data.rating_id);
+    expect(data.message).toBe('Rating already submitted');
+
+    const rows = await db.select().from(ratings).where(eq(ratings.trip_id, trip.id));
+    const mine = rows.filter((r) => r.rater_id === trip.passenger_id);
+    expect(mine).toHaveLength(1);
+    expect(mine[0].score).toBe(4);
+  });
+
+  test('POST /:id/rate works when trip is already rated by driver', async () => {
+    const token = await createPassengerToken();
+    const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ status: 'rated', driver_id: driverId, updated_at: new Date() })
+      .where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'POST',
+      `/api/passenger/trips/${trip.id}/rate`,
+      { rating: 5 },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.rating_id).toBeTruthy();
+    expect(data.message).toBe('Rating submitted');
   });
 
   test('POST /:id/rate non-completed trip returns 400', async () => {
