@@ -5,18 +5,27 @@ import { Text } from './ui/Text';
 
 interface StarRatingProps {
   rating: number;
-  onRate: (rating: number) => void;
+  onRate?: (rating: number) => void;
   size?: number;
+  readonly?: boolean;
 }
 
-export const StarRating: React.FC<StarRatingProps> = ({ rating, onRate, size = 32 }) => {
+export const StarRating: React.FC<StarRatingProps> = ({
+  rating,
+  onRate,
+  size = 32,
+  readonly = false,
+}) => {
   return (
     <View style={styles.container}>
       {[1, 2, 3, 4, 5].map((star) => (
         <TouchableOpacity
           key={star}
-          onPress={() => onRate(star)}
-          activeOpacity={0.7}
+          onPress={() => {
+            if (!readonly) onRate?.(star);
+          }}
+          activeOpacity={readonly ? 1 : 0.7}
+          disabled={readonly}
           testID={`star-${star}`}
         >
           <Text style={[styles.star, { fontSize: size }]}>{star <= rating ? '★' : '☆'}</Text>

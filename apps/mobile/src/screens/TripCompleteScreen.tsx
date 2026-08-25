@@ -41,6 +41,8 @@ export const TripCompleteScreen: React.FC = () => {
   const [comment, setComment] = React.useState('');
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [submitting, setSubmitting] = React.useState(false);
+  const [rated, setRated] = React.useState(false);
+  const submitLock = useRef(false);
   const [metrics, setMetrics] = React.useState<{
     commission_active: boolean;
     debt_remaining_ars: number;
@@ -96,11 +98,12 @@ export const TripCompleteScreen: React.FC = () => {
 
   const goOnline = () => {
     clearTrip();
-    navigation.navigate('Online');
+    setActiveTab('home');
+    navigation.replace('Online');
   };
 
   const handleCollect = async () => {
-    if (!activeTripId) return;
+    if (!activeTripId || collecting || collectingTransfer) return;
     setCollecting(true);
     try {
       await apiClient.put(`/trips/${activeTripId}/collect`, { payment_method: 'cash' });
@@ -119,7 +122,7 @@ export const TripCompleteScreen: React.FC = () => {
   };
 
   const handleCollectTransfer = async () => {
-    if (!activeTripId) return;
+    if (!activeTripId || collecting || collectingTransfer) return;
     setCollectingTransfer(true);
     try {
       await apiClient.put(`/trips/${activeTripId}/collect`, { payment_method: 'transfer' });
@@ -132,28 +135,49 @@ export const TripCompleteScreen: React.FC = () => {
     }
   };
 
+  const finishAfterRating = () => {
+    setRated(true);
+    // Brief confirmation before leaving so the driver sees success.
+    setTimeout(() => {
+      goOnline();
+    }, 600);
+  };
+
   const handleSubmitRating = async () => {
-    if (!activeTripId || rating === 0) return;
+    if (!activeTripId || rating === 0 || submitting || rated || submitLock.current) return;
+    submitLock.current = true;
     setSubmitting(true);
     try {
       const body: { rating: number; tags?: string; comment?: string } = { rating };
       if (selectedTags.length > 0) body.tags = selectedTags.join(',');
       if (comment.trim()) body.comment = comment.trim();
       await apiClient.post(`/ratings/trips/${activeTripId}`, body);
-      goOnline();
+      finishAfterRating();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'No se pudo enviar la calificación.';
-      Alert.alert('Error', message);
+      // Backend is idempotent, but older deployments may still return CONFLICT.
+      const isConflict =
+        err instanceof ApiError &&
+        (err.code === 'CONFLICT' || /already exists|already submitted/i.test(err.message));
+      if (isConflict) {
+        finishAfterRating();
+        return;
+      }
+      const message =
+        err instanceof Error ? err.message : 'No se pudo enviar la calificación. Intentá de nuevo.';
+      Alert.alert('No se pudo calificar', message);
+      submitLock.current = false;
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleSkipRating = () => {
+    if (submitting || rated) return;
     goOnline();
   };
 
   const toggleTag = (tag: string) => {
+    if (rated || submitting) return;
     setSelectedTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
     );
@@ -227,46 +251,66 @@ export const TripCompleteScreen: React.FC = () => {
   const renderRateStep = () => (
     <>
       <Text style={styles.completedLabel}>Viaje completado!</Text>
-      <Text style={styles.rateTitle}>Como fue tu pasajero?</Text>
+      <Text style={styles.rateTitle}>
+        {rated ? 'Gracias por calificar!' : 'Como fue tu pasajero?'}
+      </Text>
 
-      <StarRating rating={rating} onRate={setRating} />
-
-      <View style={styles.reportSection}>
-        <Text style={styles.reportLabel}>Reportar un problema (opcional)</Text>
-        <View style={styles.tagsContainer}>
-          {reportTags.map((tag) => {
-            const selected = selectedTags.includes(tag);
-            return (
-              <TouchableOpacity
-                key={tag}
-                onPress={() => toggleTag(tag)}
-                style={[styles.tag, selected && styles.tagSelected]}
-              >
-                <Text style={[styles.tagText, selected && styles.tagTextSelected]}>{tag}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
-      <TextInput
-        style={styles.commentInput}
-        placeholder="Deja un comentario (opcional)"
-        placeholderTextColor={theme.colors.mediumGray}
-        value={comment}
-        onChangeText={setComment}
-        multiline
-        textAlignVertical="top"
+      <StarRating
+        rating={rating}
+        onRate={rated || submitting ? undefined : setRating}
+        readonly={rated || submitting}
       />
 
-      <Button
-        title="Enviar calificacion"
-        onPress={handleSubmitRating}
-        loading={submitting}
-        disabled={rating === 0}
-        style={styles.button}
-      />
-      <Button title="Omitir" variant="secondary" onPress={handleSkipRating} style={styles.button} />
+      {rated ? (
+        <Text style={styles.ratedHint}>Calificacion enviada</Text>
+      ) : (
+        <>
+          <View style={styles.reportSection}>
+            <Text style={styles.reportLabel}>Reportar un problema (opcional)</Text>
+            <View style={styles.tagsContainer}>
+              {reportTags.map((tag) => {
+                const selected = selectedTags.includes(tag);
+                return (
+                  <TouchableOpacity
+                    key={tag}
+                    onPress={() => toggleTag(tag)}
+                    style={[styles.tag, selected && styles.tagSelected]}
+                    disabled={submitting}
+                  >
+                    <Text style={[styles.tagText, selected && styles.tagTextSelected]}>{tag}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          <TextInput
+            style={styles.commentInput}
+            placeholder="Deja un comentario (opcional)"
+            placeholderTextColor={theme.colors.mediumGray}
+            value={comment}
+            onChangeText={setComment}
+            multiline
+            textAlignVertical="top"
+            editable={!submitting}
+          />
+
+          <Button
+            title="Enviar calificacion"
+            onPress={handleSubmitRating}
+            loading={submitting}
+            disabled={rating === 0 || submitting}
+            style={styles.button}
+          />
+          <Button
+            title="Omitir"
+            variant="secondary"
+            onPress={handleSkipRating}
+            disabled={submitting}
+            style={styles.button}
+          />
+        </>
+      )}
     </>
   );
 
@@ -429,6 +473,12 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.deepBlue,
+    textAlign: 'center',
+  },
+  ratedHint: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.turquoise,
     textAlign: 'center',
   },
   button: {
