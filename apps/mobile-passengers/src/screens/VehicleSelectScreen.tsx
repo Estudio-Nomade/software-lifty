@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { estimateFare, requestRide } from '../api/passenger';
+import { estimateFare } from '../api/passenger';
 import type { FareEstimate } from '../api/types';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
@@ -35,7 +35,6 @@ export function VehicleSelectScreen() {
     destLng?: string;
   }>();
   const [selected, setSelected] = useState<Vehicle['id']>('auto');
-  const [loading, setLoading] = useState(false);
   const [fares, setFares] = useState<Partial<Record<Vehicle['id'], FareEstimate>>>({});
 
   const coords = useMemo(() => {
@@ -89,33 +88,20 @@ export function VehicleSelectScreen() {
 
   const selectedEstimate = fares[selected];
 
-  const handleRequest = async () => {
+  const handleContinue = () => {
     if (!coords || !selectedEstimate) return;
-    setLoading(true);
-    try {
-      const trip = await requestRide({
-        origin_lat: coords.origin_lat,
-        origin_lng: coords.origin_lng,
-        dest_lat: coords.dest_lat,
-        dest_lng: coords.dest_lng,
-        origin_address: pickup || '',
-        dest_address: destination || '',
-        vehicle_type: selected,
-        distance_km: selectedEstimate.distance_km,
-        duration_minutes: selectedEstimate.duration_min,
-      });
-
-      navigate('ConnectingDriver', { tripId: trip.id });
-    } catch (err) {
-      const data = (
-        err as { response?: { data?: { error?: { message?: string }; message?: string } } }
-      )?.response?.data;
-      const message = data?.error?.message ?? data?.message ?? (err as Error).message;
-      console.error('[VehicleSelect] request failed', message, err);
-      Alert.alert('No se pudo solicitar el viaje', message || 'Intentalo de nuevo.');
-    } finally {
-      setLoading(false);
-    }
+    navigate('ConfirmPayment', {
+      pickup: pickup || '',
+      destination: destination || '',
+      pickupLat: String(coords.origin_lat),
+      pickupLng: String(coords.origin_lng),
+      destLat: String(coords.dest_lat),
+      destLng: String(coords.dest_lng),
+      vehicleType: selected,
+      fare: String(selectedEstimate.fare),
+      distanceKm: String(selectedEstimate.distance_km),
+      durationMin: String(selectedEstimate.duration_min),
+    });
   };
 
   return (
@@ -183,12 +169,11 @@ export function VehicleSelectScreen() {
           </View>
           <Button
             variant="cta"
-            onPress={handleRequest}
-            loading={loading}
+            onPress={handleContinue}
             disabled={!selectedEstimate}
             style={styles.solicitarBtn}
           >
-            {selectedEstimate ? `SOLICITAR ${formatCurrency(selectedEstimate.fare)}` : 'SOLICITAR'}
+            {selectedEstimate ? `CONTINUAR ${formatCurrency(selectedEstimate.fare)}` : 'CONTINUAR'}
           </Button>
         </View>
       </View>

@@ -52,8 +52,19 @@ export async function requestRide(params: {
   vehicle_type: 'auto' | 'moto';
   distance_km: number;
   duration_minutes: number;
+  payment_method?: 'cash' | 'transfer';
 }): Promise<Trip> {
   const { data } = await api.post<Trip>('/passenger/trips/request', params);
+  return data;
+}
+
+export async function setTripPaymentMethod(
+  tripId: string,
+  payment_method: 'cash' | 'transfer',
+): Promise<Trip> {
+  const { data } = await api.post<Trip>(`/passenger/trips/${tripId}/payment-method`, {
+    payment_method,
+  });
   return data;
 }
 

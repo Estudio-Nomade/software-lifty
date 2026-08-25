@@ -8,7 +8,7 @@ Autor: agente delegado (senior React Native + Elysia)
 | # | App | Issue | Estado |
 |---|-----|-------|--------|
 | 1 | Pasajero | Push notification cuando el conductor manda mensaje en el chat del viaje | ✅ hecho |
-| 2 | Pasajero | Pantalla de pago (efectivo / transferencia) | ⏳ pendiente |
+| 2 | Pasajero | Pantalla de pago (efectivo / transferencia) | ✅ hecho |
 | 3 | Pasajero | Envío de calificación de estrellas al conductor | ⏳ pendiente |
 | 4 | Pasajero | Supabase Realtime completo en el chat (ambos lados) | ⏳ pendiente |
 | 5 | Conductor | Arreglar UI dropdown de viaje ("RUMBO AL PASAJERO") | ⏳ pendiente |

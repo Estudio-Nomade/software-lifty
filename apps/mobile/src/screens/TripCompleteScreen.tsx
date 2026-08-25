@@ -30,6 +30,10 @@ export const TripCompleteScreen: React.FC = () => {
   const trip = useTripStore((s) => s.trip);
   const clearTrip = useTripStore((s) => s.clearTrip);
   const { setActiveTab } = useTabBar();
+  const preferredMethod =
+    trip?.payment_method === 'transfer' || trip?.payment_method === 'cash'
+      ? trip.payment_method
+      : null;
   const [step, setStep] = React.useState<Step>('collect');
   const [collecting, setCollecting] = React.useState(false);
   const [collectingTransfer, setCollectingTransfer] = React.useState(false);
@@ -197,18 +201,24 @@ export const TripCompleteScreen: React.FC = () => {
           transferencia.
         </Text>
       ) : null}
+      {preferredMethod ? (
+        <Text style={styles.preferredMethod}>
+          El pasajero eligió: {preferredMethod === 'cash' ? 'Efectivo' : 'Transferencia'}
+        </Text>
+      ) : null}
       <Button
         title="Cobre en efectivo"
         onPress={handleCollect}
         loading={collecting}
         disabled={cashBlocked}
+        variant={preferredMethod === 'cash' ? 'cta' : 'primary'}
         style={styles.button}
       />
       <Button
         title="Cobre por transferencia"
         onPress={handleCollectTransfer}
         loading={collectingTransfer}
-        variant="secondary"
+        variant={preferredMethod === 'transfer' ? 'cta' : 'secondary'}
         style={styles.button}
       />
     </>
@@ -414,6 +424,12 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.medium,
     textAlign: 'center',
     paddingHorizontal: theme.spacing.md,
+  },
+  preferredMethod: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.deepBlue,
+    textAlign: 'center',
   },
   button: {
     width: 300,

@@ -51,6 +51,7 @@ export const passengerTripService = {
       vehicle_type: string;
       distance_km: number;
       duration_minutes: number;
+      payment_method?: 'cash' | 'transfer';
     },
   ) {
     const gate = await cancellationService.assertPassengerCanRequest(user.id);
@@ -115,6 +116,7 @@ export const passengerTripService = {
         total_fare: fare.total,
         platform_fee: fare.platform_fee,
         driver_earnings: fare.driver_earnings,
+        payment_method: data.payment_method ?? 'cash',
         status: 'pending',
       })
       .returning();
@@ -353,6 +355,34 @@ export const passengerTripService = {
       .orderBy(desc(trips.created_at))
       .limit(limit)
       .offset(offset);
+  },
+
+  async setPaymentMethod(user: AuthUser, tripId: string, paymentMethod: 'cash' | 'transfer') {
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(and(eq(trips.id, tripId), eq(trips.passenger_id, user.id)))
+      .limit(1);
+
+    if (!trip) throw new NotFoundError('Trip not found');
+
+    if (
+      ['completed', 'rated', 'cancelled', 'cancelled_early', 'cancelled_late'].includes(trip.status)
+    ) {
+      throw new AppError('Cannot change payment method for this trip', 409, 'TRIP_CLOSED');
+    }
+
+    if (trip.is_collected) {
+      throw new AppError('Payment already collected', 409, 'ALREADY_COLLECTED');
+    }
+
+    const [updated] = await db
+      .update(trips)
+      .set({ payment_method: paymentMethod, updated_at: new Date() })
+      .where(eq(trips.id, tripId))
+      .returning();
+
+    return updated;
   },
 
   async rateTrip(

@@ -1,8 +1,10 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { estimateFare, requestRide } from '../../api/passenger';
+import { estimateFare } from '../../api/passenger';
 import { VehicleSelectScreen } from '../../screens/VehicleSelectScreen';
+
+const mockNavigate = jest.fn();
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: jest.fn(),
@@ -14,7 +16,7 @@ jest.mock('../../api/passenger', () => ({
 }));
 
 jest.mock('../../hooks/useAppNavigation', () => ({
-  useAppNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn(), replace: jest.fn() }),
+  useAppNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn(), replace: jest.fn() }),
 }));
 
 jest.mock('../../store/locationStore', () => ({
@@ -27,7 +29,6 @@ jest.mock('../../components/Map/PassengerMap', () => ({
 
 const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
 const mockEstimateFare = estimateFare as unknown as jest.Mock;
-const mockRequestRide = requestRide as unknown as jest.Mock;
 
 jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
@@ -70,7 +71,6 @@ describe('VehicleSelectScreen fare estimation', () => {
         vehicle_type: 'auto',
       };
     });
-    mockRequestRide.mockResolvedValue({ id: 'trip-1' });
   });
 
   test('calls estimateFare with the real coords, not CABA defaults', async () => {
@@ -97,7 +97,7 @@ describe('VehicleSelectScreen fare estimation', () => {
     const { findByText, queryByText } = await render(<VehicleSelectScreen />);
     await findByText('$4.200');
 
-    expect(await findByText('SOLICITAR $4.200')).toBeTruthy();
+    expect(await findByText('CONTINUAR $4.200')).toBeTruthy();
     expect(queryByText('$3.500')).toBeNull();
     expect(queryByText('$2.100')).toBeNull();
   });
@@ -111,7 +111,7 @@ describe('VehicleSelectScreen fare estimation', () => {
     expect(queryByText('$4.200')).toBeNull();
   });
 
-  test('on API error it never falls back to $3.500 and the CTA does not request', async () => {
+  test('on API error it never falls back to $3.500 and the CTA does not navigate', async () => {
     mockEstimateFare.mockRejectedValue(new Error('network down'));
 
     const { getByText, queryByText } = await render(<VehicleSelectScreen />);
@@ -122,30 +122,31 @@ describe('VehicleSelectScreen fare estimation', () => {
     expect(queryByText('$4.200')).toBeNull();
 
     await act(async () => {
-      fireEvent.press(getByText('SOLICITAR'));
+      fireEvent.press(getByText('CONTINUAR'));
     });
 
-    expect(mockRequestRide).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  test('SOLICITAR uses distance_km/duration_minutes from the estimate', async () => {
+  test('CONTINUAR navigates to ConfirmPayment with estimate params', async () => {
     const { findByText, getByText } = await render(<VehicleSelectScreen />);
     await findByText('$4.200');
 
     await act(async () => {
-      fireEvent.press(getByText('SOLICITAR $4.200'));
+      fireEvent.press(getByText('CONTINUAR $4.200'));
     });
 
-    expect(mockRequestRide).toHaveBeenCalledWith({
-      origin_lat: -34.5,
-      origin_lng: -58.4,
-      dest_lat: -34.6,
-      dest_lng: -58.5,
-      origin_address: 'Origen A',
-      dest_address: 'Destino B',
-      vehicle_type: 'auto',
-      distance_km: 4.2,
-      duration_minutes: 15,
+    expect(mockNavigate).toHaveBeenCalledWith('ConfirmPayment', {
+      pickup: 'Origen A',
+      destination: 'Destino B',
+      pickupLat: '-34.5',
+      pickupLng: '-58.4',
+      destLat: '-34.6',
+      destLng: '-58.5',
+      vehicleType: 'auto',
+      fare: '4200',
+      distanceKm: '4.2',
+      durationMin: '15',
     });
   });
 });
