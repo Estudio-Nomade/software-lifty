@@ -190,7 +190,7 @@ describe('Ratings', () => {
     expect(data.error.message).toBe('Trip is not in completed status');
   });
 
-  test('POST rate duplicate returns error', async () => {
+  test('POST rate duplicate is idempotent', async () => {
     const driverToken = await registerAndGetToken(driverPhone, password);
     const passengerToken = await registerAndGetToken(passengerPhone, password);
     await createDriverRow(passengerToken);
@@ -198,7 +198,13 @@ describe('Ratings', () => {
     const passengerUser = await request('GET', '/api/auth/me', undefined, passengerToken);
     const tripId = await setupCompletedTrip(driverToken, passengerUser.data.id);
 
-    await request('POST', `/api/ratings/trips/${tripId}`, { rating: 4 }, driverToken);
+    const first = await request(
+      'POST',
+      `/api/ratings/trips/${tripId}`,
+      { rating: 4 },
+      driverToken,
+    );
+    expect(first.status).toBe(200);
 
     const { status, data } = await request(
       'POST',
@@ -207,9 +213,9 @@ describe('Ratings', () => {
       driverToken,
     );
 
-    expect(status).toBe(409);
-    expect(data.error.code).toBe('CONFLICT');
-    expect(data.error.message).toBe('Rating already exists for this trip');
+    expect(status).toBe(200);
+    expect(data.rating_id).toBe(first.data.rating_id);
+    expect(data.message).toBe('Rating already submitted');
   });
 
   test('POST rate with invalid rating returns error', async () => {

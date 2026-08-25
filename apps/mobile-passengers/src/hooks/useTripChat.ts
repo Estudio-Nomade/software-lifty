@@ -15,6 +15,7 @@ export function useTripChat(
   senderRole: TripMessage['sender_role'],
 ) {
   const [messages, setMessages] = useState<TripMessage[]>([]);
+  const [ready, setReady] = useState(false);
   const messagesRef = useRef<TripMessage[]>([]);
   const tripIdRef = useRef(tripId);
   tripIdRef.current = tripId;
@@ -30,9 +31,12 @@ export function useTripChat(
   useEffect(() => {
     if (!tripId) {
       commitMessages(() => []);
+      setReady(false);
       return;
     }
+
     let cancelled = false;
+    setReady(false);
 
     // Start fresh so messages from a previous trip never leak into this one.
     commitMessages(() => []);
@@ -40,15 +44,20 @@ export function useTripChat(
     const unsubscribe = subscribeToTripChannel(tripId, {
       onMessage: (msg) => {
         if (cancelled) return;
+        // Ignore own echoes that already replaced the optimistic bubble.
         commitMessages((prev) => mergeMessages(prev, msg));
       },
     });
 
     listTripMessages(tripId)
       .then((rows) => {
-        if (!cancelled) commitMessages((prev) => mergeHistory(prev, rows));
+        if (cancelled) return;
+        commitMessages((prev) => mergeHistory(prev, rows));
+        setReady(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setReady(true);
+      });
 
     return () => {
       cancelled = true;
@@ -81,5 +90,5 @@ export function useTripChat(
     [senderRole, commitMessages],
   );
 
-  return { messages, sendMessage: send };
+  return { messages, sendMessage: send, ready };
 }

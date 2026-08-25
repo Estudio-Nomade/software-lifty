@@ -11,6 +11,11 @@ export const requestTripBody = t.Object({
   vehicle_type: t.Union([t.Literal('auto'), t.Literal('moto')]),
   distance_km: t.Number(),
   duration_minutes: t.Number(),
+  payment_method: t.Optional(t.Union([t.Literal('cash'), t.Literal('transfer')])),
+});
+
+export const paymentMethodBody = t.Object({
+  payment_method: t.Union([t.Literal('cash'), t.Literal('transfer')]),
 });
 
 export const tripIdParams = t.Object({

@@ -1,7 +1,15 @@
+import * as Notifications from 'expo-notifications';
 import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { InteractionManager } from 'react-native';
+import { InteractionManager, Platform } from 'react-native';
+import { api } from '../api/client';
 import { registerPassenger } from '../api/passenger';
+import { useAppNavigation } from '../hooks/useAppNavigation';
+import {
+  handleNotificationResponse,
+  registerForPush,
+  setupNotificationHandler,
+} from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { LoadingOverlay } from './feedback/LoadingOverlay';
@@ -104,6 +112,42 @@ function ActiveTripRecovery() {
   return null;
 }
 
+function NotificationSetup() {
+  const { navigate } = useAppNavigation();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const sessionRestored = useAuthStore((s) => s.sessionRestored);
+
+  useEffect(() => {
+    setupNotificationHandler();
+
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      handleNotificationResponse(response, navigate);
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!sessionRestored || !isAuthenticated) return;
+
+    registerForPush().then((token) => {
+      if (!token) return;
+      api
+        .post('/notifications/token', {
+          token,
+          platform: Platform.OS,
+        })
+        .catch(() => {
+          // best-effort
+        });
+    });
+  }, [sessionRestored, isAuthenticated]);
+
+  return null;
+}
+
 export function AppInitializer() {
   const sessionRestored = useAuthStore((s) => s.sessionRestored);
 
@@ -114,6 +158,7 @@ export function AppInitializer() {
       <PassengerProfileRegistrar />
       <AuthRedirectWatcher />
       <ActiveTripRecovery />
+      <NotificationSetup />
     </>
   );
 }

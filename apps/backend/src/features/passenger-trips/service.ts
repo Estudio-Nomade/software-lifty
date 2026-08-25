@@ -10,7 +10,7 @@ import {
   vehicles,
 } from '../../shared/db/schema';
 import { getCommissionRate } from '../../shared/lib/commission';
-import { AppError, ConflictError, NotFoundError } from '../../shared/lib/errors';
+import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { calculateFare } from '../../shared/lib/fuel-pricing';
 import { geocode, resolveRouteDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
@@ -51,6 +51,7 @@ export const passengerTripService = {
       vehicle_type: string;
       distance_km: number;
       duration_minutes: number;
+      payment_method?: 'cash' | 'transfer';
     },
   ) {
     const gate = await cancellationService.assertPassengerCanRequest(user.id);
@@ -115,6 +116,7 @@ export const passengerTripService = {
         total_fare: fare.total,
         platform_fee: fare.platform_fee,
         driver_earnings: fare.driver_earnings,
+        payment_method: data.payment_method ?? 'cash',
         status: 'pending',
       })
       .returning();
@@ -355,6 +357,34 @@ export const passengerTripService = {
       .offset(offset);
   },
 
+  async setPaymentMethod(user: AuthUser, tripId: string, paymentMethod: 'cash' | 'transfer') {
+    const [trip] = await db
+      .select()
+      .from(trips)
+      .where(and(eq(trips.id, tripId), eq(trips.passenger_id, user.id)))
+      .limit(1);
+
+    if (!trip) throw new NotFoundError('Trip not found');
+
+    if (
+      ['completed', 'rated', 'cancelled', 'cancelled_early', 'cancelled_late'].includes(trip.status)
+    ) {
+      throw new AppError('Cannot change payment method for this trip', 409, 'TRIP_CLOSED');
+    }
+
+    if (trip.is_collected) {
+      throw new AppError('Payment already collected', 409, 'ALREADY_COLLECTED');
+    }
+
+    const [updated] = await db
+      .update(trips)
+      .set({ payment_method: paymentMethod, updated_at: new Date() })
+      .where(eq(trips.id, tripId))
+      .returning();
+
+    return updated;
+  },
+
   async rateTrip(
     user: AuthUser,
     tripId: string,
@@ -364,7 +394,7 @@ export const passengerTripService = {
       throw new AppError('Score must be between 1 and 5', 400, 'BAD_REQUEST');
     }
 
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const [trip] = await tx
         .select()
         .from(trips)
@@ -375,15 +405,26 @@ export const passengerTripService = {
       if (!trip) throw new NotFoundError('Trip not found');
 
       const [existing] = await tx
-        .select({ id: ratings.id })
+        .select({ id: ratings.id, score: ratings.score })
         .from(ratings)
         .where(and(eq(ratings.trip_id, tripId), eq(ratings.rater_id, user.id)))
         .for('update')
         .limit(1);
 
-      if (existing) throw new ConflictError('Rating already exists for this trip');
+      // Idempotent: double-submit / retry after success is not an error.
+      if (existing) {
+        return {
+          rating_id: existing.id,
+          message: 'Rating already submitted',
+          already_exists: true as const,
+          driver_user_id: null as string | null,
+          score: existing.score,
+        };
+      }
 
-      if (trip.status !== 'completed') {
+      // Bidirectional ratings: either party may rate first. Accept both
+      // `completed` and `rated` so the second rater is never blocked.
+      if (trip.status !== 'completed' && trip.status !== 'rated') {
         throw new AppError('Trip is not in completed status', 400, 'BAD_REQUEST');
       }
 
@@ -399,16 +440,18 @@ export const passengerTripService = {
 
       if (!driver) throw new NotFoundError('Driver not found');
 
-      await tx
-        .update(trips)
-        .set({ status: 'rated', updated_at: new Date() })
-        .where(eq(trips.id, tripId));
+      if (trip.status === 'completed') {
+        await tx
+          .update(trips)
+          .set({ status: 'rated', updated_at: new Date() })
+          .where(eq(trips.id, tripId));
 
-      await tx.insert(tripEvents).values({
-        trip_id: tripId,
-        from_status: 'completed',
-        to_status: 'rated',
-      });
+        await tx.insert(tripEvents).values({
+          trip_id: tripId,
+          from_status: 'completed',
+          to_status: 'rated',
+        });
+      }
 
       const [rating] = await tx
         .insert(ratings)
@@ -440,8 +483,29 @@ export const passengerTripService = {
         })
         .where(eq(drivers.id, driver.id));
 
-      return { rating_id: rating.id, message: 'Rating submitted' };
+      return {
+        rating_id: rating.id,
+        message: 'Rating submitted',
+        already_exists: false as const,
+        driver_user_id: driver.user_id,
+        score: body.rating,
+      };
     });
+
+    if (!result.already_exists && result.driver_user_id) {
+      const stars = result.score;
+      sendPushToUser(result.driver_user_id, {
+        title: 'Nueva calificación',
+        body: stars === 1 ? 'Recibiste 1 estrella' : `Recibiste ${stars} estrellas`,
+        data: {
+          type: 'trip:rated',
+          trip_id: tripId,
+          score: String(stars),
+        },
+      });
+    }
+
+    return { rating_id: result.rating_id, message: result.message };
   },
 };
 

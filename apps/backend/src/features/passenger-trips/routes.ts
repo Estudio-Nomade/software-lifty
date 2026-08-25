@@ -5,7 +5,13 @@ import { authGuard } from '../../shared/middleware/require-auth';
 import { cancellationService } from '../cancellations/service';
 import { passengersService } from '../passengers/service';
 import { tripService } from '../trips/service';
-import { rateTripBody, requestTripBody, sendMessageBody, tripIdParams } from './schema';
+import {
+  paymentMethodBody,
+  rateTripBody,
+  requestTripBody,
+  sendMessageBody,
+  tripIdParams,
+} from './schema';
 import { passengerTripService } from './service';
 
 async function asPassenger(user: AuthUser) {
@@ -107,6 +113,15 @@ export const passengerTripRoutes = new Elysia({ prefix: '/passenger/trips' })
         return tripService.sendMessage(user, params.id, body.text);
       }, set),
     { params: tripIdParams, body: sendMessageBody, requireAuth: true },
+  )
+  .post(
+    '/:id/payment-method',
+    ({ user, params, body, set }) =>
+      safeCall(async () => {
+        await asPassenger(user);
+        return passengerTripService.setPaymentMethod(user, params.id, body.payment_method);
+      }, set),
+    { params: tripIdParams, body: paymentMethodBody, requireAuth: true },
   )
   .post(
     '/:id/rate',

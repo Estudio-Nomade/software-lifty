@@ -15,6 +15,7 @@ const SCREEN_TO_ROUTE = {
   LocationPermissions: '/location-permissions',
   TripRequest: '/trip-request',
   VehicleSelect: '/vehicle-select',
+  ConfirmPayment: '/confirm-payment',
   TripInProgress: '/trip-in-progress',
   ConnectingDriver: '/connecting-driver',
   TripComplete: '/trip-complete',
