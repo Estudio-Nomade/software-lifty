@@ -32,6 +32,10 @@ import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+/** Cap the whole sheet (~48% of screen). Footer stays outside the scroll. */
+const BOTTOM_CARD_MAX_HEIGHT = SCREEN_HEIGHT * 0.48;
+/** Approx. height of LLEGUE + status + cancel + paddings. */
+const BOTTOM_CARD_FOOTER_HEIGHT = 120;
 
 export const NavigationScreen: React.FC = () => {
   const navigation = useAppNavigation();
@@ -323,16 +327,23 @@ export const NavigationScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       ) : null}
-      <View style={styles.bottomCard}>
+      <View
+        style={[styles.bottomCard, { paddingBottom: Math.max(insets.bottom, theme.spacing.sm) }]}
+      >
         <ScrollView
-          style={styles.bottomCardContent}
-          contentContainerStyle={[
-            styles.bottomCardInner,
-            { paddingBottom: theme.spacing['2xl'] + theme.spacing.lg + insets.bottom },
+          style={[
+            styles.bottomCardScroll,
+            {
+              maxHeight: Math.max(
+                BOTTOM_CARD_MAX_HEIGHT - BOTTOM_CARD_FOOTER_HEIGHT - insets.bottom,
+                SCREEN_HEIGHT * 0.18,
+              ),
+            },
           ]}
+          contentContainerStyle={styles.bottomCardInner}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          nestedScrollEnabled
+          bounces={false}
         >
           <Text style={styles.label}>Rumbo al pasajero</Text>
           <Text style={styles.address}>{displayAddress ?? trip?.origin_address ?? 'Origen'}</Text>
@@ -391,6 +402,9 @@ export const NavigationScreen: React.FC = () => {
               textStyle={styles.navButtonText}
             />
           </View>
+        </ScrollView>
+
+        <View style={styles.bottomCardFooter}>
           {enRouteStatus === 'pending' ? (
             <>
               <Text style={styles.enRouteStatusText}>Preparando navegacion...</Text>
@@ -415,9 +429,9 @@ export const NavigationScreen: React.FC = () => {
             </>
           ) : (
             <>
-              {nearPassenger && (
+              {nearPassenger ? (
                 <Text style={styles.nearPassengerText}>Estas cerca del pasajero</Text>
-              )}
+              ) : null}
               <Button
                 title="LLEGUE"
                 onPress={handleArrive}
@@ -431,7 +445,7 @@ export const NavigationScreen: React.FC = () => {
           <TouchableOpacity onPress={handleCancelTrip} style={styles.cancelLinkWrap}>
             <Text style={styles.cancelLink}>Cancelar viaje</Text>
           </TouchableOpacity>
-        </ScrollView>
+        </View>
       </View>
     </View>
   );
@@ -447,27 +461,41 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.lightGray,
   },
   bottomCard: {
-    maxHeight: SCREEN_HEIGHT * 0.48,
+    maxHeight: BOTTOM_CARD_MAX_HEIGHT,
     backgroundColor: theme.colors.white,
     borderTopLeftRadius: theme.radius.lg,
     borderTopRightRadius: theme.radius.lg,
+    // Column: scrollable body + sticky footer so LLEGUE stays visible.
+    flexDirection: 'column',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 8,
   },
-  bottomCardContent: {
+  bottomCardScroll: {
     flexGrow: 0,
   },
   bottomCardInner: {
-    padding: theme.spacing.md,
-    paddingTop: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
     gap: theme.spacing.sm,
+    flexGrow: 0,
+  },
+  bottomCardFooter: {
+    flexShrink: 0,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    gap: theme.spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.white,
   },
   cancelLinkWrap: {
     alignItems: 'center',
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
   },
   cancelLink: {
     fontSize: theme.fontSize.sm,
@@ -491,9 +519,8 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     backgroundColor: theme.colors.lightGray,
     borderRadius: theme.radius.md,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
-    marginTop: theme.spacing.xs,
   },
   etaBox: {
     alignItems: 'center',
@@ -524,12 +551,10 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.sm,
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.xs,
   },
   navButtons: {
     flexDirection: 'row',
     gap: theme.spacing.sm,
-    marginTop: theme.spacing.sm,
   },
   navButton: {
     flex: 1,
@@ -551,7 +576,6 @@ const styles = StyleSheet.create({
   },
   arrivedButton: {
     width: '100%',
-    marginTop: theme.spacing.sm,
   },
   instructionsPill: {
     flexDirection: 'row',
