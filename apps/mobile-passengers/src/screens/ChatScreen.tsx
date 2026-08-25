@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -22,17 +22,31 @@ export function ChatScreen() {
   const trip = useRideStore((s) => s.activeTrip);
   const [message, setMessage] = useState('');
   const scrollRef = useRef<ScrollView>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const tripId = trip?.id;
   const { messages, sendMessage } = useTripChat(tripId, 'passenger');
 
   const scrollToEnd = useCallback(() => {
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 80);
+  }, []);
+
+  useEffect(() => {
+    scrollToEnd();
+  }, [messages.length, scrollToEnd]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    };
   }, []);
 
   const handleSend = () => {
     const text = message.trim();
-    if (!text) return;
+    if (!text || !tripId) return;
     setMessage('');
     sendMessage(text);
     scrollToEnd();
@@ -41,7 +55,7 @@ export function ChatScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={goBack}>
+        <TouchableOpacity onPress={goBack} accessibilityLabel="Volver">
           <Ionicons name="arrow-back" size={24} color={theme.colors.white} />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
@@ -53,6 +67,7 @@ export function ChatScreen() {
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
       >
         <ScrollView
           ref={scrollRef}
@@ -60,8 +75,14 @@ export function ChatScreen() {
           contentContainerStyle={styles.chatContent}
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={scrollToEnd}
+          showsVerticalScrollIndicator={false}
         >
-          {messages.length === 0 ? (
+          {!tripId ? (
+            <View style={styles.emptyChat}>
+              <Ionicons name="alert-circle-outline" size={48} color={theme.colors.mediumGray} />
+              <Text style={styles.emptyText}>No hay un viaje activo para chatear</Text>
+            </View>
+          ) : messages.length === 0 ? (
             <View style={styles.emptyChat}>
               <Ionicons name="chatbubbles-outline" size={48} color={theme.colors.mediumGray} />
               <Text style={styles.emptyText}>Envía un mensaje a tu conductor</Text>
@@ -86,8 +107,14 @@ export function ChatScreen() {
             onChangeText={setMessage}
             onSubmitEditing={handleSend}
             returnKeyType="send"
+            editable={Boolean(tripId)}
           />
-          <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
+          <TouchableOpacity
+            style={[styles.sendBtn, !tripId && styles.sendBtnDisabled]}
+            onPress={handleSend}
+            disabled={!tripId}
+            accessibilityLabel="Enviar mensaje"
+          >
             <Ionicons name="send" size={22} color={theme.colors.white} />
           </TouchableOpacity>
         </View>
@@ -125,6 +152,7 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
+    textAlign: 'center',
   },
   inputBar: {
     flexDirection: 'row',
@@ -151,5 +179,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  sendBtnDisabled: {
+    opacity: 0.4,
   },
 });
