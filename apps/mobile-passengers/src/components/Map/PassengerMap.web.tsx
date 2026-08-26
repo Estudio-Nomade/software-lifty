@@ -24,7 +24,13 @@ interface MessageListenerTarget {
   removeEventListener: (type: string, listener: (event: MessageEventLike) => void) => void;
 }
 
+interface BrowserGlobals {
+  Blob?: new (parts?: unknown[], options?: { type?: string }) => unknown;
+  URL?: { createObjectURL: (obj: unknown) => string; revokeObjectURL: (url: string) => void };
+}
+
 const win = globalThis as unknown as MessageListenerTarget;
+const browser = globalThis as unknown as BrowserGlobals;
 const LOAD_TIMEOUT_MS = 15_000;
 
 export const PassengerMap: React.FC<PassengerMapProps> = ({
@@ -46,6 +52,17 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
       }),
     [],
   );
+
+  // Render the MapLibre document from a Blob URL (same approach as the driver's
+  // `MapView.web.tsx`) instead of `srcDoc`. A `srcDoc` iframe runs in a
+  // sandboxed `about:srcdoc` context where the external MapLibre CDN scripts and
+  // styles are unreliable, so the map can end up blank/broken. A Blob URL loads
+  // the document as a real resource with a resolvable origin.
+  const blobUrl = useMemo(() => {
+    if (!browser.Blob || !browser.URL) return null;
+    const blob = new browser.Blob([mapHtml], { type: 'text/html' });
+    return browser.URL.createObjectURL(blob);
+  }, [mapHtml]);
 
   const iframeRef = useRef<IframeElement | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -88,6 +105,16 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     return () => clearTimeout(timeout);
   }, [isLoaded]);
 
+  // Revoke the Blob URL once the component unmounts. The URL stays valid across
+  // iframe remounts (the retry `key` change reloads the same URL), so it is only
+  // released here.
+  useEffect(() => {
+    const url = blobUrl;
+    return () => {
+      if (url) browser.URL?.revokeObjectURL(url);
+    };
+  }, [blobUrl]);
+
   useEffect(() => {
     const handleMessage = (event: MessageEventLike) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
@@ -107,12 +134,12 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     {
       key: retryKey.current,
       ref: iframeRef,
-      srcDoc: mapHtml,
       title: 'map',
       sandbox: 'allow-scripts allow-same-origin allow-popups',
       onLoad: () => setIsLoaded(true),
       onError: handleError,
       style: styles.iframe,
+      ...(blobUrl ? { src: blobUrl } : { srcDoc: mapHtml }),
     },
     null,
   );
