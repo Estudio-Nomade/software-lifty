@@ -10,10 +10,12 @@ export interface MarkerData {
 }
 
 export interface PassengerMapProps {
+  /** [lng, lat]. Prefer real GPS; avoid city hardcodes. */
   centerCoordinate: [number, number];
   zoom?: number;
   markers?: MarkerData[];
   routeLine?: Array<[number, number]>;
+  /** [lng, lat] or null */
   userLocation?: [number, number] | null;
   followUserLocation?: boolean;
   recenterKey?: number;
@@ -23,11 +25,34 @@ export interface PassengerMapProps {
 
 export const DEFAULT_ZOOM = 15;
 
-export function generateMapHtml(colors: { primary: string; lightGray: string }) {
+export interface GenerateMapHtmlOptions {
+  primary: string;
+  lightGray: string;
+  /**
+   * Optional bootstrap fix baked into the HTML so the map's FIRST paint is already
+   * at the user — never a city default. Pass { lat, lng } (WGS84).
+   */
+  bootstrap?: { lat: number; lng: number } | null;
+}
+
+export function generateMapHtml(colors: GenerateMapHtmlOptions) {
   const r = Number.parseInt(colors.primary.slice(1, 3), 16);
   const g = Number.parseInt(colors.primary.slice(3, 5), 16);
   const b = Number.parseInt(colors.primary.slice(5, 7), 16);
   const primaryRgba = `rgba(${r}, ${g}, ${b}, 0.4)`;
+
+  // Inject bootstrap as JS literals (null when unknown). MapLibre order = [lng, lat].
+  const bootLat =
+    colors.bootstrap && Number.isFinite(colors.bootstrap.lat)
+      ? String(colors.bootstrap.lat)
+      : 'null';
+  const bootLng =
+    colors.bootstrap && Number.isFinite(colors.bootstrap.lng)
+      ? String(colors.bootstrap.lng)
+      : 'null';
+  const bootCenter =
+    bootLat !== 'null' && bootLng !== 'null' ? `[${bootLng}, ${bootLat}]` : '[0, 0]';
+  const bootZoom = bootLat !== 'null' ? '15' : '2';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -132,8 +157,12 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
 <body>
 <div id="map"></div>
 <script>
-  var DEFAULT_CENTER = [0, 0];
   var DEFAULT_ZOOM = 15;
+  // Baked in by generateMapHtml — real GPS when the host already has a fix.
+  var BOOTSTRAP_LAT = ${bootLat};
+  var BOOTSTRAP_LNG = ${bootLng};
+  var BOOTSTRAP_CENTER = ${bootCenter};
+  var BOOTSTRAP_ZOOM = ${bootZoom};
 
   function postToHost(msg) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -143,24 +172,19 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     }
   }
 
-  // Guard against a failed CDN load: if the MapLibre script never ran, the
-  // map object below would throw a ReferenceError before any error listener is
-  // registered, leaving the host stuck on a blank map with no feedback.
   if (typeof maplibregl === 'undefined') {
     postToHost(JSON.stringify({ type: 'error', message: 'MapLibre GL failed to load from CDN' }));
     throw new Error('MapLibre GL is not available');
   }
 
-  // Guard against a synchronous init failure (e.g. WebGL unavailable): the
-  // constructor throws before the async map.on('error') listener below is
-  // registered, so surface it to the host instead of leaving a blank map.
   var map;
   try {
     map = new maplibregl.Map({
       container: 'map',
       style: 'https://tiles.openfreemap.org/styles/liberty',
-      center: DEFAULT_CENTER,
-      zoom: DEFAULT_ZOOM,
+      // First paint uses bootstrap GPS when available — never a city hardcode.
+      center: BOOTSTRAP_CENTER,
+      zoom: BOOTSTRAP_ZOOM,
       attributionControl: true,
     });
 
@@ -176,15 +200,13 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
   var markers = [];
   var userMarker = null;
   var pendingRoute = null;
-  // Default ON so the first GPS fix always centers the camera.
   var followRequested = true;
-  var hasPerformedInitialCenter = false;
+  var hasPerformedInitialCenter = BOOTSTRAP_LAT != null && BOOTSTRAP_LNG != null;
   var userManuallyMoved = false;
-  // Browser iframe (not RN WebView) — also runs navigator.geolocation here as backup.
   var isBrowserIframe = !(window.ReactNativeWebView && window.ReactNativeWebView.postMessage);
   var browserGeoWatchId = null;
-  var lastUserLat = null;
-  var lastUserLng = null;
+  var lastUserLat = BOOTSTRAP_LAT;
+  var lastUserLng = BOOTSTRAP_LNG;
 
   var USER_ICONS = {
     car: 'car-outline',
@@ -207,8 +229,8 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
   }
 
   /**
-   * Place/move the user pin at [lng, lat] (MapLibre order).
-   * First valid fix ALWAYS centers the camera (avoids staying on a city default).
+   * Place/move the user pin. MapLibre order setLngLat([lng, lat]).
+   * First valid fix ALWAYS centers. forceCenter/fly override for recenter.
    */
   function applyUserLocation(lat, lng, opts) {
     if (!isValidLatLng(lat, lng)) return;
@@ -216,18 +238,19 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     lastUserLng = lng;
     updateUserLocation(lat, lng);
 
-    var forceCenter = opts && opts.forceCenter;
-    var fly = opts && opts.fly;
-    if (forceCenter || (!hasPerformedInitialCenter && followRequested)) {
+    var forceCenter = !!(opts && opts.forceCenter);
+    var fly = !!(opts && opts.fly);
+    if (forceCenter || !hasPerformedInitialCenter) {
       if (fly) {
         map.flyTo({ center: [lng, lat], zoom: 15, duration: 600 });
       } else {
-        setView([lng, lat], map.getZoom() > 2 ? map.getZoom() : DEFAULT_ZOOM);
+        setView([lng, lat], DEFAULT_ZOOM);
       }
       hasPerformedInitialCenter = true;
     }
   }
 
+  /** Browser-only backup GPS (host is primary). Always forceCenter when force=true. */
   function requestBrowserGeo(forceCenter) {
     if (!isBrowserIframe || !navigator.geolocation) return;
     var opts = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
@@ -235,13 +258,20 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
       if (!pos || !pos.coords) return;
       var lat = pos.coords.latitude;
       var lng = pos.coords.longitude;
-      applyUserLocation(lat, lng, { forceCenter: !!forceCenter, fly: !!forceCenter });
+      applyUserLocation(lat, lng, { forceCenter: !!forceCenter || !hasPerformedInitialCenter, fly: !!forceCenter });
       postToHost(JSON.stringify({ type: 'browserLocation', lat: lat, lng: lng }));
     }
+    function onErr(err) {
+      postToHost(JSON.stringify({
+        type: 'geoError',
+        code: err && err.code,
+        message: (err && err.message) || 'geolocation failed',
+      }));
+    }
     try {
-      navigator.geolocation.getCurrentPosition(onPos, function () {}, opts);
+      navigator.geolocation.getCurrentPosition(onPos, onErr, opts);
       if (browserGeoWatchId == null) {
-        browserGeoWatchId = navigator.geolocation.watchPosition(onPos, function () {}, opts);
+        browserGeoWatchId = navigator.geolocation.watchPosition(onPos, onErr, opts);
       }
     } catch (e) {}
   }
@@ -344,6 +374,11 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     }
   }
 
+  // Paint bootstrap pin immediately if the host already had a fix.
+  if (BOOTSTRAP_LAT != null && BOOTSTRAP_LNG != null) {
+    updateUserLocation(BOOTSTRAP_LAT, BOOTSTRAP_LNG);
+  }
+
   // Kick off browser geolocation ASAP (do not wait for style load).
   requestBrowserGeo(false);
 
@@ -430,23 +465,24 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
         break;
       case 'userLocation':
         if (msg.lat != null && msg.lng != null) {
+          // First fix always centers (applyUserLocation); later fixes only move the pin.
           applyUserLocation(Number(msg.lat), Number(msg.lng), null);
         } else if (!isBrowserIframe) {
           updateUserLocation(null, null);
           lastUserLat = null;
           lastUserLng = null;
         }
-        // Browser: ignore null from host — keep pin from browser/host last fix.
         break;
       case 'recenter':
         userManuallyMoved = false;
+        hasPerformedInitialCenter = false;
         if (msg.lat != null && msg.lng != null && isValidLatLng(Number(msg.lat), Number(msg.lng))) {
           applyUserLocation(Number(msg.lat), Number(msg.lng), { forceCenter: true, fly: true });
         } else if (lastUserLat != null && lastUserLng != null) {
           map.flyTo({ center: [lastUserLng, lastUserLat], zoom: 15, duration: 600 });
           hasPerformedInitialCenter = true;
+          updateUserLocation(lastUserLat, lastUserLng);
         } else {
-          // No known fix yet — force a fresh browser geolocation and fly there.
           requestBrowserGeo(true);
         }
         break;

@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MarkerData } from './mapHtml';
 
 interface UseMapControllerOptions {
-  /** [lng, lat]. Omit / null-island until a real fix exists — do not pass city defaults. */
+  /** [lng, lat] */
   centerCoordinate: [number, number];
   zoom: number;
   markers: MarkerData[];
   routeLine?: Array<[number, number]>;
-  /** [lng, lat] or null */
+  /** [lng, lat] or null — only real GPS */
   userLocation?: [number, number] | null;
   followUserLocation: boolean;
   recenterKey?: number;
@@ -16,18 +16,18 @@ interface UseMapControllerOptions {
   postMessage: (message: unknown) => void;
 }
 
-function isUsableCenter(center: [number, number] | null | undefined): center is [number, number] {
-  if (!center || center.length !== 2) return false;
-  const [lng, lat] = center;
+function isRealFix(lng: number | null | undefined, lat: number | null | undefined): boolean {
+  if (lng == null || lat == null) return false;
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) return false;
-  // Null island — placeholder while waiting for GPS
   if (lng === 0 && lat === 0) return false;
   return Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
 }
 
 /**
- * Shared controller for native WebView and web iframe MapLibre documents.
- * Coordinate convention: `[lng, lat]`. Messages use named `{ lat, lng }`.
+ * Shared controller for native WebView and web iframe.
+ * Convention: props use [lng, lat]; messages use { lat, lng }.
+ *
+ * Never sends city defaults. Only real GPS goes to the map.
  */
 export function useMapController({
   centerCoordinate,
@@ -44,53 +44,54 @@ export function useMapController({
   const userLocationRef = useRef(userLocation);
   userLocationRef.current = userLocation;
 
-  const centerRef = useRef(centerCoordinate);
-  centerRef.current = centerCoordinate;
-
-  const zoomRef = useRef(zoom);
-  zoomRef.current = zoom;
-
   const [userManuallyMoved, setUserManuallyMoved] = useState(false);
   const [syncGen, setSyncGen] = useState(0);
   const programmaticMoveRef = useRef(false);
   const lastRecenterKey = useRef<number | null>(null);
+  const didInitRef = useRef(false);
 
   const userLng = userLocation?.[0] ?? null;
   const userLat = userLocation?.[1] ?? null;
+  const hasUserFix = isRealFix(userLng, userLat);
 
   useEffect(() => {
     if (!isLoaded) {
       setSyncGen(0);
       lastRecenterKey.current = null;
+      didInitRef.current = false;
     }
   }, [isLoaded]);
 
-  // 1) follow first so the first userLocation can center the camera
+  // follow first
   useEffect(() => {
     if (!isLoaded) return;
     postMessage({ type: 'followUser', enabled: followUserLocation });
   }, [followUserLocation, isLoaded, syncGen, postMessage]);
 
-  // 2) user pin + camera (only real fixes — never null spam)
+  // user pin — only real fixes; first one centers inside mapHtml
   useEffect(() => {
     if (!isLoaded) return;
-    if (userLat == null || userLng == null) return;
+    if (!hasUserFix) return;
     programmaticMoveRef.current = true;
     postMessage({ type: 'userLocation', lat: userLat, lng: userLng });
-  }, [userLat, userLng, isLoaded, syncGen, postMessage]);
+  }, [userLat, userLng, hasUserFix, isLoaded, syncGen, postMessage]);
 
-  // 3) init center only when we have a real coordinate (never BA / 0,0 placeholders)
+  // init ONLY with real user fix (or a real centerCoordinate). Never [0,0] / city defaults.
   useEffect(() => {
     if (!isLoaded) return;
-    const center = isUsableCenter(userLocationRef.current)
-      ? userLocationRef.current
-      : isUsableCenter(centerRef.current)
-        ? centerRef.current
-        : null;
+    let center: [number, number] | null = null;
+    if (hasUserFix && userLng != null && userLat != null) {
+      center = [userLng, userLat];
+    } else if (isRealFix(centerCoordinate[0], centerCoordinate[1])) {
+      center = centerCoordinate;
+    }
     if (!center) return;
+    // Avoid re-init spam after the first successful center (recenter uses its own msg).
+    if (didInitRef.current && syncGen === 0) return;
+    didInitRef.current = true;
     programmaticMoveRef.current = true;
-    postMessage({ type: 'init', center, zoom: zoomRef.current });
-  }, [isLoaded, syncGen, postMessage, userLat, userLng, centerCoordinate, zoom]);
+    postMessage({ type: 'init', center, zoom });
+  }, [isLoaded, syncGen, postMessage, hasUserFix, userLat, userLng, centerCoordinate, zoom]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -109,8 +110,7 @@ export function useMapController({
     postMessage({ type: 'fitRoute', coordinates: routeLine });
   }, [isLoaded, syncGen, routeLine, userManuallyMoved, postMessage]);
 
-  // Recenter: always notify the map. Prefer live store coords; map falls back
-  // to its last known fix / browser geo if host coords are missing.
+  // Recenter always fires a message; map flies to coords or last known / re-queries GPS.
   useEffect(() => {
     if (!isLoaded) return;
     if (recenterKey == null) return;
@@ -144,7 +144,7 @@ export function useMapController({
           onError?.();
         }
       } catch {
-        // ignore non-JSON
+        // ignore
       }
     },
     [onError],

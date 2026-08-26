@@ -368,8 +368,8 @@ export function HomeScreen() {
 
             <View style={styles.mapArea}>
               <PassengerMap
-                // [0,0] = placeholder; mapHtml/useMapController ignore it until GPS arrives.
-                // Never pass a city default (e.g. BA) — that is what pinned users to the wrong place.
+                // Web waits for real GPS before painting (see PassengerMap.web).
+                // Never pass a city default — that was the BA bug.
                 centerCoordinate={current ? toMapCoordinate(current.lat, current.lng) : [0, 0]}
                 userLocation={current ? toMapCoordinate(current.lat, current.lng) : null}
                 followUserLocation
