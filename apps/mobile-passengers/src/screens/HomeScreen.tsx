@@ -76,16 +76,15 @@ export function HomeScreen() {
   );
   const visibleSuggestions = focusedField === 'pickup' ? pickupSuggestions : destSuggestions;
 
-  // When the search sheet opens, autofill empty "Desde" from the shared store
-  // (fed by the map iframe GPS on web) + a human street label. Never raw coords.
+  // "Desde" autofill: store is fed by the map iframe (web sole GPS owner via
+  // browserLocation). resolveAddressLabel turns coords into a street name.
   useEffect(() => {
     if (!searchExpanded) return;
     if (pickupPicked || pickupAddress.trim()) return;
     let cancelled = false;
 
     (async () => {
-      // On web the map iframe owns GPS and publishes via browserLocation.
-      // Wait up to ~12s for that fix (requestFreshPosition polls the store).
+      // Web: polls store until iframe publishes a fix. Native: expo-location.
       const fix = await requestFreshPosition();
       if (cancelled || !fix) return;
 
@@ -102,7 +101,8 @@ export function HomeScreen() {
   }, [searchExpanded, pickupPicked, pickupAddress]);
 
   const handleLocate = () => {
-    // Always request a fresh fix first so recenter has real coords (web + native).
+    // Web: recenter message → iframe requestExactLocation (high-accuracy GPS).
+    // Native: refresh expo-location then recenter.
     void requestFreshPosition().finally(() => {
       setRecenterKey((k) => k + 1);
     });

@@ -118,15 +118,40 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     font-size: 18px;
     color: ${colors.primary};
   }
+  /* Web-only: force a high-accuracy GPS fix (IP/WiFi is often wrong). */
+  #exact-loc-btn {
+    display: none;
+    position: absolute;
+    z-index: 10;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    padding: 10px 16px;
+    border: none;
+    border-radius: 24px;
+    background: ${colors.primary};
+    color: #FFFFFF;
+    font: 600 14px/1.2 system-ui, -apple-system, sans-serif;
+    box-shadow: 0 4px 14px rgba(13, 43, 69, 0.28);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #exact-loc-btn:active { opacity: 0.88; }
+  #exact-loc-btn:disabled { opacity: 0.65; cursor: wait; }
+  #exact-loc-btn.visible { display: block; }
 </style>
 </head>
 <body>
 <div id="map"></div>
+<button type="button" id="exact-loc-btn" aria-label="Obtener ubicación exacta">📍 Ubicación exacta</button>
 <script>
   var DEFAULT_ZOOM = 15;
   // World overview until a real GPS fix arrives — never a city hardcode.
   var WAITING_CENTER = [0, 0];
   var WAITING_ZOOM = 2;
+  // Aggressive GPS options: no cache, prefer device GPS over IP/WiFi.
+  var GEO_OPTS = { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 };
+  var GEO_OPTS_EXACT = { enableHighAccuracy: true, timeout: 45000, maximumAge: 0 };
 
   function postToHost(msg) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -165,8 +190,12 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
   var hasCenteredOnUser = false;
   // WEB: this document is the sole GPS owner (navigator.geolocation).
   // NATIVE WebView: host pushes userLocation via postMessage.
+  // Architecture: iframe GPS → postMessage browserLocation → React locationStore.
   var isNativeWebView = !!(window.ReactNativeWebView && window.ReactNativeWebView.postMessage);
   var geoWatchId = null;
+  var lastAccuracy = Infinity;
+  var exactBtn = document.getElementById('exact-loc-btn');
+  if (!isNativeWebView && exactBtn) exactBtn.classList.add('visible');
 
   var USER_ICONS = {
     car: 'car-outline',
@@ -288,41 +317,114 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     applyRoute(coordinates);
   }
 
-  /** Web-only: sole GPS owner. Publishes every fix to the React host. */
+  /**
+   * Web-only: sole GPS owner. Publishes every fix to the React host.
+   * Prefers higher-accuracy fixes (GPS) over coarse IP/WiFi when both arrive.
+   */
+  function publishFix(pos, opts) {
+    if (!pos || !pos.coords) return;
+    var lat = pos.coords.latitude;
+    var lng = pos.coords.longitude;
+    var accuracy = typeof pos.coords.accuracy === 'number' ? pos.coords.accuracy : Infinity;
+    if (!isValidLatLng(lat, lng)) return;
+
+    // Skip a worse (coarser) fix once we already have a better one, unless forced.
+    var force = opts && (opts.force || opts.fly);
+    if (!force && hasCenteredOnUser && accuracy > lastAccuracy + 25) {
+      console.log('[Lifty geo] skip coarser fix', { lat: lat, lng: lng, accuracy: accuracy, best: lastAccuracy });
+      return;
+    }
+    if (accuracy < lastAccuracy) lastAccuracy = accuracy;
+
+    console.log('[Lifty geo] fix', {
+      lat: lat,
+      lng: lng,
+      accuracy: accuracy,
+      force: !!force,
+    });
+
+    setUserFix(lat, lng, opts || null);
+    postToHost(JSON.stringify({
+      type: 'browserLocation',
+      lat: lat,
+      lng: lng,
+      accuracy: accuracy,
+    }));
+  }
+
   function startWebGeolocation(forceCenter) {
     if (isNativeWebView) return;
     if (!navigator.geolocation) {
       postToHost(JSON.stringify({ type: 'geoError', message: 'navigator.geolocation unavailable' }));
       return;
     }
-    var opts = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
-    function onPos(pos) {
-      if (!pos || !pos.coords) return;
-      var lat = pos.coords.latitude;
-      var lng = pos.coords.longitude;
-      setUserFix(lat, lng, forceCenter ? { force: true, fly: !!forceCenter } : null);
-      postToHost(JSON.stringify({
-        type: 'browserLocation',
-        lat: lat,
-        lng: lng,
-        accuracy: pos.coords.accuracy,
-      }));
-    }
     function onErr(err) {
+      console.warn('[Lifty geo] error', err && err.code, err && err.message);
       postToHost(JSON.stringify({
         type: 'geoError',
         code: err && err.code,
         message: (err && err.message) || 'geolocation failed',
       }));
+      if (exactBtn) {
+        exactBtn.disabled = false;
+        exactBtn.textContent = '📍 Ubicación exacta';
+      }
     }
     try {
-      navigator.geolocation.getCurrentPosition(onPos, onErr, opts);
+      navigator.geolocation.getCurrentPosition(
+        function (pos) {
+          publishFix(pos, forceCenter ? { force: true, fly: true } : null);
+        },
+        onErr,
+        GEO_OPTS,
+      );
       if (geoWatchId == null) {
-        geoWatchId = navigator.geolocation.watchPosition(onPos, onErr, opts);
+        geoWatchId = navigator.geolocation.watchPosition(
+          function (pos) { publishFix(pos, null); },
+          onErr,
+          GEO_OPTS,
+        );
       }
     } catch (e) {
       postToHost(JSON.stringify({ type: 'geoError', message: String(e) }));
     }
+  }
+
+  /** One-shot aggressive GPS request (user tapped "Ubicación exacta"). */
+  function requestExactLocation() {
+    if (isNativeWebView || !navigator.geolocation) return;
+    if (exactBtn) {
+      exactBtn.disabled = true;
+      exactBtn.textContent = 'Obteniendo GPS…';
+    }
+    // Drop accuracy floor so a new GPS fix always wins over a stale IP fix.
+    lastAccuracy = Infinity;
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        publishFix(pos, { force: true, fly: true });
+        if (exactBtn) {
+          exactBtn.disabled = false;
+          exactBtn.textContent = '📍 Ubicación exacta';
+        }
+      },
+      function (err) {
+        console.warn('[Lifty geo] exact failed', err && err.code, err && err.message);
+        postToHost(JSON.stringify({
+          type: 'geoError',
+          code: err && err.code,
+          message: (err && err.message) || 'exact geolocation failed',
+        }));
+        if (exactBtn) {
+          exactBtn.disabled = false;
+          exactBtn.textContent = '📍 Reintentar ubicación';
+        }
+      },
+      GEO_OPTS_EXACT,
+    );
+  }
+
+  if (exactBtn) {
+    exactBtn.addEventListener('click', function () { requestExactLocation(); });
   }
 
   // Start GPS immediately (before style load) so the first fix is ready ASAP.
@@ -392,11 +494,8 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
         break;
       case 'recenter':
         if (!isNativeWebView) {
-          // Web: always re-query the browser GPS owner, then fly.
-          startWebGeolocation(true);
-          if (lastUserLat != null && lastUserLng != null) {
-            setUserFix(lastUserLat, lastUserLng, { force: true, fly: true });
-          }
+          // Web: force a fresh high-accuracy fix (same as the floating button).
+          requestExactLocation();
         } else if (msg.lat != null && msg.lng != null && isValidLatLng(Number(msg.lat), Number(msg.lng))) {
           setUserFix(Number(msg.lat), Number(msg.lng), { force: true, fly: true });
         } else if (lastUserLat != null && lastUserLng != null) {

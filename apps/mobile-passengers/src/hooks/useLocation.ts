@@ -28,13 +28,21 @@ export function applyBrowserLocation(lat: number, lng: number): void {
   useLocationStore.getState().setPermissionGranted(true);
 }
 
+function isWebRuntime(): boolean {
+  // Prefer Platform.OS; avoid bare `window` (no DOM lib in this tsconfig).
+  if (Platform.OS === 'web') return true;
+  const g = globalThis as { window?: unknown; ReactNativeWebView?: unknown };
+  return typeof g.window !== 'undefined' && g.ReactNativeWebView == null;
+}
+
 /**
  * One-shot position.
- * - Web: returns the store value written by the map iframe (no second GPS call).
+ * - Web: NEVER calls navigator.geolocation / expo-location. Polls the store
+ *   fed by the map iframe (sole GPS owner via browserLocation).
  * - Native: expo-location.
  */
 export async function requestFreshPosition(): Promise<{ lat: number; lng: number } | null> {
-  if (Platform.OS === 'web') {
+  if (isWebRuntime()) {
     // Wait briefly for the iframe GPS owner to publish a fix.
     const existing = useLocationStore.getState().current;
     if (existing && isValidLatLng(existing.lat, existing.lng)) return existing;
@@ -85,8 +93,9 @@ export function useLocation() {
   const setPermissionGranted = useLocationStore((s) => s.setPermissionGranted);
 
   useEffect(() => {
-    // Web: do not call navigator.geolocation — the map iframe is the sole owner.
-    if (Platform.OS === 'web') return;
+    // Web: the iframe (mapHtml + navigator.geolocation) is the sole GPS owner.
+    // Never call expo-location or navigator.geolocation from this hook on web.
+    if (isWebRuntime()) return;
 
     let subscription: Location.LocationSubscription | null = null;
     let cancelled = false;
