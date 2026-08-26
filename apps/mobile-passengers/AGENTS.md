@@ -951,6 +951,15 @@ abre el navegador directamente. El puerto 8083 es el mismo que usa el orquestado
   geolocation disponible, `permissionGranted` queda `false` y la app sigue sin crashear.
   `geocodeAsync`/`reverseGeocodeAsync` lanzan `GeocoderError` en web → la app usa el backend para
   geocoding.
+- **Ubicación en el mapa (web)** — host owns GPS (single source):
+  1. `useLocation` en web usa `navigator.geolocation` en la **página host** (nunca expo-location,
+     nunca geolocation dentro del iframe). Espera accuracy ≤40m hasta ~14s antes de fijar
+     "Desde" (`requestFreshPosition` / `requestBestWebPosition`). Store: `{ lat, lng, accuracy }`.
+  2. `locationStore.applyFix` rechaza fixes más gruesos (WiFi/IP no pisan GPS).
+  3. `PassengerMap.web` monta el iframe **imperativo** y le manda el pin vía `userLocation`
+     postMessage. El iframe **no** llama `navigator.geolocation` (evita calles incorrectas tipo
+     "Margarita Galfre" por un segundo GPS grueso).
+  4. Convención MapLibre: `toMapCoordinate(lat,lng) → [lng,lat]` / `setLngLat([lng, lat])`.
 - **`expo-location` bug en el cleanup (web)**: `Location.watchPositionAsync()` devuelve una
   subscription cuyo `.remove()` llama internamente a `LocationEventEmitter.removeSubscription()`. En
   native `LocationEventEmitter` es un `LegacyEventEmitter` (que SÍ tiene `removeSubscription`), pero en

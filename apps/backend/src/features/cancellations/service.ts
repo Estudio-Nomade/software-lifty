@@ -14,7 +14,7 @@ import {
 import { getCommissionRate, getDebtCapArs } from '../../shared/lib/commission';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import type { AuthUser } from '../../shared/middleware/auth';
-import { hasActiveBlock } from './blocks';
+import { getActiveBlock } from './blocks';
 import { DEFAULT_CANCELLATION_CONFIG, parseCancellationConfig } from './config';
 import { evaluateCancel } from './evaluate';
 import { getPaymentGateway } from './gateway';
@@ -275,25 +275,38 @@ export const cancellationService = {
     const config = await getCancellationConfig();
     if (debt.amount_ars >= config.debtBlockArs) {
       throw new AppError(
-        `Tienes $${debt.amount_ars} de deuda. No puedes solicitar viajes hasta regularizar tu saldo. Contacta a soporte.`,
+        `Tenés $${debt.amount_ars} de deuda por cancelaciones. No podés solicitar viajes hasta regularizar el saldo. Contactá a soporte si necesitás ayuda.`,
         403,
         'DEBT_BLOCKED',
       );
     }
-    if (await hasActiveBlock('passenger', userId, 'cancel_rate_72h')) {
+
+    const suspend = await getActiveBlock('passenger', userId, 'cancel_rate_72h');
+    if (suspend) {
+      const until =
+        suspend.ends_at != null
+          ? ` Hasta el ${suspend.ends_at.toLocaleString('es-AR', {
+              dateStyle: 'short',
+              timeStyle: 'short',
+              timeZone: 'America/Argentina/Buenos_Aires',
+            })}.`
+          : ` Suele durar unas ${config.suspendHours} horas.`;
       throw new AppError(
-        'Estás suspendido temporalmente por cancelaciones.',
+        `Estás suspendido temporalmente por un alto porcentaje de cancelaciones.${until} Cuando termine la suspensión vas a poder pedir viajes de nuevo. Si creés que es un error, contactá a soporte.`,
         403,
         'PASSENGER_SUSPENDED',
       );
     }
-    if (await hasActiveBlock('passenger', userId, 'cancel_rate_review')) {
+
+    const review = await getActiveBlock('passenger', userId, 'cancel_rate_review');
+    if (review) {
       throw new AppError(
-        'Tu cuenta está en revisión. Contacta a soporte.',
+        'Tu cuenta está en revisión por cancelaciones. No podés solicitar viajes hasta que soporte la habilite. Contactanos por WhatsApp o email.',
         403,
         'PASSENGER_UNDER_REVIEW',
       );
     }
+
     return {
       debtArs: debt.amount_ars,
       warning: debt.amount_ars >= config.debtWarnArs && debt.amount_ars < config.debtBlockArs,

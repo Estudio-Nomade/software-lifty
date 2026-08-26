@@ -18,6 +18,11 @@ import { theme } from '../theme';
 
 const FAQ: { question: string; answer: string }[] = [
   {
+    question: '¿Me suspendieron por cancelaciones?',
+    answer:
+      'Si cancelás muchos viajes en poco tiempo, la cuenta puede suspenderse temporalmente (unas 72 horas) o pasar a revisión. Cuando termine la suspensión vas a poder pedir de nuevo. Si creés que es un error, escribinos por WhatsApp.',
+  },
+  {
     question: '¿Cómo cancelo un viaje?',
     answer:
       'Desde la pantalla del viaje en curso tocá "Cancelar". Si cancelás después de los 5 minutos de espera se aplica un cargo de cancelación.',

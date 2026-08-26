@@ -54,8 +54,19 @@ export async function requestRide(params: {
   duration_minutes: number;
   payment_method?: 'cash' | 'transfer';
 }): Promise<Trip> {
-  const { data } = await api.post<Trip>('/passenger/trips/request', params);
-  return data;
+  const { data } = await api.post<Trip | { error?: { message?: string; code?: string } }>(
+    '/passenger/trips/request',
+    params,
+  );
+  // safeCall can return { error } with a non-throwing status in some paths.
+  if (data && typeof data === 'object' && 'error' in data && data.error) {
+    throw new Error(data.error.message || data.error.code || 'No se pudo solicitar el viaje');
+  }
+  const trip = data as Trip;
+  if (!trip?.id) {
+    throw new Error('Respuesta inválida del servidor al crear el viaje');
+  }
+  return trip;
 }
 
 export async function setTripPaymentMethod(
@@ -89,6 +100,18 @@ export async function geocodeAddress(address: string): Promise<{
   const { data } = await api.get<{ lat: number; lng: number; formatted_address: string }>(
     '/maps/geocode',
     { params: { address } },
+  );
+  return data;
+}
+
+/** Reverse geocode (coords → street name). Uses backend Photon proxy — works on web. */
+export async function reverseGeocode(
+  lat: number,
+  lng: number,
+): Promise<{ lat: number; lng: number; formatted_address: string }> {
+  const { data } = await api.get<{ lat: number; lng: number; formatted_address: string }>(
+    '/maps/geocode',
+    { params: { lat, lng } },
   );
   return data;
 }

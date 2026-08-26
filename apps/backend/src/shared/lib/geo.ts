@@ -105,8 +105,9 @@ function formatPhotonAddress(props: Record<string, string | number | undefined>)
   const name = props.name ? String(props.name) : '';
   const street = props.street ? String(props.street) : '';
   const housenumber = props.housenumber ? String(props.housenumber) : '';
-
-  const primary = name || (street && housenumber ? `${street} ${housenumber}` : street);
+  // Street+number first — bare `name` is often a POI/person near the pin.
+  const streetLine = street && housenumber ? `${street} ${housenumber}` : street;
+  const primary = streetLine || name;
 
   const parts = [
     primary,

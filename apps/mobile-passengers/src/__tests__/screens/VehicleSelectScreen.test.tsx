@@ -1,7 +1,7 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { estimateFare } from '../../api/passenger';
+import { estimateFare, requestRide } from '../../api/passenger';
 import { VehicleSelectScreen } from '../../screens/VehicleSelectScreen';
 
 const mockNavigate = jest.fn();
@@ -15,12 +15,28 @@ jest.mock('../../api/passenger', () => ({
   requestRide: jest.fn(),
 }));
 
+const mockReplace = jest.fn();
 jest.mock('../../hooks/useAppNavigation', () => ({
-  useAppNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn(), replace: jest.fn() }),
+  useAppNavigation: () => ({
+    navigate: mockNavigate,
+    goBack: jest.fn(),
+    replace: mockReplace,
+  }),
 }));
 
 jest.mock('../../store/locationStore', () => ({
   useLocationStore: jest.fn(() => null),
+}));
+
+jest.mock('../../store/paymentStore', () => ({
+  usePaymentStore: (sel: (s: unknown) => unknown) =>
+    sel({
+      methods: [
+        { id: 'cash', type: 'cash', label: 'Efectivo', isDefault: true },
+        { id: 'transfer', type: 'transfer', label: 'Transferencia', isDefault: false },
+      ],
+      setDefault: jest.fn(),
+    }),
 }));
 
 jest.mock('../../components/Map/PassengerMap', () => ({
@@ -29,6 +45,7 @@ jest.mock('../../components/Map/PassengerMap', () => ({
 
 const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
 const mockEstimateFare = estimateFare as unknown as jest.Mock;
+const mockRequestRide = requestRide as unknown as jest.Mock;
 
 jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
@@ -54,6 +71,7 @@ describe('VehicleSelectScreen fare estimation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseLocalSearchParams.mockReturnValue(NEAR);
+    mockRequestRide.mockResolvedValue({ id: 'trip-1' });
     mockEstimateFare.mockImplementation(async (p: { vehicle_type: string; dest_lng: number }) => {
       const isFar = p.dest_lng === -59.0;
       if (p.vehicle_type === 'moto') {
@@ -98,8 +116,23 @@ describe('VehicleSelectScreen fare estimation', () => {
     await findByText('$4.200');
 
     expect(await findByText('CONTINUAR $4.200')).toBeTruthy();
+    expect(queryByText('CONTINUO')).toBeNull();
     expect(queryByText('$3.500')).toBeNull();
     expect(queryByText('$2.100')).toBeNull();
+  });
+
+  test('shows Hacia destination without mystery markers', async () => {
+    const { findByText, getAllByText, queryByText } = await render(<VehicleSelectScreen />);
+    expect(await findByText('Hacia')).toBeTruthy();
+    expect(getAllByText('Destino B').length).toBeGreaterThan(0);
+    expect(queryByText('CONTINUO')).toBeNull();
+  });
+
+  test('shows Efectivo and Transferencia payment options', async () => {
+    const { findByText } = await render(<VehicleSelectScreen />);
+    expect(await findByText('Forma de pago')).toBeTruthy();
+    expect(await findByText('Efectivo')).toBeTruthy();
+    expect(await findByText('Transferencia')).toBeTruthy();
   });
 
   test('shows a different fare for a farther destination', async () => {
@@ -128,7 +161,7 @@ describe('VehicleSelectScreen fare estimation', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  test('CONTINUAR navigates to ConfirmPayment with estimate params', async () => {
+  test('CONTINUAR requests ride with selected payment and goes to ConnectingDriver', async () => {
     const { findByText, getByText } = await render(<VehicleSelectScreen />);
     await findByText('$4.200');
 
@@ -136,17 +169,43 @@ describe('VehicleSelectScreen fare estimation', () => {
       fireEvent.press(getByText('CONTINUAR $4.200'));
     });
 
-    expect(mockNavigate).toHaveBeenCalledWith('ConfirmPayment', {
-      pickup: 'Origen A',
-      destination: 'Destino B',
-      pickupLat: '-34.5',
-      pickupLng: '-58.4',
-      destLat: '-34.6',
-      destLng: '-58.5',
-      vehicleType: 'auto',
-      fare: '4200',
-      distanceKm: '4.2',
-      durationMin: '15',
+    expect(mockRequestRide).toHaveBeenCalledWith({
+      origin_lat: -34.5,
+      origin_lng: -58.4,
+      dest_lat: -34.6,
+      dest_lng: -58.5,
+      origin_address: 'Origen A',
+      dest_address: 'Destino B',
+      vehicle_type: 'auto',
+      distance_km: 4.2,
+      duration_minutes: 15,
+      payment_method: 'cash',
     });
+    expect(mockReplace).toHaveBeenCalledWith('ConnectingDriver', { tripId: 'trip-1' });
+    expect(mockNavigate).not.toHaveBeenCalledWith('ConfirmPayment', expect.anything());
+  });
+
+  test('shows blocked card when suspended for cancellations', async () => {
+    mockRequestRide.mockRejectedValueOnce({
+      response: {
+        data: {
+          error: {
+            code: 'PASSENGER_SUSPENDED',
+            message: 'Estás suspendido temporalmente por cancelaciones.',
+          },
+        },
+      },
+    });
+    const { findByText, getByText } = await render(<VehicleSelectScreen />);
+    await findByText('$4.200');
+
+    await act(async () => {
+      fireEvent.press(getByText('CONTINUAR $4.200'));
+    });
+
+    expect(await findByText('Cuenta suspendida temporalmente')).toBeTruthy();
+    expect(await findByText(/suspendido temporalmente/i)).toBeTruthy();
+    expect(await findByText('Contactar soporte')).toBeTruthy();
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 });

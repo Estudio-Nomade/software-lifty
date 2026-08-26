@@ -9,8 +9,15 @@
  * stdout without a TTY. Both break QR codes: a per-line prefix destroys the QR
  * quiet zone, and a missing TTY flips Expo into non-interactive mode (no QR,
  * `localhost` URL). So we orchestrate the three dev servers here and print the
- * two QR codes ourselves from the LAN URL (Expo's Metro always binds to all
- * interfaces, so `exp://<lan-ip>:<port>` is reachable from Expo Go).
+ * two QR codes ourselves from the LAN URL.
+ *
+ * Expo must advertise the same LAN host the phone will hit. We force:
+ *   - `--lan` on every `expo start`
+ *   - `REACT_NATIVE_PACKAGER_HOSTNAME=<lan-ip>` so the manifest's `hostUri`,
+ *     `debuggerHost` and bundle URLs never fall back to 127.0.0.1
+ *
+ * We only print QRs after Metro answers `/status`, and we pre-warm the Android
+ * bundle so the first Expo Go scan does not time out on a cold transform.
  *
  * Idempotent: any leftover process still holding one of our three ports is
  * terminated before starting, so `bun run dev` can be re-run freely. Cleanup
@@ -26,6 +33,8 @@ const BACKEND_PORT = 3001;
 const DRIVER_PORT = 8081;
 const PASSENGER_PORT = 8083;
 const PORTS = [BACKEND_PORT, DRIVER_PORT, PASSENGER_PORT];
+const METRO_READY_TIMEOUT_MS = 90_000;
+const METRO_POLL_MS = 400;
 
 const C = {
   reset: '\x1b[0m',
@@ -143,13 +152,23 @@ async function pipeStream(
   }
 }
 
-function spawn(cmd: string[], cwd: string, label: string, color: string): Proc {
+function spawn(
+  cmd: string[],
+  cwd: string,
+  label: string,
+  color: string,
+  env: Record<string, string> = {},
+): Proc {
   const proc = Bun.spawn({
     cmd,
     cwd,
     stdout: 'pipe',
     stderr: 'pipe',
     stdin: 'ignore',
+    env: {
+      ...process.env,
+      ...env,
+    },
   });
   children.push(proc);
   pipeStream(proc.stdout, label, color);
@@ -162,14 +181,65 @@ function spawn(cmd: string[], cwd: string, label: string, color: string): Proc {
   return proc;
 }
 
-async function printAppQr(label: string, color: string, name: string, port: number): Promise<void> {
-  const url = `exp://${lanIp()}:${port}`;
+async function waitForMetro(port: number, label: string, host: string): Promise<boolean> {
+  const url = `http://${host}:${port}/status`;
+  const deadline = Date.now() + METRO_READY_TIMEOUT_MS;
+  process.stdout.write(`${C.dim}${pad(label)}${C.reset} waiting for Metro on ${host}:${port}...\n`);
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
+      const body = await res.text();
+      if (res.ok && body.includes('packager-status:running')) {
+        process.stdout.write(
+          `${C.green}${pad(label)}${C.reset} Metro ready (http://${host}:${port})\n`,
+        );
+        return true;
+      }
+    } catch {
+      // not up yet
+    }
+    await Bun.sleep(METRO_POLL_MS);
+  }
+  process.stdout.write(
+    `${C.red}${pad(label)}${C.reset} Metro not ready after ${METRO_READY_TIMEOUT_MS / 1000}s\n`,
+  );
+  return false;
+}
+
+/** Pre-warm the Android Hermes bundle so Expo Go's first scan does not time out. */
+async function prewarmBundle(port: number, label: string, host: string): Promise<void> {
+  const url = `http://${host}:${port}/index.bundle?platform=android&dev=true&minify=false&hot=false&lazy=true&transform.engine=hermes&transform.bytecode=1&transform.routerRoot=app&unstable_transformProfile=hermes-stable`;
+  process.stdout.write(`${C.dim}${pad(label)}${C.reset} pre-warming Android bundle...\n`);
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(120_000) });
+    // Drain body so Metro finishes the transform even if the entry path 404s
+    // (Expo resolves the real entry via the manifest; a warm cache still helps).
+    await res.arrayBuffer().catch(() => null);
+    process.stdout.write(
+      `${C.green}${pad(label)}${C.reset} bundle warm-up done (HTTP ${res.status})\n`,
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stdout.write(`${C.yellow}${pad(label)}${C.reset} bundle warm-up skipped (${msg})\n`);
+  }
+}
+
+async function printAppQr(
+  label: string,
+  color: string,
+  name: string,
+  port: number,
+  host: string,
+): Promise<void> {
+  // exp:// is what Expo Go expects when scanning a LAN packager.
+  const url = `exp://${host}:${port}`;
   const qr = await qrString(url);
   process.stdout.write(
     [
       '',
       `${C.bold}${color}${pad(label)}${C.reset} ${name} — escanea con Expo Go`,
       `  ${color}${url}${C.reset}`,
+      `  ${C.dim}mismo Wi-Fi · Metro en 0.0.0.0 · hostUri=${host}:${port}${C.reset}`,
       qr,
       '',
     ].join('\n'),
@@ -204,7 +274,17 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 async function main(): Promise<void> {
+  const host = lanIp();
   process.stdout.write(`${C.bold}${C.cyan}Lifty dev${C.reset} — backend + conductor + pasajeros\n`);
+  process.stdout.write(`  ${C.dim}LAN host: ${host}${C.reset}\n`);
+
+  if (host === 'localhost') {
+    process.stdout.write(
+      `${C.yellow}⚠ No se detectó IP LAN. Expo Go en el teléfono no podrá conectar.${C.reset}
+  Conectá Wi-Fi o usá túnel: cd apps/mobile && bunx expo start --tunnel --port 8081
+`,
+    );
+  }
 
   // Idempotency: free our ports from any previous run.
   await Promise.all([
@@ -219,25 +299,57 @@ async function main(): Promise<void> {
   process.stdout.write(
     `\n  ${C.yellow}[backend]  ${C.reset}http://localhost:${BACKEND_PORT}  (API + Swagger /docs)\n`,
   );
-
-  await printAppQr('[conductor]', C.cyan, 'Conductor (driver)', DRIVER_PORT);
-  await printAppQr('[pasajeros]', C.magenta, 'Pasajero (passenger)', PASSENGER_PORT);
-
   process.stdout.write(`${C.dim}── logs ──${C.reset}\n\n`);
+
+  const expoEnv = {
+    REACT_NATIVE_PACKAGER_HOSTNAME: host,
+    // Ensure Metro is reachable from other devices on the LAN.
+    EXPO_DEVTOOLS_LISTEN_ADDRESS: '0.0.0.0',
+  };
 
   // Backend first (its predev brings up docker Postgres/Redis), Expo apps in parallel.
   spawn(['bun', 'run', 'dev'], join(ROOT, 'apps', 'backend'), '[backend]', C.yellow);
   spawn(
-    ['node_modules/.bin/expo', 'start', '--port', String(DRIVER_PORT)],
+    ['node_modules/.bin/expo', 'start', '--lan', '--port', String(DRIVER_PORT)],
     join(ROOT, 'apps', 'mobile'),
     '[conductor]',
     C.cyan,
+    expoEnv,
   );
   spawn(
-    ['node_modules/.bin/expo', 'start', '--port', String(PASSENGER_PORT)],
+    ['node_modules/.bin/expo', 'start', '--lan', '--port', String(PASSENGER_PORT)],
     join(ROOT, 'apps', 'mobile-passengers'),
     '[pasajeros]',
     C.magenta,
+    expoEnv,
+  );
+
+  // Wait for both Metros, warm bundles, THEN print QRs (so a scan never races a cold start).
+  const [driverReady, passengerReady] = await Promise.all([
+    waitForMetro(DRIVER_PORT, '[conductor]', host),
+    waitForMetro(PASSENGER_PORT, '[pasajeros]', host),
+  ]);
+
+  await Promise.all([
+    driverReady ? prewarmBundle(DRIVER_PORT, '[conductor]', host) : Promise.resolve(),
+    passengerReady ? prewarmBundle(PASSENGER_PORT, '[pasajeros]', host) : Promise.resolve(),
+  ]);
+
+  if (driverReady) {
+    await printAppQr('[conductor]', C.cyan, 'Conductor (driver)', DRIVER_PORT, host);
+  }
+  if (passengerReady) {
+    await printAppQr('[pasajeros]', C.magenta, 'Pasajero (passenger)', PASSENGER_PORT, host);
+  }
+
+  process.stdout.write(
+    [
+      `${C.dim}Si Expo Go no conecta:${C.reset}`,
+      `  1. Mismo Wi-Fi que esta máquina (${host})`,
+      '  2. Cache limpia:  bun run dev:driver:clear   /   bun run dev:passenger:clear',
+      '  3. Túnel (otra red):  cd apps/mobile && bunx expo start --tunnel --port 8081',
+      '',
+    ].join('\n'),
   );
 
   // Keep the orchestrator alive until a signal triggers shutdown.

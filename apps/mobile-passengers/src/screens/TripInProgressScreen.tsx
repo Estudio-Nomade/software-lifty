@@ -15,7 +15,7 @@ import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useDriverRoute } from '../hooks/useDriverRoute';
-import { useLocation } from '../hooks/useLocation';
+import { requestFreshPosition, toMapCoordinate, useLocation } from '../hooks/useLocation';
 import { subscribeToDriverLocation, subscribeToPassengerChannel } from '../lib/realtime';
 import { useAuthStore } from '../store/authStore';
 import { useRideStore } from '../store/rideStore';
@@ -129,7 +129,9 @@ export function TripInProgressScreen() {
   const driverCoord: [number, number] | null =
     driverLat != null && driverLng != null ? [driverLng, driverLat] : null;
 
-  const passengerCoord: [number, number] | null = current ? [current.lng, current.lat] : null;
+  const passengerCoord: [number, number] | null = current
+    ? toMapCoordinate(current.lat, current.lng)
+    : null;
 
   const routeTargetLat =
     trip?.status === 'in_trip'
@@ -211,7 +213,7 @@ export function TripInProgressScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.mapArea}>
         <PassengerMap
-          centerCoordinate={driverCoord ?? passengerCoord ?? [-58.3816, -34.6037]}
+          centerCoordinate={driverCoord ?? passengerCoord ?? [0, 0]}
           followUserLocation={false}
           userLocation={passengerCoord}
           markers={markers}
@@ -223,7 +225,9 @@ export function TripInProgressScreen() {
 
       <TouchableOpacity
         style={styles.recenterButton}
-        onPress={() => setRecenterKey((k) => k + 1)}
+        onPress={() => {
+          void requestFreshPosition().finally(() => setRecenterKey((k) => k + 1));
+        }}
         accessibilityLabel="Centrar mi ubicación"
       >
         <Ionicons name="locate-outline" size={22} color={theme.colors.deepBlue} />

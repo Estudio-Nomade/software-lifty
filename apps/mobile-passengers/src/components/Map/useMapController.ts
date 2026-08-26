@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MarkerData } from './mapHtml';
 
 interface UseMapControllerOptions {
+  /** [lng, lat] — reserved for future camera init; pin uses userLocation. */
   centerCoordinate: [number, number];
   zoom: number;
   markers: MarkerData[];
   routeLine?: Array<[number, number]>;
+  /** [lng, lat] or null — host GPS (web + native). */
   userLocation?: [number, number] | null;
   followUserLocation: boolean;
   recenterKey?: number;
@@ -14,22 +16,21 @@ interface UseMapControllerOptions {
   postMessage: (message: unknown) => void;
 }
 
+function isRealFix(lng: number | null | undefined, lat: number | null | undefined): boolean {
+  if (lng == null || lat == null) return false;
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return false;
+  if (lng === 0 && lat === 0) return false;
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+}
+
 /**
- * Shared controller for the native (WebView) and web (iframe) map implementations.
- *
- * Both transports talk to the same self-contained MapLibre HTML document via
- * `postMessage`, so the message-sending effects and the incoming-message parsing
- * are identical and live here to avoid drift between `PassengerMap.tsx` and
- * `PassengerMap.web.tsx`. Each implementation only owns its transport (the
- * WebView/iframe element) and the loading/error UI.
+ * Thin bridge: push markers/route/userLocation/recenter to the MapLibre document.
+ * Host owns GPS; mapHtml only draws the pin from userLocation messages.
  */
 export function useMapController({
-  centerCoordinate,
-  zoom,
   markers,
   routeLine,
   userLocation,
-  followUserLocation,
   recenterKey,
   onError,
   isLoaded,
@@ -38,17 +39,25 @@ export function useMapController({
   const userLocationRef = useRef(userLocation);
   userLocationRef.current = userLocation;
 
-  const initCenterRef = useRef(centerCoordinate);
-  initCenterRef.current = centerCoordinate;
-
   const [userManuallyMoved, setUserManuallyMoved] = useState(false);
+  const lastRecenterKey = useRef<number | null>(null);
   const programmaticMoveRef = useRef(false);
+
+  const userLng = userLocation?.[0] ?? null;
+  const userLat = userLocation?.[1] ?? null;
+
+  useEffect(() => {
+    if (!isLoaded) {
+      lastRecenterKey.current = null;
+    }
+  }, [isLoaded]);
 
   useEffect(() => {
     if (!isLoaded) return;
+    if (!isRealFix(userLng, userLat)) return;
     programmaticMoveRef.current = true;
-    postMessage({ type: 'init', center: initCenterRef.current, zoom });
-  }, [isLoaded, postMessage, zoom]);
+    postMessage({ type: 'userLocation', lat: userLat, lng: userLng });
+  }, [userLat, userLng, isLoaded, postMessage]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -63,27 +72,16 @@ export function useMapController({
   useEffect(() => {
     if (!isLoaded || !routeLine || routeLine.length < 2) return;
     if (userManuallyMoved) return;
-
     programmaticMoveRef.current = true;
     postMessage({ type: 'fitRoute', coordinates: routeLine });
   }, [isLoaded, routeLine, userManuallyMoved, postMessage]);
 
   useEffect(() => {
     if (!isLoaded) return;
-    postMessage({ type: 'followUser', enabled: followUserLocation });
-  }, [followUserLocation, isLoaded, postMessage]);
+    if (recenterKey == null) return;
+    if (lastRecenterKey.current === recenterKey) return;
+    lastRecenterKey.current = recenterKey;
 
-  useEffect(() => {
-    if (!isLoaded) return;
-    postMessage({
-      type: 'userLocation',
-      lat: userLocation?.[1] ?? null,
-      lng: userLocation?.[0] ?? null,
-    });
-  }, [userLocation, isLoaded, postMessage]);
-
-  useEffect(() => {
-    if (!isLoaded || recenterKey == null) return;
     const loc = userLocationRef.current;
     setUserManuallyMoved(false);
     programmaticMoveRef.current = true;
@@ -108,7 +106,9 @@ export function useMapController({
         } else if (data.type === 'error') {
           onError?.();
         }
-      } catch {}
+      } catch {
+        // ignore
+      }
     },
     [onError],
   );

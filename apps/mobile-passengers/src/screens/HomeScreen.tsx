@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -22,11 +21,28 @@ import { HowItWorks } from '../components/HowItWorks';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { QuickChips } from '../components/QuickChips';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { useLocation } from '../hooks/useLocation';
+import {
+  TARGET_ACCURACY_M,
+  requestFreshPosition,
+  toMapCoordinate,
+  useLocation,
+} from '../hooks/useLocation';
 import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
-import { useLocationStore } from '../store/locationStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
+import { resolveAddressLabel } from '../utils/resolveAddressLabel';
+
+/** Rough meters between two WGS84 points (good enough for GPS refine). */
+function metersBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const R = 6371000;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
 
 export function HomeScreen() {
   const { navigate, replace } = useAppNavigation();
@@ -68,6 +84,9 @@ export function HomeScreen() {
   const [pickupPicked, setPickupPicked] = useState(false);
   const [destPicked, setDestPicked] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  /** True while "Desde" still tracks live GPS (not user-edited). */
+  const [pickupFromGps, setPickupFromGps] = useState(false);
+  const lastGpsLabel = useRef<{ lat: number; lng: number; acc: number } | null>(null);
 
   const pickupSuggestions = usePlaceAutocomplete(
     focusedField === 'pickup' && !pickupPicked ? pickupAddress : '',
@@ -77,55 +96,60 @@ export function HomeScreen() {
   );
   const visibleSuggestions = focusedField === 'pickup' ? pickupSuggestions : destSuggestions;
 
+  // "Desde" autofill: wait for best GPS (not first coarse WiFi), then label.
   useEffect(() => {
     if (!searchExpanded) return;
+    if (pickupPicked || pickupAddress.trim()) return;
     let cancelled = false;
     (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') return;
-        const pos = await Location.getCurrentPositionAsync({});
-        if (cancelled) return;
-        // reverseGeocodeAsync throws on web (GeocoderError) — fall back to raw coords.
-        let name = '';
-        try {
-          const [addr] = await Location.reverseGeocodeAsync({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-          });
-          if (cancelled) return;
-          name =
-            addr?.street && addr?.streetNumber
-              ? `${addr.street} ${addr.streetNumber}`
-              : (addr?.name ?? '');
-        } catch {
-          name = '';
-        }
-        setPickupAddress(
-          name || `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`,
-        );
-        setPickupCoord({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setPickupPicked(true);
-      } catch {
-        // expo-location throws on web when the context is insecure or the
-        // browser blocks geolocation. Fall back to the already-tracked
-        // location so the user still gets a pickup point.
-        if (cancelled) return;
-        const tracked = useLocationStore.getState().current;
-        if (tracked) {
-          setPickupAddress(`${tracked.lat.toFixed(4)}, ${tracked.lng.toFixed(4)}`);
-          setPickupCoord({ lat: tracked.lat, lng: tracked.lng });
-          setPickupPicked(true);
-        }
-      }
+      const fix = await requestFreshPosition();
+      if (cancelled || !fix) return;
+
+      const acc = fix.accuracy ?? Number.POSITIVE_INFINITY;
+      setPickupCoord({ lat: fix.lat, lng: fix.lng });
+      // Coarse WiFi/IP must not freeze a wrong street name.
+      const label = await resolveAddressLabel(fix.lat, fix.lng, { accuracy: acc });
+      if (cancelled) return;
+      setPickupAddress(label);
+      setPickupPicked(true);
+      setPickupFromGps(true);
+      lastGpsLabel.current = { lat: fix.lat, lng: fix.lng, acc };
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally omit `current` — requestFreshPosition owns the wait.
+  }, [searchExpanded, pickupPicked, pickupAddress]);
+
+  // Refine "Desde" when GPS warm-up yields a much better / moved fix.
+  useEffect(() => {
+    if (!searchExpanded || !pickupFromGps || !current) return;
+    const prev = lastGpsLabel.current;
+    if (!prev) return;
+    const acc = current.accuracy ?? Number.POSITIVE_INFINITY;
+    const moved = metersBetween(prev, current);
+    const muchBetter = acc <= TARGET_ACCURACY_M && acc < prev.acc * 0.5;
+    const jumped = moved > 45 && acc <= Math.max(prev.acc, 80);
+    if (!muchBetter && !jumped) return;
+
+    let cancelled = false;
+    (async () => {
+      const label = await resolveAddressLabel(current.lat, current.lng, { accuracy: acc });
+      if (cancelled) return;
+      setPickupCoord({ lat: current.lat, lng: current.lng });
+      setPickupAddress(label);
+      lastGpsLabel.current = { lat: current.lat, lng: current.lng, acc };
     })();
     return () => {
       cancelled = true;
     };
-  }, [searchExpanded]);
+  }, [current?.lat, current?.lng, current?.accuracy, searchExpanded, pickupFromGps]);
 
   const handleLocate = () => {
-    setRecenterKey((k) => k + 1);
+    void requestFreshPosition().finally(() => {
+      setRecenterKey((k) => k + 1);
+    });
   };
 
   const handleOpenSearch = () => {
@@ -140,6 +164,8 @@ export function HomeScreen() {
     setDestCoord(null);
     setPickupPicked(false);
     setDestPicked(false);
+    setPickupFromGps(false);
+    lastGpsLabel.current = null;
     setFocusedField('dest');
     setSearchError(null);
   };
@@ -157,6 +183,7 @@ export function HomeScreen() {
       setPickupAddress(suggestion.description);
       setPickupCoord({ lat: suggestion.lat, lng: suggestion.lng });
       setPickupPicked(true);
+      setPickupFromGps(false);
     } else {
       setDestAddress(suggestion.description);
       setDestCoord({ lat: suggestion.lat, lng: suggestion.lng });
@@ -170,6 +197,7 @@ export function HomeScreen() {
     setPickupAddress('');
     setPickupCoord(null);
     setPickupPicked(false);
+    setPickupFromGps(false);
     setFocusedField('pickup');
   };
 
@@ -258,6 +286,7 @@ export function HomeScreen() {
                       setPickupAddress(text);
                       setPickupCoord(null);
                       setPickupPicked(false);
+                      setPickupFromGps(false);
                       setFocusedField('pickup');
                       setSearchError(null);
                     }}
@@ -365,8 +394,9 @@ export function HomeScreen() {
 
             <View style={styles.mapArea}>
               <PassengerMap
-                centerCoordinate={current ? [current.lng, current.lat] : [-58.3816, -34.6037]}
-                userLocation={current ? [current.lng, current.lat] : null}
+                // [0,0] ignored until real GPS. Never pass a city default (BA bug).
+                centerCoordinate={current ? toMapCoordinate(current.lat, current.lng) : [0, 0]}
+                userLocation={current ? toMapCoordinate(current.lat, current.lng) : null}
                 followUserLocation
                 recenterKey={recenterKey}
                 style={styles.mapFill}

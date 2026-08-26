@@ -10,10 +10,12 @@ export interface MarkerData {
 }
 
 export interface PassengerMapProps {
+  /** [lng, lat] */
   centerCoordinate: [number, number];
   zoom?: number;
   markers?: MarkerData[];
   routeLine?: Array<[number, number]>;
+  /** [lng, lat] or null */
   userLocation?: [number, number] | null;
   followUserLocation?: boolean;
   recenterKey?: number;
@@ -91,13 +93,6 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     font-size: 28px;
     color: ${colors.primary};
   }
-  .pulsing-circle {
-    width: 18px; height: 18px;
-    background: ${primaryRgba};
-    border: 2px solid ${colors.primary};
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-  }
   .destination-pin {
     position: relative;
     width: 32px; height: 32px;
@@ -123,18 +118,15 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     font-size: 18px;
     color: ${colors.primary};
   }
-  @keyframes pulse {
-    0% { transform: scale(0.5); opacity: 0.8; }
-    100% { transform: scale(2.5); opacity: 0; }
-  }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <script>
-  var DEFAULT_CENTER = [0, 0];
   var DEFAULT_ZOOM = 15;
-
+  // World overview until a real GPS fix arrives — never a city hardcode.
+  var WAITING_CENTER = [0, 0];
+  var WAITING_ZOOM = 2;
   function postToHost(msg) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       window.ReactNativeWebView.postMessage(msg);
@@ -143,32 +135,23 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     }
   }
 
-  // Guard against a failed CDN load: if the MapLibre script never ran, the
-  // map object below would throw a ReferenceError before any error listener is
-  // registered, leaving the host stuck on a blank map with no feedback.
   if (typeof maplibregl === 'undefined') {
     postToHost(JSON.stringify({ type: 'error', message: 'MapLibre GL failed to load from CDN' }));
     throw new Error('MapLibre GL is not available');
   }
 
-  // Guard against a synchronous init failure (e.g. WebGL unavailable): the
-  // constructor throws before the async map.on('error') listener below is
-  // registered, so surface it to the host instead of leaving a blank map.
   var map;
   try {
     map = new maplibregl.Map({
       container: 'map',
       style: 'https://tiles.openfreemap.org/styles/liberty',
-      center: DEFAULT_CENTER,
-      zoom: DEFAULT_ZOOM,
+      center: WAITING_CENTER,
+      zoom: WAITING_ZOOM,
       attributionControl: true,
     });
-
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
   } catch (e) {
-    postToHost(
-      JSON.stringify({ type: 'error', message: (e && e.message) || 'Failed to initialize the map' }),
-    );
+    postToHost(JSON.stringify({ type: 'error', message: (e && e.message) || 'Failed to initialize the map' }));
     throw e;
   }
 
@@ -176,9 +159,12 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
   var markers = [];
   var userMarker = null;
   var pendingRoute = null;
-  var followRequested = false;
-  var hasPerformedInitialCenter = false;
-  var userManuallyMoved = false;
+  var lastUserLat = null;
+  var lastUserLng = null;
+  var hasCenteredOnUser = false;
+  // Architecture: host owns GPS (useLocation → locationStore).
+  // This document only draws the pin from host userLocation / recenter messages.
+  // Never call navigator.geolocation here (dual sources caused wrong streets).
 
   var USER_ICONS = {
     car: 'car-outline',
@@ -187,8 +173,40 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     person: 'person-outline',
   };
 
-  function setView(center, zoom) {
-    map.jumpTo({ center: center, zoom: zoom });
+  function isValidLatLng(lat, lng) {
+    return (
+      typeof lat === 'number' && typeof lng === 'number' &&
+      isFinite(lat) && isFinite(lng) &&
+      Math.abs(lat) <= 90 && Math.abs(lng) <= 180 &&
+      !(lat === 0 && lng === 0)
+    );
+  }
+
+  /** Pin + optional camera. MapLibre wants setLngLat([lng, lat]). */
+  function setUserFix(lat, lng, opts) {
+    if (!isValidLatLng(lat, lng)) return;
+    lastUserLat = lat;
+    lastUserLng = lng;
+
+    if (!userMarker) {
+      var el = document.createElement('div');
+      el.className = 'user-marker';
+      el.innerHTML = '<ion-icon name="person-outline"></ion-icon>';
+      userMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+    } else {
+      userMarker.setLngLat([lng, lat]);
+    }
+
+    var force = opts && opts.force;
+    var fly = opts && opts.fly;
+    if (force || !hasCenteredOnUser) {
+      if (fly) {
+        map.flyTo({ center: [lng, lat], zoom: DEFAULT_ZOOM, duration: 600 });
+      } else {
+        map.jumpTo({ center: [lng, lat], zoom: DEFAULT_ZOOM });
+      }
+      hasCenteredOnUser = true;
+    }
   }
 
   function updateMarkers(newMarkers) {
@@ -240,7 +258,6 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
       properties: {},
       geometry: { type: 'LineString', coordinates: coordinates || [] },
     };
-
     var existing = map.getSource(ROUTE_SOURCE_ID);
     if (existing) {
       existing.setData(geojson);
@@ -269,30 +286,14 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     applyRoute(coordinates);
   }
 
-  function updateUserLocation(lat, lng) {
-    if (lat == null || lng == null) {
-      if (userMarker) {
-        userMarker.remove();
-        userMarker = null;
-      }
-      return;
-    }
-
-    if (!userMarker) {
-      var el = document.createElement('div');
-      el.className = 'user-marker';
-      el.innerHTML = '<ion-icon name="person-outline"></ion-icon>';
-      userMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
-    } else {
-      userMarker.setLngLat([lng, lat]);
-    }
-  }
-
   map.on('load', function () {
     mapLoaded = true;
     if (pendingRoute) {
       applyRoute(pendingRoute);
       pendingRoute = null;
+    }
+    if (lastUserLat != null && lastUserLng != null) {
+      setUserFix(lastUserLat, lastUserLng, { force: true });
     }
     postToHost(JSON.stringify({ type: 'ready' }));
   });
@@ -313,18 +314,18 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     }));
   });
 
+  function parseMsg(data) {
+    if (data == null) return null;
+    if (typeof data === 'object') return data;
+    if (typeof data !== 'string') return null;
+    try { return JSON.parse(data); } catch (e) { return null; }
+  }
+
   window.addEventListener('message', function (event) {
-    var msg;
-    try {
-      msg = JSON.parse(event.data);
-    } catch (e) {
-      return;
-    }
+    var msg = parseMsg(event.data);
+    if (!msg || !msg.type) return;
 
     switch (msg.type) {
-      case 'init':
-        setView(msg.center, msg.zoom || DEFAULT_ZOOM);
-        break;
       case 'markers':
         updateMarkers(msg.markers || []);
         break;
@@ -338,35 +339,24 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
           map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 600 });
         }
         break;
-      case 'followUser':
-        followRequested = !!msg.enabled;
-        if (followRequested) {
-          hasPerformedInitialCenter = false;
-        }
-        break;
       case 'userLocation':
-        if (followRequested && msg.lat != null && msg.lng != null) {
-          updateUserLocation(msg.lat, msg.lng);
-          if (!hasPerformedInitialCenter) {
-            setView([msg.lng, msg.lat], map.getZoom());
-            hasPerformedInitialCenter = true;
-          }
+        // Host GPS → pin (web + native).
+        if (msg.lat != null && msg.lng != null) {
+          setUserFix(Number(msg.lat), Number(msg.lng), null);
         }
         break;
       case 'recenter':
-        if (msg.lat != null && msg.lng != null) {
-          userManuallyMoved = false;
-          map.flyTo({ center: [msg.lng, msg.lat], zoom: 15, duration: 600 });
+        if (msg.lat != null && msg.lng != null && isValidLatLng(Number(msg.lat), Number(msg.lng))) {
+          setUserFix(Number(msg.lat), Number(msg.lng), { force: true, fly: true });
+        } else if (lastUserLat != null && lastUserLng != null) {
+          setUserFix(lastUserLat, lastUserLng, { force: true, fly: true });
         }
         break;
     }
   });
 
   window.addEventListener('error', function (e) {
-    postToHost(JSON.stringify({
-      type: 'error',
-      message: e.message || 'Unknown error',
-    }));
+    postToHost(JSON.stringify({ type: 'error', message: e.message || 'Unknown error' }));
   });
 </script>
 </body>

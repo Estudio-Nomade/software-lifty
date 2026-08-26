@@ -1,36 +1,25 @@
 import type React from 'react';
-import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { theme } from '../../theme';
 import { MapErrorFallback } from './MapErrorFallback';
 import { DEFAULT_ZOOM, type PassengerMapProps, generateMapHtml } from './mapHtml';
 import { useMapController } from './useMapController';
 
-interface IframeWindow {
-  postMessage: (message: string, targetOrigin: string) => void;
-}
+/**
+ * Web MapLibre transport.
+ *
+ * GPS lives on the host (useLocation → locationStore). This iframe only renders
+ * the map and draws the pin from host `userLocation` postMessages.
+ */
 
-interface IframeElement {
-  contentWindow?: IframeWindow | null;
-}
+declare const document: any;
+declare const window: any;
+declare const URL: {
+  createObjectURL: (obj: unknown) => string;
+  revokeObjectURL: (url: string) => void;
+};
 
-interface MessageEventLike {
-  data?: unknown;
-  source?: unknown;
-}
-
-interface MessageListenerTarget {
-  addEventListener: (type: string, listener: (event: MessageEventLike) => void) => void;
-  removeEventListener: (type: string, listener: (event: MessageEventLike) => void) => void;
-}
-
-interface BrowserGlobals {
-  Blob?: new (parts?: unknown[], options?: { type?: string }) => unknown;
-  URL?: { createObjectURL: (obj: unknown) => string; revokeObjectURL: (url: string) => void };
-}
-
-const win = globalThis as unknown as MessageListenerTarget;
-const browser = globalThis as unknown as BrowserGlobals;
 const LOAD_TIMEOUT_MS = 15_000;
 
 export const PassengerMap: React.FC<PassengerMapProps> = ({
@@ -53,21 +42,13 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     [],
   );
 
-  // Render the MapLibre document from a Blob URL (same approach as the driver's
-  // `MapView.web.tsx`) instead of `srcDoc`. A `srcDoc` iframe runs in a
-  // sandboxed `about:srcdoc` context where the external MapLibre CDN scripts and
-  // styles are unreliable, so the map can end up blank/broken. A Blob URL loads
-  // the document as a real resource with a resolvable origin.
-  const blobUrl = useMemo(() => {
-    if (!browser.Blob || !browser.URL) return null;
-    const blob = new browser.Blob([mapHtml], { type: 'text/html' });
-    return browser.URL.createObjectURL(blob);
-  }, [mapHtml]);
-
-  const iframeRef = useRef<IframeElement | null>(null);
+  const containerRef = useRef<any>(null);
+  const iframeRef = useRef<any>(null);
+  const blobUrlRef = useRef<string | null>(null);
+  const pendingRef = useRef<string[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const retryKey = useRef(0);
+  const [mountKey, setMountKey] = useState(0);
 
   const handleError = useCallback(() => {
     setHasError(true);
@@ -77,12 +58,21 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
   const handleRetry = useCallback(() => {
     setHasError(false);
     setIsLoaded(false);
-    retryKey.current += 1;
+    setMountKey((k) => k + 1);
   }, []);
 
-  const postMessage = useCallback((message: unknown) => {
-    iframeRef.current?.contentWindow?.postMessage(JSON.stringify(message), '*');
-  }, []);
+  const postMessage = useCallback(
+    (message: unknown) => {
+      const raw = JSON.stringify(message);
+      const win = iframeRef.current?.contentWindow;
+      if (!win || !isLoaded) {
+        pendingRef.current.push(raw);
+        return;
+      }
+      win.postMessage(raw, '*');
+    },
+    [isLoaded],
+  );
 
   const { handleRawMessage } = useMapController({
     centerCoordinate,
@@ -97,56 +87,84 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     postMessage,
   });
 
-  // Safety net: if the iframe never fires `onload` (e.g. a CDN script hangs),
-  // stop showing the loading overlay instead of spinning forever.
   useEffect(() => {
-    if (isLoaded) return;
-    const timeout = setTimeout(() => setIsLoaded(true), LOAD_TIMEOUT_MS);
-    return () => clearTimeout(timeout);
-  }, [isLoaded]);
-
-  // Revoke the Blob URL once the component unmounts. The URL stays valid across
-  // iframe remounts (the retry `key` change reloads the same URL), so it is only
-  // released here.
-  useEffect(() => {
-    const url = blobUrl;
-    return () => {
-      if (url) browser.URL?.revokeObjectURL(url);
-    };
-  }, [blobUrl]);
-
-  useEffect(() => {
-    const handleMessage = (event: MessageEventLike) => {
+    const onMessage = (event: any) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
-      handleRawMessage(String(event.data));
+      const raw = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+      handleRawMessage(raw);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [handleRawMessage]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof document === 'undefined') return;
+
+    pendingRef.current = [];
+    setIsLoaded(false);
+
+    while (container.firstChild) container.removeChild(container.firstChild);
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
+
+    const blob = new Blob([mapHtml], { type: 'text/html' } as any);
+    const url = URL.createObjectURL(blob);
+    blobUrlRef.current = url;
+
+    const iframe: any = document.createElement('iframe');
+    iframe.src = url;
+    iframe.title = 'map';
+    // No geolocation in iframe — host owns GPS.
+    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
+    iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:transparent';
+
+    const flush = () => {
+      const win = iframe.contentWindow;
+      if (!win) return;
+      while (pendingRef.current.length) {
+        win.postMessage(pendingRef.current.shift(), '*');
+      }
     };
 
-    win.addEventListener('message', handleMessage);
-    return () => win.removeEventListener('message', handleMessage);
-  }, [handleRawMessage]);
+    let loadTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      setIsLoaded(true);
+      flush();
+    }, LOAD_TIMEOUT_MS);
+
+    iframe.onload = () => {
+      if (loadTimer) {
+        clearTimeout(loadTimer);
+        loadTimer = null;
+      }
+      setIsLoaded(true);
+      setTimeout(flush, 0);
+    };
+    iframe.onerror = () => handleError();
+
+    container.appendChild(iframe);
+    iframeRef.current = iframe;
+
+    return () => {
+      if (loadTimer) clearTimeout(loadTimer);
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+      iframeRef.current = null;
+      while (container.firstChild) container.removeChild(container.firstChild);
+    };
+  }, [mapHtml, mountKey, handleError]);
 
   if (hasError) {
     return <MapErrorFallback onRetry={handleRetry} style={style} />;
   }
 
-  const iframe = createElement(
-    'iframe',
-    {
-      key: retryKey.current,
-      ref: iframeRef,
-      title: 'map',
-      sandbox: 'allow-scripts allow-same-origin allow-popups',
-      onLoad: () => setIsLoaded(true),
-      onError: handleError,
-      style: styles.iframe,
-      ...(blobUrl ? { src: blobUrl } : { srcDoc: mapHtml }),
-    },
-    null,
-  );
-
   return (
     <View style={[styles.container, style]}>
-      {iframe}
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
       {!isLoaded && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -157,14 +175,7 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  iframe: {
-    flex: 1,
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-  },
+  container: { flex: 1 },
   loadingOverlay: {
     ...(StyleSheet.absoluteFillObject as object),
     justifyContent: 'center',

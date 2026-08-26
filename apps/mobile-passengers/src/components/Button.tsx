@@ -46,7 +46,9 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={variantStyles.label.color as string} />
       ) : (
-        <Text style={[styles.label, variantStyles.label]}>{children}</Text>
+        <Text style={[styles.label, variantStyles.label]} numberOfLines={1}>
+          {children}
+        </Text>
       )}
     </Pressable>
   );

@@ -4,7 +4,9 @@ import { useMemo, useState } from 'react';
 import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { requestRide } from '../api/passenger';
 import { Button } from '../components/Button';
+import { RequestBlockedCard } from '../components/RequestBlockedCard';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { type RideRequestErrorInfo, parseRideRequestError } from '../lib/rideRequestErrors';
 import { type PaymentMethodType, usePaymentStore } from '../store/paymentStore';
 import { theme } from '../theme';
 import { formatCurrency } from '../utils/formatters';
@@ -32,6 +34,8 @@ const OPTIONS: {
 export function ConfirmPaymentScreen() {
   const { goBack, navigate } = useAppNavigation();
   const defaultMethod = usePaymentStore((s) => s.methods.find((m) => m.isDefault)?.type ?? 'cash');
+  const methods = usePaymentStore((s) => s.methods);
+  const setDefault = usePaymentStore((s) => s.setDefault);
 
   const params = useLocalSearchParams<{
     pickup?: string;
@@ -50,6 +54,15 @@ export function ConfirmPaymentScreen() {
     defaultMethod === 'transfer' ? 'transfer' : 'cash',
   );
   const [loading, setLoading] = useState(false);
+  const [blocked, setBlocked] = useState<RideRequestErrorInfo | null>(null);
+
+  const selectMethod = (type: PaymentMethodType) => {
+    setSelected(type);
+    const match = methods.find((m) => m.type === type && (type === 'cash' || m.isDefault));
+    const fallback = methods.find((m) => m.type === type);
+    const id = match?.id ?? fallback?.id;
+    if (id) setDefault(id);
+  };
 
   const coords = useMemo(() => {
     const origin_lat = Number(params.pickupLat);
@@ -71,7 +84,8 @@ export function ConfirmPaymentScreen() {
     !Number.isNaN(durationMin);
 
   const handleConfirm = async () => {
-    if (!canConfirm || !coords) return;
+    if (!canConfirm || !coords || loading) return;
+    setBlocked(null);
     setLoading(true);
     try {
       const trip = await requestRide({
@@ -86,13 +100,14 @@ export function ConfirmPaymentScreen() {
         duration_minutes: durationMin,
         payment_method: selected,
       });
-      navigate('ConnectingDriver', { tripId: trip.id });
+      navigate('ConnectingDriver', { tripId: String(trip.id) });
     } catch (err) {
-      const data = (
-        err as { response?: { data?: { error?: { message?: string }; message?: string } } }
-      )?.response?.data;
-      const message = data?.error?.message ?? data?.message ?? (err as Error).message;
-      Alert.alert('No se pudo solicitar el viaje', message || 'Intentalo de nuevo.');
+      console.error('[ConfirmPayment] requestRide failed', err);
+      const info = parseRideRequestError(err);
+      setBlocked(info);
+      if (info.code === 'UNKNOWN') {
+        Alert.alert(info.title, info.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -128,7 +143,7 @@ export function ConfirmPaymentScreen() {
               <TouchableOpacity
                 key={option.id}
                 style={[styles.optionCard, active && styles.optionCardActive]}
-                onPress={() => setSelected(option.id)}
+                onPress={() => selectMethod(option.id)}
                 activeOpacity={0.85}
               >
                 <View style={[styles.optionIcon, active && styles.optionIconActive]}>
@@ -155,11 +170,20 @@ export function ConfirmPaymentScreen() {
         </View>
 
         <View style={styles.footer}>
+          {blocked ? (
+            <RequestBlockedCard
+              info={blocked}
+              onOpenHistory={() => navigate('TripHistory')}
+              onOpenSupport={() => navigate('Support')}
+            />
+          ) : null}
           <Button
             variant="cta"
-            onPress={handleConfirm}
+            onPress={() => {
+              void handleConfirm();
+            }}
             loading={loading}
-            disabled={!canConfirm}
+            disabled={!canConfirm || loading}
             style={styles.confirmBtn}
           >
             {!Number.isNaN(fare) ? `CONFIRMAR ${formatCurrency(fare)}` : 'CONFIRMAR'}

@@ -2,14 +2,18 @@ import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { userBlocks } from '../../shared/db/schema';
 
-export async function hasActiveBlock(
+export async function getActiveBlock(
   subjectType: 'passenger' | 'driver',
   subjectId: string,
   kind: string,
   now = new Date(),
-): Promise<boolean> {
+): Promise<{ id: string; ends_at: Date | null; kind: string } | null> {
   const rows = await db
-    .select({ id: userBlocks.id })
+    .select({
+      id: userBlocks.id,
+      ends_at: userBlocks.ends_at,
+      kind: userBlocks.kind,
+    })
     .from(userBlocks)
     .where(
       and(
@@ -20,7 +24,16 @@ export async function hasActiveBlock(
       ),
     )
     .limit(1);
-  return rows.length > 0;
+  return rows[0] ?? null;
+}
+
+export async function hasActiveBlock(
+  subjectType: 'passenger' | 'driver',
+  subjectId: string,
+  kind: string,
+  now = new Date(),
+): Promise<boolean> {
+  return (await getActiveBlock(subjectType, subjectId, kind, now)) != null;
 }
 
 export async function insertBlock(data: {
