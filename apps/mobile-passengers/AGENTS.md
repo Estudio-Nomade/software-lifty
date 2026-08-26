@@ -951,6 +951,12 @@ abre el navegador directamente. El puerto 8083 es el mismo que usa el orquestado
   geolocation disponible, `permissionGranted` queda `false` y la app sigue sin crashear.
   `geocodeAsync`/`reverseGeocodeAsync` lanzan `GeocoderError` en web → la app usa el backend para
   geocoding.
+- **Ubicación en el mapa (web)**: `useLocation` en web (1) pide permiso, (2) **siembra** la posición
+  con `getCurrentPosition` (el watch solo puede llegar tarde o fallar en silencio), (3) observa con
+  `navigator.geolocation.watchPosition`. Coordenadas siempre `{ lat, lng }` en el store y
+  `[lng, lat]` hacia MapLibre. El pin de usuario se actualiza **siempre** que hay coords (no depende
+  de `followUserLocation`); el follow solo controla la cámara. Al recibir `ready` del mapa se
+  re-envían markers/location (`useMapController` syncGen).
 - **`expo-location` bug en el cleanup (web)**: `Location.watchPositionAsync()` devuelve una
   subscription cuyo `.remove()` llama internamente a `LocationEventEmitter.removeSubscription()`. En
   native `LocationEventEmitter` es un `LegacyEventEmitter` (que SÍ tiene `removeSubscription`), pero en

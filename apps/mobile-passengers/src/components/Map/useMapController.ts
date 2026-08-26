@@ -22,6 +22,9 @@ interface UseMapControllerOptions {
  * are identical and live here to avoid drift between `PassengerMap.tsx` and
  * `PassengerMap.web.tsx`. Each implementation only owns its transport (the
  * WebView/iframe element) and the loading/error UI.
+ *
+ * Coordinate convention (everywhere): `[lng, lat]` — MapLibre / GeoJSON order.
+ * Messages to the HTML document use named `{ lat, lng }` fields.
  */
 export function useMapController({
   centerCoordinate,
@@ -41,24 +44,44 @@ export function useMapController({
   const initCenterRef = useRef(centerCoordinate);
   initCenterRef.current = centerCoordinate;
 
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+
   const [userManuallyMoved, setUserManuallyMoved] = useState(false);
+  // Bumps when MapLibre posts `ready` so we re-push state after style load.
+  const [syncGen, setSyncGen] = useState(0);
   const programmaticMoveRef = useRef(false);
+
+  // userLocation is always [lng, lat].
+  const userLng = userLocation?.[0] ?? null;
+  const userLat = userLocation?.[1] ?? null;
+
+  useEffect(() => {
+    if (!isLoaded) setSyncGen(0);
+  }, [isLoaded]);
+
+  const pushUserLocation = useCallback(
+    (lat: number | null, lng: number | null) => {
+      postMessage({ type: 'userLocation', lat, lng });
+    },
+    [postMessage],
+  );
 
   useEffect(() => {
     if (!isLoaded) return;
     programmaticMoveRef.current = true;
-    postMessage({ type: 'init', center: initCenterRef.current, zoom });
-  }, [isLoaded, postMessage, zoom]);
+    postMessage({ type: 'init', center: initCenterRef.current, zoom: zoomRef.current });
+  }, [isLoaded, syncGen, postMessage]);
 
   useEffect(() => {
     if (!isLoaded) return;
     postMessage({ type: 'markers', markers });
-  }, [markers, isLoaded, postMessage]);
+  }, [markers, isLoaded, syncGen, postMessage]);
 
   useEffect(() => {
     if (!isLoaded) return;
     postMessage({ type: 'route', coordinates: routeLine || [] });
-  }, [routeLine, isLoaded, postMessage]);
+  }, [routeLine, isLoaded, syncGen, postMessage]);
 
   useEffect(() => {
     if (!isLoaded || !routeLine || routeLine.length < 2) return;
@@ -66,21 +89,17 @@ export function useMapController({
 
     programmaticMoveRef.current = true;
     postMessage({ type: 'fitRoute', coordinates: routeLine });
-  }, [isLoaded, routeLine, userManuallyMoved, postMessage]);
+  }, [isLoaded, syncGen, routeLine, userManuallyMoved, postMessage]);
 
   useEffect(() => {
     if (!isLoaded) return;
     postMessage({ type: 'followUser', enabled: followUserLocation });
-  }, [followUserLocation, isLoaded, postMessage]);
+  }, [followUserLocation, isLoaded, syncGen, postMessage]);
 
   useEffect(() => {
     if (!isLoaded) return;
-    postMessage({
-      type: 'userLocation',
-      lat: userLocation?.[1] ?? null,
-      lng: userLocation?.[0] ?? null,
-    });
-  }, [userLocation, isLoaded, postMessage]);
+    pushUserLocation(userLat, userLng);
+  }, [userLat, userLng, isLoaded, syncGen, pushUserLocation]);
 
   useEffect(() => {
     if (!isLoaded || recenterKey == null) return;
@@ -98,7 +117,11 @@ export function useMapController({
     (raw: string) => {
       try {
         const data = JSON.parse(raw);
-        if (data.type === 'moved') {
+        if (data.type === 'ready') {
+          // MapLibre style finished loading. Re-push all state so a userLocation
+          // that arrived while the style was still loading is applied.
+          setSyncGen((g) => g + 1);
+        } else if (data.type === 'moved') {
           if (programmaticMoveRef.current) {
             programmaticMoveRef.current = false;
             setUserManuallyMoved(false);

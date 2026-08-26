@@ -345,17 +345,24 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
         }
         break;
       case 'userLocation':
-        if (followRequested && msg.lat != null && msg.lng != null) {
+        // Always place the user pin when we have coords. Camera follow is
+        // independent — gating the marker on followRequested hid the pin on
+        // screens with followUserLocation=false and dropped early fixes that
+        // arrived before the followUser message was processed.
+        if (msg.lat != null && msg.lng != null) {
           updateUserLocation(msg.lat, msg.lng);
-          if (!hasPerformedInitialCenter) {
+          if (followRequested && !hasPerformedInitialCenter) {
             setView([msg.lng, msg.lat], map.getZoom());
             hasPerformedInitialCenter = true;
           }
+        } else {
+          updateUserLocation(null, null);
         }
         break;
       case 'recenter':
         if (msg.lat != null && msg.lng != null) {
           userManuallyMoved = false;
+          updateUserLocation(msg.lat, msg.lng);
           map.flyTo({ center: [msg.lng, msg.lat], zoom: 15, duration: 600 });
         }
         break;

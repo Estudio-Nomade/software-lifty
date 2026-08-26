@@ -57,6 +57,19 @@ bun run clean          # turbo clean
 > los QR. El orquestador imprime él mismo los dos QR (desde la URL `exp://<ip-lan>:<puerto>`,
 > con `qrcode-terminal`) y arranca los 3 servicios en paralelo con logs etiquetados
 > `[backend]` / `[conductor]` / `[pasajeros]`.
+>
+> Expo se lanza con `--lan` + `REACT_NATIVE_PACKAGER_HOSTNAME=<ip-lan>` para que el
+> manifest (`hostUri` / bundle URL) nunca apunte a `127.0.0.1`. Los QR se imprimen
+> **después** de que Metro responda `/status` y de un pre-warm del bundle Android
+> (evita "Could not connect to development server" por cold transform).
+>
+> Si el QR no conecta:
+> ```bash
+> bun run dev:driver:clear          # conductor con cache limpia
+> bun run dev:passenger:clear       # pasajero con cache limpia
+> # otra red / guest Wi-Fi:
+> cd apps/mobile && bunx expo start --tunnel --port 8081
+> ```
 
 ### Per-app commands
 ```bash
