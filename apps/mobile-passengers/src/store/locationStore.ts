@@ -47,7 +47,18 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
         : Number.POSITIVE_INFINITY;
 
     // Keep a better fix unless forced or we have nothing yet.
-    if (!opts?.force && prev && nextAcc > prevAcc + 25) {
+    // Coarse network fixes (often 500m–5km) must not overwrite GPS.
+    if (!opts?.force && prev && nextAcc > prevAcc + 15) {
+      return false;
+    }
+    // Same-or-worse accuracy with tiny movement: ignore noise.
+    if (
+      !opts?.force &&
+      prev &&
+      nextAcc >= prevAcc - 5 &&
+      Math.abs(prev.lat - lat) < 1e-6 &&
+      Math.abs(prev.lng - lng) < 1e-6
+    ) {
       return false;
     }
 

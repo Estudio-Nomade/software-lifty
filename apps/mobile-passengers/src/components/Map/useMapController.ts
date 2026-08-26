@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MarkerData } from './mapHtml';
 
 interface UseMapControllerOptions {
-  /** [lng, lat] — unused for camera on web (iframe owns GPS); kept for native. */
+  /** [lng, lat] — reserved for future camera init; pin uses userLocation. */
   centerCoordinate: [number, number];
   zoom: number;
   markers: MarkerData[];
   routeLine?: Array<[number, number]>;
-  /** [lng, lat] or null */
+  /** [lng, lat] or null — host GPS (web + native). */
   userLocation?: [number, number] | null;
   followUserLocation: boolean;
   recenterKey?: number;
@@ -25,8 +25,7 @@ function isRealFix(lng: number | null | undefined, lat: number | null | undefine
 
 /**
  * Thin bridge: push markers/route/userLocation/recenter to the MapLibre document.
- * Does NOT send city defaults or init-to-BA. Camera centering is owned by mapHtml
- * on the first real GPS fix (web) or first userLocation message (native).
+ * Host owns GPS; mapHtml only draws the pin from userLocation messages.
  */
 export function useMapController({
   markers,

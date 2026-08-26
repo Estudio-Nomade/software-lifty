@@ -86,4 +86,16 @@ describe('formatStreetLabel', () => {
       'Plaza Independencia, Tandil',
     );
   });
+
+  it('treats highway name as the street (Margarita Galfre case)', () => {
+    expect(
+      formatStreetLabel({
+        name: 'Margarita Galfre',
+        osm_key: 'highway',
+        city: 'Tandil',
+        state: 'Buenos Aires',
+        country: 'Argentina',
+      }),
+    ).toBe('Margarita Galfre, Tandil, Buenos Aires, Argentina');
+  });
 });

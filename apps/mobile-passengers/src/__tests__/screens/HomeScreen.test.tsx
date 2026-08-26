@@ -19,6 +19,7 @@ jest.mock('../../hooks/useLocation', () => ({
   toMapCoordinate: (lat: number, lng: number) => [lng, lat] as [number, number],
   isValidLatLng: () => true,
   applyBrowserLocation: jest.fn(),
+  TARGET_ACCURACY_M: 40,
   // Default: no GPS — individual tests can override when they need a fix.
   requestFreshPosition: jest.fn().mockResolvedValue(null),
 }));

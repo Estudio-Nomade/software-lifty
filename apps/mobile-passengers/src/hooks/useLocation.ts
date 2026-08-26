@@ -44,69 +44,171 @@ type BrowserGeolocation = {
   clearWatch: (id: number) => void;
 };
 
+/** Prefer real GPS; never reuse a cached network fix. */
 const WEB_GEO_OPTS: GeoOptions = {
   enableHighAccuracy: true,
-  timeout: 30_000,
+  timeout: 25_000,
   maximumAge: 0,
 };
+
+/** Stop waiting early once accuracy is this good (meters). */
+export const TARGET_ACCURACY_M = 40;
+/** Minimum time to wait for a better fix after the first sample (ms). */
+const MIN_SAMPLE_MS = 2_000;
+
+function isJestRuntime(): boolean {
+  try {
+    return (
+      typeof process !== 'undefined' &&
+      Boolean((process.env as { JEST_WORKER_ID?: string }).JEST_WORKER_ID)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Hard cap while hunting for a tight fix (ms). Short under Jest. */
+const MAX_WAIT_MS = isJestRuntime() ? 80 : 14_000;
+const MIN_WAIT_MS = isJestRuntime() ? 0 : MIN_SAMPLE_MS;
 
 function readBrowserGeo(): BrowserGeolocation | null {
   const g = globalThis as { navigator?: { geolocation?: BrowserGeolocation } };
   return g.navigator?.geolocation ?? null;
 }
 
+function accuracyOf(pos: GeoPositionLike): number {
+  const a = pos.coords.accuracy;
+  return typeof a === 'number' && Number.isFinite(a) ? a : Number.POSITIVE_INFINITY;
+}
+
 function applyPosition(pos: GeoPositionLike, force = false): boolean {
   const lat = pos.coords.latitude;
   const lng = pos.coords.longitude;
   if (!isValidLatLng(lat, lng)) return false;
-  const accuracy =
-    typeof pos.coords.accuracy === 'number' && Number.isFinite(pos.coords.accuracy)
-      ? pos.coords.accuracy
-      : undefined;
-  return useLocationStore.getState().applyFix({ lat, lng, accuracy }, { force });
+  const accuracy = accuracyOf(pos);
+  return useLocationStore.getState().applyFix(
+    {
+      lat,
+      lng,
+      accuracy: Number.isFinite(accuracy) ? accuracy : undefined,
+    },
+    { force },
+  );
 }
 
 /**
- * Apply a fix coming from the map iframe (secondary web source).
- * Host navigator.geolocation is primary; accuracy gate drops coarse overwrites.
+ * Secondary path (legacy): map iframe used to own GPS.
+ * Host is now the sole web GPS owner — still accept better fixes only.
  */
 export function applyBrowserLocation(lat: number, lng: number, accuracy?: number): void {
   if (!isValidLatLng(lat, lng)) return;
   useLocationStore.getState().applyFix({ lat, lng, accuracy }, { force: false });
 }
 
+type Fix = { lat: number; lng: number; accuracy: number };
+
 /**
- * One-shot position.
- * - Web: navigator.geolocation on the host page (works even when map is unmounted).
- * - Native: expo-location.
+ * Collect browser positions until TARGET_ACCURACY_M or timeout.
+ * Browsers often return a coarse WiFi/IP fix first; GPS arrives seconds later.
+ */
+function requestBestWebPosition(): Promise<Fix | null> {
+  const geo = readBrowserGeo();
+  if (!geo) {
+    const cur = useLocationStore.getState().current;
+    return Promise.resolve(
+      cur && isValidLatLng(cur.lat, cur.lng)
+        ? {
+            lat: cur.lat,
+            lng: cur.lng,
+            accuracy: cur.accuracy ?? Number.POSITIVE_INFINITY,
+          }
+        : null,
+    );
+  }
+
+  return new Promise((resolve) => {
+    let best: Fix | null = null;
+    let settled = false;
+    let watchId: number | null = null;
+    const started = Date.now();
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (watchId != null) {
+        try {
+          geo.clearWatch(watchId);
+        } catch {
+          // ignore
+        }
+      }
+      if (best) {
+        useLocationStore.getState().applyFix(best, { force: true });
+        resolve(best);
+        return;
+      }
+      const cur = useLocationStore.getState().current;
+      if (cur && isValidLatLng(cur.lat, cur.lng)) {
+        resolve({
+          lat: cur.lat,
+          lng: cur.lng,
+          accuracy: cur.accuracy ?? Number.POSITIVE_INFINITY,
+        });
+        return;
+      }
+      resolve(null);
+    };
+
+    const onPos = (pos: GeoPositionLike) => {
+      if (settled) return;
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      if (!isValidLatLng(lat, lng)) return;
+      const accuracy = accuracyOf(pos);
+      if (!best || accuracy < best.accuracy - 1) {
+        best = { lat, lng, accuracy };
+        // Publish progressive improvements (no force) so the map pin tracks GPS warm-up.
+        useLocationStore.getState().applyFix(best, { force: false });
+      }
+      const waited = Date.now() - started;
+      if (best.accuracy <= TARGET_ACCURACY_M && waited >= MIN_WAIT_MS) {
+        finish();
+      }
+    };
+
+    const onErr = () => {
+      // Keep waiting for watch / timeout if we already have something.
+      if (!best && Date.now() - started > MAX_WAIT_MS) finish();
+    };
+
+    try {
+      geo.getCurrentPosition(onPos, onErr, WEB_GEO_OPTS);
+      watchId = geo.watchPosition(onPos, onErr, WEB_GEO_OPTS);
+    } catch {
+      finish();
+      return;
+    }
+
+    setTimeout(finish, MAX_WAIT_MS);
+  });
+}
+
+/**
+ * One-shot best-effort position.
+ * - Web: wait for high-accuracy GPS (not the first coarse WiFi hit).
+ * - Native: expo-location High accuracy.
  */
 export async function requestFreshPosition(): Promise<{ lat: number; lng: number } | null> {
   if (isWebRuntime()) {
-    const geo = readBrowserGeo();
-    if (geo) {
-      try {
-        const pos = await new Promise<GeoPositionLike>((resolve, reject) => {
-          geo.getCurrentPosition(resolve, reject, WEB_GEO_OPTS);
-        });
-        if (applyPosition(pos, true)) {
-          return { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        }
-      } catch {
-        // fall through to store
-      }
-    }
-    const existing = useLocationStore.getState().current;
-    if (existing && isValidLatLng(existing.lat, existing.lng)) {
-      return { lat: existing.lat, lng: existing.lng };
-    }
-    return null;
+    const best = await requestBestWebPosition();
+    return best ? { lat: best.lat, lng: best.lng } : null;
   }
 
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return null;
     const pos = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
+      accuracy: Location.Accuracy.BestForNavigation,
     });
     const lat = pos.coords.latitude;
     const lng = pos.coords.longitude;
@@ -126,9 +228,14 @@ export async function requestFreshPosition(): Promise<{ lat: number; lng: number
 }
 
 /**
- * Subscribe to the shared location store.
- * - Web: host navigator.geolocation (primary) — survives map unmount.
- * - Native: expo-location.
+ * Shared location subscription.
+ *
+ * Architecture (web):
+ *   Host page navigator.geolocation → locationStore → map iframe via userLocation.
+ *   The map iframe does NOT call geolocation (avoids dual sources / pin drift).
+ *
+ * Architecture (native):
+ *   expo-location → locationStore → WebView userLocation messages.
  */
 export function useLocation() {
   const current = useLocationStore((s) => s.current);
@@ -146,26 +253,25 @@ export function useLocation() {
       let watchId: number | null = null;
       let cancelled = false;
 
-      geo.getCurrentPosition(
-        (pos) => {
-          if (!cancelled) applyPosition(pos, true);
-        },
-        () => {
-          if (!cancelled) setPermissionGranted(false);
-        },
-        WEB_GEO_OPTS,
-      );
+      // Kick a best-effort hunt once, then keep watching for tighter fixes.
+      void requestBestWebPosition().then((fix) => {
+        if (!cancelled && fix) setPermissionGranted(true);
+      });
 
       try {
         watchId = geo.watchPosition(
           (pos) => {
             if (!cancelled) applyPosition(pos, false);
           },
-          () => {},
+          () => {
+            if (!cancelled && !useLocationStore.getState().current) {
+              setPermissionGranted(false);
+            }
+          },
           WEB_GEO_OPTS,
         );
       } catch {
-        // watch optional
+        // watch optional after one-shot
       }
 
       return () => {
@@ -197,7 +303,7 @@ export function useLocation() {
 
       try {
         const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
+          accuracy: Location.Accuracy.BestForNavigation,
         });
         if (!cancelled) {
           applyPosition(
@@ -218,7 +324,11 @@ export function useLocation() {
 
       try {
         subscription = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 5 },
+          {
+            accuracy: Location.Accuracy.BestForNavigation,
+            timeInterval: 3000,
+            distanceInterval: 5,
+          },
           (loc) => {
             applyPosition(
               {

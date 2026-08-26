@@ -127,9 +127,6 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
   // World overview until a real GPS fix arrives — never a city hardcode.
   var WAITING_CENTER = [0, 0];
   var WAITING_ZOOM = 2;
-  // Aggressive GPS options: no cache, prefer device GPS over IP/WiFi.
-  var GEO_OPTS = { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 };
-
   function postToHost(msg) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       window.ReactNativeWebView.postMessage(msg);
@@ -165,12 +162,9 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
   var lastUserLat = null;
   var lastUserLng = null;
   var hasCenteredOnUser = false;
-  // WEB: this document is the sole GPS owner (navigator.geolocation).
-  // NATIVE WebView: host pushes userLocation via postMessage.
-  // Architecture: iframe GPS → postMessage browserLocation → React locationStore.
-  var isNativeWebView = !!(window.ReactNativeWebView && window.ReactNativeWebView.postMessage);
-  var geoWatchId = null;
-  var lastAccuracy = Infinity;
+  // Architecture: host owns GPS (useLocation → locationStore).
+  // This document only draws the pin from host userLocation / recenter messages.
+  // Never call navigator.geolocation here (dual sources caused wrong streets).
 
   var USER_ICONS = {
     car: 'car-outline',
@@ -292,78 +286,6 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     applyRoute(coordinates);
   }
 
-  /**
-   * Web-only: sole GPS owner. Publishes every fix to the React host.
-   * Prefers higher-accuracy fixes (GPS) over coarse IP/WiFi when both arrive.
-   */
-  function publishFix(pos, opts) {
-    if (!pos || !pos.coords) return;
-    var lat = pos.coords.latitude;
-    var lng = pos.coords.longitude;
-    var accuracy = typeof pos.coords.accuracy === 'number' ? pos.coords.accuracy : Infinity;
-    if (!isValidLatLng(lat, lng)) return;
-
-    // Skip a worse (coarser) fix once we already have a better one, unless forced.
-    var force = opts && (opts.force || opts.fly);
-    if (!force && hasCenteredOnUser && accuracy > lastAccuracy + 25) {
-      console.log('[Lifty geo] skip coarser fix', { lat: lat, lng: lng, accuracy: accuracy, best: lastAccuracy });
-      return;
-    }
-    if (accuracy < lastAccuracy) lastAccuracy = accuracy;
-
-    console.log('[Lifty geo] fix', {
-      lat: lat,
-      lng: lng,
-      accuracy: accuracy,
-      force: !!force,
-    });
-
-    setUserFix(lat, lng, opts || null);
-    postToHost(JSON.stringify({
-      type: 'browserLocation',
-      lat: lat,
-      lng: lng,
-      accuracy: accuracy,
-    }));
-  }
-
-  function startWebGeolocation(forceCenter) {
-    if (isNativeWebView) return;
-    if (!navigator.geolocation) {
-      postToHost(JSON.stringify({ type: 'geoError', message: 'navigator.geolocation unavailable' }));
-      return;
-    }
-    function onErr(err) {
-      console.warn('[Lifty geo] error', err && err.code, err && err.message);
-      postToHost(JSON.stringify({
-        type: 'geoError',
-        code: err && err.code,
-        message: (err && err.message) || 'geolocation failed',
-      }));
-    }
-    try {
-      navigator.geolocation.getCurrentPosition(
-        function (pos) {
-          publishFix(pos, forceCenter ? { force: true, fly: true } : null);
-        },
-        onErr,
-        GEO_OPTS,
-      );
-      if (geoWatchId == null) {
-        geoWatchId = navigator.geolocation.watchPosition(
-          function (pos) { publishFix(pos, null); },
-          onErr,
-          GEO_OPTS,
-        );
-      }
-    } catch (e) {
-      postToHost(JSON.stringify({ type: 'geoError', message: String(e) }));
-    }
-  }
-
-  // Start GPS immediately (before style load) so the first fix is ready ASAP.
-  startWebGeolocation(false);
-
   map.on('load', function () {
     mapLoaded = true;
     if (pendingRoute) {
@@ -374,8 +296,6 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
       setUserFix(lastUserLat, lastUserLng, { force: true });
     }
     postToHost(JSON.stringify({ type: 'ready' }));
-    // Permission prompt may complete after load — one more kick.
-    startWebGeolocation(false);
   });
 
   map.on('moveend', function () {
@@ -420,18 +340,13 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
         }
         break;
       case 'userLocation':
-        // Native host path only. On web the iframe owns GPS — ignore host pushes
-        // to avoid fighting a second geolocation source.
-        if (isNativeWebView && msg.lat != null && msg.lng != null) {
+        // Host GPS → pin (web + native).
+        if (msg.lat != null && msg.lng != null) {
           setUserFix(Number(msg.lat), Number(msg.lng), null);
         }
         break;
       case 'recenter':
-        if (!isNativeWebView) {
-          // Fresh high-accuracy fix; reset accuracy floor so GPS can beat stale WiFi.
-          lastAccuracy = Infinity;
-          startWebGeolocation(true);
-        } else if (msg.lat != null && msg.lng != null && isValidLatLng(Number(msg.lat), Number(msg.lng))) {
+        if (msg.lat != null && msg.lng != null && isValidLatLng(Number(msg.lat), Number(msg.lng))) {
           setUserFix(Number(msg.lat), Number(msg.lng), { force: true, fly: true });
         } else if (lastUserLat != null && lastUserLng != null) {
           setUserFix(lastUserLat, lastUserLng, { force: true, fly: true });
