@@ -115,10 +115,9 @@ export function VehicleSelectScreen() {
 
       <View style={styles.mapContainer}>
         <PassengerMap
-          centerCoordinate={
-            current ? toMapCoordinate(current.lat, current.lng) : [-58.3816, -34.6037]
-          }
+          centerCoordinate={current ? toMapCoordinate(current.lat, current.lng) : [0, 0]}
           userLocation={current ? toMapCoordinate(current.lat, current.lng) : null}
+          followUserLocation
           style={styles.mapFill}
         />
       </View>

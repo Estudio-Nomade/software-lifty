@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MarkerData } from './mapHtml';
 
 interface UseMapControllerOptions {
+  /** [lng, lat]. Omit / null-island until a real fix exists — do not pass city defaults. */
   centerCoordinate: [number, number];
   zoom: number;
   markers: MarkerData[];
   routeLine?: Array<[number, number]>;
+  /** [lng, lat] or null */
   userLocation?: [number, number] | null;
   followUserLocation: boolean;
   recenterKey?: number;
@@ -14,17 +16,18 @@ interface UseMapControllerOptions {
   postMessage: (message: unknown) => void;
 }
 
+function isUsableCenter(center: [number, number] | null | undefined): center is [number, number] {
+  if (!center || center.length !== 2) return false;
+  const [lng, lat] = center;
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return false;
+  // Null island — placeholder while waiting for GPS
+  if (lng === 0 && lat === 0) return false;
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+}
+
 /**
- * Shared controller for the native (WebView) and web (iframe) map implementations.
- *
- * Both transports talk to the same self-contained MapLibre HTML document via
- * `postMessage`, so the message-sending effects and the incoming-message parsing
- * are identical and live here to avoid drift between `PassengerMap.tsx` and
- * `PassengerMap.web.tsx`. Each implementation only owns its transport (the
- * WebView/iframe element) and the loading/error UI.
- *
- * Coordinate convention (everywhere): `[lng, lat]` — MapLibre / GeoJSON order.
- * Messages to the HTML document use named `{ lat, lng }` fields.
+ * Shared controller for native WebView and web iframe MapLibre documents.
+ * Coordinate convention: `[lng, lat]`. Messages use named `{ lat, lng }`.
  */
 export function useMapController({
   centerCoordinate,
@@ -41,37 +44,53 @@ export function useMapController({
   const userLocationRef = useRef(userLocation);
   userLocationRef.current = userLocation;
 
-  const initCenterRef = useRef(centerCoordinate);
-  initCenterRef.current = centerCoordinate;
+  const centerRef = useRef(centerCoordinate);
+  centerRef.current = centerCoordinate;
 
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
 
   const [userManuallyMoved, setUserManuallyMoved] = useState(false);
-  // Bumps when MapLibre posts `ready` so we re-push state after style load.
   const [syncGen, setSyncGen] = useState(0);
   const programmaticMoveRef = useRef(false);
+  const lastRecenterKey = useRef<number | null>(null);
 
-  // userLocation is always [lng, lat].
   const userLng = userLocation?.[0] ?? null;
   const userLat = userLocation?.[1] ?? null;
 
   useEffect(() => {
-    if (!isLoaded) setSyncGen(0);
+    if (!isLoaded) {
+      setSyncGen(0);
+      lastRecenterKey.current = null;
+    }
   }, [isLoaded]);
 
-  const pushUserLocation = useCallback(
-    (lat: number | null, lng: number | null) => {
-      postMessage({ type: 'userLocation', lat, lng });
-    },
-    [postMessage],
-  );
-
+  // 1) follow first so the first userLocation can center the camera
   useEffect(() => {
     if (!isLoaded) return;
+    postMessage({ type: 'followUser', enabled: followUserLocation });
+  }, [followUserLocation, isLoaded, syncGen, postMessage]);
+
+  // 2) user pin + camera (only real fixes — never null spam)
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (userLat == null || userLng == null) return;
     programmaticMoveRef.current = true;
-    postMessage({ type: 'init', center: initCenterRef.current, zoom: zoomRef.current });
-  }, [isLoaded, syncGen, postMessage]);
+    postMessage({ type: 'userLocation', lat: userLat, lng: userLng });
+  }, [userLat, userLng, isLoaded, syncGen, postMessage]);
+
+  // 3) init center only when we have a real coordinate (never BA / 0,0 placeholders)
+  useEffect(() => {
+    if (!isLoaded) return;
+    const center = isUsableCenter(userLocationRef.current)
+      ? userLocationRef.current
+      : isUsableCenter(centerRef.current)
+        ? centerRef.current
+        : null;
+    if (!center) return;
+    programmaticMoveRef.current = true;
+    postMessage({ type: 'init', center, zoom: zoomRef.current });
+  }, [isLoaded, syncGen, postMessage, userLat, userLng, centerCoordinate, zoom]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -86,27 +105,18 @@ export function useMapController({
   useEffect(() => {
     if (!isLoaded || !routeLine || routeLine.length < 2) return;
     if (userManuallyMoved) return;
-
     programmaticMoveRef.current = true;
     postMessage({ type: 'fitRoute', coordinates: routeLine });
   }, [isLoaded, syncGen, routeLine, userManuallyMoved, postMessage]);
 
+  // Recenter: always notify the map. Prefer live store coords; map falls back
+  // to its last known fix / browser geo if host coords are missing.
   useEffect(() => {
     if (!isLoaded) return;
-    postMessage({ type: 'followUser', enabled: followUserLocation });
-  }, [followUserLocation, isLoaded, syncGen, postMessage]);
+    if (recenterKey == null) return;
+    if (lastRecenterKey.current === recenterKey) return;
+    lastRecenterKey.current = recenterKey;
 
-  useEffect(() => {
-    if (!isLoaded) return;
-    // Only push when we have a real fix. Sending null clears the pin on native
-    // and is a no-op on web (mapHtml ignores null while browser geo owns the pin).
-    // Avoid spamming null on every mount/sync before geolocation resolves.
-    if (userLat == null || userLng == null) return;
-    pushUserLocation(userLat, userLng);
-  }, [userLat, userLng, isLoaded, syncGen, pushUserLocation]);
-
-  useEffect(() => {
-    if (!isLoaded || recenterKey == null) return;
     const loc = userLocationRef.current;
     setUserManuallyMoved(false);
     programmaticMoveRef.current = true;
@@ -122,8 +132,6 @@ export function useMapController({
       try {
         const data = JSON.parse(raw);
         if (data.type === 'ready') {
-          // MapLibre style finished loading. Re-push all state so a userLocation
-          // that arrived while the style was still loading is applied.
           setSyncGen((g) => g + 1);
         } else if (data.type === 'moved') {
           if (programmaticMoveRef.current) {
@@ -135,7 +143,9 @@ export function useMapController({
         } else if (data.type === 'error') {
           onError?.();
         }
-      } catch {}
+      } catch {
+        // ignore non-JSON
+      }
     },
     [onError],
   );

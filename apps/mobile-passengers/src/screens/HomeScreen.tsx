@@ -22,7 +22,7 @@ import { HowItWorks } from '../components/HowItWorks';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { QuickChips } from '../components/QuickChips';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { toMapCoordinate, useLocation } from '../hooks/useLocation';
+import { requestFreshPosition, toMapCoordinate, useLocation } from '../hooks/useLocation';
 import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
 import { useLocationStore } from '../store/locationStore';
 import { useRideStore } from '../store/rideStore';
@@ -125,7 +125,10 @@ export function HomeScreen() {
   }, [searchExpanded]);
 
   const handleLocate = () => {
-    setRecenterKey((k) => k + 1);
+    // Always request a fresh fix first so recenter has real coords (web + native).
+    void requestFreshPosition().finally(() => {
+      setRecenterKey((k) => k + 1);
+    });
   };
 
   const handleOpenSearch = () => {
@@ -365,9 +368,9 @@ export function HomeScreen() {
 
             <View style={styles.mapArea}>
               <PassengerMap
-                centerCoordinate={
-                  current ? toMapCoordinate(current.lat, current.lng) : [-58.3816, -34.6037]
-                }
+                // [0,0] = placeholder; mapHtml/useMapController ignore it until GPS arrives.
+                // Never pass a city default (e.g. BA) — that is what pinned users to the wrong place.
+                centerCoordinate={current ? toMapCoordinate(current.lat, current.lng) : [0, 0]}
                 userLocation={current ? toMapCoordinate(current.lat, current.lng) : null}
                 followUserLocation
                 recenterKey={recenterKey}

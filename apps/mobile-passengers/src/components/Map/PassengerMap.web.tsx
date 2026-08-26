@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useLocationStore } from '../../store/locationStore';
 import { theme } from '../../theme';
 import { MapErrorFallback } from './MapErrorFallback';
 import { DEFAULT_ZOOM, type PassengerMapProps, generateMapHtml } from './mapHtml';
@@ -87,6 +88,25 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     isLoaded,
     postMessage,
   });
+
+  // When the iframe resolves browser geolocation first, keep React store in sync
+  // so recenter / other UI have coords even if host geo was slow.
+  useEffect(() => {
+    const onMessage = (event: any) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data?.type === 'browserLocation' && data.lat != null && data.lng != null) {
+          useLocationStore.getState().setCurrent({ lat: data.lat, lng: data.lng });
+          useLocationStore.getState().setPermissionGranted(true);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
 
   // Mount a real DOM iframe into the container (imperative — not RN createElement).
   useEffect(() => {

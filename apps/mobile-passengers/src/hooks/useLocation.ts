@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Platform } from 'react-native';
 import { useLocationStore } from '../store/locationStore';
 
@@ -26,11 +26,10 @@ interface WebGeolocation {
   clearWatch: (id: number) => void;
 }
 
-/** Browser geolocation options — prefer a fresh, accurate fix. */
 const WEB_GEO_OPTIONS: WebGeoOptions = {
   enableHighAccuracy: true,
   timeout: 20_000,
-  maximumAge: 5_000,
+  maximumAge: 0,
 };
 
 function getWebGeolocation(): WebGeolocation | null {
@@ -39,7 +38,6 @@ function getWebGeolocation(): WebGeolocation | null {
   return nav?.geolocation ?? null;
 }
 
-/** Reject null-island and non-finite / out-of-range pairs. */
 export function isValidLatLng(lat: number, lng: number): boolean {
   return (
     Number.isFinite(lat) &&
@@ -50,12 +48,54 @@ export function isValidLatLng(lat: number, lng: number): boolean {
   );
 }
 
-/**
- * MapLibre / GeoJSON order: [longitude, latitude].
- * Use this whenever building map props from a {lat,lng} store value.
- */
+/** MapLibre / GeoJSON order: [longitude, latitude]. */
 export function toMapCoordinate(lat: number, lng: number): [number, number] {
   return [lng, lat];
+}
+
+/**
+ * One-shot browser/native fix. Resolves with coords or null.
+ * Used by the locate/recenter button so it never depends on a stale store.
+ */
+export function requestFreshPosition(): Promise<{ lat: number; lng: number } | null> {
+  const webGeo = getWebGeolocation();
+  if (webGeo) {
+    return new Promise((resolve) => {
+      webGeo.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          if (!isValidLatLng(lat, lng)) {
+            resolve(null);
+            return;
+          }
+          useLocationStore.getState().setCurrent({ lat, lng });
+          useLocationStore.getState().setPermissionGranted(true);
+          resolve({ lat, lng });
+        },
+        () => resolve(null),
+        WEB_GEO_OPTIONS,
+      );
+    });
+  }
+
+  return (async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return null;
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      if (!isValidLatLng(lat, lng)) return null;
+      useLocationStore.getState().setCurrent({ lat, lng });
+      useLocationStore.getState().setPermissionGranted(true);
+      return { lat, lng };
+    } catch {
+      return null;
+    }
+  })();
 }
 
 export function useLocation() {
@@ -77,24 +117,21 @@ export function useLocation() {
       setCurrent({ lat, lng });
     };
 
-    // ─── WEB: navigator.geolocation only (never expo-location) ───────────
-    // expo-location on web wraps the same API but its permission helper can
-    // hang, mis-report GRANTED on timeout, and its watch subscription cleanup
-    // crashes (missing removeSubscription). Go straight to the browser API.
+    // WEB: only navigator.geolocation (never expo-location).
     if (webGeo) {
       const onPos = (pos: WebPosition) => {
         setCurrentSafe(pos.coords.latitude, pos.coords.longitude);
         setPermissionGranted(true);
       };
       const onErr = (err: WebPositionError) => {
-        // PERMISSION_DENIED = 1
-        if (err.code === 1) {
-          setPermissionGranted(false);
-        }
+        if (err.code === 1) setPermissionGranted(false);
       };
 
       webGeo.getCurrentPosition(onPos, onErr, WEB_GEO_OPTIONS);
-      webWatchId = webGeo.watchPosition(onPos, onErr, WEB_GEO_OPTIONS);
+      webWatchId = webGeo.watchPosition(onPos, onErr, {
+        ...WEB_GEO_OPTIONS,
+        maximumAge: 5_000,
+      });
 
       return () => {
         cancelled = true;
@@ -102,7 +139,7 @@ export function useLocation() {
       };
     }
 
-    // ─── NATIVE: expo-location ───────────────────────────────────────────
+    // NATIVE: expo-location
     (async () => {
       let granted = false;
       try {
@@ -121,7 +158,7 @@ export function useLocation() {
         });
         setCurrentSafe(pos.coords.latitude, pos.coords.longitude);
       } catch {
-        // one-shot failed; watch may still deliver
+        // watch may still deliver
       }
       if (cancelled) return;
 
@@ -147,5 +184,7 @@ export function useLocation() {
     };
   }, [setCurrent, setPermissionGranted]);
 
-  return { current, permissionGranted };
+  const refresh = useCallback(async () => requestFreshPosition(), []);
+
+  return { current, permissionGranted, refresh };
 }
