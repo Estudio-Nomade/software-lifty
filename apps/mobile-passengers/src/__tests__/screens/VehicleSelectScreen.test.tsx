@@ -26,7 +26,10 @@ jest.mock('../../store/locationStore', () => ({
 jest.mock('../../store/paymentStore', () => ({
   usePaymentStore: (sel: (s: unknown) => unknown) =>
     sel({
-      methods: [{ id: 'cash', type: 'cash', label: 'Efectivo', isDefault: true }],
+      methods: [
+        { id: 'cash', type: 'cash', label: 'Efectivo', isDefault: true },
+        { id: 'transfer', type: 'transfer', label: 'Transferencia', isDefault: false },
+      ],
       setDefault: jest.fn(),
     }),
 }));
@@ -118,10 +121,11 @@ describe('VehicleSelectScreen fare estimation', () => {
     expect(queryByText('CONTINUO')).toBeNull();
   });
 
-  test('shows payment method row with Efectivo', async () => {
+  test('shows Efectivo and Transferencia payment options', async () => {
     const { findByText } = await render(<VehicleSelectScreen />);
     expect(await findByText('Forma de pago')).toBeTruthy();
     expect(await findByText('Efectivo')).toBeTruthy();
+    expect(await findByText('Transferencia')).toBeTruthy();
   });
 
   test('shows a different fare for a farther destination', async () => {
