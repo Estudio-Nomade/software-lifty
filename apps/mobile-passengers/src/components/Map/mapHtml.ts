@@ -10,7 +10,7 @@ export interface MarkerData {
 }
 
 export interface PassengerMapProps {
-  /** [lng, lat]. Prefer real GPS; avoid city hardcodes. */
+  /** [lng, lat] */
   centerCoordinate: [number, number];
   zoom?: number;
   markers?: MarkerData[];
@@ -25,34 +25,11 @@ export interface PassengerMapProps {
 
 export const DEFAULT_ZOOM = 15;
 
-export interface GenerateMapHtmlOptions {
-  primary: string;
-  lightGray: string;
-  /**
-   * Optional bootstrap fix baked into the HTML so the map's FIRST paint is already
-   * at the user — never a city default. Pass { lat, lng } (WGS84).
-   */
-  bootstrap?: { lat: number; lng: number } | null;
-}
-
-export function generateMapHtml(colors: GenerateMapHtmlOptions) {
+export function generateMapHtml(colors: { primary: string; lightGray: string }) {
   const r = Number.parseInt(colors.primary.slice(1, 3), 16);
   const g = Number.parseInt(colors.primary.slice(3, 5), 16);
   const b = Number.parseInt(colors.primary.slice(5, 7), 16);
   const primaryRgba = `rgba(${r}, ${g}, ${b}, 0.4)`;
-
-  // Inject bootstrap as JS literals (null when unknown). MapLibre order = [lng, lat].
-  const bootLat =
-    colors.bootstrap && Number.isFinite(colors.bootstrap.lat)
-      ? String(colors.bootstrap.lat)
-      : 'null';
-  const bootLng =
-    colors.bootstrap && Number.isFinite(colors.bootstrap.lng)
-      ? String(colors.bootstrap.lng)
-      : 'null';
-  const bootCenter =
-    bootLat !== 'null' && bootLng !== 'null' ? `[${bootLng}, ${bootLat}]` : '[0, 0]';
-  const bootZoom = bootLat !== 'null' ? '15' : '2';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -116,13 +93,6 @@ export function generateMapHtml(colors: GenerateMapHtmlOptions) {
     font-size: 28px;
     color: ${colors.primary};
   }
-  .pulsing-circle {
-    width: 18px; height: 18px;
-    background: ${primaryRgba};
-    border: 2px solid ${colors.primary};
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-  }
   .destination-pin {
     position: relative;
     width: 32px; height: 32px;
@@ -148,21 +118,15 @@ export function generateMapHtml(colors: GenerateMapHtmlOptions) {
     font-size: 18px;
     color: ${colors.primary};
   }
-  @keyframes pulse {
-    0% { transform: scale(0.5); opacity: 0.8; }
-    100% { transform: scale(2.5); opacity: 0; }
-  }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <script>
   var DEFAULT_ZOOM = 15;
-  // Baked in by generateMapHtml — real GPS when the host already has a fix.
-  var BOOTSTRAP_LAT = ${bootLat};
-  var BOOTSTRAP_LNG = ${bootLng};
-  var BOOTSTRAP_CENTER = ${bootCenter};
-  var BOOTSTRAP_ZOOM = ${bootZoom};
+  // World overview until a real GPS fix arrives — never a city hardcode.
+  var WAITING_CENTER = [0, 0];
+  var WAITING_ZOOM = 2;
 
   function postToHost(msg) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -182,17 +146,13 @@ export function generateMapHtml(colors: GenerateMapHtmlOptions) {
     map = new maplibregl.Map({
       container: 'map',
       style: 'https://tiles.openfreemap.org/styles/liberty',
-      // First paint uses bootstrap GPS when available — never a city hardcode.
-      center: BOOTSTRAP_CENTER,
-      zoom: BOOTSTRAP_ZOOM,
+      center: WAITING_CENTER,
+      zoom: WAITING_ZOOM,
       attributionControl: true,
     });
-
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
   } catch (e) {
-    postToHost(
-      JSON.stringify({ type: 'error', message: (e && e.message) || 'Failed to initialize the map' }),
-    );
+    postToHost(JSON.stringify({ type: 'error', message: (e && e.message) || 'Failed to initialize the map' }));
     throw e;
   }
 
@@ -200,13 +160,11 @@ export function generateMapHtml(colors: GenerateMapHtmlOptions) {
   var markers = [];
   var userMarker = null;
   var pendingRoute = null;
-  var followRequested = true;
-  var hasPerformedInitialCenter = BOOTSTRAP_LAT != null && BOOTSTRAP_LNG != null;
-  var userManuallyMoved = false;
-  var isBrowserIframe = !(window.ReactNativeWebView && window.ReactNativeWebView.postMessage);
-  var browserGeoWatchId = null;
-  var lastUserLat = BOOTSTRAP_LAT;
-  var lastUserLng = BOOTSTRAP_LNG;
+  var lastUserLat = null;
+  var lastUserLng = null;
+  var hasCenteredOnUser = false;
+  var isNativeWebView = !!(window.ReactNativeWebView && window.ReactNativeWebView.postMessage);
+  var geoWatchId = null;
 
   var USER_ICONS = {
     car: 'car-outline',
@@ -214,10 +172,6 @@ export function generateMapHtml(colors: GenerateMapHtmlOptions) {
     camioneta: 'car-sport-outline',
     person: 'person-outline',
   };
-
-  function setView(center, zoom) {
-    map.jumpTo({ center: center, zoom: zoom != null ? zoom : DEFAULT_ZOOM });
-  }
 
   function isValidLatLng(lat, lng) {
     return (
@@ -228,52 +182,31 @@ export function generateMapHtml(colors: GenerateMapHtmlOptions) {
     );
   }
 
-  /**
-   * Place/move the user pin. MapLibre order setLngLat([lng, lat]).
-   * First valid fix ALWAYS centers. forceCenter/fly override for recenter.
-   */
-  function applyUserLocation(lat, lng, opts) {
+  /** Pin + optional camera. MapLibre wants setLngLat([lng, lat]). */
+  function setUserFix(lat, lng, opts) {
     if (!isValidLatLng(lat, lng)) return;
     lastUserLat = lat;
     lastUserLng = lng;
-    updateUserLocation(lat, lng);
 
-    var forceCenter = !!(opts && opts.forceCenter);
-    var fly = !!(opts && opts.fly);
-    if (forceCenter || !hasPerformedInitialCenter) {
+    if (!userMarker) {
+      var el = document.createElement('div');
+      el.className = 'user-marker';
+      el.innerHTML = '<ion-icon name="person-outline"></ion-icon>';
+      userMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+    } else {
+      userMarker.setLngLat([lng, lat]);
+    }
+
+    var force = opts && opts.force;
+    var fly = opts && opts.fly;
+    if (force || !hasCenteredOnUser) {
       if (fly) {
-        map.flyTo({ center: [lng, lat], zoom: 15, duration: 600 });
+        map.flyTo({ center: [lng, lat], zoom: DEFAULT_ZOOM, duration: 600 });
       } else {
-        setView([lng, lat], DEFAULT_ZOOM);
+        map.jumpTo({ center: [lng, lat], zoom: DEFAULT_ZOOM });
       }
-      hasPerformedInitialCenter = true;
+      hasCenteredOnUser = true;
     }
-  }
-
-  /** Browser-only backup GPS (host is primary). Always forceCenter when force=true. */
-  function requestBrowserGeo(forceCenter) {
-    if (!isBrowserIframe || !navigator.geolocation) return;
-    var opts = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
-    function onPos(pos) {
-      if (!pos || !pos.coords) return;
-      var lat = pos.coords.latitude;
-      var lng = pos.coords.longitude;
-      applyUserLocation(lat, lng, { forceCenter: !!forceCenter || !hasPerformedInitialCenter, fly: !!forceCenter });
-      postToHost(JSON.stringify({ type: 'browserLocation', lat: lat, lng: lng }));
-    }
-    function onErr(err) {
-      postToHost(JSON.stringify({
-        type: 'geoError',
-        code: err && err.code,
-        message: (err && err.message) || 'geolocation failed',
-      }));
-    }
-    try {
-      navigator.geolocation.getCurrentPosition(onPos, onErr, opts);
-      if (browserGeoWatchId == null) {
-        browserGeoWatchId = navigator.geolocation.watchPosition(onPos, onErr, opts);
-      }
-    } catch (e) {}
   }
 
   function updateMarkers(newMarkers) {
@@ -325,7 +258,6 @@ export function generateMapHtml(colors: GenerateMapHtmlOptions) {
       properties: {},
       geometry: { type: 'LineString', coordinates: coordinates || [] },
     };
-
     var existing = map.getSource(ROUTE_SOURCE_ID);
     if (existing) {
       existing.setData(geojson);
@@ -354,33 +286,31 @@ export function generateMapHtml(colors: GenerateMapHtmlOptions) {
     applyRoute(coordinates);
   }
 
-  function updateUserLocation(lat, lng) {
-    if (lat == null || lng == null) {
-      if (userMarker) {
-        userMarker.remove();
-        userMarker = null;
-      }
-      return;
+  /**
+   * Web (browser iframe): own navigator.geolocation — pin/center do not depend on postMessage.
+   * Native WebView: host drives location via postMessage (expo-location).
+   */
+  function startWebGeolocation() {
+    if (isNativeWebView) return;
+    if (!navigator.geolocation) return;
+
+    var opts = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
+
+    function onPos(pos) {
+      if (!pos || !pos.coords) return;
+      var lat = pos.coords.latitude;
+      var lng = pos.coords.longitude;
+      setUserFix(lat, lng, null);
+      postToHost(JSON.stringify({ type: 'browserLocation', lat: lat, lng: lng }));
     }
 
-    // MapLibre always wants [longitude, latitude].
-    if (!userMarker) {
-      var el = document.createElement('div');
-      el.className = 'user-marker';
-      el.innerHTML = '<ion-icon name="person-outline"></ion-icon>';
-      userMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
-    } else {
-      userMarker.setLngLat([lng, lat]);
-    }
+    try {
+      navigator.geolocation.getCurrentPosition(onPos, function () {}, opts);
+      geoWatchId = navigator.geolocation.watchPosition(onPos, function () {}, opts);
+    } catch (e) {}
   }
 
-  // Paint bootstrap pin immediately if the host already had a fix.
-  if (BOOTSTRAP_LAT != null && BOOTSTRAP_LNG != null) {
-    updateUserLocation(BOOTSTRAP_LAT, BOOTSTRAP_LNG);
-  }
-
-  // Kick off browser geolocation ASAP (do not wait for style load).
-  requestBrowserGeo(false);
+  startWebGeolocation();
 
   map.on('load', function () {
     mapLoaded = true;
@@ -389,15 +319,11 @@ export function generateMapHtml(colors: GenerateMapHtmlOptions) {
       pendingRoute = null;
     }
     if (lastUserLat != null && lastUserLng != null) {
-      updateUserLocation(lastUserLat, lastUserLng);
-      if (!hasPerformedInitialCenter) {
-        setView([lastUserLng, lastUserLat], DEFAULT_ZOOM);
-        hasPerformedInitialCenter = true;
-      }
+      setUserFix(lastUserLat, lastUserLng, null);
     }
     postToHost(JSON.stringify({ type: 'ready' }));
-    // Retry geo after style load (permission prompt may resolve around now).
-    requestBrowserGeo(false);
+    // Permission dialog may resolve after load — retry once.
+    if (!isNativeWebView) startWebGeolocation();
   });
 
   map.on('moveend', function () {
@@ -416,33 +342,18 @@ export function generateMapHtml(colors: GenerateMapHtmlOptions) {
     }));
   });
 
-  function parseHostMessage(data) {
+  function parseMsg(data) {
     if (data == null) return null;
     if (typeof data === 'object') return data;
     if (typeof data !== 'string') return null;
-    try {
-      return JSON.parse(data);
-    } catch (e) {
-      return null;
-    }
+    try { return JSON.parse(data); } catch (e) { return null; }
   }
 
   window.addEventListener('message', function (event) {
-    var msg = parseHostMessage(event.data);
+    var msg = parseMsg(event.data);
     if (!msg || !msg.type) return;
 
     switch (msg.type) {
-      case 'init':
-        // Never jump to a placeholder once we have a real user fix.
-        if (hasPerformedInitialCenter && lastUserLat != null) break;
-        if (msg.center && msg.center.length === 2) {
-          var cLng = Number(msg.center[0]);
-          var cLat = Number(msg.center[1]);
-          // Skip null-island placeholders.
-          if (cLng === 0 && cLat === 0) break;
-          setView([cLng, cLat], msg.zoom || DEFAULT_ZOOM);
-        }
-        break;
       case 'markers':
         updateMarkers(msg.markers || []);
         break;
@@ -456,44 +367,37 @@ export function generateMapHtml(colors: GenerateMapHtmlOptions) {
           map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 600 });
         }
         break;
-      case 'followUser':
-        followRequested = !!msg.enabled;
-        if (followRequested && lastUserLat != null && lastUserLng != null && !hasPerformedInitialCenter) {
-          setView([lastUserLng, lastUserLat], map.getZoom() > 2 ? map.getZoom() : DEFAULT_ZOOM);
-          hasPerformedInitialCenter = true;
-        }
-        break;
       case 'userLocation':
+        // Native host path (and web backup from React store).
         if (msg.lat != null && msg.lng != null) {
-          // First fix always centers (applyUserLocation); later fixes only move the pin.
-          applyUserLocation(Number(msg.lat), Number(msg.lng), null);
-        } else if (!isBrowserIframe) {
-          updateUserLocation(null, null);
-          lastUserLat = null;
-          lastUserLng = null;
+          setUserFix(Number(msg.lat), Number(msg.lng), null);
         }
         break;
       case 'recenter':
-        userManuallyMoved = false;
-        hasPerformedInitialCenter = false;
         if (msg.lat != null && msg.lng != null && isValidLatLng(Number(msg.lat), Number(msg.lng))) {
-          applyUserLocation(Number(msg.lat), Number(msg.lng), { forceCenter: true, fly: true });
+          setUserFix(Number(msg.lat), Number(msg.lng), { force: true, fly: true });
         } else if (lastUserLat != null && lastUserLng != null) {
-          map.flyTo({ center: [lastUserLng, lastUserLat], zoom: 15, duration: 600 });
-          hasPerformedInitialCenter = true;
-          updateUserLocation(lastUserLat, lastUserLng);
-        } else {
-          requestBrowserGeo(true);
+          setUserFix(lastUserLat, lastUserLng, { force: true, fly: true });
+        } else if (!isNativeWebView && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            function (pos) {
+              setUserFix(pos.coords.latitude, pos.coords.longitude, { force: true, fly: true });
+              postToHost(JSON.stringify({
+                type: 'browserLocation',
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+              }));
+            },
+            function () {},
+            { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+          );
         }
         break;
     }
   });
 
   window.addEventListener('error', function (e) {
-    postToHost(JSON.stringify({
-      type: 'error',
-      message: e.message || 'Unknown error',
-    }));
+    postToHost(JSON.stringify({ type: 'error', message: e.message || 'Unknown error' }));
   });
 </script>
 </body>

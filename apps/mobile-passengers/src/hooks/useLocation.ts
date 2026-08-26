@@ -28,8 +28,8 @@ interface WebGeolocation {
 
 const WEB_GEO_OPTIONS: WebGeoOptions = {
   enableHighAccuracy: true,
-  timeout: 20_000,
-  maximumAge: 0,
+  timeout: 15_000,
+  maximumAge: 5_000,
 };
 
 function getWebGeolocation(): WebGeolocation | null {

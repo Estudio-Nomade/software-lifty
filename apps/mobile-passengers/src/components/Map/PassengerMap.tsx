@@ -24,7 +24,6 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
       generateMapHtml({
         primary: theme.colors.primary,
         lightGray: theme.colors.lightGray,
-        bootstrap: null,
       }),
     [],
   );

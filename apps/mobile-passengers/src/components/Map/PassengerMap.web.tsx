@@ -1,7 +1,6 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { requestFreshPosition } from '../../hooks/useLocation';
 import { useLocationStore } from '../../store/locationStore';
 import { theme } from '../../theme';
 import { MapErrorFallback } from './MapErrorFallback';
@@ -9,13 +8,13 @@ import { DEFAULT_ZOOM, type PassengerMapProps, generateMapHtml } from './mapHtml
 import { useMapController } from './useMapController';
 
 /**
- * Web map transport — fast mount, no city defaults.
+ * Web MapLibre transport.
  *
- * - Mount the MapLibre iframe immediately (same UX speed as before).
- * - HTML starts at world view [0,0] zoom 2 — never Buenos Aires / city hardcodes.
- * - First real GPS fix (host or iframe navigator.geolocation) centers + teal pin.
- * - postMessage queue so early messages are not dropped before onload.
- * - Parent geolocation is primary; iframe geo is backup.
+ * Simple model:
+ * - Mount iframe immediately (fast UX).
+ * - Map HTML owns navigator.geolocation for the user pin + first camera center.
+ * - Host still pushes markers/route/userLocation/recenter via postMessage.
+ * - browserLocation events keep the React location store in sync.
  */
 
 declare const document: any;
@@ -26,13 +25,6 @@ declare const URL: {
 };
 
 const LOAD_TIMEOUT_MS = 15_000;
-
-function isRealFix(lat: number | null | undefined, lng: number | null | undefined): boolean {
-  if (lat == null || lng == null) return false;
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
-  if (lat === 0 && lng === 0) return false;
-  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
-}
 
 export const PassengerMap: React.FC<PassengerMapProps> = ({
   centerCoordinate,
@@ -45,13 +37,11 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
   style,
   onError,
 }) => {
-  // Static HTML — no bootstrap remount. GPS arrives via postMessage / iframe geo.
   const mapHtml = useMemo(
     () =>
       generateMapHtml({
         primary: theme.colors.primary,
         lightGray: theme.colors.lightGray,
-        bootstrap: null,
       }),
     [],
   );
@@ -59,36 +49,10 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
   const containerRef = useRef<any>(null);
   const iframeRef = useRef<any>(null);
   const blobUrlRef = useRef<string | null>(null);
-  const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingQueue = useRef<string[]>([]);
+  const pendingRef = useRef<string[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [mountKey, setMountKey] = useState(0);
-
-  const storeCurrent = useLocationStore((s) => s.current);
-
-  const propLat = userLocation?.[1] ?? null;
-  const propLng = userLocation?.[0] ?? null;
-  const fixLat = isRealFix(propLat, propLng)
-    ? (propLat as number)
-    : storeCurrent && isRealFix(storeCurrent.lat, storeCurrent.lng)
-      ? storeCurrent.lat
-      : null;
-  const fixLng = isRealFix(propLat, propLng)
-    ? (propLng as number)
-    : storeCurrent && isRealFix(storeCurrent.lat, storeCurrent.lng)
-      ? storeCurrent.lng
-      : null;
-
-  const effectiveUser: [number, number] | null =
-    fixLat != null && fixLng != null ? [fixLng, fixLat] : null;
-
-  // Only pass a real center — never city defaults. [0,0] is ignored by controller/mapHtml.
-  const effectiveCenter: [number, number] = effectiveUser
-    ? effectiveUser
-    : isRealFix(centerCoordinate?.[1], centerCoordinate?.[0])
-      ? centerCoordinate
-      : [0, 0];
 
   const handleError = useCallback(() => {
     setHasError(true);
@@ -106,24 +70,20 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
       const raw = JSON.stringify(message);
       const win = iframeRef.current?.contentWindow;
       if (!win || !isLoaded) {
-        pendingQueue.current.push(raw);
+        pendingRef.current.push(raw);
         return;
       }
-      try {
-        win.postMessage(raw, '*');
-      } catch {
-        pendingQueue.current.push(raw);
-      }
+      win.postMessage(raw, '*');
     },
     [isLoaded],
   );
 
   const { handleRawMessage } = useMapController({
-    centerCoordinate: effectiveCenter,
+    centerCoordinate,
     zoom,
     markers,
     routeLine,
-    userLocation: effectiveUser,
+    userLocation,
     followUserLocation,
     recenterKey,
     onError: handleError,
@@ -131,42 +91,35 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     postMessage,
   });
 
-  // Kick host geolocation immediately (parallel to map CDN load).
-  useEffect(() => {
-    void requestFreshPosition();
-  }, []);
-
-  // Iframe → parent
+  // iframe → parent
   useEffect(() => {
     const onMessage = (event: any) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
+      let data: any;
       try {
-        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (data?.type === 'browserLocation' && isRealFix(data.lat, data.lng)) {
-          useLocationStore.getState().setCurrent({ lat: data.lat, lng: data.lng });
-          useLocationStore.getState().setPermissionGranted(true);
-        }
-        const raw = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
-        handleRawMessage(raw);
+        data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
       } catch {
-        // ignore
+        return;
       }
+      if (data?.type === 'browserLocation' && data.lat != null && data.lng != null) {
+        useLocationStore.getState().setCurrent({ lat: data.lat, lng: data.lng });
+        useLocationStore.getState().setPermissionGranted(true);
+      }
+      handleRawMessage(typeof event.data === 'string' ? event.data : JSON.stringify(event.data));
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [handleRawMessage]);
 
-  // Mount iframe immediately (do not wait for GPS).
+  // Mount iframe once, immediately.
   useEffect(() => {
     const container = containerRef.current;
     if (!container || typeof document === 'undefined') return;
 
-    pendingQueue.current = [];
+    pendingRef.current = [];
     setIsLoaded(false);
 
-    while (container.firstChild) {
-      container.removeChild(container.firstChild);
-    }
+    while (container.firstChild) container.removeChild(container.firstChild);
     if (blobUrlRef.current) {
       URL.revokeObjectURL(blobUrlRef.current);
       blobUrlRef.current = null;
@@ -181,25 +134,25 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     iframe.title = 'map';
     iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
     iframe.setAttribute('allow', 'geolocation');
-    iframe.style.width = '100%';
-    iframe.style.height = '100%';
-    iframe.style.border = '0';
-    iframe.style.background = 'transparent';
-    iframe.style.display = 'block';
+    iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:transparent';
 
     const flush = () => {
       const win = iframe.contentWindow;
       if (!win) return;
-      while (pendingQueue.current.length > 0) {
-        const raw = pendingQueue.current.shift();
-        if (raw != null) win.postMessage(raw, '*');
+      while (pendingRef.current.length) {
+        win.postMessage(pendingRef.current.shift(), '*');
       }
     };
 
+    let loadTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+      setIsLoaded(true);
+      flush();
+    }, LOAD_TIMEOUT_MS);
+
     iframe.onload = () => {
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-        loadTimeoutRef.current = null;
+      if (loadTimer) {
+        clearTimeout(loadTimer);
+        loadTimer = null;
       }
       setIsLoaded(true);
       setTimeout(flush, 0);
@@ -209,24 +162,14 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     container.appendChild(iframe);
     iframeRef.current = iframe;
 
-    loadTimeoutRef.current = setTimeout(() => {
-      setIsLoaded((prev) => prev || true);
-      flush();
-    }, LOAD_TIMEOUT_MS);
-
     return () => {
-      if (loadTimeoutRef.current) {
-        clearTimeout(loadTimeoutRef.current);
-        loadTimeoutRef.current = null;
-      }
+      if (loadTimer) clearTimeout(loadTimer);
       if (blobUrlRef.current) {
         URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = null;
       }
       iframeRef.current = null;
-      while (container.firstChild) {
-        container.removeChild(container.firstChild);
-      }
+      while (container.firstChild) container.removeChild(container.firstChild);
     };
   }, [mapHtml, mountKey, handleError]);
 
@@ -247,9 +190,7 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   loadingOverlay: {
     ...(StyleSheet.absoluteFillObject as object),
     justifyContent: 'center',
