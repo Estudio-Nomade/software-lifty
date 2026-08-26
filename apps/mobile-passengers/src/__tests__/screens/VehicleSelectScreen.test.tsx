@@ -15,8 +15,13 @@ jest.mock('../../api/passenger', () => ({
   requestRide: jest.fn(),
 }));
 
+const mockReplace = jest.fn();
 jest.mock('../../hooks/useAppNavigation', () => ({
-  useAppNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn(), replace: jest.fn() }),
+  useAppNavigation: () => ({
+    navigate: mockNavigate,
+    goBack: jest.fn(),
+    replace: mockReplace,
+  }),
 }));
 
 jest.mock('../../store/locationStore', () => ({
@@ -176,7 +181,20 @@ describe('VehicleSelectScreen fare estimation', () => {
       duration_minutes: 15,
       payment_method: 'cash',
     });
-    expect(mockNavigate).toHaveBeenCalledWith('ConnectingDriver', { tripId: 'trip-1' });
+    expect(mockReplace).toHaveBeenCalledWith('ConnectingDriver', { tripId: 'trip-1' });
     expect(mockNavigate).not.toHaveBeenCalledWith('ConfirmPayment', expect.anything());
+  });
+
+  test('shows inline error when requestRide fails (web has no Alert)', async () => {
+    mockRequestRide.mockRejectedValueOnce(new Error('Debés saldar tu deuda'));
+    const { findByText, getByText } = await render(<VehicleSelectScreen />);
+    await findByText('$4.200');
+
+    await act(async () => {
+      fireEvent.press(getByText('CONTINUAR $4.200'));
+    });
+
+    expect(await findByText('Debés saldar tu deuda')).toBeTruthy();
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 });

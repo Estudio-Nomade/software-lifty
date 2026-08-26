@@ -48,8 +48,19 @@ function paramText(value: string | string[] | undefined): string {
   return value ?? '';
 }
 
+function errorMessage(err: unknown): string {
+  const data = (err as { response?: { data?: { error?: { message?: string }; message?: string } } })
+    ?.response?.data;
+  return (
+    data?.error?.message ||
+    data?.message ||
+    (err as Error)?.message ||
+    'No se pudo solicitar el viaje. Intentá de nuevo.'
+  );
+}
+
 export function VehicleSelectScreen() {
-  const { goBack, navigate } = useAppNavigation();
+  const { goBack, replace } = useAppNavigation();
   const current = useLocationStore((s) => s.current);
   const methods = usePaymentStore((s) => s.methods);
   const setDefault = usePaymentStore((s) => s.setDefault);
@@ -70,6 +81,7 @@ export function VehicleSelectScreen() {
   const [selected, setSelected] = useState<Vehicle['id']>('auto');
   const [fares, setFares] = useState<Partial<Record<Vehicle['id'], FareEstimate>>>({});
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const coords = useMemo(() => {
     const origin_lat = Number(paramText(params.pickupLat));
@@ -134,27 +146,29 @@ export function VehicleSelectScreen() {
 
   const handleContinue = async () => {
     if (!coords || !selectedEstimate || loading) return;
+    setSubmitError(null);
     setLoading(true);
     try {
       const trip = await requestRide({
-        origin_lat: coords.origin_lat,
-        origin_lng: coords.origin_lng,
-        dest_lat: coords.dest_lat,
-        dest_lng: coords.dest_lng,
-        origin_address: pickup || '',
-        dest_address: destination || '',
+        origin_lat: Number(coords.origin_lat),
+        origin_lng: Number(coords.origin_lng),
+        dest_lat: Number(coords.dest_lat),
+        dest_lng: Number(coords.dest_lng),
+        origin_address: pickup || 'Origen',
+        dest_address: destination || 'Destino',
         vehicle_type: selected,
-        distance_km: selectedEstimate.distance_km,
-        duration_minutes: selectedEstimate.duration_min,
+        distance_km: Number(selectedEstimate.distance_km),
+        duration_minutes: Number(selectedEstimate.duration_min),
         payment_method: selectedPaymentType,
       });
-      navigate('ConnectingDriver', { tripId: trip.id });
+      // replace: don't stack vehicle-select under connecting
+      replace('ConnectingDriver', { tripId: String(trip.id) });
     } catch (err) {
-      const data = (
-        err as { response?: { data?: { error?: { message?: string }; message?: string } } }
-      )?.response?.data;
-      const message = data?.error?.message ?? data?.message ?? (err as Error).message;
-      Alert.alert('No se pudo solicitar el viaje', message || 'Intentalo de nuevo.');
+      console.error('[VehicleSelect] requestRide failed', err);
+      const message = errorMessage(err);
+      setSubmitError(message);
+      // Alert is a no-op on web — keep inline error as primary UX.
+      Alert.alert('No se pudo solicitar el viaje', message);
     } finally {
       setLoading(false);
     }
@@ -263,9 +277,18 @@ export function VehicleSelectScreen() {
             })}
           </View>
 
+          {submitError ? (
+            <View style={styles.errorBox} accessibilityRole="alert">
+              <Ionicons name="alert-circle" size={16} color={theme.colors.dangerRed} />
+              <Text style={styles.errorText}>{submitError}</Text>
+            </View>
+          ) : null}
+
           <Button
             variant="cta"
-            onPress={handleContinue}
+            onPress={() => {
+              void handleContinue();
+            }}
             loading={loading}
             disabled={!selectedEstimate || loading}
             style={styles.solicitarBtn}
@@ -436,6 +459,20 @@ const styles = StyleSheet.create({
   },
   paymentChipTextActive: {
     color: theme.colors.white,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    backgroundColor: 'rgba(229, 57, 53, 0.08)',
+  },
+  errorText: {
+    flex: 1,
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.dangerRed,
   },
   solicitarBtn: {
     width: '100%',
