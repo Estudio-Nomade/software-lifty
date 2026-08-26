@@ -18,8 +18,13 @@ jest.mock('../../hooks/useLocation', () => ({
   useLocation: jest.fn(),
   toMapCoordinate: (lat: number, lng: number) => [lng, lat] as [number, number],
   isValidLatLng: () => true,
+  applyBrowserLocation: jest.fn(),
   // Default: no GPS — individual tests can override when they need a fix.
   requestFreshPosition: jest.fn().mockResolvedValue(null),
+}));
+
+jest.mock('../../utils/resolveAddressLabel', () => ({
+  resolveAddressLabel: jest.fn().mockResolvedValue('Mi ubicación actual'),
 }));
 
 jest.mock('../../hooks/usePlaceAutocomplete', () => ({

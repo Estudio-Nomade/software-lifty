@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -14,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { geocodeAddress, getActiveRide, reverseGeocode } from '../api/passenger';
+import { geocodeAddress, getActiveRide } from '../api/passenger';
 import type { PlaceSuggestion } from '../api/types';
 import { BottomTabBar } from '../components/BottomTabBar';
 import { HomeHeader } from '../components/HomeHeader';
@@ -24,9 +23,9 @@ import { QuickChips } from '../components/QuickChips';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { requestFreshPosition, toMapCoordinate, useLocation } from '../hooks/useLocation';
 import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
-import { useLocationStore } from '../store/locationStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
+import { resolveAddressLabel } from '../utils/resolveAddressLabel';
 
 export function HomeScreen() {
   const { navigate, replace } = useAppNavigation();
@@ -77,51 +76,23 @@ export function HomeScreen() {
   );
   const visibleSuggestions = focusedField === 'pickup' ? pickupSuggestions : destSuggestions;
 
-  // When the search sheet opens, autofill empty "Desde" with GPS + street name.
-  // Never show raw "lat, lng" as the label (web reverseGeocodeAsync is broken).
+  // When the search sheet opens, autofill empty "Desde" from the shared store
+  // (fed by the map iframe GPS on web) + a human street label. Never raw coords.
   useEffect(() => {
     if (!searchExpanded) return;
-    // Don't overwrite a pickup the user already typed / picked.
     if (pickupPicked || pickupAddress.trim()) return;
     let cancelled = false;
 
     (async () => {
-      let fix = useLocationStore.getState().current;
-      if (!fix) fix = await requestFreshPosition();
+      // On web the map iframe owns GPS and publishes via browserLocation.
+      // Wait up to ~12s for that fix (requestFreshPosition polls the store).
+      const fix = await requestFreshPosition();
       if (cancelled || !fix) return;
 
       setPickupCoord({ lat: fix.lat, lng: fix.lng });
-
-      let label = '';
-      try {
-        const rev = await reverseGeocode(fix.lat, fix.lng);
-        if (cancelled) return;
-        // Skip the backend's last-resort "Ubicación (lat, lng)" placeholder.
-        if (rev.formatted_address && !/^Ubicación \(/.test(rev.formatted_address)) {
-          label = rev.formatted_address;
-        }
-      } catch {
-        // fall through
-      }
-
-      if (!label && Platform.OS !== 'web') {
-        try {
-          const [addr] = await Location.reverseGeocodeAsync({
-            latitude: fix.lat,
-            longitude: fix.lng,
-          });
-          if (cancelled) return;
-          label =
-            addr?.street && addr?.streetNumber
-              ? `${addr.street} ${addr.streetNumber}`
-              : (addr?.name ?? '');
-        } catch {
-          // fall through
-        }
-      }
-
+      const label = await resolveAddressLabel(fix.lat, fix.lng);
       if (cancelled) return;
-      setPickupAddress(label || 'Mi ubicación actual');
+      setPickupAddress(label);
       setPickupPicked(true);
     })();
 

@@ -3,42 +3,6 @@ import { useCallback, useEffect } from 'react';
 import { Platform } from 'react-native';
 import { useLocationStore } from '../store/locationStore';
 
-type WebPosition = { coords: { latitude: number; longitude: number; accuracy?: number } };
-type WebPositionError = { code: number; message?: string };
-
-interface WebGeoOptions {
-  enableHighAccuracy?: boolean;
-  timeout?: number;
-  maximumAge?: number;
-}
-
-interface WebGeolocation {
-  getCurrentPosition: (
-    success: (pos: WebPosition) => void,
-    error?: (err: WebPositionError) => void,
-    options?: WebGeoOptions,
-  ) => void;
-  watchPosition: (
-    success: (pos: WebPosition) => void,
-    error?: (err: WebPositionError) => void,
-    options?: WebGeoOptions,
-  ) => number;
-  clearWatch: (id: number) => void;
-}
-
-/** Prefer a fresh, accurate fix. Single GPS owner for the whole app on web. */
-const WEB_GEO_OPTIONS: WebGeoOptions = {
-  enableHighAccuracy: true,
-  timeout: 15_000,
-  maximumAge: 0,
-};
-
-function getWebGeolocation(): WebGeolocation | null {
-  if (Platform.OS !== 'web') return null;
-  const nav = (globalThis as { navigator?: { geolocation?: WebGeolocation } }).navigator;
-  return nav?.geolocation ?? null;
-}
-
 export function isValidLatLng(lat: number, lng: number): boolean {
   return (
     Number.isFinite(lat) &&
@@ -55,55 +19,64 @@ export function toMapCoordinate(lat: number, lng: number): [number, number] {
 }
 
 /**
- * One-shot fix. Updates the store and resolves with coords (or null).
- * Used by the locate button and the "Desde" autofill.
+ * Apply a fix coming from the map iframe (web sole GPS owner).
+ * Native never calls this — expo-location writes the store directly.
  */
-export function requestFreshPosition(): Promise<{ lat: number; lng: number } | null> {
-  const webGeo = getWebGeolocation();
-  if (webGeo) {
-    return new Promise((resolve) => {
-      webGeo.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          if (!isValidLatLng(lat, lng)) {
-            resolve(null);
-            return;
-          }
-          useLocationStore.getState().setCurrent({ lat, lng });
-          useLocationStore.getState().setPermissionGranted(true);
-          resolve({ lat, lng });
-        },
-        () => resolve(null),
-        WEB_GEO_OPTIONS,
-      );
-    });
-  }
-
-  return (async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return null;
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      const lat = pos.coords.latitude;
-      const lng = pos.coords.longitude;
-      if (!isValidLatLng(lat, lng)) return null;
-      useLocationStore.getState().setCurrent({ lat, lng });
-      useLocationStore.getState().setPermissionGranted(true);
-      return { lat, lng };
-    } catch {
-      return null;
-    }
-  })();
+export function applyBrowserLocation(lat: number, lng: number): void {
+  if (!isValidLatLng(lat, lng)) return;
+  useLocationStore.getState().setCurrent({ lat, lng });
+  useLocationStore.getState().setPermissionGranted(true);
 }
 
 /**
- * Single source of truth for device position.
- * - Web: navigator.geolocation only
- * - Native: expo-location
- * Map iframe must NOT run its own geolocation.
+ * One-shot position.
+ * - Web: returns the store value written by the map iframe (no second GPS call).
+ * - Native: expo-location.
+ */
+export async function requestFreshPosition(): Promise<{ lat: number; lng: number } | null> {
+  if (Platform.OS === 'web') {
+    // Wait briefly for the iframe GPS owner to publish a fix.
+    const existing = useLocationStore.getState().current;
+    if (existing && isValidLatLng(existing.lat, existing.lng)) return existing;
+
+    return new Promise((resolve) => {
+      const started = Date.now();
+      const id = setInterval(() => {
+        const cur = useLocationStore.getState().current;
+        if (cur && isValidLatLng(cur.lat, cur.lng)) {
+          clearInterval(id);
+          resolve(cur);
+          return;
+        }
+        if (Date.now() - started > 12_000) {
+          clearInterval(id);
+          resolve(null);
+        }
+      }, 200);
+    });
+  }
+
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return null;
+    const pos = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High,
+    });
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
+    if (!isValidLatLng(lat, lng)) return null;
+    useLocationStore.getState().setCurrent({ lat, lng });
+    useLocationStore.getState().setPermissionGranted(true);
+    return { lat, lng };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Subscribe to the shared location store.
+ * - Web: store is fed by the map iframe via applyBrowserLocation (NO navigator.geolocation here).
+ * - Native: expo-location writes the store.
  */
 export function useLocation() {
   const current = useLocationStore((s) => s.current);
@@ -112,39 +85,17 @@ export function useLocation() {
   const setPermissionGranted = useLocationStore((s) => s.setPermissionGranted);
 
   useEffect(() => {
-    let subscription: Location.LocationSubscription | null = null;
-    let webWatchId: number | null = null;
-    let cancelled = false;
+    // Web: do not call navigator.geolocation — the map iframe is the sole owner.
+    if (Platform.OS === 'web') return;
 
-    const webGeo = getWebGeolocation();
+    let subscription: Location.LocationSubscription | null = null;
+    let cancelled = false;
 
     const setCurrentSafe = (lat: number, lng: number) => {
       if (cancelled) return;
       if (!isValidLatLng(lat, lng)) return;
       setCurrent({ lat, lng });
     };
-
-    if (webGeo) {
-      const onPos = (pos: WebPosition) => {
-        setCurrentSafe(pos.coords.latitude, pos.coords.longitude);
-        setPermissionGranted(true);
-      };
-      const onErr = (err: WebPositionError) => {
-        if (err.code === 1) setPermissionGranted(false);
-      };
-
-      webGeo.getCurrentPosition(onPos, onErr, WEB_GEO_OPTIONS);
-      webWatchId = webGeo.watchPosition(onPos, onErr, {
-        enableHighAccuracy: true,
-        timeout: 15_000,
-        maximumAge: 5_000,
-      });
-
-      return () => {
-        cancelled = true;
-        if (webWatchId != null) webGeo.clearWatch(webWatchId);
-      };
-    }
 
     (async () => {
       let granted = false;

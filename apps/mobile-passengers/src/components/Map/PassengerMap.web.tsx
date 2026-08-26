@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { applyBrowserLocation } from '../../hooks/useLocation';
 import { theme } from '../../theme';
 import { MapErrorFallback } from './MapErrorFallback';
 import { DEFAULT_ZOOM, type PassengerMapProps, generateMapHtml } from './mapHtml';
@@ -9,8 +10,8 @@ import { useMapController } from './useMapController';
 /**
  * Web MapLibre transport.
  *
- * GPS is owned solely by React `useLocation` (navigator.geolocation).
- * This component only bridges host → iframe via postMessage.
+ * Sole GPS owner on web = the iframe (navigator.geolocation inside mapHtml).
+ * React only receives fixes via postMessage type `browserLocation` → store.
  */
 
 declare const document: any;
@@ -74,12 +75,14 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     [isLoaded],
   );
 
+  // On web the iframe owns GPS — do not push userLocation back into it
+  // (would fight the iframe's own navigator.geolocation).
   const { handleRawMessage } = useMapController({
     centerCoordinate,
     zoom,
     markers,
     routeLine,
-    userLocation,
+    userLocation: null,
     followUserLocation,
     recenterKey,
     onError: handleError,
@@ -90,6 +93,16 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
   useEffect(() => {
     const onMessage = (event: any) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
+      let data: any;
+      try {
+        data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      } catch {
+        return;
+      }
+      // Sole GPS path into React on web.
+      if (data?.type === 'browserLocation' && data.lat != null && data.lng != null) {
+        applyBrowserLocation(Number(data.lat), Number(data.lng));
+      }
       const raw = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
       handleRawMessage(raw);
     };
@@ -118,6 +131,8 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     iframe.src = url;
     iframe.title = 'map';
     iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
+    // Required for navigator.geolocation inside the sandboxed document.
+    iframe.setAttribute('allow', 'geolocation');
     iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:transparent';
 
     const flush = () => {

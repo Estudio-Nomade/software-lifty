@@ -163,7 +163,10 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
   var lastUserLat = null;
   var lastUserLng = null;
   var hasCenteredOnUser = false;
-  // GPS is owned by the React host (useLocation). This document only renders.
+  // WEB: this document is the sole GPS owner (navigator.geolocation).
+  // NATIVE WebView: host pushes userLocation via postMessage.
+  var isNativeWebView = !!(window.ReactNativeWebView && window.ReactNativeWebView.postMessage);
+  var geoWatchId = null;
 
   var USER_ICONS = {
     car: 'car-outline',
@@ -285,6 +288,46 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     applyRoute(coordinates);
   }
 
+  /** Web-only: sole GPS owner. Publishes every fix to the React host. */
+  function startWebGeolocation(forceCenter) {
+    if (isNativeWebView) return;
+    if (!navigator.geolocation) {
+      postToHost(JSON.stringify({ type: 'geoError', message: 'navigator.geolocation unavailable' }));
+      return;
+    }
+    var opts = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
+    function onPos(pos) {
+      if (!pos || !pos.coords) return;
+      var lat = pos.coords.latitude;
+      var lng = pos.coords.longitude;
+      setUserFix(lat, lng, forceCenter ? { force: true, fly: !!forceCenter } : null);
+      postToHost(JSON.stringify({
+        type: 'browserLocation',
+        lat: lat,
+        lng: lng,
+        accuracy: pos.coords.accuracy,
+      }));
+    }
+    function onErr(err) {
+      postToHost(JSON.stringify({
+        type: 'geoError',
+        code: err && err.code,
+        message: (err && err.message) || 'geolocation failed',
+      }));
+    }
+    try {
+      navigator.geolocation.getCurrentPosition(onPos, onErr, opts);
+      if (geoWatchId == null) {
+        geoWatchId = navigator.geolocation.watchPosition(onPos, onErr, opts);
+      }
+    } catch (e) {
+      postToHost(JSON.stringify({ type: 'geoError', message: String(e) }));
+    }
+  }
+
+  // Start GPS immediately (before style load) so the first fix is ready ASAP.
+  startWebGeolocation(false);
+
   map.on('load', function () {
     mapLoaded = true;
     if (pendingRoute) {
@@ -295,6 +338,8 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
       setUserFix(lastUserLat, lastUserLng, { force: true });
     }
     postToHost(JSON.stringify({ type: 'ready' }));
+    // Permission prompt may complete after load — one more kick.
+    startWebGeolocation(false);
   });
 
   map.on('moveend', function () {
@@ -339,13 +384,20 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
         }
         break;
       case 'userLocation':
-        // Single source of truth: host (useLocation) pushes every fix.
-        if (msg.lat != null && msg.lng != null) {
+        // Native host path only. On web the iframe owns GPS — ignore host pushes
+        // to avoid fighting a second geolocation source.
+        if (isNativeWebView && msg.lat != null && msg.lng != null) {
           setUserFix(Number(msg.lat), Number(msg.lng), null);
         }
         break;
       case 'recenter':
-        if (msg.lat != null && msg.lng != null && isValidLatLng(Number(msg.lat), Number(msg.lng))) {
+        if (!isNativeWebView) {
+          // Web: always re-query the browser GPS owner, then fly.
+          startWebGeolocation(true);
+          if (lastUserLat != null && lastUserLng != null) {
+            setUserFix(lastUserLat, lastUserLng, { force: true, fly: true });
+          }
+        } else if (msg.lat != null && msg.lng != null && isValidLatLng(Number(msg.lat), Number(msg.lng))) {
           setUserFix(Number(msg.lat), Number(msg.lng), { force: true, fly: true });
         } else if (lastUserLat != null && lastUserLng != null) {
           setUserFix(lastUserLat, lastUserLng, { force: true, fly: true });
