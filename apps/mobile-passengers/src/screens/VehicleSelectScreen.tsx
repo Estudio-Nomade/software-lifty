@@ -14,8 +14,10 @@ import { estimateFare, requestRide } from '../api/passenger';
 import type { FareEstimate } from '../api/types';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
+import { RequestBlockedCard } from '../components/RequestBlockedCard';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { toMapCoordinate } from '../hooks/useLocation';
+import { type RideRequestErrorInfo, parseRideRequestError } from '../lib/rideRequestErrors';
 import { useLocationStore } from '../store/locationStore';
 import { type PaymentMethodType, usePaymentStore } from '../store/paymentStore';
 import { theme } from '../theme';
@@ -48,19 +50,8 @@ function paramText(value: string | string[] | undefined): string {
   return value ?? '';
 }
 
-function errorMessage(err: unknown): string {
-  const data = (err as { response?: { data?: { error?: { message?: string }; message?: string } } })
-    ?.response?.data;
-  return (
-    data?.error?.message ||
-    data?.message ||
-    (err as Error)?.message ||
-    'No se pudo solicitar el viaje. Intentá de nuevo.'
-  );
-}
-
 export function VehicleSelectScreen() {
-  const { goBack, replace } = useAppNavigation();
+  const { goBack, replace, navigate } = useAppNavigation();
   const current = useLocationStore((s) => s.current);
   const methods = usePaymentStore((s) => s.methods);
   const setDefault = usePaymentStore((s) => s.setDefault);
@@ -81,7 +72,7 @@ export function VehicleSelectScreen() {
   const [selected, setSelected] = useState<Vehicle['id']>('auto');
   const [fares, setFares] = useState<Partial<Record<Vehicle['id'], FareEstimate>>>({});
   const [loading, setLoading] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<RideRequestErrorInfo | null>(null);
 
   const coords = useMemo(() => {
     const origin_lat = Number(paramText(params.pickupLat));
@@ -146,7 +137,7 @@ export function VehicleSelectScreen() {
 
   const handleContinue = async () => {
     if (!coords || !selectedEstimate || loading) return;
-    setSubmitError(null);
+    setBlocked(null);
     setLoading(true);
     try {
       const trip = await requestRide({
@@ -161,14 +152,14 @@ export function VehicleSelectScreen() {
         duration_minutes: Number(selectedEstimate.duration_min),
         payment_method: selectedPaymentType,
       });
-      // replace: don't stack vehicle-select under connecting
       replace('ConnectingDriver', { tripId: String(trip.id) });
     } catch (err) {
       console.error('[VehicleSelect] requestRide failed', err);
-      const message = errorMessage(err);
-      setSubmitError(message);
-      // Alert is a no-op on web — keep inline error as primary UX.
-      Alert.alert('No se pudo solicitar el viaje', message);
+      const info = parseRideRequestError(err);
+      setBlocked(info);
+      if (info.code === 'UNKNOWN') {
+        Alert.alert(info.title, info.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -277,11 +268,12 @@ export function VehicleSelectScreen() {
             })}
           </View>
 
-          {submitError ? (
-            <View style={styles.errorBox} accessibilityRole="alert">
-              <Ionicons name="alert-circle" size={16} color={theme.colors.dangerRed} />
-              <Text style={styles.errorText}>{submitError}</Text>
-            </View>
+          {blocked ? (
+            <RequestBlockedCard
+              info={blocked}
+              onOpenHistory={() => navigate('TripHistory')}
+              onOpenSupport={() => navigate('Support')}
+            />
           ) : null}
 
           <Button
@@ -459,20 +451,6 @@ const styles = StyleSheet.create({
   },
   paymentChipTextActive: {
     color: theme.colors.white,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    padding: theme.spacing.md,
-    borderRadius: theme.radius.md,
-    backgroundColor: 'rgba(229, 57, 53, 0.08)',
-  },
-  errorText: {
-    flex: 1,
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
-    color: theme.colors.dangerRed,
   },
   solicitarBtn: {
     width: '100%',

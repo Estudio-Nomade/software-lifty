@@ -185,8 +185,17 @@ describe('VehicleSelectScreen fare estimation', () => {
     expect(mockNavigate).not.toHaveBeenCalledWith('ConfirmPayment', expect.anything());
   });
 
-  test('shows inline error when requestRide fails (web has no Alert)', async () => {
-    mockRequestRide.mockRejectedValueOnce(new Error('Debés saldar tu deuda'));
+  test('shows blocked card when suspended for cancellations', async () => {
+    mockRequestRide.mockRejectedValueOnce({
+      response: {
+        data: {
+          error: {
+            code: 'PASSENGER_SUSPENDED',
+            message: 'Estás suspendido temporalmente por cancelaciones.',
+          },
+        },
+      },
+    });
     const { findByText, getByText } = await render(<VehicleSelectScreen />);
     await findByText('$4.200');
 
@@ -194,7 +203,9 @@ describe('VehicleSelectScreen fare estimation', () => {
       fireEvent.press(getByText('CONTINUAR $4.200'));
     });
 
-    expect(await findByText('Debés saldar tu deuda')).toBeTruthy();
+    expect(await findByText('Cuenta suspendida temporalmente')).toBeTruthy();
+    expect(await findByText(/suspendido temporalmente/i)).toBeTruthy();
+    expect(await findByText('Contactar soporte')).toBeTruthy();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 });
