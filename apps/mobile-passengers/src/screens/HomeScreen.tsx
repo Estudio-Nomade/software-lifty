@@ -368,8 +368,7 @@ export function HomeScreen() {
 
             <View style={styles.mapArea}>
               <PassengerMap
-                // Web waits for real GPS before painting (see PassengerMap.web).
-                // Never pass a city default — that was the BA bug.
+                // [0,0] ignored until real GPS. Never pass a city default (BA bug).
                 centerCoordinate={current ? toMapCoordinate(current.lat, current.lng) : [0, 0]}
                 userLocation={current ? toMapCoordinate(current.lat, current.lng) : null}
                 followUserLocation
