@@ -3,6 +3,8 @@ import React, { useRef, useEffect } from 'react';
 import {
   Alert,
   Animated,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -66,6 +68,7 @@ export const TripCompleteScreen: React.FC = () => {
 
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     Animated.parallel([
@@ -293,6 +296,9 @@ export const TripCompleteScreen: React.FC = () => {
             multiline
             textAlignVertical="top"
             editable={!submitting}
+            onFocus={() => {
+              setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+            }}
           />
 
           <Button
@@ -317,19 +323,29 @@ export const TripCompleteScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Animated.View
-          style={[
-            styles.content,
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim }],
-            },
-          ]}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {step === 'collect' ? renderCollectStep() : renderRateStep()}
-        </Animated.View>
-      </ScrollView>
+          <Animated.View
+            style={[
+              styles.content,
+              {
+                opacity: fadeAnim,
+                transform: [{ scale: scaleAnim }],
+              },
+            ]}
+          >
+            {step === 'collect' ? renderCollectStep() : renderRateStep()}
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 };
@@ -338,19 +354,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.white,
-    gap: theme.spacing.lg,
+  },
+  flex: {
+    flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
+    paddingVertical: theme.spacing.lg,
     paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   content: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.lg,
+    width: '100%',
   },
   completedLabel: {
     fontSize: theme.fontSize.md,

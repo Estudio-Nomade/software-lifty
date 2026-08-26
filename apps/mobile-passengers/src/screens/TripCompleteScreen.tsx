@@ -1,6 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { rateRide, setTripPaymentMethod } from '../api/passenger';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -113,134 +123,152 @@ export function TripCompleteScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.content}>
-        <Ionicons name="checkmark-circle" size={64} color={theme.colors.primary} />
-        <Text style={styles.title}>¡Viaje completado!</Text>
-        <Text style={styles.amount}>{formatCurrency(trip?.total_fare)}</Text>
-        {routeLabel ? <Text style={styles.subtitle}>{routeLabel}</Text> : null}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.content}>
+            <Ionicons name="checkmark-circle" size={64} color={theme.colors.primary} />
+            <Text style={styles.title}>¡Viaje completado!</Text>
+            <Text style={styles.amount}>{formatCurrency(trip?.total_fare)}</Text>
+            {routeLabel ? <Text style={styles.subtitle}>{routeLabel}</Text> : null}
 
-        <View style={styles.detailCard}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Distancia</Text>
-            <Text style={styles.detailValue}>
-              {trip?.distance_km != null ? `${trip.distance_km} km` : '—'}
-            </Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Duración</Text>
-            <Text style={styles.detailValue}>
-              {trip?.duration_minutes != null ? `${trip.duration_minutes} min` : '—'}
-            </Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Conductor</Text>
-            <Text style={styles.detailValue}>{driverName}</Text>
-          </View>
-        </View>
-
-        {!paymentConfirmed ? (
-          <>
-            <Text style={styles.rateTitle}>Confirmá el pago</Text>
-            <Text style={styles.paymentHint}>¿Cómo pagaste este viaje?</Text>
-            <View style={styles.paymentOptions}>
-              {(['cash', 'transfer'] as const).map((type) => {
-                const active = paymentMethod === type;
-                return (
-                  <TouchableOpacity
-                    key={type}
-                    style={[styles.paymentChip, active && styles.paymentChipActive]}
-                    onPress={() => setPaymentMethod(type)}
-                    disabled={confirmingPayment}
-                  >
-                    <Ionicons
-                      name={type === 'cash' ? 'cash-outline' : 'business-outline'}
-                      size={18}
-                      color={active ? theme.colors.white : theme.colors.deepBlue}
-                    />
-                    <Text style={[styles.paymentChipText, active && styles.paymentChipTextActive]}>
-                      {paymentTitle(type)}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
-            <Button
-              variant="primary"
-              onPress={handleConfirmPayment}
-              loading={confirmingPayment}
-              disabled={confirmingPayment}
-              style={styles.button}
-            >
-              CONFIRMAR PAGO
-            </Button>
-          </>
-        ) : (
-          <>
-            <View style={styles.paidBadge}>
-              <Ionicons name="checkmark-circle" size={18} color={theme.colors.primary} />
-              <Text style={styles.paidBadgeText}>
-                Pago confirmado · {paymentTitle(paymentMethod)}
-              </Text>
+            <View style={styles.detailCard}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Distancia</Text>
+                <Text style={styles.detailValue}>
+                  {trip?.distance_km != null ? `${trip.distance_km} km` : '—'}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Duración</Text>
+                <Text style={styles.detailValue}>
+                  {trip?.duration_minutes != null ? `${trip.duration_minutes} min` : '—'}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Conductor</Text>
+                <Text style={styles.detailValue}>{driverName}</Text>
+              </View>
             </View>
 
-            <Text style={styles.rateTitle}>
-              {rated ? '¡Gracias por calificar!' : '¿Cómo fue tu viaje?'}
-            </Text>
-            <View style={styles.stars}>
-              {[1, 2, 3, 4, 5].map((s) => (
-                <TouchableOpacity
-                  key={s}
-                  disabled={submitting || rated}
-                  onPress={() => handleSelectStars(s)}
-                  accessibilityLabel={`${s} estrellas`}
+            {!paymentConfirmed ? (
+              <>
+                <Text style={styles.rateTitle}>Confirmá el pago</Text>
+                <Text style={styles.paymentHint}>¿Cómo pagaste este viaje?</Text>
+                <View style={styles.paymentOptions}>
+                  {(['cash', 'transfer'] as const).map((type) => {
+                    const active = paymentMethod === type;
+                    return (
+                      <TouchableOpacity
+                        key={type}
+                        style={[styles.paymentChip, active && styles.paymentChipActive]}
+                        onPress={() => setPaymentMethod(type)}
+                        disabled={confirmingPayment}
+                      >
+                        <Ionicons
+                          name={type === 'cash' ? 'cash-outline' : 'business-outline'}
+                          size={18}
+                          color={active ? theme.colors.white : theme.colors.deepBlue}
+                        />
+                        <Text
+                          style={[styles.paymentChipText, active && styles.paymentChipTextActive]}
+                        >
+                          {paymentTitle(type)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+                <Button
+                  variant="primary"
+                  onPress={handleConfirmPayment}
+                  loading={confirmingPayment}
+                  disabled={confirmingPayment}
+                  style={styles.button}
                 >
-                  <Ionicons
-                    name={s <= rating ? 'star' : 'star-outline'}
-                    size={32}
-                    color={s <= rating ? theme.colors.amber : theme.colors.mediumGray}
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
+                  CONFIRMAR PAGO
+                </Button>
+              </>
+            ) : (
+              <>
+                <View style={styles.paidBadge}>
+                  <Ionicons name="checkmark-circle" size={18} color={theme.colors.primary} />
+                  <Text style={styles.paidBadgeText}>
+                    Pago confirmado · {paymentTitle(paymentMethod)}
+                  </Text>
+                </View>
 
-            {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+                <Text style={styles.rateTitle}>
+                  {rated ? '¡Gracias por calificar!' : '¿Cómo fue tu viaje?'}
+                </Text>
+                <View style={styles.stars}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <TouchableOpacity
+                      key={s}
+                      disabled={submitting || rated}
+                      onPress={() => handleSelectStars(s)}
+                      accessibilityLabel={`${s} estrellas`}
+                    >
+                      <Ionicons
+                        name={s <= rating ? 'star' : 'star-outline'}
+                        size={32}
+                        color={s <= rating ? theme.colors.amber : theme.colors.mediumGray}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-            {!rated ? (
-              <Button
-                variant="primary"
-                onPress={handleSubmitRating}
-                loading={submitting}
-                disabled={rating === 0 || submitting}
-                style={styles.button}
-              >
-                ENVIAR CALIFICACIÓN
-              </Button>
-            ) : null}
+                {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
 
-            <Button
-              variant={rated ? 'primary' : 'secondary'}
-              onPress={handleFinish}
-              disabled={submitting}
-              style={styles.button}
-            >
-              {rated ? 'VOLVER AL INICIO' : 'OMITIR'}
-            </Button>
-          </>
-        )}
-      </View>
+                {!rated ? (
+                  <Button
+                    variant="primary"
+                    onPress={handleSubmitRating}
+                    loading={submitting}
+                    disabled={rating === 0 || submitting}
+                    style={styles.button}
+                  >
+                    ENVIAR CALIFICACIÓN
+                  </Button>
+                ) : null}
+
+                <Button
+                  variant={rated ? 'primary' : 'secondary'}
+                  onPress={handleFinish}
+                  disabled={submitting}
+                  style={styles.button}
+                >
+                  {rated ? 'VOLVER AL INICIO' : 'OMITIR'}
+                </Button>
+              </>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.white },
-  content: {
-    flex: 1,
+  flex: { flex: 1 },
+  scroll: {
+    flexGrow: 1,
     justifyContent: 'center',
-    alignItems: 'center',
     padding: theme.spacing.lg,
+    paddingBottom: theme.spacing['2xl'],
+  },
+  content: {
+    alignItems: 'center',
     gap: theme.spacing.md,
+    width: '100%',
   },
   title: {
     fontSize: theme.fontSize['2xl'],
