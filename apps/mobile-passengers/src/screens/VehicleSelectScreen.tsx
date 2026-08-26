@@ -9,6 +9,7 @@ import { PassengerMap } from '../components/Map/PassengerMap';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { toMapCoordinate } from '../hooks/useLocation';
 import { useLocationStore } from '../store/locationStore';
+import { usePaymentStore } from '../store/paymentStore';
 import { theme } from '../theme';
 import { formatCurrency } from '../utils/formatters';
 
@@ -32,6 +33,11 @@ function paramText(value: string | string[] | undefined): string {
 export function VehicleSelectScreen() {
   const { goBack, navigate } = useAppNavigation();
   const current = useLocationStore((s) => s.current);
+  const methods = usePaymentStore((s) => s.methods);
+  const setDefault = usePaymentStore((s) => s.setDefault);
+  const defaultMethod = methods.find((m) => m.isDefault) ?? methods[0];
+  const [paymentOpen, setPaymentOpen] = useState(false);
+
   const params = useLocalSearchParams<{
     pickup?: string;
     destination?: string;
@@ -99,6 +105,11 @@ export function VehicleSelectScreen() {
     selectedEstimate != null && Number.isFinite(selectedEstimate.fare)
       ? `CONTINUAR ${formatCurrency(selectedEstimate.fare)}`
       : 'CONTINUAR';
+
+  const paymentLabel =
+    defaultMethod?.type === 'transfer' ? defaultMethod.label || 'Transferencia' : 'Efectivo';
+  const paymentIcon: keyof typeof Ionicons.glyphMap =
+    defaultMethod?.type === 'transfer' ? 'business-outline' : 'cash-outline';
 
   const handleContinue = () => {
     if (!coords || !selectedEstimate) return;
@@ -186,6 +197,71 @@ export function VehicleSelectScreen() {
               </Text>
             </View>
           ) : null}
+
+          <TouchableOpacity
+            style={styles.paymentRow}
+            onPress={() => setPaymentOpen((o) => !o)}
+            activeOpacity={0.85}
+            accessibilityLabel="Elegir método de pago"
+          >
+            <Ionicons name={paymentIcon} size={20} color={theme.colors.primary} />
+            <View style={styles.paymentText}>
+              <Text style={styles.paymentHint}>Forma de pago</Text>
+              <Text style={styles.paymentValue}>{paymentLabel}</Text>
+            </View>
+            <Ionicons
+              name={paymentOpen ? 'chevron-up' : 'chevron-forward'}
+              size={18}
+              color={theme.colors.mediumGray}
+            />
+          </TouchableOpacity>
+
+          {paymentOpen ? (
+            <View style={styles.paymentPicker}>
+              {methods.map((m) => {
+                const active = m.id === defaultMethod?.id;
+                const icon: keyof typeof Ionicons.glyphMap =
+                  m.type === 'transfer' ? 'business-outline' : 'cash-outline';
+                const label = m.type === 'transfer' ? m.label || 'Transferencia' : 'Efectivo';
+                return (
+                  <TouchableOpacity
+                    key={m.id}
+                    style={[styles.paymentOption, active && styles.paymentOptionActive]}
+                    onPress={() => {
+                      setDefault(m.id);
+                      setPaymentOpen(false);
+                    }}
+                  >
+                    <Ionicons
+                      name={icon}
+                      size={18}
+                      color={active ? theme.colors.primary : theme.colors.deepBlue}
+                    />
+                    <Text
+                      style={[styles.paymentOptionText, active && styles.paymentOptionTextActive]}
+                    >
+                      {label}
+                    </Text>
+                    <Ionicons
+                      name={active ? 'radio-button-on' : 'radio-button-off'}
+                      size={18}
+                      color={active ? theme.colors.primary : theme.colors.mediumGray}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity
+                style={styles.managePayment}
+                onPress={() => {
+                  setPaymentOpen(false);
+                  navigate('PaymentMethod');
+                }}
+              >
+                <Text style={styles.managePaymentText}>Administrar métodos</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           <Button
             variant="cta"
             onPress={handleContinue}
@@ -301,6 +377,7 @@ const styles = StyleSheet.create({
     borderTopColor: theme.colors.lightGray,
     paddingTop: theme.spacing.md,
     gap: theme.spacing.sm,
+    marginTop: 'auto',
   },
   footerRow: {
     flexDirection: 'row',
@@ -318,6 +395,68 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
+  },
+  paymentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    backgroundColor: theme.colors.lightGray,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 12,
+  },
+  paymentText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  paymentHint: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+  },
+  paymentValue: {
+    fontSize: theme.fontSize.md,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.deepBlue,
+  },
+  paymentPicker: {
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
+    overflow: 'hidden',
+  },
+  paymentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.lightGray,
+  },
+  paymentOptionActive: {
+    backgroundColor: 'rgba(0, 194, 179, 0.06)',
+  },
+  paymentOptionText: {
+    flex: 1,
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.deepBlue,
+  },
+  paymentOptionTextActive: {
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.primary,
+  },
+  managePayment: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  managePaymentText: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.primary,
   },
   solicitarBtn: {
     width: '100%',

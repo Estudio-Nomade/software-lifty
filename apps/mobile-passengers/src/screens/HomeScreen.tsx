@@ -28,7 +28,6 @@ import {
   useLocation,
 } from '../hooks/useLocation';
 import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
-import { useLocationStore } from '../store/locationStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 import { resolveAddressLabel } from '../utils/resolveAddressLabel';
@@ -102,14 +101,14 @@ export function HomeScreen() {
     if (!searchExpanded) return;
     if (pickupPicked || pickupAddress.trim()) return;
     let cancelled = false;
-
     (async () => {
       const fix = await requestFreshPosition();
       if (cancelled || !fix) return;
 
-      const acc = useLocationStore.getState().current?.accuracy ?? Number.POSITIVE_INFINITY;
+      const acc = fix.accuracy ?? Number.POSITIVE_INFINITY;
       setPickupCoord({ lat: fix.lat, lng: fix.lng });
-      const label = await resolveAddressLabel(fix.lat, fix.lng);
+      // Coarse WiFi/IP must not freeze a wrong street name.
+      const label = await resolveAddressLabel(fix.lat, fix.lng, { accuracy: acc });
       if (cancelled) return;
       setPickupAddress(label);
       setPickupPicked(true);
@@ -136,7 +135,7 @@ export function HomeScreen() {
 
     let cancelled = false;
     (async () => {
-      const label = await resolveAddressLabel(current.lat, current.lng);
+      const label = await resolveAddressLabel(current.lat, current.lng, { accuracy: acc });
       if (cancelled) return;
       setPickupCoord({ lat: current.lat, lng: current.lng });
       setPickupAddress(label);

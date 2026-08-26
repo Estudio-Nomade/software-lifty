@@ -15,13 +15,20 @@ type PhotonProps = {
   type?: string;
 };
 
+export type ResolveLabelOptions = {
+  /** meters — when coarse, never invent a street name (WiFi/IP lie). */
+  accuracy?: number;
+};
+
+/** Above this, reverse-geocode is noise (wrong street like "Margarita Galfre"). */
+export const MAX_LABEL_ACCURACY_M = 100;
+
 /** Prefer street+number over POI names. Highway `name` counts as the street. */
 export function formatStreetLabel(p: PhotonProps): string | null {
   const streetField = typeof p.street === 'string' ? p.street.trim() : '';
   const num = typeof p.housenumber === 'string' ? p.housenumber.trim() : '';
   const name = typeof p.name === 'string' ? p.name.trim() : '';
 
-  // Photon often puts the road in `name` for highway features (no `street`).
   const isHighway =
     p.osm_key === 'highway' ||
     p.type === 'street' ||
@@ -43,7 +50,6 @@ export function formatStreetLabel(p: PhotonProps): string | null {
   return parts.length > 0 ? parts.join(', ') : null;
 }
 
-/** True when label has a house number (street-level precision). */
 export function hasHouseNumber(label: string): boolean {
   return /\d/.test(label);
 }
@@ -61,7 +67,6 @@ async function reversePhoton(lat: number, lng: number): Promise<string | null> {
   return props ? formatStreetLabel(props) : null;
 }
 
-/** Nominatim often returns house_number when Photon only has the road name. */
 async function reverseNominatim(lat: number, lng: number): Promise<string | null> {
   const url =
     `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(String(lat))}` +
@@ -93,15 +98,20 @@ async function reverseNominatim(lat: number, lng: number): Promise<string | null
 }
 
 /**
- * Human-readable label for a lat/lng. Never returns raw coordinates.
- *
- * Order:
- * 1. Backend /maps/geocode (auth) — street-first formatting server-side
- * 2. Photon reverse (web)
- * 3. Nominatim reverse (web) — better house numbers
- * 4. "Mi ubicación actual"
+ * Human-readable label for a lat/lng.
+ * Coarse fixes (accuracy > MAX_LABEL_ACCURACY_M) → "Mi ubicación actual"
+ * so WiFi/IP never freezes a wrong nearby street name.
  */
-export async function resolveAddressLabel(lat: number, lng: number): Promise<string> {
+export async function resolveAddressLabel(
+  lat: number,
+  lng: number,
+  opts?: ResolveLabelOptions,
+): Promise<string> {
+  const acc = opts?.accuracy;
+  if (typeof acc === 'number' && Number.isFinite(acc) && acc > MAX_LABEL_ACCURACY_M) {
+    return 'Mi ubicación actual';
+  }
+
   let best: string | null = null;
 
   try {
@@ -121,7 +131,7 @@ export async function resolveAddressLabel(lat: number, lng: number): Promise<str
       if (photon) {
         if (!best || (hasHouseNumber(photon) && !hasHouseNumber(best))) best = photon;
         else if (!best) best = photon;
-        if (hasHouseNumber(best)) return best;
+        if (best && hasHouseNumber(best)) return best;
       }
     } catch {
       // continue

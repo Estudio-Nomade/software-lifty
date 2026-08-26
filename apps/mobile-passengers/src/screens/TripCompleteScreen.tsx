@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { rateRide } from '../api/passenger';
+import { rateRide, setTripPaymentMethod } from '../api/passenger';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { type PaymentMethodType, usePaymentStore } from '../store/paymentStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 
@@ -26,23 +27,60 @@ function getErrorMessage(err: unknown): { code?: string; message: string } {
   return { code, message };
 }
 
+function paymentTitle(type: PaymentMethodType): string {
+  return type === 'transfer' ? 'Transferencia' : 'Efectivo';
+}
+
 export function TripCompleteScreen() {
   const { replace } = useAppNavigation();
   const trip = useRideStore((s) => s.activeTrip);
+  const setActiveTrip = useRideStore((s) => s.setActiveTrip);
   const reset = useRideStore((s) => s.reset);
+  const storeDefault = usePaymentStore((s) => s.methods.find((m) => m.isDefault)?.type ?? 'cash');
+
+  const initialMethod: PaymentMethodType =
+    trip?.payment_method === 'transfer' || trip?.payment_method === 'cash'
+      ? trip.payment_method
+      : storeDefault === 'transfer'
+        ? 'transfer'
+        : 'cash';
+
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>(initialMethod);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [rating, setRating] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [rated, setRated] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
 
+  const handleConfirmPayment = async () => {
+    if (!trip?.id || confirmingPayment) return;
+    setConfirmingPayment(true);
+    setErrorText(null);
+    try {
+      if (trip.payment_method !== paymentMethod) {
+        const updated = await setTripPaymentMethod(trip.id, paymentMethod);
+        setActiveTrip(updated);
+      }
+      setPaymentConfirmed(true);
+    } catch (err) {
+      const { message } = getErrorMessage(err);
+      // Still allow continue if endpoint fails (e.g. already collected).
+      setPaymentConfirmed(true);
+      if (message) setErrorText(message);
+    } finally {
+      setConfirmingPayment(false);
+    }
+  };
+
   const handleSelectStars = (stars: number) => {
-    if (submitting || rated) return;
+    if (submitting || rated || !paymentConfirmed) return;
     setRating(stars);
     setErrorText(null);
   };
 
   const handleSubmitRating = async () => {
-    if (!trip?.id || rating === 0 || submitting || rated) return;
+    if (!trip?.id || rating === 0 || submitting || rated || !paymentConfirmed) return;
     setSubmitting(true);
     setErrorText(null);
     try {
@@ -50,7 +88,6 @@ export function TripCompleteScreen() {
       setRated(true);
     } catch (err) {
       const { code, message } = getErrorMessage(err);
-      // Backend is idempotent, but older servers may still return CONFLICT.
       if (code === 'CONFLICT') {
         setRated(true);
         return;
@@ -101,48 +138,96 @@ export function TripCompleteScreen() {
           </View>
         </View>
 
-        <Text style={styles.rateTitle}>
-          {rated ? '¡Gracias por calificar!' : '¿Cómo fue tu viaje?'}
-        </Text>
-        <View style={styles.stars}>
-          {[1, 2, 3, 4, 5].map((s) => (
-            <TouchableOpacity
-              key={s}
-              disabled={submitting || rated}
-              onPress={() => handleSelectStars(s)}
-              accessibilityLabel={`${s} estrellas`}
+        {!paymentConfirmed ? (
+          <>
+            <Text style={styles.rateTitle}>Confirmá el pago</Text>
+            <Text style={styles.paymentHint}>¿Cómo pagaste este viaje?</Text>
+            <View style={styles.paymentOptions}>
+              {(['cash', 'transfer'] as const).map((type) => {
+                const active = paymentMethod === type;
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={[styles.paymentChip, active && styles.paymentChipActive]}
+                    onPress={() => setPaymentMethod(type)}
+                    disabled={confirmingPayment}
+                  >
+                    <Ionicons
+                      name={type === 'cash' ? 'cash-outline' : 'business-outline'}
+                      size={18}
+                      color={active ? theme.colors.white : theme.colors.deepBlue}
+                    />
+                    <Text style={[styles.paymentChipText, active && styles.paymentChipTextActive]}>
+                      {paymentTitle(type)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+            <Button
+              variant="primary"
+              onPress={handleConfirmPayment}
+              loading={confirmingPayment}
+              disabled={confirmingPayment}
+              style={styles.button}
             >
-              <Ionicons
-                name={s <= rating ? 'star' : 'star-outline'}
-                size={32}
-                color={s <= rating ? theme.colors.amber : theme.colors.mediumGray}
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
+              CONFIRMAR PAGO
+            </Button>
+          </>
+        ) : (
+          <>
+            <View style={styles.paidBadge}>
+              <Ionicons name="checkmark-circle" size={18} color={theme.colors.primary} />
+              <Text style={styles.paidBadgeText}>
+                Pago confirmado · {paymentTitle(paymentMethod)}
+              </Text>
+            </View>
 
-        {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+            <Text style={styles.rateTitle}>
+              {rated ? '¡Gracias por calificar!' : '¿Cómo fue tu viaje?'}
+            </Text>
+            <View style={styles.stars}>
+              {[1, 2, 3, 4, 5].map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  disabled={submitting || rated}
+                  onPress={() => handleSelectStars(s)}
+                  accessibilityLabel={`${s} estrellas`}
+                >
+                  <Ionicons
+                    name={s <= rating ? 'star' : 'star-outline'}
+                    size={32}
+                    color={s <= rating ? theme.colors.amber : theme.colors.mediumGray}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
 
-        {!rated ? (
-          <Button
-            variant="primary"
-            onPress={handleSubmitRating}
-            loading={submitting}
-            disabled={rating === 0 || submitting}
-            style={styles.button}
-          >
-            ENVIAR CALIFICACIÓN
-          </Button>
-        ) : null}
+            {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
 
-        <Button
-          variant={rated ? 'primary' : 'secondary'}
-          onPress={handleFinish}
-          disabled={submitting}
-          style={styles.button}
-        >
-          {rated ? 'VOLVER AL INICIO' : 'OMITIR'}
-        </Button>
+            {!rated ? (
+              <Button
+                variant="primary"
+                onPress={handleSubmitRating}
+                loading={submitting}
+                disabled={rating === 0 || submitting}
+                style={styles.button}
+              >
+                ENVIAR CALIFICACIÓN
+              </Button>
+            ) : null}
+
+            <Button
+              variant={rated ? 'primary' : 'secondary'}
+              onPress={handleFinish}
+              disabled={submitting}
+              style={styles.button}
+            >
+              {rated ? 'VOLVER AL INICIO' : 'OMITIR'}
+            </Button>
+          </>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -199,6 +284,55 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.semibold,
     color: theme.colors.deepBlue,
     marginTop: theme.spacing.md,
+  },
+  paymentHint: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+    textAlign: 'center',
+  },
+  paymentOptions: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+    width: '100%',
+  },
+  paymentChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: theme.radius.md,
+    borderWidth: 1.5,
+    borderColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.white,
+  },
+  paymentChipActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary,
+  },
+  paymentChipText: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.deepBlue,
+  },
+  paymentChipTextActive: {
+    color: theme.colors.white,
+  },
+  paidBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0, 194, 179, 0.1)',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 8,
+    borderRadius: theme.radius.full,
+  },
+  paidBadgeText: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.primary,
   },
   stars: { flexDirection: 'row', gap: theme.spacing.sm },
   errorText: {

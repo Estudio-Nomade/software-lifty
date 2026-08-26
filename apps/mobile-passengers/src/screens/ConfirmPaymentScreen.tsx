@@ -32,6 +32,8 @@ const OPTIONS: {
 export function ConfirmPaymentScreen() {
   const { goBack, navigate } = useAppNavigation();
   const defaultMethod = usePaymentStore((s) => s.methods.find((m) => m.isDefault)?.type ?? 'cash');
+  const methods = usePaymentStore((s) => s.methods);
+  const setDefault = usePaymentStore((s) => s.setDefault);
 
   const params = useLocalSearchParams<{
     pickup?: string;
@@ -50,6 +52,14 @@ export function ConfirmPaymentScreen() {
     defaultMethod === 'transfer' ? 'transfer' : 'cash',
   );
   const [loading, setLoading] = useState(false);
+
+  const selectMethod = (type: PaymentMethodType) => {
+    setSelected(type);
+    const match = methods.find((m) => m.type === type && (type === 'cash' || m.isDefault));
+    const fallback = methods.find((m) => m.type === type);
+    const id = match?.id ?? fallback?.id;
+    if (id) setDefault(id);
+  };
 
   const coords = useMemo(() => {
     const origin_lat = Number(params.pickupLat);
@@ -128,7 +138,7 @@ export function ConfirmPaymentScreen() {
               <TouchableOpacity
                 key={option.id}
                 style={[styles.optionCard, active && styles.optionCardActive]}
-                onPress={() => setSelected(option.id)}
+                onPress={() => selectMethod(option.id)}
                 activeOpacity={0.85}
               >
                 <View style={[styles.optionIcon, active && styles.optionIconActive]}>

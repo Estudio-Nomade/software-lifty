@@ -4,7 +4,11 @@ jest.mock('../../api/passenger', () => ({
 
 import { isValidLatLng, toMapCoordinate } from '../../hooks/useLocation';
 import { useLocationStore } from '../../store/locationStore';
-import { formatStreetLabel } from '../../utils/resolveAddressLabel';
+import {
+  MAX_LABEL_ACCURACY_M,
+  formatStreetLabel,
+  resolveAddressLabel,
+} from '../../utils/resolveAddressLabel';
 
 describe('toMapCoordinate', () => {
   it('returns [lng, lat] MapLibre/GeoJSON order (not [lat, lng])', () => {
@@ -97,5 +101,14 @@ describe('formatStreetLabel', () => {
         country: 'Argentina',
       }),
     ).toBe('Margarita Galfre, Tandil, Buenos Aires, Argentina');
+  });
+});
+
+describe('resolveAddressLabel accuracy gate', () => {
+  it('does not invent a street when accuracy is coarse', async () => {
+    const label = await resolveAddressLabel(-37.32, -59.13, {
+      accuracy: MAX_LABEL_ACCURACY_M + 50,
+    });
+    expect(label).toBe('Mi ubicación actual');
   });
 });
