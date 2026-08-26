@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { estimateFare } from '../api/passenger';
+import { estimateFare, requestRide } from '../api/passenger';
 import type { FareEstimate } from '../api/types';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
@@ -69,6 +69,7 @@ export function VehicleSelectScreen() {
   const destination = paramText(params.destination);
   const [selected, setSelected] = useState<Vehicle['id']>('auto');
   const [fares, setFares] = useState<Partial<Record<Vehicle['id'], FareEstimate>>>({});
+  const [loading, setLoading] = useState(false);
 
   const coords = useMemo(() => {
     const origin_lat = Number(paramText(params.pickupLat));
@@ -131,20 +132,32 @@ export function VehicleSelectScreen() {
     if (match) setDefault(match.id);
   };
 
-  const handleContinue = () => {
-    if (!coords || !selectedEstimate) return;
-    navigate('ConfirmPayment', {
-      pickup: pickup || '',
-      destination: destination || '',
-      pickupLat: String(coords.origin_lat),
-      pickupLng: String(coords.origin_lng),
-      destLat: String(coords.dest_lat),
-      destLng: String(coords.dest_lng),
-      vehicleType: selected,
-      fare: String(selectedEstimate.fare),
-      distanceKm: String(selectedEstimate.distance_km),
-      durationMin: String(selectedEstimate.duration_min),
-    });
+  const handleContinue = async () => {
+    if (!coords || !selectedEstimate || loading) return;
+    setLoading(true);
+    try {
+      const trip = await requestRide({
+        origin_lat: coords.origin_lat,
+        origin_lng: coords.origin_lng,
+        dest_lat: coords.dest_lat,
+        dest_lng: coords.dest_lng,
+        origin_address: pickup || '',
+        dest_address: destination || '',
+        vehicle_type: selected,
+        distance_km: selectedEstimate.distance_km,
+        duration_minutes: selectedEstimate.duration_min,
+        payment_method: selectedPaymentType,
+      });
+      navigate('ConnectingDriver', { tripId: trip.id });
+    } catch (err) {
+      const data = (
+        err as { response?: { data?: { error?: { message?: string }; message?: string } } }
+      )?.response?.data;
+      const message = data?.error?.message ?? data?.message ?? (err as Error).message;
+      Alert.alert('No se pudo solicitar el viaje', message || 'Intentalo de nuevo.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -253,7 +266,8 @@ export function VehicleSelectScreen() {
           <Button
             variant="cta"
             onPress={handleContinue}
-            disabled={!selectedEstimate}
+            loading={loading}
+            disabled={!selectedEstimate || loading}
             style={styles.solicitarBtn}
           >
             {continueLabel}
