@@ -93,6 +93,18 @@ export async function geocodeAddress(address: string): Promise<{
   return data;
 }
 
+/** Reverse geocode (coords → street name). Uses backend Photon proxy — works on web. */
+export async function reverseGeocode(
+  lat: number,
+  lng: number,
+): Promise<{ lat: number; lng: number; formatted_address: string }> {
+  const { data } = await api.get<{ lat: number; lng: number; formatted_address: string }>(
+    '/maps/geocode',
+    { params: { lat, lng } },
+  );
+  return data;
+}
+
 export async function getActiveRide(): Promise<Trip | null> {
   const { data } = await api.get<Trip | null>('/passenger/trips/active');
   return data;

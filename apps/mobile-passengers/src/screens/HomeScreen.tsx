@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { geocodeAddress, getActiveRide } from '../api/passenger';
+import { geocodeAddress, getActiveRide, reverseGeocode } from '../api/passenger';
 import type { PlaceSuggestion } from '../api/types';
 import { BottomTabBar } from '../components/BottomTabBar';
 import { HomeHeader } from '../components/HomeHeader';
@@ -77,52 +77,58 @@ export function HomeScreen() {
   );
   const visibleSuggestions = focusedField === 'pickup' ? pickupSuggestions : destSuggestions;
 
+  // When the search sheet opens, autofill empty "Desde" with GPS + street name.
+  // Never show raw "lat, lng" as the label (web reverseGeocodeAsync is broken).
   useEffect(() => {
     if (!searchExpanded) return;
+    // Don't overwrite a pickup the user already typed / picked.
+    if (pickupPicked || pickupAddress.trim()) return;
     let cancelled = false;
+
     (async () => {
+      let fix = useLocationStore.getState().current;
+      if (!fix) fix = await requestFreshPosition();
+      if (cancelled || !fix) return;
+
+      setPickupCoord({ lat: fix.lat, lng: fix.lng });
+
+      let label = '';
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') return;
-        const pos = await Location.getCurrentPositionAsync({});
+        const rev = await reverseGeocode(fix.lat, fix.lng);
         if (cancelled) return;
-        // reverseGeocodeAsync throws on web (GeocoderError) — fall back to raw coords.
-        let name = '';
+        // Skip the backend's last-resort "Ubicación (lat, lng)" placeholder.
+        if (rev.formatted_address && !/^Ubicación \(/.test(rev.formatted_address)) {
+          label = rev.formatted_address;
+        }
+      } catch {
+        // fall through
+      }
+
+      if (!label && Platform.OS !== 'web') {
         try {
           const [addr] = await Location.reverseGeocodeAsync({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
+            latitude: fix.lat,
+            longitude: fix.lng,
           });
           if (cancelled) return;
-          name =
+          label =
             addr?.street && addr?.streetNumber
               ? `${addr.street} ${addr.streetNumber}`
               : (addr?.name ?? '');
         } catch {
-          name = '';
-        }
-        setPickupAddress(
-          name || `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`,
-        );
-        setPickupCoord({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setPickupPicked(true);
-      } catch {
-        // expo-location throws on web when the context is insecure or the
-        // browser blocks geolocation. Fall back to the already-tracked
-        // location so the user still gets a pickup point.
-        if (cancelled) return;
-        const tracked = useLocationStore.getState().current;
-        if (tracked) {
-          setPickupAddress(`${tracked.lat.toFixed(4)}, ${tracked.lng.toFixed(4)}`);
-          setPickupCoord({ lat: tracked.lat, lng: tracked.lng });
-          setPickupPicked(true);
+          // fall through
         }
       }
+
+      if (cancelled) return;
+      setPickupAddress(label || 'Mi ubicación actual');
+      setPickupPicked(true);
     })();
+
     return () => {
       cancelled = true;
     };
-  }, [searchExpanded]);
+  }, [searchExpanded, pickupPicked, pickupAddress]);
 
   const handleLocate = () => {
     // Always request a fresh fix first so recenter has real coords (web + native).

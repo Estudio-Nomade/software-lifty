@@ -163,8 +163,7 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
   var lastUserLat = null;
   var lastUserLng = null;
   var hasCenteredOnUser = false;
-  var isNativeWebView = !!(window.ReactNativeWebView && window.ReactNativeWebView.postMessage);
-  var geoWatchId = null;
+  // GPS is owned by the React host (useLocation). This document only renders.
 
   var USER_ICONS = {
     car: 'car-outline',
@@ -286,32 +285,6 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     applyRoute(coordinates);
   }
 
-  /**
-   * Web (browser iframe): own navigator.geolocation — pin/center do not depend on postMessage.
-   * Native WebView: host drives location via postMessage (expo-location).
-   */
-  function startWebGeolocation() {
-    if (isNativeWebView) return;
-    if (!navigator.geolocation) return;
-
-    var opts = { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 };
-
-    function onPos(pos) {
-      if (!pos || !pos.coords) return;
-      var lat = pos.coords.latitude;
-      var lng = pos.coords.longitude;
-      setUserFix(lat, lng, null);
-      postToHost(JSON.stringify({ type: 'browserLocation', lat: lat, lng: lng }));
-    }
-
-    try {
-      navigator.geolocation.getCurrentPosition(onPos, function () {}, opts);
-      geoWatchId = navigator.geolocation.watchPosition(onPos, function () {}, opts);
-    } catch (e) {}
-  }
-
-  startWebGeolocation();
-
   map.on('load', function () {
     mapLoaded = true;
     if (pendingRoute) {
@@ -319,11 +292,9 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
       pendingRoute = null;
     }
     if (lastUserLat != null && lastUserLng != null) {
-      setUserFix(lastUserLat, lastUserLng, null);
+      setUserFix(lastUserLat, lastUserLng, { force: true });
     }
     postToHost(JSON.stringify({ type: 'ready' }));
-    // Permission dialog may resolve after load — retry once.
-    if (!isNativeWebView) startWebGeolocation();
   });
 
   map.on('moveend', function () {
@@ -368,7 +339,7 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
         }
         break;
       case 'userLocation':
-        // Native host path (and web backup from React store).
+        // Single source of truth: host (useLocation) pushes every fix.
         if (msg.lat != null && msg.lng != null) {
           setUserFix(Number(msg.lat), Number(msg.lng), null);
         }
@@ -378,19 +349,6 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
           setUserFix(Number(msg.lat), Number(msg.lng), { force: true, fly: true });
         } else if (lastUserLat != null && lastUserLng != null) {
           setUserFix(lastUserLat, lastUserLng, { force: true, fly: true });
-        } else if (!isNativeWebView && navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            function (pos) {
-              setUserFix(pos.coords.latitude, pos.coords.longitude, { force: true, fly: true });
-              postToHost(JSON.stringify({
-                type: 'browserLocation',
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-              }));
-            },
-            function () {},
-            { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
-          );
         }
         break;
     }

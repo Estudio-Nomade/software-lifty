@@ -3,7 +3,7 @@ import { useCallback, useEffect } from 'react';
 import { Platform } from 'react-native';
 import { useLocationStore } from '../store/locationStore';
 
-type WebPosition = { coords: { latitude: number; longitude: number } };
+type WebPosition = { coords: { latitude: number; longitude: number; accuracy?: number } };
 type WebPositionError = { code: number; message?: string };
 
 interface WebGeoOptions {
@@ -26,10 +26,11 @@ interface WebGeolocation {
   clearWatch: (id: number) => void;
 }
 
+/** Prefer a fresh, accurate fix. Single GPS owner for the whole app on web. */
 const WEB_GEO_OPTIONS: WebGeoOptions = {
   enableHighAccuracy: true,
   timeout: 15_000,
-  maximumAge: 5_000,
+  maximumAge: 0,
 };
 
 function getWebGeolocation(): WebGeolocation | null {
@@ -54,8 +55,8 @@ export function toMapCoordinate(lat: number, lng: number): [number, number] {
 }
 
 /**
- * One-shot browser/native fix. Resolves with coords or null.
- * Used by the locate/recenter button so it never depends on a stale store.
+ * One-shot fix. Updates the store and resolves with coords (or null).
+ * Used by the locate button and the "Desde" autofill.
  */
 export function requestFreshPosition(): Promise<{ lat: number; lng: number } | null> {
   const webGeo = getWebGeolocation();
@@ -98,6 +99,12 @@ export function requestFreshPosition(): Promise<{ lat: number; lng: number } | n
   })();
 }
 
+/**
+ * Single source of truth for device position.
+ * - Web: navigator.geolocation only
+ * - Native: expo-location
+ * Map iframe must NOT run its own geolocation.
+ */
 export function useLocation() {
   const current = useLocationStore((s) => s.current);
   const setCurrent = useLocationStore((s) => s.setCurrent);
@@ -117,7 +124,6 @@ export function useLocation() {
       setCurrent({ lat, lng });
     };
 
-    // WEB: only navigator.geolocation (never expo-location).
     if (webGeo) {
       const onPos = (pos: WebPosition) => {
         setCurrentSafe(pos.coords.latitude, pos.coords.longitude);
@@ -129,7 +135,8 @@ export function useLocation() {
 
       webGeo.getCurrentPosition(onPos, onErr, WEB_GEO_OPTIONS);
       webWatchId = webGeo.watchPosition(onPos, onErr, {
-        ...WEB_GEO_OPTIONS,
+        enableHighAccuracy: true,
+        timeout: 15_000,
         maximumAge: 5_000,
       });
 
@@ -139,7 +146,6 @@ export function useLocation() {
       };
     }
 
-    // NATIVE: expo-location
     (async () => {
       let granted = false;
       try {

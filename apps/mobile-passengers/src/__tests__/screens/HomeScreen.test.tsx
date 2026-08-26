@@ -18,6 +18,8 @@ jest.mock('../../hooks/useLocation', () => ({
   useLocation: jest.fn(),
   toMapCoordinate: (lat: number, lng: number) => [lng, lat] as [number, number],
   isValidLatLng: () => true,
+  // Default: no GPS — individual tests can override when they need a fix.
+  requestFreshPosition: jest.fn().mockResolvedValue(null),
 }));
 
 jest.mock('../../hooks/usePlaceAutocomplete', () => ({
@@ -27,6 +29,11 @@ jest.mock('../../hooks/usePlaceAutocomplete', () => ({
 jest.mock('../../api/passenger', () => ({
   getActiveRide: jest.fn().mockResolvedValue(null),
   geocodeAddress: jest.fn(),
+  reverseGeocode: jest.fn().mockResolvedValue({
+    lat: -34.5,
+    lng: -58.4,
+    formatted_address: 'Av. Corrientes 1234',
+  }),
 }));
 
 jest.mock('../../components/Map/PassengerMap', () => ({

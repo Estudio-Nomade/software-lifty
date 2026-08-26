@@ -1,7 +1,6 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { useLocationStore } from '../../store/locationStore';
 import { theme } from '../../theme';
 import { MapErrorFallback } from './MapErrorFallback';
 import { DEFAULT_ZOOM, type PassengerMapProps, generateMapHtml } from './mapHtml';
@@ -10,11 +9,8 @@ import { useMapController } from './useMapController';
 /**
  * Web MapLibre transport.
  *
- * Simple model:
- * - Mount iframe immediately (fast UX).
- * - Map HTML owns navigator.geolocation for the user pin + first camera center.
- * - Host still pushes markers/route/userLocation/recenter via postMessage.
- * - browserLocation events keep the React location store in sync.
+ * GPS is owned solely by React `useLocation` (navigator.geolocation).
+ * This component only bridges host → iframe via postMessage.
  */
 
 declare const document: any;
@@ -91,27 +87,16 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     postMessage,
   });
 
-  // iframe → parent
   useEffect(() => {
     const onMessage = (event: any) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
-      let data: any;
-      try {
-        data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-      } catch {
-        return;
-      }
-      if (data?.type === 'browserLocation' && data.lat != null && data.lng != null) {
-        useLocationStore.getState().setCurrent({ lat: data.lat, lng: data.lng });
-        useLocationStore.getState().setPermissionGranted(true);
-      }
-      handleRawMessage(typeof event.data === 'string' ? event.data : JSON.stringify(event.data));
+      const raw = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+      handleRawMessage(raw);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [handleRawMessage]);
 
-  // Mount iframe once, immediately.
   useEffect(() => {
     const container = containerRef.current;
     if (!container || typeof document === 'undefined') return;
@@ -133,7 +118,6 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     iframe.src = url;
     iframe.title = 'map';
     iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
-    iframe.setAttribute('allow', 'geolocation');
     iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:transparent';
 
     const flush = () => {
