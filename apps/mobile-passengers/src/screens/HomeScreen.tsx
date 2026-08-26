@@ -76,15 +76,13 @@ export function HomeScreen() {
   );
   const visibleSuggestions = focusedField === 'pickup' ? pickupSuggestions : destSuggestions;
 
-  // "Desde" autofill: store is fed by the map iframe (web sole GPS owner via
-  // browserLocation). resolveAddressLabel turns coords into a street name.
+  // "Desde" autofill from host GPS (web + native) + human street label.
   useEffect(() => {
     if (!searchExpanded) return;
     if (pickupPicked || pickupAddress.trim()) return;
     let cancelled = false;
 
     (async () => {
-      // Web: polls store until iframe publishes a fix. Native: expo-location.
       const fix = await requestFreshPosition();
       if (cancelled || !fix) return;
 
@@ -101,8 +99,6 @@ export function HomeScreen() {
   }, [searchExpanded, pickupPicked, pickupAddress]);
 
   const handleLocate = () => {
-    // Web: recenter message → iframe requestExactLocation (high-accuracy GPS).
-    // Native: refresh expo-location then recenter.
     void requestFreshPosition().finally(() => {
       setRecenterKey((k) => k + 1);
     });

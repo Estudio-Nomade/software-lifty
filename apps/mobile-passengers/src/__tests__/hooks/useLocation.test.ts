@@ -1,4 +1,10 @@
+jest.mock('../../api/passenger', () => ({
+  reverseGeocode: jest.fn(),
+}));
+
 import { isValidLatLng, toMapCoordinate } from '../../hooks/useLocation';
+import { useLocationStore } from '../../store/locationStore';
+import { formatStreetLabel } from '../../utils/resolveAddressLabel';
 
 describe('toMapCoordinate', () => {
   it('returns [lng, lat] MapLibre/GeoJSON order (not [lat, lng])', () => {
@@ -30,5 +36,54 @@ describe('isValidLatLng', () => {
     expect(isValidLatLng(91, 0)).toBe(false);
     expect(isValidLatLng(0, 181)).toBe(false);
     expect(isValidLatLng(Number.NaN, 1)).toBe(false);
+  });
+});
+
+describe('locationStore.applyFix accuracy gate', () => {
+  beforeEach(() => {
+    useLocationStore.setState({ current: null, permissionGranted: false });
+  });
+
+  it('rejects coarser fixes once a better accuracy is known', () => {
+    const ok = useLocationStore
+      .getState()
+      .applyFix({ lat: -37.32, lng: -59.13, accuracy: 20 }, { force: true });
+    expect(ok).toBe(true);
+
+    const rejected = useLocationStore
+      .getState()
+      .applyFix({ lat: -37.3, lng: -59.1, accuracy: 5000 });
+    expect(rejected).toBe(false);
+    expect(useLocationStore.getState().current?.lat).toBe(-37.32);
+  });
+
+  it('accepts a better (tighter) accuracy fix', () => {
+    useLocationStore.getState().applyFix({ lat: -37.32, lng: -59.13, accuracy: 80 }, { force: true });
+    const ok = useLocationStore
+      .getState()
+      .applyFix({ lat: -37.321, lng: -59.133, accuracy: 12 });
+    expect(ok).toBe(true);
+    expect(useLocationStore.getState().current?.accuracy).toBe(12);
+  });
+});
+
+describe('formatStreetLabel', () => {
+  it('prefers street+number over POI/person name', () => {
+    expect(
+      formatStreetLabel({
+        name: 'Margarita Galfre',
+        street: 'San Martín',
+        housenumber: '454',
+        city: 'Tandil',
+        state: 'Buenos Aires',
+        country: 'Argentina',
+      }),
+    ).toBe('San Martín 454, Tandil, Buenos Aires, Argentina');
+  });
+
+  it('falls back to name when no street', () => {
+    expect(formatStreetLabel({ name: 'Plaza Independencia', city: 'Tandil' })).toBe(
+      'Plaza Independencia, Tandil',
+    );
   });
 });

@@ -98,8 +98,16 @@ describe('VehicleSelectScreen fare estimation', () => {
     await findByText('$4.200');
 
     expect(await findByText('CONTINUAR $4.200')).toBeTruthy();
+    expect(queryByText('CONTINUO')).toBeNull();
     expect(queryByText('$3.500')).toBeNull();
     expect(queryByText('$2.100')).toBeNull();
+  });
+
+  test('shows Hacia destination without mystery markers', async () => {
+    const { findByText, getAllByText, queryByText } = await render(<VehicleSelectScreen />);
+    expect(await findByText('Hacia')).toBeTruthy();
+    expect(getAllByText('Destino B').length).toBeGreaterThan(0);
+    expect(queryByText('CONTINUO')).toBeNull();
   });
 
   test('shows a different fare for a farther destination', async () => {

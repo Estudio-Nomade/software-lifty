@@ -101,7 +101,12 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
       }
       // Sole GPS path into React on web.
       if (data?.type === 'browserLocation' && data.lat != null && data.lng != null) {
-        applyBrowserLocation(Number(data.lat), Number(data.lng));
+        const acc = data.accuracy != null ? Number(data.accuracy) : undefined;
+        applyBrowserLocation(
+          Number(data.lat),
+          Number(data.lng),
+          Number.isFinite(acc) ? acc : undefined,
+        );
       }
       const raw = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
       handleRawMessage(raw);

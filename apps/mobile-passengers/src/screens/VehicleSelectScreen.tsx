@@ -20,14 +20,19 @@ interface Vehicle {
 }
 
 const VEHICLES: Vehicle[] = [
-  { id: 'auto', name: 'Auto', icon: 'car', capacity: '4 pasajeros' },
-  { id: 'moto', name: 'Moto', icon: 'bicycle', capacity: '1 pasajero' },
+  { id: 'auto', name: 'Auto', icon: 'car-outline', capacity: '4 pasajeros' },
+  { id: 'moto', name: 'Moto', icon: 'bicycle-outline', capacity: '1 pasajero' },
 ];
+
+function paramText(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] ?? '';
+  return value ?? '';
+}
 
 export function VehicleSelectScreen() {
   const { goBack, navigate } = useAppNavigation();
   const current = useLocationStore((s) => s.current);
-  const { pickup, destination, pickupLat, pickupLng, destLat, destLng } = useLocalSearchParams<{
+  const params = useLocalSearchParams<{
     pickup?: string;
     destination?: string;
     pickupLat?: string;
@@ -35,17 +40,19 @@ export function VehicleSelectScreen() {
     destLat?: string;
     destLng?: string;
   }>();
+  const pickup = paramText(params.pickup);
+  const destination = paramText(params.destination);
   const [selected, setSelected] = useState<Vehicle['id']>('auto');
   const [fares, setFares] = useState<Partial<Record<Vehicle['id'], FareEstimate>>>({});
 
   const coords = useMemo(() => {
-    const origin_lat = Number(pickupLat);
-    const origin_lng = Number(pickupLng);
-    const dest_lat = Number(destLat);
-    const dest_lng = Number(destLng);
+    const origin_lat = Number(paramText(params.pickupLat));
+    const origin_lng = Number(paramText(params.pickupLng));
+    const dest_lat = Number(paramText(params.destLat));
+    const dest_lng = Number(paramText(params.destLng));
     if ([origin_lat, origin_lng, dest_lat, dest_lng].some(Number.isNaN)) return null;
     return { origin_lat, origin_lng, dest_lat, dest_lng };
-  }, [pickupLat, pickupLng, destLat, destLng]);
+  }, [params.pickupLat, params.pickupLng, params.destLat, params.destLng]);
 
   useEffect(() => {
     if (!coords) {
@@ -88,6 +95,10 @@ export function VehicleSelectScreen() {
   }, [coords]);
 
   const selectedEstimate = fares[selected];
+  const continueLabel =
+    selectedEstimate != null && Number.isFinite(selectedEstimate.fare)
+      ? `CONTINUAR ${formatCurrency(selectedEstimate.fare)}`
+      : 'CONTINUAR';
 
   const handleContinue = () => {
     if (!coords || !selectedEstimate) return;
@@ -123,12 +134,12 @@ export function VehicleSelectScreen() {
       </View>
 
       <View style={styles.routeSummary}>
-        <Ionicons name="location" size={16} color={theme.colors.dangerRed} />
+        <Ionicons name="location-outline" size={16} color={theme.colors.dangerRed} />
         <Text style={styles.routeAddr} numberOfLines={1}>
           {pickup || 'Origen'}
         </Text>
-        <Ionicons name="arrow-forward" size={16} color={theme.colors.mediumGray} />
-        <Ionicons name="location" size={16} color={theme.colors.primary} />
+        <Ionicons name="arrow-forward" size={14} color={theme.colors.mediumGray} />
+        <Ionicons name="navigate-outline" size={16} color={theme.colors.primary} />
         <Text style={styles.routeAddr} numberOfLines={1}>
           {destination || 'Destino'}
         </Text>
@@ -149,9 +160,12 @@ export function VehicleSelectScreen() {
               <View style={styles.vehicleInfo}>
                 <Text style={styles.vehicleName}>{v.name}</Text>
                 <View style={styles.vehicleMeta}>
-                  <Text style={styles.vehicleDetail}>
-                    ⏱ {estimate ? `${estimate.duration_min} min` : '—'}
-                  </Text>
+                  <View style={styles.metaItem}>
+                    <Ionicons name="time-outline" size={12} color={theme.colors.mediumGray} />
+                    <Text style={styles.vehicleDetail}>
+                      {estimate ? `${estimate.duration_min} min` : '—'}
+                    </Text>
+                  </View>
                   <Text style={styles.vehicleDetail}>{v.capacity}</Text>
                 </View>
               </View>
@@ -163,19 +177,22 @@ export function VehicleSelectScreen() {
         })}
 
         <View style={styles.footer}>
-          <View style={styles.footerRow}>
-            <Ionicons name="location-outline" size={16} color={theme.colors.mediumGray} />
-            <Text style={styles.footerAddr} numberOfLines={1}>
-              {destination || ''}
-            </Text>
-          </View>
+          {destination ? (
+            <View style={styles.footerRow}>
+              <Ionicons name="navigate-outline" size={16} color={theme.colors.mediumGray} />
+              <Text style={styles.footerLabel}>Hacia</Text>
+              <Text style={styles.footerAddr} numberOfLines={1}>
+                {destination}
+              </Text>
+            </View>
+          ) : null}
           <Button
             variant="cta"
             onPress={handleContinue}
             disabled={!selectedEstimate}
             style={styles.solicitarBtn}
           >
-            {selectedEstimate ? `CONTINUAR ${formatCurrency(selectedEstimate.fare)}` : 'CONTINUAR'}
+            {continueLabel}
           </Button>
         </View>
       </View>
@@ -218,6 +235,7 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.deepBlue,
     flex: 1,
+    minWidth: 0,
   },
   content: {
     flex: 1,
@@ -260,7 +278,13 @@ const styles = StyleSheet.create({
   },
   vehicleMeta: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: theme.spacing.sm,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   vehicleDetail: {
     fontSize: theme.fontSize.xs,
@@ -283,7 +307,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.sm,
   },
+  footerLabel: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.mediumGray,
+  },
   footerAddr: {
+    flex: 1,
+    minWidth: 0,
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
