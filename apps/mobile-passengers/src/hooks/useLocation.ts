@@ -6,26 +6,32 @@ import { useLocationStore } from '../store/locationStore';
 type WebPosition = { coords: { latitude: number; longitude: number } };
 type WebPositionError = { code: number; message?: string };
 
+interface WebGeoOptions {
+  enableHighAccuracy?: boolean;
+  timeout?: number;
+  maximumAge?: number;
+}
+
 interface WebGeolocation {
   getCurrentPosition: (
     success: (pos: WebPosition) => void,
-    error: (err: WebPositionError) => void,
-    options?: Record<string, unknown>,
+    error?: (err: WebPositionError) => void,
+    options?: WebGeoOptions,
   ) => void;
   watchPosition: (
     success: (pos: WebPosition) => void,
-    error: (err: WebPositionError) => void,
-    options?: Record<string, unknown>,
+    error?: (err: WebPositionError) => void,
+    options?: WebGeoOptions,
   ) => number;
   clearWatch: (id: number) => void;
 }
 
-const WEB_GEO_OPTIONS = {
+/** Browser geolocation options — prefer a fresh, accurate fix. */
+const WEB_GEO_OPTIONS: WebGeoOptions = {
   enableHighAccuracy: true,
-  timeout: 15_000,
-  // Do not reuse a stale cached fix — wrong pin is worse than a short wait.
-  maximumAge: 0,
-} as const;
+  timeout: 20_000,
+  maximumAge: 5_000,
+};
 
 function getWebGeolocation(): WebGeolocation | null {
   if (Platform.OS !== 'web') return null;
@@ -33,7 +39,8 @@ function getWebGeolocation(): WebGeolocation | null {
   return nav?.geolocation ?? null;
 }
 
-function isFiniteCoord(lat: number, lng: number): boolean {
+/** Reject null-island and non-finite / out-of-range pairs. */
+export function isValidLatLng(lat: number, lng: number): boolean {
   return (
     Number.isFinite(lat) &&
     Number.isFinite(lng) &&
@@ -41,6 +48,14 @@ function isFiniteCoord(lat: number, lng: number): boolean {
     Math.abs(lng) <= 180 &&
     !(lat === 0 && lng === 0)
   );
+}
+
+/**
+ * MapLibre / GeoJSON order: [longitude, latitude].
+ * Use this whenever building map props from a {lat,lng} store value.
+ */
+export function toMapCoordinate(lat: number, lng: number): [number, number] {
+  return [lng, lat];
 }
 
 export function useLocation() {
@@ -58,31 +73,38 @@ export function useLocation() {
 
     const setCurrentSafe = (lat: number, lng: number) => {
       if (cancelled) return;
-      if (!isFiniteCoord(lat, lng)) return;
+      if (!isValidLatLng(lat, lng)) return;
       setCurrent({ lat, lng });
     };
 
-    const seedFromWeb = (): Promise<boolean> =>
-      new Promise((resolve) => {
-        if (!webGeo) {
-          resolve(false);
-          return;
+    // ─── WEB: navigator.geolocation only (never expo-location) ───────────
+    // expo-location on web wraps the same API but its permission helper can
+    // hang, mis-report GRANTED on timeout, and its watch subscription cleanup
+    // crashes (missing removeSubscription). Go straight to the browser API.
+    if (webGeo) {
+      const onPos = (pos: WebPosition) => {
+        setCurrentSafe(pos.coords.latitude, pos.coords.longitude);
+        setPermissionGranted(true);
+      };
+      const onErr = (err: WebPositionError) => {
+        // PERMISSION_DENIED = 1
+        if (err.code === 1) {
+          setPermissionGranted(false);
         }
-        webGeo.getCurrentPosition(
-          (pos) => {
-            const { latitude, longitude } = pos.coords;
-            setCurrentSafe(latitude, longitude);
-            resolve(isFiniteCoord(latitude, longitude));
-          },
-          () => resolve(false),
-          WEB_GEO_OPTIONS,
-        );
-      });
+      };
 
+      webGeo.getCurrentPosition(onPos, onErr, WEB_GEO_OPTIONS);
+      webWatchId = webGeo.watchPosition(onPos, onErr, WEB_GEO_OPTIONS);
+
+      return () => {
+        cancelled = true;
+        if (webWatchId != null) webGeo.clearWatch(webWatchId);
+      };
+    }
+
+    // ─── NATIVE: expo-location ───────────────────────────────────────────
     (async () => {
       let granted = false;
-
-      // 1. Preferred path: expo-location (native + web with a secure context).
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         granted = status === 'granted';
@@ -90,66 +112,36 @@ export function useLocation() {
         granted = false;
       }
 
-      // 2. Web fallback: expo-location can throw or return non-granted when the
-      //    Permissions API is unavailable or the context is insecure, even
-      //    though `navigator.geolocation` itself works (e.g. localhost/HTTPS).
-      if (!granted && webGeo) {
-        granted = await seedFromWeb();
-      }
-
       setPermissionGranted(granted);
       if (!granted || cancelled) return;
 
-      if (webGeo) {
-        // Web: seed immediately (watch alone can hang or fire late), then watch.
-        // Also avoid expo-location's broken subscription.remove() on web
-        // (LocationEventEmitter.removeSubscription is missing).
-        if (!useLocationStore.getState().current) {
-          await seedFromWeb();
-        }
-        if (cancelled) return;
+      try {
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        setCurrentSafe(pos.coords.latitude, pos.coords.longitude);
+      } catch {
+        // one-shot failed; watch may still deliver
+      }
+      if (cancelled) return;
 
-        webWatchId = webGeo.watchPosition(
-          (pos) => setCurrentSafe(pos.coords.latitude, pos.coords.longitude),
-          () => {
-            // Watch failed (timeout / denied mid-session) — retry a one-shot fix.
-            void seedFromWeb();
-          },
-          WEB_GEO_OPTIONS,
+      try {
+        subscription = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 5 },
+          (loc) => setCurrentSafe(loc.coords.latitude, loc.coords.longitude),
         );
-      } else {
-        try {
-          const pos = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.High,
-          });
-          setCurrentSafe(pos.coords.latitude, pos.coords.longitude);
-        } catch {
-          // Native one-shot failed; watch may still deliver updates.
-        }
-        if (cancelled) return;
-
-        try {
-          subscription = await Location.watchPositionAsync(
-            { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 5 },
-            (loc) => setCurrentSafe(loc.coords.latitude, loc.coords.longitude),
-          );
-        } catch {
-          // Native watch failed; `current` stays at last one-shot if any.
-        }
+      } catch {
+        // watch failed
       }
     })();
 
     return () => {
       cancelled = true;
-      if (webWatchId != null && webGeo) {
-        webGeo.clearWatch(webWatchId);
-      }
       if (subscription) {
         try {
           subscription.remove();
         } catch {
-          // Defensive: never let a cleanup throw (guards against any platform
-          // where `removeSubscription` is missing).
+          // never throw from cleanup
         }
       }
     };

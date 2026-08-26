@@ -15,7 +15,7 @@ import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useDriverRoute } from '../hooks/useDriverRoute';
-import { useLocation } from '../hooks/useLocation';
+import { toMapCoordinate, useLocation } from '../hooks/useLocation';
 import { subscribeToDriverLocation, subscribeToPassengerChannel } from '../lib/realtime';
 import { useAuthStore } from '../store/authStore';
 import { useRideStore } from '../store/rideStore';
@@ -129,7 +129,9 @@ export function TripInProgressScreen() {
   const driverCoord: [number, number] | null =
     driverLat != null && driverLng != null ? [driverLng, driverLat] : null;
 
-  const passengerCoord: [number, number] | null = current ? [current.lng, current.lat] : null;
+  const passengerCoord: [number, number] | null = current
+    ? toMapCoordinate(current.lat, current.lng)
+    : null;
 
   const routeTargetLat =
     trip?.status === 'in_trip'

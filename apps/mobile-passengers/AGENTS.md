@@ -951,12 +951,15 @@ abre el navegador directamente. El puerto 8083 es el mismo que usa el orquestado
   geolocation disponible, `permissionGranted` queda `false` y la app sigue sin crashear.
   `geocodeAsync`/`reverseGeocodeAsync` lanzan `GeocoderError` en web → la app usa el backend para
   geocoding.
-- **Ubicación en el mapa (web)**: `useLocation` en web (1) pide permiso, (2) **siembra** la posición
-  con `getCurrentPosition` (el watch solo puede llegar tarde o fallar en silencio), (3) observa con
-  `navigator.geolocation.watchPosition`. Coordenadas siempre `{ lat, lng }` en el store y
-  `[lng, lat]` hacia MapLibre. El pin de usuario se actualiza **siempre** que hay coords (no depende
-  de `followUserLocation`); el follow solo controla la cámara. Al recibir `ready` del mapa se
-  re-envían markers/location (`useMapController` syncGen).
+- **Ubicación en el mapa (web)** — capas defensivas:
+  1. `useLocation` en web **solo** usa `navigator.geolocation` (nunca expo-location). Store:
+     `{ lat, lng }`. Hacia el mapa: `toMapCoordinate(lat,lng) → [lng, lat]`.
+  2. `PassengerMap.web` monta el iframe **imperativo** (`document.createElement`) con
+     `allow="geolocation"` — el `createElement` de RN-web no expone `contentWindow` confiable.
+  3. El HTML del mapa (`mapHtml.ts`), cuando corre en iframe de browser (no RN WebView), llama
+     él mismo a `navigator.geolocation` y dibuja el pin. Así el pin es correcto aunque el puente
+     React→iframe falle. Un `userLocation: null` del host **no** borra el pin en web.
+  4. Convención MapLibre siempre `setLngLat([lng, lat])`. Follow solo mueve la cámara.
 - **`expo-location` bug en el cleanup (web)**: `Location.watchPositionAsync()` devuelve una
   subscription cuyo `.remove()` llama internamente a `LocationEventEmitter.removeSubscription()`. En
   native `LocationEventEmitter` es un `LegacyEventEmitter` (que SÍ tiene `removeSubscription`), pero en

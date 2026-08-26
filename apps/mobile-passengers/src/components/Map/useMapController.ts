@@ -98,6 +98,10 @@ export function useMapController({
 
   useEffect(() => {
     if (!isLoaded) return;
+    // Only push when we have a real fix. Sending null clears the pin on native
+    // and is a no-op on web (mapHtml ignores null while browser geo owns the pin).
+    // Avoid spamming null on every mount/sync before geolocation resolves.
+    if (userLat == null || userLng == null) return;
     pushUserLocation(userLat, userLng);
   }, [userLat, userLng, isLoaded, syncGen, pushUserLocation]);
 

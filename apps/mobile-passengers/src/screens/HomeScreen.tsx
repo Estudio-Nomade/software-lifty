@@ -22,7 +22,7 @@ import { HowItWorks } from '../components/HowItWorks';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { QuickChips } from '../components/QuickChips';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { useLocation } from '../hooks/useLocation';
+import { toMapCoordinate, useLocation } from '../hooks/useLocation';
 import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
 import { useLocationStore } from '../store/locationStore';
 import { useRideStore } from '../store/rideStore';
@@ -365,8 +365,10 @@ export function HomeScreen() {
 
             <View style={styles.mapArea}>
               <PassengerMap
-                centerCoordinate={current ? [current.lng, current.lat] : [-58.3816, -34.6037]}
-                userLocation={current ? [current.lng, current.lat] : null}
+                centerCoordinate={
+                  current ? toMapCoordinate(current.lat, current.lng) : [-58.3816, -34.6037]
+                }
+                userLocation={current ? toMapCoordinate(current.lat, current.lng) : null}
                 followUserLocation
                 recenterKey={recenterKey}
                 style={styles.mapFill}

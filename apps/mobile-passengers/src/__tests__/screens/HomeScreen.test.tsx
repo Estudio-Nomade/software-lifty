@@ -16,6 +16,8 @@ jest.mock('expo-location', () => ({
 
 jest.mock('../../hooks/useLocation', () => ({
   useLocation: jest.fn(),
+  toMapCoordinate: (lat: number, lng: number) => [lng, lat] as [number, number],
+  isValidLatLng: () => true,
 }));
 
 jest.mock('../../hooks/usePlaceAutocomplete', () => ({

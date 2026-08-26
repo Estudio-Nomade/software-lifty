@@ -179,6 +179,13 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
   var followRequested = false;
   var hasPerformedInitialCenter = false;
   var userManuallyMoved = false;
+  // True when running inside a browser iframe (not a native RN WebView).
+  // In that case the map owns navigator.geolocation so the user pin is correct
+  // even if the React host→iframe bridge drops messages.
+  var isBrowserIframe = !(window.ReactNativeWebView && window.ReactNativeWebView.postMessage);
+  var browserGeoWatchId = null;
+  var lastUserLat = null;
+  var lastUserLng = null;
 
   var USER_ICONS = {
     car: 'car-outline',
@@ -189,6 +196,27 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
 
   function setView(center, zoom) {
     map.jumpTo({ center: center, zoom: zoom });
+  }
+
+  function isValidLatLng(lat, lng) {
+    return (
+      typeof lat === 'number' && typeof lng === 'number' &&
+      isFinite(lat) && isFinite(lng) &&
+      Math.abs(lat) <= 90 && Math.abs(lng) <= 180 &&
+      !(lat === 0 && lng === 0)
+    );
+  }
+
+  /** Place/move the user pin. Always uses MapLibre order setLngLat([lng, lat]). */
+  function applyUserLocation(lat, lng) {
+    if (!isValidLatLng(lat, lng)) return;
+    lastUserLat = lat;
+    lastUserLng = lng;
+    updateUserLocation(lat, lng);
+    if (followRequested && !hasPerformedInitialCenter) {
+      setView([lng, lat], map.getZoom());
+      hasPerformedInitialCenter = true;
+    }
   }
 
   function updateMarkers(newMarkers) {
@@ -278,6 +306,7 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
       return;
     }
 
+    // MapLibre always wants [longitude, latitude].
     if (!userMarker) {
       var el = document.createElement('div');
       el.className = 'user-marker';
@@ -288,13 +317,38 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     }
   }
 
+  function startBrowserGeolocation() {
+    if (!isBrowserIframe) return;
+    if (!navigator.geolocation) return;
+
+    var opts = { enableHighAccuracy: true, timeout: 20000, maximumAge: 5000 };
+
+    function onPos(pos) {
+      if (!pos || !pos.coords) return;
+      applyUserLocation(pos.coords.latitude, pos.coords.longitude);
+    }
+
+    try {
+      navigator.geolocation.getCurrentPosition(onPos, function () {}, opts);
+      browserGeoWatchId = navigator.geolocation.watchPosition(onPos, function () {}, opts);
+    } catch (e) {
+      // Geolocation blocked (insecure context, missing allow=geolocation, etc.)
+    }
+  }
+
   map.on('load', function () {
     mapLoaded = true;
     if (pendingRoute) {
       applyRoute(pendingRoute);
       pendingRoute = null;
     }
+    // Re-apply last known user pin after style load (marker can be added pre-load,
+    // but re-set ensures it is visible on top of the finished style).
+    if (lastUserLat != null && lastUserLng != null) {
+      updateUserLocation(lastUserLat, lastUserLng);
+    }
     postToHost(JSON.stringify({ type: 'ready' }));
+    startBrowserGeolocation();
   });
 
   map.on('moveend', function () {
@@ -313,17 +367,31 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     }));
   });
 
-  window.addEventListener('message', function (event) {
-    var msg;
+  function parseHostMessage(data) {
+    if (data == null) return null;
+    if (typeof data === 'object') return data;
+    if (typeof data !== 'string') return null;
     try {
-      msg = JSON.parse(event.data);
+      return JSON.parse(data);
     } catch (e) {
-      return;
+      return null;
     }
+  }
+
+  window.addEventListener('message', function (event) {
+    var msg = parseHostMessage(event.data);
+    if (!msg || !msg.type) return;
 
     switch (msg.type) {
       case 'init':
-        setView(msg.center, msg.zoom || DEFAULT_ZOOM);
+        // On browser, do not jump away from a live user fix to a stale default
+        // center (e.g. BA fallback) once we already centered on the user.
+        if (isBrowserIframe && hasPerformedInitialCenter && lastUserLat != null) {
+          break;
+        }
+        if (msg.center && msg.center.length === 2) {
+          setView(msg.center, msg.zoom || DEFAULT_ZOOM);
+        }
         break;
       case 'markers':
         updateMarkers(msg.markers || []);
@@ -342,28 +410,33 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
         followRequested = !!msg.enabled;
         if (followRequested) {
           hasPerformedInitialCenter = false;
+          if (lastUserLat != null && lastUserLng != null) {
+            setView([lastUserLng, lastUserLat], map.getZoom());
+            hasPerformedInitialCenter = true;
+          }
         }
         break;
       case 'userLocation':
         // Always place the user pin when we have coords. Camera follow is
-        // independent — gating the marker on followRequested hid the pin on
-        // screens with followUserLocation=false and dropped early fixes that
-        // arrived before the followUser message was processed.
+        // independent of whether the pin is shown.
         if (msg.lat != null && msg.lng != null) {
-          updateUserLocation(msg.lat, msg.lng);
-          if (followRequested && !hasPerformedInitialCenter) {
-            setView([msg.lng, msg.lat], map.getZoom());
-            hasPerformedInitialCenter = true;
-          }
-        } else {
+          applyUserLocation(Number(msg.lat), Number(msg.lng));
+        } else if (!isBrowserIframe) {
+          // Native: host owns location — null means clear.
+          // Browser: ignore null so we do not wipe the pin owned by
+          // navigator.geolocation inside this document.
           updateUserLocation(null, null);
+          lastUserLat = null;
+          lastUserLng = null;
         }
         break;
       case 'recenter':
+        userManuallyMoved = false;
         if (msg.lat != null && msg.lng != null) {
-          userManuallyMoved = false;
-          updateUserLocation(msg.lat, msg.lng);
-          map.flyTo({ center: [msg.lng, msg.lat], zoom: 15, duration: 600 });
+          applyUserLocation(Number(msg.lat), Number(msg.lng));
+          map.flyTo({ center: [Number(msg.lng), Number(msg.lat)], zoom: 15, duration: 600 });
+        } else if (lastUserLat != null && lastUserLng != null) {
+          map.flyTo({ center: [lastUserLng, lastUserLat], zoom: 15, duration: 600 });
         }
         break;
     }

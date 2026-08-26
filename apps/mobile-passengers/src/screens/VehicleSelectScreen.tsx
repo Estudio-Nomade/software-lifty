@@ -7,6 +7,7 @@ import type { FareEstimate } from '../api/types';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { toMapCoordinate } from '../hooks/useLocation';
 import { useLocationStore } from '../store/locationStore';
 import { theme } from '../theme';
 import { formatCurrency } from '../utils/formatters';
@@ -114,8 +115,10 @@ export function VehicleSelectScreen() {
 
       <View style={styles.mapContainer}>
         <PassengerMap
-          centerCoordinate={current ? [current.lng, current.lat] : [-58.3816, -34.6037]}
-          userLocation={current ? [current.lng, current.lat] : null}
+          centerCoordinate={
+            current ? toMapCoordinate(current.lat, current.lng) : [-58.3816, -34.6037]
+          }
+          userLocation={current ? toMapCoordinate(current.lat, current.lng) : null}
           style={styles.mapFill}
         />
       </View>

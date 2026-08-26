@@ -1,36 +1,33 @@
 import type React from 'react';
-import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { theme } from '../../theme';
 import { MapErrorFallback } from './MapErrorFallback';
 import { DEFAULT_ZOOM, type PassengerMapProps, generateMapHtml } from './mapHtml';
 import { useMapController } from './useMapController';
 
-interface IframeWindow {
-  postMessage: (message: string, targetOrigin: string) => void;
-}
+/**
+ * Web map transport.
+ *
+ * Uses an imperative DOM iframe (same pattern as the driver `MapView.web.tsx`)
+ * instead of React `createElement('iframe')`. RN-web's synthetic host nodes do
+ * not always expose a real `contentWindow`, which silently drops postMessage
+ * traffic — markers from the host never reach MapLibre.
+ *
+ * The iframe document itself also runs `navigator.geolocation` (see mapHtml)
+ * so the user pin is correct even if the React→iframe bridge lags.
+ *
+ * DOM types are intentionally `any` — the passenger tsconfig has no `dom` lib
+ * (shared with native). Matches `apps/mobile/src/components/MapView.web.tsx`.
+ */
 
-interface IframeElement {
-  contentWindow?: IframeWindow | null;
-}
+declare const document: any;
+declare const window: any;
+declare const URL: {
+  createObjectURL: (obj: unknown) => string;
+  revokeObjectURL: (url: string) => void;
+};
 
-interface MessageEventLike {
-  data?: unknown;
-  source?: unknown;
-}
-
-interface MessageListenerTarget {
-  addEventListener: (type: string, listener: (event: MessageEventLike) => void) => void;
-  removeEventListener: (type: string, listener: (event: MessageEventLike) => void) => void;
-}
-
-interface BrowserGlobals {
-  Blob?: new (parts?: unknown[], options?: { type?: string }) => unknown;
-  URL?: { createObjectURL: (obj: unknown) => string; revokeObjectURL: (url: string) => void };
-}
-
-const win = globalThis as unknown as MessageListenerTarget;
-const browser = globalThis as unknown as BrowserGlobals;
 const LOAD_TIMEOUT_MS = 15_000;
 
 export const PassengerMap: React.FC<PassengerMapProps> = ({
@@ -53,21 +50,13 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     [],
   );
 
-  // Render the MapLibre document from a Blob URL (same approach as the driver's
-  // `MapView.web.tsx`) instead of `srcDoc`. A `srcDoc` iframe runs in a
-  // sandboxed `about:srcdoc` context where the external MapLibre CDN scripts and
-  // styles are unreliable, so the map can end up blank/broken. A Blob URL loads
-  // the document as a real resource with a resolvable origin.
-  const blobUrl = useMemo(() => {
-    if (!browser.Blob || !browser.URL) return null;
-    const blob = new browser.Blob([mapHtml], { type: 'text/html' });
-    return browser.URL.createObjectURL(blob);
-  }, [mapHtml]);
-
-  const iframeRef = useRef<IframeElement | null>(null);
+  const containerRef = useRef<any>(null);
+  const iframeRef = useRef<any>(null);
+  const blobUrlRef = useRef<string | null>(null);
+  const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const retryKey = useRef(0);
+  const [mountKey, setMountKey] = useState(0);
 
   const handleError = useCallback(() => {
     setHasError(true);
@@ -77,11 +66,13 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
   const handleRetry = useCallback(() => {
     setHasError(false);
     setIsLoaded(false);
-    retryKey.current += 1;
+    setMountKey((k) => k + 1);
   }, []);
 
   const postMessage = useCallback((message: unknown) => {
-    iframeRef.current?.contentWindow?.postMessage(JSON.stringify(message), '*');
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    win.postMessage(JSON.stringify(message), '*');
   }, []);
 
   const { handleRawMessage } = useMapController({
@@ -97,56 +88,86 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     postMessage,
   });
 
-  // Safety net: if the iframe never fires `onload` (e.g. a CDN script hangs),
-  // stop showing the loading overlay instead of spinning forever.
+  // Mount a real DOM iframe into the container (imperative — not RN createElement).
   useEffect(() => {
-    if (isLoaded) return;
-    const timeout = setTimeout(() => setIsLoaded(true), LOAD_TIMEOUT_MS);
-    return () => clearTimeout(timeout);
-  }, [isLoaded]);
+    const container = containerRef.current;
+    if (!container || typeof document === 'undefined') return;
 
-  // Revoke the Blob URL once the component unmounts. The URL stays valid across
-  // iframe remounts (the retry `key` change reloads the same URL), so it is only
-  // released here.
-  useEffect(() => {
-    const url = blobUrl;
+    while (container.firstChild) {
+      container.removeChild(container.firstChild);
+    }
+
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
+
+    const blob = new Blob([mapHtml], { type: 'text/html' } as any);
+    const url = URL.createObjectURL(blob);
+    blobUrlRef.current = url;
+
+    const iframe: any = document.createElement('iframe');
+    iframe.src = url;
+    iframe.title = 'map';
+    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
+    // Required for navigator.geolocation inside the sandboxed blob document.
+    iframe.setAttribute('allow', 'geolocation');
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = '0';
+    iframe.style.background = 'transparent';
+    iframe.style.display = 'block';
+
+    iframe.onload = () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+        loadTimeoutRef.current = null;
+      }
+      setIsLoaded(true);
+    };
+    iframe.onerror = () => handleError();
+
+    container.appendChild(iframe);
+    iframeRef.current = iframe;
+
+    loadTimeoutRef.current = setTimeout(() => {
+      setIsLoaded((prev) => prev || true);
+    }, LOAD_TIMEOUT_MS);
+
     return () => {
-      if (url) browser.URL?.revokeObjectURL(url);
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+        loadTimeoutRef.current = null;
+      }
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+      iframeRef.current = null;
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
     };
-  }, [blobUrl]);
+  }, [mapHtml, mountKey, handleError]);
 
+  // Parent ← iframe messages (filter by source = our iframe window).
   useEffect(() => {
-    const handleMessage = (event: MessageEventLike) => {
+    const onMessage = (event: any) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
-      handleRawMessage(String(event.data));
+      const raw = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+      handleRawMessage(raw);
     };
-
-    win.addEventListener('message', handleMessage);
-    return () => win.removeEventListener('message', handleMessage);
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
   }, [handleRawMessage]);
 
   if (hasError) {
     return <MapErrorFallback onRetry={handleRetry} style={style} />;
   }
 
-  const iframe = createElement(
-    'iframe',
-    {
-      key: retryKey.current,
-      ref: iframeRef,
-      title: 'map',
-      sandbox: 'allow-scripts allow-same-origin allow-popups',
-      onLoad: () => setIsLoaded(true),
-      onError: handleError,
-      style: styles.iframe,
-      ...(blobUrl ? { src: blobUrl } : { srcDoc: mapHtml }),
-    },
-    null,
-  );
-
   return (
     <View style={[styles.container, style]}>
-      {iframe}
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
       {!isLoaded && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -159,11 +180,6 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  iframe: {
-    flex: 1,
-    borderWidth: 0,
-    backgroundColor: 'transparent',
   },
   loadingOverlay: {
     ...(StyleSheet.absoluteFillObject as object),
