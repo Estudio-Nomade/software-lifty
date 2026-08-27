@@ -18,13 +18,21 @@ export function useVerifyEmail() {
 
   return useMutation({
     mutationFn: async ({ email, code }: { email: string; code: string }) => {
-      const { data, error } = await supabase.auth.verifyOtp({
+      // Prefer signup OTP (register flow). Fall back to email OTP for older codes.
+      const first = await supabase.auth.verifyOtp({
+        email,
+        token: code,
+        type: 'signup',
+      });
+      if (!first.error) return first.data;
+
+      const second = await supabase.auth.verifyOtp({
         email,
         token: code,
         type: 'email',
       });
-      if (error) throw error;
-      return data;
+      if (second.error) throw second.error;
+      return second.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries();

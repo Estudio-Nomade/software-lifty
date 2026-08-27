@@ -71,6 +71,7 @@ export const RegisterScreen: React.FC = () => {
 
   const handleRegister = async () => {
     setError(null);
+    setInfo(null);
     if (!email.trim()) {
       setError('Ingresa tu email');
       return;
@@ -85,11 +86,35 @@ export const RegisterScreen: React.FC = () => {
     }
 
     try {
-      await signUp.mutateAsync({ email: email.trim(), password });
-      setStep('verify');
-    } catch (err: any) {
-      const message = err?.message ?? err?.response?.data?.message ?? 'Error al crear la cuenta';
-      setError(message);
+      // Same Supabase project as the passenger app. If the email already exists
+      // (e.g. they signed up as passenger first), signUp returns success with
+      // empty identities and does NOT send a confirmation email (anti-enumeration).
+      const data = await signUp.mutateAsync({ email: email.trim(), password });
+
+      if (data.session) {
+        // Email confirmation disabled — already authenticated; continue onboarding.
+        const route = await resolvePostAuthRoute();
+        if (route.blockedMessage) {
+          setError(route.blockedMessage);
+          return;
+        }
+        if (route.screen) {
+          navigation.replace(route.screen);
+        }
+        return;
+      }
+
+      if ((data.user?.identities?.length ?? 0) > 0) {
+        setStep('verify');
+        return;
+      }
+
+      // Existing Lifty account (passenger or driver) — no mail is sent.
+      setError(
+        'Este email ya esta registrado en Lifty. Inicia sesion en lugar de crear una cuenta nueva. Si ya sos pasajero, usa el mismo email y contrasena.',
+      );
+    } catch (err: unknown) {
+      setError(getFriendlyAuthError(err));
     }
   };
 
@@ -99,9 +124,8 @@ export const RegisterScreen: React.FC = () => {
     try {
       await resendCode.mutateAsync({ email: email.trim() });
       setInfo('Te enviamos un nuevo codigo');
-    } catch (err: any) {
-      const message = err?.message ?? 'Error al reenviar el codigo';
-      setError(message);
+    } catch (err: unknown) {
+      setError(getFriendlyAuthError(err));
     }
   };
 
@@ -112,11 +136,19 @@ export const RegisterScreen: React.FC = () => {
 
     try {
       await verifyEmail.mutateAsync({ email: email.trim(), code: verificationCode });
-      setDriverStatus('pending');
-      navigation.replace('LoginCredentials', { email: email.trim() });
-    } catch (err: any) {
-      const message = err?.message ?? err?.response?.data?.message ?? 'Error al verificar';
-      setError(message);
+      const route = await resolvePostAuthRoute();
+      if (route.blockedMessage) {
+        setError(route.blockedMessage);
+        return;
+      }
+      if (route.status) {
+        setDriverStatus(route.status);
+      }
+      if (route.screen) {
+        navigation.replace(route.screen);
+      }
+    } catch (err: unknown) {
+      setError(getFriendlyAuthError(err));
     }
   };
 
@@ -264,7 +296,16 @@ export const RegisterScreen: React.FC = () => {
             textStyle={styles.googleButtonText}
           />
           {error !== null && <Text style={styles.errorText}>{error}</Text>}
-          <TouchableOpacity onPress={() => navigation.navigate('LoginCredentials')}>
+          <TouchableOpacity
+            onPress={() => {
+              const trimmed = email.trim();
+              if (trimmed) {
+                navigation.navigate('LoginCredentials', { email: trimmed });
+              } else {
+                navigation.navigate('LoginCredentials');
+              }
+            }}
+          >
             <Text style={styles.loginLink}>Ya tenes cuenta? Inicia sesion</Text>
           </TouchableOpacity>
         </ScrollView>

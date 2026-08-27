@@ -17,9 +17,18 @@ function getClient(): any {
   return resendClient;
 }
 
+// Email is always enabled in production. Off in test. In development it is off
+// by default so we don't spam real inboxes; set SEND_EMAILS_IN_DEV=true to
+// actually deliver via Resend (same idea as SEND_PUSH_IN_DEV).
+function isEmailEnabled(): boolean {
+  if (process.env.NODE_ENV === 'production') return true;
+  if (process.env.NODE_ENV === 'test') return false;
+  return process.env.SEND_EMAILS_IN_DEV === 'true';
+}
+
 export async function sendEmail(email: string, subject: string, html: string): Promise<boolean> {
-  if (process.env.NODE_ENV !== 'production') {
-    logger.info('[EMAIL]', email, '|', subject);
+  if (!isEmailEnabled()) {
+    logger.info('[EMAIL] skipped (dev)', email, '|', subject);
     return true;
   }
 
@@ -30,13 +39,25 @@ export async function sendEmail(email: string, subject: string, html: string): P
   }
 
   try {
-    await client.emails.send({
+    const result = await client.emails.send({
       from: process.env.EMAIL_FROM ?? 'Lifty <noreply@lifty.app>',
       to: email,
       subject,
       html,
     });
-    logger.info('[EMAIL] Sent to', email);
+
+    // Resend SDK returns { data, error } instead of throwing on API failures.
+    if (result?.error) {
+      logger.error(
+        '[EMAIL] Send failed to',
+        email,
+        ':',
+        result.error.message ?? JSON.stringify(result.error),
+      );
+      return false;
+    }
+
+    logger.info('[EMAIL] Sent to', email, result?.data?.id ? `(id=${result.data.id})` : '');
     return true;
   } catch (err) {
     logger.error('[EMAIL] Send failed to', email, ':', (err as Error).message);

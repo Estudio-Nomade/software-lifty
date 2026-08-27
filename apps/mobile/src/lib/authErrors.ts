@@ -31,6 +31,14 @@ export function getFriendlyAuthError(error: unknown): string {
     return 'Error al enviar el email. Verifica tu conexion o intenta mas tarde.';
   }
   if (
+    message.includes('already') ||
+    message.includes('registered') ||
+    message.includes('user already') ||
+    message.includes('email address has already been registered')
+  ) {
+    return 'Este email ya esta registrado en Lifty. Inicia sesion en lugar de crear una cuenta nueva.';
+  }
+  if (
     message.includes('email') &&
     (message.includes('valid') || message.includes('format') || message.includes('invalid'))
   ) {
