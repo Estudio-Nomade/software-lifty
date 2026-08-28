@@ -46,7 +46,7 @@ function metersBetween(a: { lat: number; lng: number }, b: { lat: number; lng: n
 
 export function HomeScreen() {
   const { navigate, replace } = useAppNavigation();
-  const { current } = useLocation();
+  const { current, locationError, refresh } = useLocation();
   const setActiveTrip = useRideStore((s) => s.setActiveTrip);
 
   useFocusEffect(
@@ -147,7 +147,7 @@ export function HomeScreen() {
   }, [current?.lat, current?.lng, current?.accuracy, searchExpanded, pickupFromGps]);
 
   const handleLocate = () => {
-    void requestFreshPosition().finally(() => {
+    void (typeof refresh === 'function' ? refresh() : requestFreshPosition()).finally(() => {
       setRecenterKey((k) => k + 1);
     });
   };
@@ -401,6 +401,21 @@ export function HomeScreen() {
                 recenterKey={recenterKey}
                 style={styles.mapFill}
               />
+              {locationError && !current ? (
+                <TouchableOpacity
+                  style={styles.geoBanner}
+                  onPress={handleLocate}
+                  activeOpacity={0.9}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reintentar ubicación"
+                >
+                  <Ionicons name="warning-outline" size={16} color={theme.colors.white} />
+                  <Text style={styles.geoBannerText} numberOfLines={2}>
+                    {locationError}
+                  </Text>
+                  <Text style={styles.geoBannerRetry}>Reintentar</Text>
+                </TouchableOpacity>
+              ) : null}
               <TouchableOpacity
                 style={styles.locateBtn}
                 onPress={handleLocate}
@@ -476,6 +491,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...theme.shadows.card,
+  },
+  geoBanner: {
+    position: 'absolute',
+    left: theme.spacing.sm,
+    right: theme.spacing.sm,
+    bottom: theme.spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    backgroundColor: theme.colors.deepBlue,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    ...theme.shadows.card,
+  },
+  geoBannerText: {
+    flex: 1,
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.white,
+  },
+  geoBannerRetry: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.primary,
   },
   expandedSearch: {
     flex: 1,

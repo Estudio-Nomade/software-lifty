@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useState } from 'react';
-import { StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { requestFreshPosition } from '../hooks/useLocation';
 import { useLocationStore } from '../store/locationStore';
 import { theme } from '../theme';
 
@@ -17,8 +18,31 @@ export function LocationPermissionsScreen() {
     setLoading(true);
     setError(null);
     try {
+      if (Platform.OS === 'web') {
+        // Browser prompt is tied to getCurrentPosition / watch — seed immediately.
+        const fix = await requestFreshPosition();
+        setPermissionGranted(Boolean(fix));
+        if (!fix) {
+          setError(
+            useLocationStore.getState().locationError ??
+              'No se pudo obtener la ubicación. Podés reintentar desde el mapa.',
+          );
+          setLoading(false);
+          // Still enter Home so locate/retry works.
+          replace('Home');
+          return;
+        }
+        replace('Home');
+        return;
+      }
+
       const { status } = await Location.requestForegroundPermissionsAsync();
-      setPermissionGranted(status === 'granted');
+      const granted = status === 'granted';
+      setPermissionGranted(granted);
+      if (granted) {
+        // Seed store before Home mounts so the map is not stuck on null.
+        await requestFreshPosition();
+      }
       replace('Home');
     } catch {
       setError('No se pudo solicitar el permiso. Podés activarlo después desde Configuración.');
