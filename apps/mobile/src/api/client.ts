@@ -11,7 +11,7 @@ function getApiUrl(): string {
 
   // The backend may run on a non-default port (bun run setup picks a free
   // one and writes it here) — the host is still auto-detected from Expo.
-  const port = process.env.EXPO_PUBLIC_API_PORT ?? '3000';
+  const port = process.env.EXPO_PUBLIC_API_PORT ?? '3001';
 
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {

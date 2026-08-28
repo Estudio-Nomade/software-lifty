@@ -7,7 +7,7 @@ function getApiUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
   if (envUrl) return envUrl;
 
-  const port = process.env.EXPO_PUBLIC_API_PORT ?? '3000';
+  const port = process.env.EXPO_PUBLIC_API_PORT ?? '3001';
 
   // On web, `Constants.expoConfig?.hostUri` is undefined, so we used to fall
   // back to `localhost` — which is wrong when the app is opened via LAN IP

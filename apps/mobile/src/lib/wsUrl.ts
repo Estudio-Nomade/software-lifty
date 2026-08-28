@@ -8,7 +8,7 @@ export function getWsUrl(): string {
   if (envUrl) {
     base = envUrl.replace('/api', '').replace(/^http/, 'ws');
   } else {
-    const port = process.env.EXPO_PUBLIC_API_PORT ?? '3000';
+    const port = process.env.EXPO_PUBLIC_API_PORT ?? '3001';
     const hostUri = Constants.expoConfig?.hostUri;
     const host = hostUri ? hostUri.split(':')[0] : 'localhost';
     base = `ws://${host}:${port}`;

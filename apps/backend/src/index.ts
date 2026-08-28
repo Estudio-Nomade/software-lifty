@@ -111,6 +111,20 @@ export function createApp(customAuthPlugin?: typeof authPlugin) {
         .use(passengerTripRoutes)
         .use(locationHttpPlugin),
     )
+    .get('/', () => {
+      const isProd = process.env.NODE_ENV === 'production';
+      return {
+        name: 'lifty-api',
+        health: '/health',
+        ready: '/ready',
+        api: '/api',
+        ...(isProd ? {} : { docs: '/docs' }),
+      };
+    })
+    .get('/favicon.ico', ({ set }) => {
+      set.status = 204;
+      return null;
+    })
     .get('/health', async ({ set }) => {
       const checks: Record<string, string> = {};
       let degraded = false;
@@ -177,36 +191,47 @@ export function createApp(customAuthPlugin?: typeof authPlugin) {
   app.onError(({ code, error, set, request }) => {
     const e = error as Error;
     const msg = e?.message ?? 'Unknown error';
-    const status = set.status ?? 500;
     const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
     const url = request ? new URL(request.url) : null;
+    const path = url?.pathname ?? '?';
 
-    logger.error(
-      `[ERROR] ${code ?? 'UNKNOWN'} ${request?.method ?? '?'} ${url?.pathname ?? '?'} → ${msg}`,
-      {
+    // Resolve status before logging so NOT_FOUND never appears as 200.
+    let status: number;
+    switch (code) {
+      case 'NOT_FOUND':
+        status = 404;
+        break;
+      case 'VALIDATION':
+        status = 400;
+        break;
+      default:
+        status = typeof set.status === 'number' ? set.status : 500;
+    }
+    set.status = status;
+
+    const isBrowserProbe = path === '/' || path === '/favicon.ico';
+    if (!(code === 'NOT_FOUND' && isBrowserProbe)) {
+      logger.error(`[ERROR] ${code ?? 'UNKNOWN'} ${request?.method ?? '?'} ${path} → ${msg}`, {
         code: code ?? 'UNKNOWN',
         status,
         method: request?.method ?? '?',
-        path: url?.pathname ?? '?',
+        path,
         ...(isDev && e?.stack ? { stack: e.stack } : {}),
-      },
-    );
+      });
+    }
 
     switch (code) {
       case 'NOT_FOUND':
-        set.status = 404;
         return {
           error: { code: 'NOT_FOUND', message: msg, status: 404 },
           meta: { timestamp: new Date().toISOString() },
         };
       case 'VALIDATION':
-        set.status = 400;
         return {
           error: { code: 'VALIDATION_ERROR', message: msg, status: 400 },
           meta: { timestamp: new Date().toISOString() },
         };
       default:
-        set.status = status;
         return {
           error: {
             code: 'INTERNAL_ERROR',

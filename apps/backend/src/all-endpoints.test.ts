@@ -140,6 +140,25 @@ describe('System', () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toContain('http_requests_total');
   });
+  test('GET / → 200 service index (browser probe DX)', async () => {
+    const { status, data } = await req('GET', '/');
+    expect(status).toBe(200);
+    expect(data.name).toBe('lifty-api');
+    expect(data.health).toBe('/health');
+    expect(data.ready).toBe('/ready');
+    expect(data.api).toBe('/api');
+  });
+  test('GET /favicon.ico → 204 silent (browser probe)', async () => {
+    const res = await app.handle(new Request('http://localhost/favicon.ico'));
+    expect(res.status).toBe(204);
+  });
+  test('GET /api/does-not-exist → 404 NOT_FOUND shape', async () => {
+    const { status, data } = await req('GET', '/api/does-not-exist');
+    expect(status).toBe(404);
+    expect(data.error.code).toBe('NOT_FOUND');
+    expect(data.error.status).toBe(404);
+    expect(data.meta.timestamp).toBeDefined();
+  });
   test('security headers are applied on top-level and nested routes', async () => {
     const top = await app.handle(new Request('http://localhost/health'));
     expect(top.headers.get('X-Content-Type-Options')).toBe('nosniff');
