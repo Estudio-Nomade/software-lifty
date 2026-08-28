@@ -10,7 +10,7 @@ jest.mock('../../lib/realtime', () => ({
 }));
 
 jest.mock('../../hooks/useLocation', () => ({
-  useLocation: () => ({ current: null, permissionGranted: true }),
+  useLocation: () => ({ current: null, permissionGranted: true, locationError: null, refresh: jest.fn() }),
 }));
 
 jest.mock('../../hooks/useDriverRoute', () => ({

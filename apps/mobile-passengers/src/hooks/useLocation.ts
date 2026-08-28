@@ -18,10 +18,13 @@ export function toMapCoordinate(lat: number, lng: number): [number, number] {
   return [lng, lat];
 }
 
+/**
+ * Only Platform.OS === 'web' is reliable.
+ * RN (and jest-expo) polyfill `window`, so a window-based check falsely
+ * treated Expo Go as web and never called expo-location → current stayed null.
+ */
 function isWebRuntime(): boolean {
-  if (Platform.OS === 'web') return true;
-  const g = globalThis as { window?: unknown; ReactNativeWebView?: unknown };
-  return typeof g.window !== 'undefined' && g.ReactNativeWebView == null;
+  return Platform.OS === 'web';
 }
 
 type GeoCoords = { latitude: number; longitude: number; accuracy?: number | null };
@@ -44,14 +47,23 @@ type BrowserGeolocation = {
   clearWatch: (id: number) => void;
 };
 
-const WEB_GEO_OPTS: GeoOptions = {
+const WEB_GEO_OPTS_HIGH: GeoOptions = {
   enableHighAccuracy: true,
-  timeout: 25_000,
+  timeout: 12_000,
   maximumAge: 0,
+};
+
+const WEB_GEO_OPTS_BALANCED: GeoOptions = {
+  enableHighAccuracy: false,
+  timeout: 10_000,
+  maximumAge: 5_000,
 };
 
 /** Good enough to reverse-geocode a street name. */
 export const TARGET_ACCURACY_M = 40;
+
+const LOCATION_DENIED_MSG =
+  'No pudimos obtener tu ubicación. Activá el GPS o permití el acceso e intentá de nuevo.';
 
 function isJestRuntime(): boolean {
   try {
@@ -66,6 +78,8 @@ function isJestRuntime(): boolean {
 
 const MAX_WAIT_MS = isJestRuntime() ? 80 : 16_000;
 const MIN_WAIT_MS = isJestRuntime() ? 0 : 2_500;
+/** Cap native getCurrentPosition so a hung BestForNavigation cannot block forever. */
+const NATIVE_FIX_TIMEOUT_MS = isJestRuntime() ? 200 : 8_000;
 
 function readBrowserGeo(): BrowserGeolocation | null {
   const g = globalThis as { navigator?: { geolocation?: BrowserGeolocation } };
@@ -78,6 +92,10 @@ function accuracyOf(pos: GeoPositionLike): number {
 }
 
 export type PositionFix = { lat: number; lng: number; accuracy: number };
+
+function setGeoError(message: string | null): void {
+  useLocationStore.getState().setLocationError(message);
+}
 
 function applyPosition(pos: GeoPositionLike, force = false): boolean {
   const lat = pos.coords.latitude;
@@ -100,23 +118,53 @@ export function applyBrowserLocation(lat: number, lng: number, accuracy?: number
   useLocationStore.getState().applyFix({ lat, lng, accuracy }, { force: false });
 }
 
+function geoErrorMessage(err: { code?: number; message?: string } | undefined): string {
+  if (!err) return LOCATION_DENIED_MSG;
+  // 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
+  if (err.code === 1) {
+    return 'Permiso de ubicación denegado. Activálo en el navegador o en Ajustes.';
+  }
+  if (err.code === 3) {
+    return 'La ubicación tardó demasiado. Revisá el GPS e intentá de nuevo.';
+  }
+  return LOCATION_DENIED_MSG;
+}
+
+function browserGetCurrent(
+  geo: BrowserGeolocation,
+  opts: GeoOptions,
+): Promise<GeoPositionLike | null> {
+  return new Promise((resolve) => {
+    try {
+      geo.getCurrentPosition(
+        (pos) => resolve(pos),
+        () => resolve(null),
+        opts,
+      );
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 /**
  * Collect browser positions until TARGET_ACCURACY_M or timeout.
  * Never force-overwrite a better stored fix with a coarser one.
+ * Falls back to enableHighAccuracy:false when high-accuracy times out.
  */
 function requestBestWebPosition(): Promise<PositionFix | null> {
   const geo = readBrowserGeo();
   if (!geo) {
     const cur = useLocationStore.getState().current;
-    return Promise.resolve(
-      cur && isValidLatLng(cur.lat, cur.lng)
-        ? {
-            lat: cur.lat,
-            lng: cur.lng,
-            accuracy: cur.accuracy ?? Number.POSITIVE_INFINITY,
-          }
-        : null,
-    );
+    if (cur && isValidLatLng(cur.lat, cur.lng)) {
+      return Promise.resolve({
+        lat: cur.lat,
+        lng: cur.lng,
+        accuracy: cur.accuracy ?? Number.POSITIVE_INFINITY,
+      });
+    }
+    setGeoError(LOCATION_DENIED_MSG);
+    return Promise.resolve(null);
   }
 
   return new Promise((resolve) => {
@@ -124,6 +172,7 @@ function requestBestWebPosition(): Promise<PositionFix | null> {
     let settled = false;
     let watchId: number | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastError: { code?: number; message?: string } | undefined;
     const started = Date.now();
 
     const finish = () => {
@@ -138,7 +187,6 @@ function requestBestWebPosition(): Promise<PositionFix | null> {
         }
       }
       if (best) {
-        // Only force if equal-or-better than store (never re-inject coarse over GPS).
         const prev = useLocationStore.getState().current;
         const prevAcc = prev?.accuracy ?? Number.POSITIVE_INFINITY;
         const force = !prev || best.accuracy <= prevAcc + 5;
@@ -155,6 +203,7 @@ function requestBestWebPosition(): Promise<PositionFix | null> {
         });
         return;
       }
+      setGeoError(geoErrorMessage(lastError));
       resolve(null);
     };
 
@@ -174,21 +223,89 @@ function requestBestWebPosition(): Promise<PositionFix | null> {
       }
     };
 
-    try {
-      geo.getCurrentPosition(onPos, () => {}, WEB_GEO_OPTS);
-      watchId = geo.watchPosition(onPos, () => {}, WEB_GEO_OPTS);
-    } catch {
-      finish();
-      return;
-    }
+    const onErr = (err: { code?: number; message?: string }) => {
+      lastError = err;
+      if (__DEV__) {
+        // eslint-disable-next-line no-console
+        console.warn('[passenger-geo] web geo error', err?.code, err?.message);
+      }
+    };
+
+    const startWatch = (opts: GeoOptions) => {
+      try {
+        if (watchId != null) {
+          try {
+            geo.clearWatch(watchId);
+          } catch {
+            // ignore
+          }
+        }
+        watchId = geo.watchPosition(onPos, onErr, opts);
+      } catch {
+        // optional
+      }
+    };
+
+    void (async () => {
+      // High accuracy first, then balanced network fallback (common on desktop/LAN).
+      const high = await browserGetCurrent(geo, WEB_GEO_OPTS_HIGH);
+      if (settled) return;
+      if (high) onPos(high);
+      else {
+        const balanced = await browserGetCurrent(geo, WEB_GEO_OPTS_BALANCED);
+        if (settled) return;
+        if (balanced) onPos(balanced);
+      }
+      if (settled) return;
+      // Prefer high-accuracy watch until we already have a tight fix.
+      const storeAcc = useLocationStore.getState().current?.accuracy;
+      const tight =
+        typeof storeAcc === 'number' && Number.isFinite(storeAcc) && storeAcc <= TARGET_ACCURACY_M;
+      startWatch(tight ? WEB_GEO_OPTS_BALANCED : WEB_GEO_OPTS_HIGH);
+    })();
 
     timer = setTimeout(finish, MAX_WAIT_MS);
   });
 }
 
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('location_timeout')), ms);
+      }),
+    ]);
+  } finally {
+    if (timer != null) clearTimeout(timer);
+  }
+}
+
+async function getNativePositionOnce(
+  accuracy: Location.LocationAccuracy,
+): Promise<GeoPositionLike | null> {
+  try {
+    const pos = await withTimeout(
+      Location.getCurrentPositionAsync({ accuracy }),
+      NATIVE_FIX_TIMEOUT_MS,
+    );
+    return {
+      coords: {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Best-effort position with accuracy.
  * Web waits for GPS warm-up; still may return coarse WiFi after timeout.
+ * Native tries BestForNavigation then Balanced so a hung high-accuracy call cannot block.
  */
 export async function requestFreshPosition(): Promise<PositionFix | null> {
   if (isWebRuntime()) {
@@ -197,18 +314,35 @@ export async function requestFreshPosition(): Promise<PositionFix | null> {
 
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return null;
-    const pos = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.BestForNavigation,
-    });
+    if (status !== 'granted') {
+      setGeoError('Permiso de ubicación denegado. Activálo en Ajustes e intentá de nuevo.');
+      useLocationStore.getState().setPermissionGranted(false);
+      return null;
+    }
+    useLocationStore.getState().setPermissionGranted(true);
+
+    const pos =
+      (await getNativePositionOnce(Location.Accuracy.BestForNavigation)) ??
+      (await getNativePositionOnce(Location.Accuracy.Balanced)) ??
+      (await getNativePositionOnce(Location.Accuracy.High));
+
+    if (!pos) {
+      setGeoError(LOCATION_DENIED_MSG);
+      return null;
+    }
+
     const lat = pos.coords.latitude;
     const lng = pos.coords.longitude;
-    if (!isValidLatLng(lat, lng)) return null;
+    if (!isValidLatLng(lat, lng)) {
+      setGeoError(LOCATION_DENIED_MSG);
+      return null;
+    }
     const accuracy =
       typeof pos.coords.accuracy === 'number' ? pos.coords.accuracy : Number.POSITIVE_INFINITY;
     useLocationStore.getState().applyFix({ lat, lng, accuracy }, { force: true });
     return { lat, lng, accuracy };
   } catch {
+    setGeoError(LOCATION_DENIED_MSG);
     return null;
   }
 }
@@ -220,6 +354,7 @@ export async function requestFreshPosition(): Promise<PositionFix | null> {
 export function useLocation() {
   const current = useLocationStore((s) => s.current);
   const permissionGranted = useLocationStore((s) => s.permissionGranted);
+  const locationError = useLocationStore((s) => s.locationError);
   const setPermissionGranted = useLocationStore((s) => s.setPermissionGranted);
 
   useEffect(() => {
@@ -227,6 +362,7 @@ export function useLocation() {
       const geo = readBrowserGeo();
       if (!geo) {
         setPermissionGranted(false);
+        setGeoError(LOCATION_DENIED_MSG);
         return;
       }
 
@@ -234,7 +370,8 @@ export function useLocation() {
       let cancelled = false;
 
       void requestBestWebPosition().then((fix) => {
-        if (!cancelled && fix) setPermissionGranted(true);
+        if (cancelled) return;
+        if (fix) setPermissionGranted(true);
       });
 
       try {
@@ -242,12 +379,18 @@ export function useLocation() {
           (pos) => {
             if (!cancelled) applyPosition(pos, false);
           },
-          () => {
-            if (!cancelled && !useLocationStore.getState().current) {
+          (err) => {
+            if (cancelled) return;
+            if (__DEV__) {
+              // eslint-disable-next-line no-console
+              console.warn('[passenger-geo] watch error', err?.code, err?.message);
+            }
+            if (!useLocationStore.getState().current) {
               setPermissionGranted(false);
+              setGeoError(geoErrorMessage(err));
             }
           },
-          WEB_GEO_OPTS,
+          WEB_GEO_OPTS_HIGH,
         );
       } catch {
         // optional
@@ -278,33 +421,18 @@ export function useLocation() {
       }
 
       setPermissionGranted(granted);
-      if (!granted || cancelled) return;
-
-      try {
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.BestForNavigation,
-        });
-        if (!cancelled) {
-          applyPosition(
-            {
-              coords: {
-                latitude: pos.coords.latitude,
-                longitude: pos.coords.longitude,
-                accuracy: pos.coords.accuracy,
-              },
-            },
-            true,
-          );
-        }
-      } catch {
-        // watch may still deliver
+      if (!granted) {
+        if (!cancelled)
+          setGeoError('Permiso de ubicación denegado. Activálo en Ajustes e intentá de nuevo.');
+        return;
       }
       if (cancelled) return;
 
+      // Start watch first so a hung getCurrentPosition cannot leave current=null forever.
       try {
         subscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.BestForNavigation,
+            accuracy: Location.Accuracy.Balanced,
             timeInterval: 3000,
             distanceInterval: 5,
           },
@@ -322,7 +450,20 @@ export function useLocation() {
           },
         );
       } catch {
-        // watch failed
+        // watch failed — still try one-shot below
+      }
+      if (cancelled) return;
+
+      // Seed with one-shot (timeout + accuracy fallback). Does not block the watch.
+      const pos =
+        (await getNativePositionOnce(Location.Accuracy.Balanced)) ??
+        (await getNativePositionOnce(Location.Accuracy.High)) ??
+        (await getNativePositionOnce(Location.Accuracy.BestForNavigation));
+
+      if (!cancelled && pos) {
+        applyPosition(pos, true);
+      } else if (!cancelled && !useLocationStore.getState().current) {
+        setGeoError(LOCATION_DENIED_MSG);
       }
     })();
 
@@ -340,5 +481,5 @@ export function useLocation() {
 
   const refresh = useCallback(async () => requestFreshPosition(), []);
 
-  return { current, permissionGranted, refresh };
+  return { current, permissionGranted, locationError, refresh };
 }

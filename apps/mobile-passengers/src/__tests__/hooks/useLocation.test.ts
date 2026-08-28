@@ -2,7 +2,26 @@ jest.mock('../../api/passenger', () => ({
   reverseGeocode: jest.fn(),
 }));
 
-import { isValidLatLng, toMapCoordinate } from '../../hooks/useLocation';
+const mockRequestForegroundPermissionsAsync = jest.fn();
+const mockGetCurrentPositionAsync = jest.fn();
+const mockWatchPositionAsync = jest.fn();
+
+jest.mock('expo-location', () => ({
+  Accuracy: {
+    Lowest: 1,
+    Low: 2,
+    Balanced: 3,
+    High: 4,
+    Highest: 5,
+    BestForNavigation: 6,
+  },
+  requestForegroundPermissionsAsync: (...args: unknown[]) =>
+    mockRequestForegroundPermissionsAsync(...args),
+  getCurrentPositionAsync: (...args: unknown[]) => mockGetCurrentPositionAsync(...args),
+  watchPositionAsync: (...args: unknown[]) => mockWatchPositionAsync(...args),
+}));
+
+import { isValidLatLng, requestFreshPosition, toMapCoordinate } from '../../hooks/useLocation';
 import { useLocationStore } from '../../store/locationStore';
 import {
   MAX_LABEL_ACCURACY_M,
@@ -45,7 +64,25 @@ describe('isValidLatLng', () => {
 
 describe('locationStore.applyFix accuracy gate', () => {
   beforeEach(() => {
-    useLocationStore.setState({ current: null, permissionGranted: false });
+    useLocationStore.setState({
+      current: null,
+      permissionGranted: false,
+      locationError: null,
+    });
+  });
+
+  it('accepts the first valid fix even with coarse accuracy', () => {
+    const ok = useLocationStore
+      .getState()
+      .applyFix({ lat: -37.32, lng: -59.13, accuracy: 2500 });
+    expect(ok).toBe(true);
+    expect(useLocationStore.getState().current).toEqual({
+      lat: -37.32,
+      lng: -59.13,
+      accuracy: 2500,
+    });
+    expect(useLocationStore.getState().permissionGranted).toBe(true);
+    expect(useLocationStore.getState().locationError).toBeNull();
   });
 
   it('rejects coarser fixes once a better accuracy is known', () => {
@@ -68,6 +105,49 @@ describe('locationStore.applyFix accuracy gate', () => {
       .applyFix({ lat: -37.321, lng: -59.133, accuracy: 12 });
     expect(ok).toBe(true);
     expect(useLocationStore.getState().current?.accuracy).toBe(12);
+  });
+
+  it('stores a recoverable locationError and clears it on good fix', () => {
+    useLocationStore.getState().setLocationError('Activá la ubicación para continuar');
+    expect(useLocationStore.getState().locationError).toBe('Activá la ubicación para continuar');
+    useLocationStore.getState().applyFix({ lat: -34.6, lng: -58.4, accuracy: 30 });
+    expect(useLocationStore.getState().locationError).toBeNull();
+  });
+});
+
+describe('requestFreshPosition (native path)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useLocationStore.setState({
+      current: null,
+      permissionGranted: false,
+      locationError: null,
+    });
+  });
+
+  it('falls back to Balanced when BestForNavigation fails', async () => {
+    // jest-expo defaults Platform.OS to ios/android (not web) — native path.
+    mockRequestForegroundPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    mockGetCurrentPositionAsync
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValueOnce({
+        coords: { latitude: -34.6037, longitude: -58.3816, accuracy: 45 },
+      });
+
+    const fix = await requestFreshPosition();
+
+    expect(fix).toEqual({ lat: -34.6037, lng: -58.3816, accuracy: 45 });
+    expect(useLocationStore.getState().current?.lat).toBe(-34.6037);
+    expect(mockGetCurrentPositionAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('sets locationError when permission is denied', async () => {
+    mockRequestForegroundPermissionsAsync.mockResolvedValue({ status: 'denied' });
+
+    const fix = await requestFreshPosition();
+
+    expect(fix).toBeNull();
+    expect(useLocationStore.getState().locationError).toMatch(/ubicación/i);
   });
 });
 

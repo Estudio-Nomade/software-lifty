@@ -10,18 +10,23 @@ interface LocationCoord {
 interface LocationStore {
   current: LocationCoord | null;
   permissionGranted: boolean;
+  /** User-facing recovery message when GPS fails or is denied. */
+  locationError: string | null;
   setCurrent: (current: LocationCoord | null) => void;
   /**
    * Accept a fix only when it improves (or matches) known accuracy,
    * unless `force` is true. Prevents coarse IP/WiFi from overwriting GPS.
+   * First valid fix is always accepted.
    */
   applyFix: (fix: LocationCoord, opts?: { force?: boolean }) => boolean;
   setPermissionGranted: (granted: boolean) => void;
+  setLocationError: (message: string | null) => void;
 }
 
 export const useLocationStore = create<LocationStore>((set, get) => ({
   current: null,
   permissionGranted: false,
+  locationError: null,
   setCurrent: (current) => set({ current }),
   applyFix: (fix, opts) => {
     const lat = fix.lat;
@@ -65,8 +70,10 @@ export const useLocationStore = create<LocationStore>((set, get) => ({
     set({
       current: { lat, lng, accuracy: nextAcc },
       permissionGranted: true,
+      locationError: null,
     });
     return true;
   },
   setPermissionGranted: (permissionGranted) => set({ permissionGranted }),
+  setLocationError: (locationError) => set({ locationError }),
 }));

@@ -63,7 +63,26 @@ async function openSearch() {
 describe('HomeScreen address clear', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseLocation.mockReturnValue({ current: null });
+    mockUseLocation.mockReturnValue({
+      current: null,
+      locationError: null,
+      refresh: jest.fn().mockResolvedValue(null),
+    });
+  });
+
+  test('shows location error banner and retries on press', async () => {
+    const refresh = jest.fn().mockResolvedValue(null);
+    mockUseLocation.mockReturnValue({
+      current: null,
+      locationError: 'No pudimos obtener tu ubicación. Activá el GPS.',
+      refresh,
+    });
+
+    const utils = await render(<HomeScreen />);
+
+    expect(utils.getByText(/No pudimos obtener tu ubicación/i)).toBeTruthy();
+    await fireEvent.press(utils.getByLabelText('Reintentar ubicación'));
+    expect(refresh).toHaveBeenCalled();
   });
 
   test('no clear button when destination is empty', async () => {
@@ -106,7 +125,11 @@ describe('HomeScreen address clear', () => {
 describe('HomeScreen destination confirmation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseLocation.mockReturnValue({ current: { lat: -34.5, lng: -58.4 } });
+    mockUseLocation.mockReturnValue({
+      current: { lat: -34.5, lng: -58.4 },
+      locationError: null,
+      refresh: jest.fn().mockResolvedValue({ lat: -34.5, lng: -58.4, accuracy: 20 }),
+    });
   });
 
   test('geocodes destination and navigates with its coords', async () => {
