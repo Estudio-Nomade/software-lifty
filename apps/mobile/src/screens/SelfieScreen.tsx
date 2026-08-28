@@ -29,7 +29,7 @@ export const SelfieScreen: React.FC = () => {
       <Button
         title="Simular selfie exitoso"
         variant="primary"
-        onPress={() => navigation.navigate('OnboardingVehicle')}
+        onPress={() => navigation.replace('KYCVerify')}
         style={styles.button}
       />
       <Text style={styles.brand}>Verificacion por DIDIT</Text>

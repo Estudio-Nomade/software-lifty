@@ -548,6 +548,74 @@ describe('Document re-upload', () => {
   });
 });
 
+describe('Vehicle step (no duplicate form)', () => {
+  const phone = '+5492617777001';
+  const password = 'testPass123';
+
+  test('status is vehicle when KYC approved and no vehicle row', async () => {
+    const { token, userId } = await registerAndGetToken(phone, password);
+    const { data: step1 } = await request(
+      'PUT',
+      '/api/drivers/me',
+      { first_name: 'Ana', last_name: 'Gomez' },
+      token,
+    );
+    await getDb().update(users).set({ kyc_status: 'approved' }).where(eq(users.id, userId));
+    await getDb().update(drivers).set({ kyc_status: 'approved' }).where(eq(drivers.id, step1.id));
+
+    const { data } = await request('GET', '/api/drivers/me/status', undefined, token);
+    expect(data.step).toBe('vehicle');
+  });
+
+  test('after vehicle PUT, status is documents (not vehicle again)', async () => {
+    const { token } = await fullOnboarding(phone, password);
+    const { data } = await request('GET', '/api/drivers/me/status', undefined, token);
+    expect(data.step).toBe('documents');
+  });
+
+  test('second vehicle PUT is idempotent and stays on documents', async () => {
+    const { token } = await fullOnboarding(phone, password);
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Toyota',
+        vehicle_model: 'Corolla',
+        vehicle_year: 2022,
+        vehicle_color: 'Blanco',
+        vehicle_plate: 'ABC123',
+        vehicle_type: 'car',
+      },
+      token,
+    );
+    expect(status).toBe(200);
+    expect(data.step).toBe('documents');
+
+    const me = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me.data.vehicle.plate).toBe('ABC123');
+    expect(me.data.vehicle.brand).toBe('Toyota');
+  });
+
+  test('vehicle PUT before KYC returns KYC_REQUIRED', async () => {
+    const { token } = await registerAndGetToken('+5492617777002', password);
+    await request('PUT', '/api/drivers/me', { first_name: 'Ana' }, token);
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Toyota',
+        vehicle_model: 'Corolla',
+        vehicle_year: 2022,
+        vehicle_color: 'Blanco',
+        vehicle_plate: 'ABC123',
+      },
+      token,
+    );
+    expect(status).toBe(400);
+    expect(data.error?.code).toBe('KYC_REQUIRED');
+  });
+});
+
 describe('Document step completeness', () => {
   const phone = '+5492619999999';
   const password = 'testPass123';

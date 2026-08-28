@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -17,10 +17,9 @@ import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
+import { type VehicleTypeUi, vehicleFormFromProfile, vehicleTypeToApi } from '../lib/vehicleForm';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
-
-type VehicleType = 'Auto' | 'Moto' | 'Camioneta';
 
 interface ValidationErrors {
   vehiclePlate?: string;
@@ -31,7 +30,7 @@ interface ValidationErrors {
 }
 
 const PLATE_REGEX = /^[A-Z]{2,3}[0-9]{3}[A-Z]{0,2}$/;
-const VEHICLE_TYPES: VehicleType[] = ['Auto', 'Moto', 'Camioneta'];
+const VEHICLE_TYPES: VehicleTypeUi[] = ['Auto', 'Moto', 'Camioneta'];
 const CURRENT_YEAR = new Date().getFullYear();
 
 const normalizePlate = (value: string) => value.replace(/\s+/g, '').toUpperCase();
@@ -75,17 +74,54 @@ const isFormValid = (
 
 export const OnboardingVehicleScreen: React.FC = () => {
   const navigation = useAppNavigation();
-  const driverStatus = useAuthStore((s) => s.driverStatus);
+  const setOnboardingStep = useAuthStore((s) => s.setOnboardingStep);
 
   const [vehiclePlate, setVehiclePlate] = useState('');
   const [vehicleBrand, setVehicleBrand] = useState('');
   const [vehicleModel, setVehicleModel] = useState('');
   const [vehicleColor, setVehicleColor] = useState('');
   const [vehicleYear, setVehicleYear] = useState('');
-  const [vehicleType, setVehicleType] = useState<VehicleType>('Auto');
+  const [vehicleType, setVehicleType] = useState<VehicleTypeUi>('Auto');
   const [loading, setLoading] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitError, setSubmitError] = useState('');
+  const prefilled = useRef(false);
+
+  // Prefill from GET /drivers/me so back/redirect/kill-app never shows a blank form twice.
+  useEffect(() => {
+    if (prefilled.current) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data } = await apiClient.get('/drivers/me');
+        if (cancelled) return;
+        const form = vehicleFormFromProfile(data?.vehicle);
+        if (form) {
+          setVehiclePlate(form.plate);
+          setVehicleBrand(form.brand);
+          setVehicleModel(form.model);
+          setVehicleColor(form.color);
+          setVehicleYear(form.year);
+          setVehicleType(form.type);
+          prefilled.current = true;
+          if (__DEV__) {
+            // eslint-disable-next-line no-console
+            console.log('[driver-onboarding] vehicle prefilled from profile');
+          }
+        }
+      } catch {
+        // empty form — first time
+      } finally {
+        if (!cancelled) setLoadingProfile(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const setError = (field: keyof ValidationErrors, error: string | undefined) => {
     setErrors((prev) => ({ ...prev, [field]: error }));
@@ -103,18 +139,24 @@ export const OnboardingVehicleScreen: React.FC = () => {
         vehicle_model: vehicleModel.trim(),
         vehicle_color: vehicleColor.trim(),
         vehicle_year: Number.parseInt(vehicleYear, 10),
-        vehicle_type: vehicleType,
+        vehicle_type: vehicleTypeToApi(vehicleType),
       });
 
-      const step: string = data?.step ?? 'documents';
+      const step: string = data?.step ?? data?.data?.step ?? 'documents';
+      setOnboardingStep(step);
+      if (__DEV__) {
+        // eslint-disable-next-line no-console
+        console.log('[driver-onboarding] vehicle saved → step', step);
+      }
       const target = STEP_ROUTE[step];
       if (target) {
         navigation.replace(target.screen);
       } else {
-        navigation.navigate('OnboardingStep2');
+        navigation.replace('OnboardingStep2');
       }
     } catch (err: any) {
       if (err instanceof ApiError && err.code === 'KYC_REQUIRED') {
+        setOnboardingStep('kyc');
         const kycRoute = STEP_ROUTE.kyc;
         if (kycRoute) navigation.replace(kycRoute.screen);
         return;
@@ -140,6 +182,9 @@ export const OnboardingVehicleScreen: React.FC = () => {
           keyboardDismissMode="interactive"
         >
           <Text style={styles.sectionTitle}>VEHICULO</Text>
+          {vehiclePlate !== '' && vehicleBrand !== '' ? (
+            <Text style={styles.hint}>Datos guardados. Revisá y continuá.</Text>
+          ) : null}
           <View style={styles.vehicleTypes}>
             {VEHICLE_TYPES.map((type) => (
               <TouchableOpacity
@@ -229,9 +274,10 @@ export const OnboardingVehicleScreen: React.FC = () => {
             title="CONTINUAR"
             onPress={handleContinue}
             disabled={
+              loadingProfile ||
               !isFormValid(vehiclePlate, vehicleBrand, vehicleModel, vehicleColor, vehicleYear)
             }
-            loading={loading}
+            loading={loading || loadingProfile}
             variant="cta"
             style={styles.button}
           />
@@ -262,6 +308,13 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
     alignSelf: 'flex-start',
+    marginBottom: theme.spacing.xs,
+  },
+  hint: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.mediumGray,
+    alignSelf: 'flex-start',
+    width: 343,
     marginBottom: theme.spacing.xs,
   },
   input: {
