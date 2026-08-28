@@ -5,9 +5,12 @@ import { ActivityIndicator, StatusBar, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { WebViewErrorEvent, WebViewNavigation } from 'react-native-webview/lib/WebViewTypes';
 import { apiClient } from '../api/client';
+import type { DriverStatus } from '../api/types';
+import { driverStatusSchema } from '../api/types';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { STEP_ROUTE, routeForDriverStatus } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -21,20 +24,59 @@ export const KYCWebViewScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [done, setDone] = useState(false);
 
-  const finish = () => {
+  /**
+   * After Didit: refresh decision, then route by real status step.
+   * Never hardcode OnboardingVehicle — that caused a blank vehicle form before
+   * KYC was approved (PUT → KYC_REQUIRED), then a second fill after approval.
+   */
+  const finish = async () => {
     if (done) return;
     setDone(true);
+
     const sessionId = useAuthStore.getState().kycSessionId;
     if (sessionId) {
-      apiClient.get(`/kyc/decision/${sessionId}`).catch(() => {});
+      try {
+        await apiClient.get(`/kyc/decision/${sessionId}`);
+      } catch {
+        // decision may still be processing
+      }
       useAuthStore.getState().setKycSessionId(null);
     }
-    navigation.navigate('OnboardingVehicle');
+
+    try {
+      const { data: body } = await apiClient.get('/drivers/me/status');
+      const payload = body?.data ?? body;
+      const parsed = driverStatusSchema.safeParse(payload);
+      const driverData = (parsed.success ? parsed.data : payload) as DriverStatus;
+
+      if (driverData.status) {
+        useAuthStore.getState().setDriverStatus(driverData.status);
+      }
+      if (driverData.step) {
+        useAuthStore.getState().setOnboardingStep(driverData.step);
+      }
+
+      if (__DEV__) {
+        // eslint-disable-next-line no-console
+        console.log('[driver-onboarding] post-KYC step', driverData.step, driverData.kyc_status);
+      }
+
+      const route = routeForDriverStatus(driverData);
+      if (route.screen) {
+        navigation.replace(route.screen);
+        return;
+      }
+    } catch {
+      // fall through
+    }
+
+    // Safe default while Didit processes: stay in KYC flow, not vehicle.
+    navigation.replace(STEP_ROUTE.kyc.screen);
   };
 
   const handleRequest = (request: WebViewNavigation): boolean => {
     if (request.url.startsWith(CALLBACK_PREFIX)) {
-      finish();
+      void finish();
       return false;
     }
     return true;
@@ -44,7 +86,7 @@ export const KYCWebViewScreen: React.FC = () => {
     const { url: errorUrl, description } = e.nativeEvent;
     const desc = description ?? '';
     if (errorUrl?.startsWith(CALLBACK_PREFIX) || desc.includes('liftyviajes')) {
-      finish();
+      void finish();
     }
   };
 
@@ -67,7 +109,7 @@ export const KYCWebViewScreen: React.FC = () => {
         source={{ uri: url }}
         onShouldStartLoadWithRequest={handleRequest}
         onNavigationStateChange={(navState) => {
-          if (navState.url.startsWith(CALLBACK_PREFIX)) finish();
+          if (navState.url.startsWith(CALLBACK_PREFIX)) void finish();
         }}
         onError={handleError}
         onLoadEnd={() => setLoading(false)}

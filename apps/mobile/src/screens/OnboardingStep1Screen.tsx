@@ -19,6 +19,7 @@ import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
+import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 import { compressImage } from '../utils/image';
 import { uploadPhotoToBackend } from '../utils/upload';
@@ -164,12 +165,13 @@ export const OnboardingStep1Screen: React.FC = () => {
 
       const { data } = await apiClient.put('/drivers/me', payload);
 
-      const step: string = data?.step ?? 'kyc';
+      const step: string = data?.step ?? data?.data?.step ?? 'kyc';
+      useAuthStore.getState().setOnboardingStep(step);
       const target = STEP_ROUTE[step];
       if (target) {
         navigation.replace(target.screen);
       } else {
-        navigation.navigate('KYCVerify');
+        navigation.replace('KYCVerify');
       }
     } catch (err: any) {
       setSubmitError(err?.message ?? 'Error al guardar los datos');
