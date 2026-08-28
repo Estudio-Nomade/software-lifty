@@ -5,6 +5,8 @@ let requestCount = 0;
 
 function isNoisy(pathname: string): boolean {
   return (
+    pathname === '/' ||
+    pathname === '/favicon.ico' ||
     pathname === '/health' ||
     pathname === '/ready' ||
     pathname === '/metrics' ||
@@ -49,9 +51,19 @@ export const requestId = new Elysia({ name: 'request-id' })
   .onError({ as: 'scoped' }, ({ request, set, _metrics, error, code, log }) => {
     const duration = Date.now() - ((_metrics as { start: number })?.start ?? Date.now());
     const url = new URL(request.url);
-    const status = set.status ?? 500;
 
     if (isNoisy(url.pathname)) return;
+
+    // Elysia leaves set.status empty on route miss until the root onError
+    // assigns 404 — map known codes so logs never show "NOT_FOUND … 200".
+    const status =
+      code === 'NOT_FOUND'
+        ? 404
+        : code === 'VALIDATION'
+          ? 400
+          : typeof set.status === 'number'
+            ? set.status
+            : 500;
 
     const l = log ?? logger;
     l.error(
