@@ -42,8 +42,10 @@ Hooks are skipped on merge and rebase.
 bun install            # install all deps
 bun run dev            # backend (3001) + conductor (8081) + pasajeros (8083), con los 2 QR
 bun run dev:backend    # solo backend
-bun run dev:driver     # solo app conductor (Expo, QR)
-bun run dev:passenger  # solo app pasajeros (Expo, QR)
+bun run dev:driver     # solo app conductor (Expo Go / Metro LAN)
+bun run dev:driver:web # conductor en browser (Metro --web, puerto 8081)
+bun run dev:passenger  # solo app pasajeros (Expo Go / Metro LAN)
+bun run dev:passenger:web # pasajero en browser (puerto 8083)
 bun run typecheck      # turbo typecheck (both apps)
 bun run test           # turbo test (both apps)
 bun run lint           # biome check all
@@ -63,6 +65,16 @@ bun run clean          # turbo clean
 > **después** de que Metro responda `/status` y de un pre-warm del bundle Android
 > (evita "Could not connect to development server" por cold transform).
 >
+> **Expo Go vs browser (no confundir):**
+> - Camino principal del conductor: escanear el QR (`exp://<lan-ip>:8081`) con **Expo Go**.
+> - `http://<lan-ip>:8081` en Chrome es la shell **web de desarrollo** (Metro). Solo funciona
+>   mientras el packager está up (`bun run dev` o `bun run dev:driver:web`). Siempre **HTTP**,
+>   nunca `https://` (Metro no sirve TLS → "No se puede acceder a este sitio").
+> - Si Chrome muestra ERR_CONNECTION_REFUSED: Metro no está escuchando en 8081. Verificá con
+>   `curl -sS http://127.0.0.1:8081/status` → debe decir `packager-status:running`.
+> - Web dedicado (abre browser): `bun run dev:driver:web` / `bun run dev:passenger:web`.
+>   No mezclar `--web` dentro de `dev-all` (rompe el flujo Expo Go).
+>
 > Si el QR no conecta:
 > ```bash
 > bun run dev:driver:clear          # conductor con cache limpia
@@ -75,7 +87,9 @@ bun run clean          # turbo clean
 ```bash
 bun --filter @lifty/backend dev
 bun --filter @lifty/mobile dev
+bun --filter @lifty/mobile web
 bun --filter @lifty/mobile-passengers dev
+bun --filter @lifty/mobile-passengers web
 ```
 
 ## Directory layout

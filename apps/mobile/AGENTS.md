@@ -8,12 +8,31 @@
 
 ## Commands (use `bun`, never `npx`)
 ```bash
-bun run start         # expo start
-bun run android        # expo start --android
-bun run ios            # expo start --ios
-bunx tsc --noEmit      # type check
-bunx expo-doctor       # diagnostics
+bun run start         # expo start --lan
+bun run dev           # Metro LAN puerto 8081 (Expo Go)
+bun run web           # Metro web puerto 8081 (browser)
+bun run android       # expo start --android --lan
+bun run ios           # expo start --ios --lan
+bunx tsc --noEmit     # type check
+bunx expo-doctor      # diagnostics
 ```
+
+Desde el monorepo root:
+```bash
+bun run dev:driver      # Expo Go / Metro LAN
+bun run dev:driver:web  # browser en http://localhost:8081 (o http://<lan-ip>:8081)
+```
+
+## Web (browser) vs Expo Go
+
+- **Expo Go (principal):** QR `exp://<lan-ip>:8081` con el teléfono en la misma Wi‑Fi.
+- **Browser (dev):** `bun run dev:driver:web` → abrir **solo HTTP** `http://192.168.x.x:8081`.
+  Nunca `https://` (Chrome → "No se puede acceder" / ERR_CONNECTION_*).
+- Si el browser falla: `curl -sS http://127.0.0.1:8081/status`. Si no responde, Metro no está up.
+- Config web alineada con pasajero: `app.json` → `web.bundler=metro`, `@expo/metro-runtime`,
+  `metro.config.js` → `unstable_conditionNames: ['react-native']` (Zustand CJS / sin `import.meta`).
+- API en web: `getApiUrl()` usa `window.location.hostname` en LAN para no pegarle a `localhost`
+  del dispositivo remoto.
 
 ## Project layout
 ```

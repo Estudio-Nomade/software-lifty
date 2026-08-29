@@ -234,12 +234,15 @@ async function printAppQr(
   // exp:// is what Expo Go expects when scanning a LAN packager.
   const url = `exp://${host}:${port}`;
   const qr = await qrString(url);
+  const browserUrl = `http://${host}:${port}`;
   process.stdout.write(
     [
       '',
       `${C.bold}${color}${pad(label)}${C.reset} ${name} — escanea con Expo Go`,
       `  ${color}${url}${C.reset}`,
       `  ${C.dim}mismo Wi-Fi · Metro en 0.0.0.0 · hostUri=${host}:${port}${C.reset}`,
+      `  ${C.dim}browser (dev web, HTTP only): ${browserUrl}${C.reset}`,
+      `  ${C.dim}web dedicado: bun run dev:driver:web  /  bun run dev:passenger:web${C.reset}`,
       qr,
       '',
     ].join('\n'),
@@ -348,6 +351,12 @@ async function main(): Promise<void> {
       `  1. Mismo Wi-Fi que esta máquina (${host})`,
       '  2. Cache limpia:  bun run dev:driver:clear   /   bun run dev:passenger:clear',
       '  3. Túnel (otra red):  cd apps/mobile && bunx expo start --tunnel --port 8081',
+      '',
+      `${C.dim}Browser vs Expo Go:${C.reset}`,
+      '  - QR / exp://… = Expo Go en el teléfono (camino principal)',
+      `  - http://${host}:8081 = shell web del conductor (solo si Metro está up; NUNCA https://)`,
+      '  - Si Chrome dice "No se puede acceder": curl http://127.0.0.1:8081/status',
+      '    → si falla, el packager no está corriendo (bun run dev / bun run dev:driver:web)',
       '',
     ].join('\n'),
   );

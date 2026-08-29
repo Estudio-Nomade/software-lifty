@@ -29,6 +29,11 @@
         "barStyle": "dark-content"
       }
     },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/icon.png"
+    },
     "experiments": {
       "reactCompiler": true
     },

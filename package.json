@@ -8,6 +8,7 @@
     "dev:backend": "bun run --filter @lifty/backend dev",
     "dev:driver": "bun run --filter @lifty/mobile dev",
     "dev:driver:clear": "bun run --filter @lifty/mobile dev:clear",
+    "dev:driver:web": "bun run --filter @lifty/mobile web",
     "dev:passenger": "bun run --filter @lifty/mobile-passengers dev",
     "dev:passenger:clear": "bun run --filter @lifty/mobile-passengers dev:clear",
     "dev:passenger:web": "bun run --filter @lifty/mobile-passengers web",
