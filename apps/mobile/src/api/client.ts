@@ -13,6 +13,14 @@ function getApiUrl(): string {
   // one and writes it here) — the host is still auto-detected from Expo.
   const port = process.env.EXPO_PUBLIC_API_PORT ?? '3001';
 
+  // Web: hostUri is often undefined. Prefer the page hostname so opening
+  // http://192.168.x.x:8081 hits the API on the same LAN machine (not localhost
+  // of the client device).
+  const pageHost = (globalThis as { location?: { hostname?: string } }).location?.hostname;
+  if (pageHost && pageHost !== 'localhost' && pageHost !== '127.0.0.1') {
+    return `http://${pageHost}:${port}/api`;
+  }
+
   const hostUri = Constants.expoConfig?.hostUri;
   if (hostUri) {
     const host = hostUri.split(':')[0];
