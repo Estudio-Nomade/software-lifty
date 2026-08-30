@@ -65,6 +65,16 @@ export const TARGET_ACCURACY_M = 40;
 const LOCATION_DENIED_MSG =
   'No pudimos obtener tu ubicación. Activá el GPS o permití el acceso e intentá de nuevo.';
 
+const SECURE_CONTEXT_MSG =
+  'Chrome bloquea el GPS en http://IP-de-red (no es seguro). Abrí http://localhost:8083 en ESTA PC, o usá Expo Go en el teléfono.';
+
+function isSecureContext(): boolean {
+  const g = globalThis as { isSecureContext?: boolean; location?: { hostname?: string } };
+  if (typeof g.isSecureContext === 'boolean') return g.isSecureContext;
+  const host = g.location?.hostname;
+  return host === 'localhost' || host === '127.0.0.1';
+}
+
 function isJestRuntime(): boolean {
   try {
     return (
@@ -124,8 +134,14 @@ function geoErrorMessage(err: { code?: number; message?: string } | undefined): 
   if (err.code === 1) {
     return 'Permiso de ubicación denegado. Activálo en el navegador o en Ajustes.';
   }
+  if (err.code === 2 && !isSecureContext()) {
+    return SECURE_CONTEXT_MSG;
+  }
   if (err.code === 3) {
     return 'La ubicación tardó demasiado. Revisá el GPS e intentá de nuevo.';
+  }
+  if (!isSecureContext()) {
+    return SECURE_CONTEXT_MSG;
   }
   return LOCATION_DENIED_MSG;
 }
@@ -153,6 +169,16 @@ function browserGetCurrent(
  * Falls back to enableHighAccuracy:false when high-accuracy times out.
  */
 function requestBestWebPosition(): Promise<PositionFix | null> {
+  // Chrome denies Geolocation on http://LAN-IP — fail fast with honest UX.
+  if (!isSecureContext()) {
+    if (__DEV__) {
+      // eslint-disable-next-line no-console
+      console.warn('[passenger-geo] insecure context — geolocation blocked on this origin');
+    }
+    setGeoError(SECURE_CONTEXT_MSG);
+    return Promise.resolve(null);
+  }
+
   const geo = readBrowserGeo();
   if (!geo) {
     const cur = useLocationStore.getState().current;
@@ -359,6 +385,12 @@ export function useLocation() {
 
   useEffect(() => {
     if (isWebRuntime()) {
+      if (!isSecureContext()) {
+        setPermissionGranted(false);
+        setGeoError(SECURE_CONTEXT_MSG);
+        return;
+      }
+
       const geo = readBrowserGeo();
       if (!geo) {
         setPermissionGranted(false);

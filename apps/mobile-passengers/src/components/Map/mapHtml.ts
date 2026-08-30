@@ -161,6 +161,7 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
   var pendingRoute = null;
   var lastUserLat = null;
   var lastUserLng = null;
+  var followRequested = false;
   var hasCenteredOnUser = false;
   // Architecture: host owns GPS (useLocation → locationStore).
   // This document only draws the pin from host userLocation / recenter messages.
@@ -199,6 +200,8 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
 
     var force = opts && opts.force;
     var fly = opts && opts.fly;
+    // First fix or forced recenter. With follow on, also re-center until user pans
+    // (host sends recenter after locate; continuous pan follow is first-fix only like driver).
     if (force || !hasCenteredOnUser) {
       if (fly) {
         map.flyTo({ center: [lng, lat], zoom: DEFAULT_ZOOM, duration: 600 });
@@ -321,7 +324,7 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
     try { return JSON.parse(data); } catch (e) { return null; }
   }
 
-  window.addEventListener('message', function (event) {
+  function onHostMessage(event) {
     var msg = parseMsg(event.data);
     if (!msg || !msg.type) return;
 
@@ -339,8 +342,18 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
           map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 600 });
         }
         break;
+      case 'followUser':
+        followRequested = !!msg.enabled;
+        if (followRequested) {
+          // Next userLocation may re-run initial center (driver parity).
+          hasCenteredOnUser = false;
+          if (lastUserLat != null && lastUserLng != null) {
+            setUserFix(lastUserLat, lastUserLng, null);
+          }
+        }
+        break;
       case 'userLocation':
-        // Host GPS → pin (web + native).
+        // Host GPS → pin (web + native). Always draw pin when coords are real.
         if (msg.lat != null && msg.lng != null) {
           setUserFix(Number(msg.lat), Number(msg.lng), null);
         }
@@ -353,7 +366,11 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
         }
         break;
     }
-  });
+  }
+
+  window.addEventListener('message', onHostMessage);
+  // RN WebView may deliver via document on some Android builds.
+  document.addEventListener('message', onHostMessage);
 
   window.addEventListener('error', function (e) {
     postToHost(JSON.stringify({ type: 'error', message: e.message || 'Unknown error' }));

@@ -91,6 +91,20 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     const onMessage = (event: any) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const raw = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data?.type === 'ready') {
+          setIsLoaded(true);
+          const win = iframeRef.current?.contentWindow;
+          if (win) {
+            while (pendingRef.current.length) {
+              win.postMessage(pendingRef.current.shift(), '*');
+            }
+          }
+        }
+      } catch {
+        // non-JSON
+      }
       handleRawMessage(raw);
     };
     window.addEventListener('message', onMessage);
@@ -121,34 +135,28 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
     iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:transparent';
 
-    const flush = () => {
-      const win = iframe.contentWindow;
-      if (!win) return;
-      while (pendingRef.current.length) {
-        win.postMessage(pendingRef.current.shift(), '*');
-      }
-    };
-
-    let loadTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-      setIsLoaded(true);
-      flush();
+    // Fallback if MapLibre never posts ready (CDN hang).
+    const loadTimer = setTimeout(() => {
+      setIsLoaded((prev) => {
+        if (!prev) {
+          const win = iframe.contentWindow;
+          if (win) {
+            while (pendingRef.current.length) {
+              win.postMessage(pendingRef.current.shift(), '*');
+            }
+          }
+        }
+        return true;
+      });
     }, LOAD_TIMEOUT_MS);
 
-    iframe.onload = () => {
-      if (loadTimer) {
-        clearTimeout(loadTimer);
-        loadTimer = null;
-      }
-      setIsLoaded(true);
-      setTimeout(flush, 0);
-    };
     iframe.onerror = () => handleError();
 
     container.appendChild(iframe);
     iframeRef.current = iframe;
 
     return () => {
-      if (loadTimer) clearTimeout(loadTimer);
+      clearTimeout(loadTimer);
       if (blobUrlRef.current) {
         URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = null;

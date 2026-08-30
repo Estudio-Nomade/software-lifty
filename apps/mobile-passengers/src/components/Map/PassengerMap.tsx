@@ -31,6 +31,7 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
   const source = useMemo(() => ({ html: mapHtml }), [mapHtml]);
 
   const webViewRef = useRef<any>(null);
+  /** True only after MapLibre posts `ready` — not WebView onLoadEnd (race). */
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const retryKey = useRef(0);
@@ -64,7 +65,18 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
   });
 
   const handleMessage = useCallback(
-    (event: WebViewMessageEvent) => handleRawMessage(event.nativeEvent.data),
+    (event: WebViewMessageEvent) => {
+      const raw = event.nativeEvent.data;
+      try {
+        const data = JSON.parse(raw);
+        if (data?.type === 'ready') {
+          setIsLoaded(true);
+        }
+      } catch {
+        // fall through to controller
+      }
+      handleRawMessage(raw);
+    },
     [handleRawMessage],
   );
 
@@ -79,7 +91,6 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
         ref={webViewRef}
         source={source}
         style={styles.webview}
-        onLoadEnd={() => setIsLoaded(true)}
         onError={handleError}
         onMessage={handleMessage}
         javaScriptEnabled={true}
