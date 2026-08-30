@@ -33,6 +33,12 @@ bun run dev:driver:web  # browser en http://localhost:8081 (o http://<lan-ip>:80
   `metro.config.js` → `unstable_conditionNames: ['react-native']` (Zustand CJS / sin `import.meta`).
 - API en web: `getApiUrl()` usa `window.location.hostname` en LAN para no pegarle a `localhost`
   del dispositivo remoto.
+- WS en web: `getWsUrl()` mismo criterio de host LAN (no `localhost` del cliente remoto).
+- **GPS en web:** `src/lib/location.ts` — `isWebRuntime()` = `Platform.OS === 'web'` only
+  (nunca `typeof window`). Web usa `navigator.geolocation`; native usa `expo-location`.
+  Host owns GPS → store `lat/lng` → MapView. Si Chrome bloquea geo en
+  `http://192.168.x.x:8081` (secure context), la UI muestra error + Reintentar;
+  workaround: `http://localhost:8081` en la misma máquina o Expo Go.
 
 ## Project layout
 ```
