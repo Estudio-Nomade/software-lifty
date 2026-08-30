@@ -14,6 +14,8 @@ import {
 import { Button } from '../components/Button';
 import { OTPInput } from '../components/OTPInput';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { getFriendlyAuthError } from '../lib/authErrors';
+import { resendSignupEmailOtp, verifySignupEmailOtp } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
 import { theme } from '../theme';
 
@@ -24,6 +26,7 @@ export function VerifyEmailScreen() {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
@@ -35,17 +38,14 @@ export function VerifyEmailScreen() {
   const handleVerify = async () => {
     if (code.length !== 6) return;
     setError(null);
+    setInfo(null);
     setLoading(true);
     try {
-      const { error: authError } = await supabase.auth.verifyOtp({
-        email,
-        token: code,
-        type: 'email',
-      });
-      if (authError) throw authError;
+      // Signup confirmation OTP first; email OTP fallback (parity with driver useAuth).
+      await verifySignupEmailOtp(supabase, email, code);
       replace('LocationPermissions');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Código inválido o expirado.');
+      setError(getFriendlyAuthError(e));
       setLoading(false);
     }
   };
@@ -53,15 +53,14 @@ export function VerifyEmailScreen() {
   const handleResend = async () => {
     if (resendCooldown > 0 || !email) return;
     setError(null);
+    setInfo(null);
     try {
-      const { error: authError } = await supabase.auth.signInWithOtp({
-        email,
-        options: { shouldCreateUser: false },
-      });
-      if (authError) throw authError;
+      // Must resend signup confirmation — not signInWithOtp (magic/login).
+      await resendSignupEmailOtp(supabase, email);
+      setInfo('Te enviamos un nuevo código. Revisá inbox y spam.');
       setResendCooldown(60);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo reenviar el código.');
+      setError(getFriendlyAuthError(e));
     }
   };
 
@@ -81,12 +80,15 @@ export function VerifyEmailScreen() {
           <View style={styles.body}>
             <Ionicons name="mail-outline" size={48} color={theme.colors.primary} />
             <Text style={styles.title}>¡Casi listo!</Text>
-            <Text style={styles.subtitle}>Te enviamos un código a tu email</Text>
+            <Text style={styles.subtitle}>
+              Te enviamos un código de 6 dígitos. Si no lo ves, revisá spam.
+            </Text>
             <Text style={styles.email}>{email}</Text>
 
             <OTPInput value={code} onChange={setCode} autoFocus />
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
+            {info ? <Text style={styles.info}>{info}</Text> : null}
 
             <Button
               variant="primary"
@@ -159,6 +161,12 @@ const styles = StyleSheet.create({
   error: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
+    textAlign: 'center',
+    fontFamily: theme.fontFamily.regular,
+  },
+  info: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.primary,
     textAlign: 'center',
     fontFamily: theme.fontFamily.regular,
   },
