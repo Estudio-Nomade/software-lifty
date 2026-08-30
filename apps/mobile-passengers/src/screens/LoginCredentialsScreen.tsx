@@ -16,6 +16,7 @@ import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
+import { classifySignUpResult } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
 import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 import { theme } from '../theme';
@@ -54,24 +55,33 @@ export function LoginCredentialsScreen() {
           return;
         }
         const phoneTrimmed = phone.trim() || undefined;
+        const trimmedEmail = email.trim();
         const { data, error: err } = await supabase.auth.signUp({
-          email: email.trim(),
+          email: trimmedEmail,
           password,
           options: {
             data: { full_name: fullName, phone: phoneTrimmed },
           },
         });
-        console.log('[signUp] data:', JSON.stringify(data), 'error:', err?.message ?? null);
+        if (__DEV__) {
+          console.log('[signUp]', {
+            hasSession: Boolean(data.session),
+            identities: data.user?.identities?.length ?? 0,
+            confirmation_sent_at: data.user?.confirmation_sent_at ?? null,
+            error: err?.message ?? null,
+          });
+        }
         if (err) throw err;
         clearDraft();
-        if (data.session) {
-          // email confirmation disabled — user is logged in directly
+        const outcome = classifySignUpResult(data, trimmedEmail);
+        if (outcome.kind === 'session') {
           registerPassenger(phoneTrimmed).catch(() => {});
           replace('LocationPermissions');
-        } else if ((data.user?.identities?.length ?? 0) > 0) {
-          replace('VerifyEmail', { email: email.trim() });
+        } else if (outcome.kind === 'needs_verify') {
+          // confirmation_sent_at means Supabase accepted the send; delivery is SMTP/spam.
+          // User can resend on VerifyEmail (type signup).
+          replace('VerifyEmail', { email: trimmedEmail });
         } else {
-          // user already exists (anti-enumeration: Supabase returns null user/session silently)
           setLoading(false);
           setError(
             'Este email ya está registrado en Lifty. Iniciá sesión en lugar de crear una cuenta nueva.',

@@ -176,7 +176,9 @@ export const RegisterScreen: React.FC = () => {
         </View>
         <View style={styles.verifyContent}>
           <Text style={styles.title}>Verifica tu email</Text>
-          <Text style={styles.subtitle}>Te enviamos un codigo de 6 digitos a {email}</Text>
+          <Text style={styles.subtitle}>
+            Te enviamos un codigo de 6 digitos a {email}. Si no lo ves, revisa spam.
+          </Text>
           <View style={{ height: 24 }} />
           <OTPInput length={6} value={verificationCode} onChange={setVerificationCode} />
           <View style={{ height: 16 }} />
