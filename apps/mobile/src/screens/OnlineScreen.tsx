@@ -18,7 +18,7 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
 import { shouldShowPlatformDebt } from '../lib/commission';
-import { stopTracking } from '../lib/location';
+import { getCurrentPosition, stopTracking } from '../lib/location';
 import { useLocationStore } from '../store/locationStore';
 import { useOnlineStore } from '../store/onlineStore';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -31,10 +31,12 @@ export const OnlineScreen: React.FC = () => {
   const { setActiveTab } = useTabBar();
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [retryingLocation, setRetryingLocation] = useState(false);
   const heatmapPoints = useHeatmapPolling();
   const signOut = useSignOut();
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
+  const locationError = useLocationStore((s) => s.locationError);
 
   const profileSchema = z.object({
     full_name: z.string(),
@@ -268,9 +270,19 @@ export const OnlineScreen: React.FC = () => {
         <TouchableOpacity
           style={styles.mapContainer}
           activeOpacity={0.9}
-          onPress={() => navigation.navigate('Active')}
+          onPress={() => {
+            if (locationLat != null && locationLng != null) {
+              navigation.navigate('Active');
+            }
+          }}
+          disabled={locationLat == null || locationLng == null}
         >
-          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <View
+            pointerEvents={
+              locationError && (locationLat == null || locationLng == null) ? 'auto' : 'none'
+            }
+            style={StyleSheet.absoluteFill}
+          >
             {locationLat != null && locationLng != null ? (
               <MapView
                 followUserLocation
@@ -280,8 +292,36 @@ export const OnlineScreen: React.FC = () => {
               />
             ) : (
               <View style={styles.mapLoading}>
-                <ActivityIndicator size="large" color={theme.colors.turquoise} />
-                <Text style={styles.mapLoadingText}>Obteniendo ubicación...</Text>
+                {locationError ? (
+                  <>
+                    <Text style={styles.mapErrorText}>{locationError}</Text>
+                    <TouchableOpacity
+                      style={styles.retryBtn}
+                      onPress={async () => {
+                        setRetryingLocation(true);
+                        try {
+                          await getCurrentPosition();
+                        } finally {
+                          setRetryingLocation(false);
+                        }
+                      }}
+                      disabled={retryingLocation}
+                      accessibilityRole="button"
+                      accessibilityLabel="Reintentar ubicación"
+                    >
+                      {retryingLocation ? (
+                        <ActivityIndicator size="small" color={theme.colors.white} />
+                      ) : (
+                        <Text style={styles.retryBtnText}>Reintentar</Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <ActivityIndicator size="large" color={theme.colors.turquoise} />
+                    <Text style={styles.mapLoadingText}>Obteniendo ubicación...</Text>
+                  </>
+                )}
               </View>
             )}
           </View>
@@ -432,9 +472,29 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.lightGray,
     borderRadius: theme.radius.lg,
     gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
   },
   mapLoadingText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
+  },
+  mapErrorText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.dangerRed,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    marginTop: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radius.buttonRadius,
+    backgroundColor: theme.colors.turquoise,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  retryBtnText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.white,
   },
 });
