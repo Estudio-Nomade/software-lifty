@@ -49,7 +49,7 @@ const LOCATION_DENIED_MSG =
   'No pudimos obtener tu ubicación. Activá el GPS o permití el acceso e intentá de nuevo.';
 
 const SECURE_CONTEXT_MSG =
-  'El navegador bloquea la ubicación en HTTP por IP de LAN. Probá http://localhost:8081 en esta máquina, o usá Expo Go.';
+  'Chrome bloquea el GPS en http://IP-de-red (no es seguro). Abrí http://localhost:8081 en ESTA PC, o usá Expo Go en el teléfono.';
 
 let nativeSubscription: Location.LocationSubscription | null = null;
 let webWatchId: number | null = null;
@@ -89,43 +89,65 @@ function applyCoords(lat: number, lng: number, heading?: number | null): boolean
   return true;
 }
 
-function browserGetCurrent(
-  geo: BrowserGeolocation,
-  opts: GeoOptions,
-): Promise<GeoPositionLike | null> {
+type BrowserGetResult =
+  | { ok: true; pos: GeoPositionLike }
+  | { ok: false; err?: { code?: number; message?: string } };
+
+function browserGetCurrent(geo: BrowserGeolocation, opts: GeoOptions): Promise<BrowserGetResult> {
   return new Promise((resolve) => {
     try {
       geo.getCurrentPosition(
-        (pos) => resolve(pos),
-        () => resolve(null),
+        (pos) => resolve({ ok: true, pos }),
+        (err) => resolve({ ok: false, err }),
         opts,
       );
-    } catch {
-      resolve(null);
+    } catch (e) {
+      resolve({
+        ok: false,
+        err: { message: e instanceof Error ? e.message : 'geolocation failed' },
+      });
     }
   });
 }
 
 async function getWebPositionOnce(): Promise<boolean> {
+  // Chrome/Safari deny Geolocation on http://LAN-IP (not a secure context).
+  // Fail immediately — do not spin 20s+ on timeouts that never resolve usefully.
+  if (!isSecureContext()) {
+    if (__DEV__) {
+      console.warn('[driver-geo] insecure context — geolocation blocked on this origin');
+    }
+    useLocationStore.getState().setLocationError(SECURE_CONTEXT_MSG);
+    return false;
+  }
+
   const geo = readBrowserGeo();
   if (!geo) {
-    if (!isSecureContext()) {
-      useLocationStore.getState().setLocationError(SECURE_CONTEXT_MSG);
-    } else {
-      useLocationStore.getState().setLocationError(LOCATION_DENIED_MSG);
-    }
+    useLocationStore.getState().setLocationError(LOCATION_DENIED_MSG);
     return false;
   }
 
   const high = await browserGetCurrent(geo, WEB_GEO_OPTS_HIGH);
-  if (high && applyCoords(high.coords.latitude, high.coords.longitude, high.coords.heading)) {
+  if (
+    high.ok &&
+    applyCoords(high.pos.coords.latitude, high.pos.coords.longitude, high.pos.coords.heading)
+  ) {
     return true;
+  }
+  // Permission denied — no point retrying with balanced accuracy.
+  if (!high.ok && high.err?.code === 1) {
+    useLocationStore.getState().setLocationError(geoErrorMessage(high.err));
+    return false;
   }
 
   const balanced = await browserGetCurrent(geo, WEB_GEO_OPTS_BALANCED);
   if (
-    balanced &&
-    applyCoords(balanced.coords.latitude, balanced.coords.longitude, balanced.coords.heading)
+    balanced.ok &&
+    applyCoords(
+      balanced.pos.coords.latitude,
+      balanced.pos.coords.longitude,
+      balanced.pos.coords.heading,
+    )
   ) {
     return true;
   }
@@ -133,11 +155,11 @@ async function getWebPositionOnce(): Promise<boolean> {
   const { lat, lng } = useLocationStore.getState();
   if (lat != null && lng != null) return true;
 
-  if (!isSecureContext()) {
-    useLocationStore.getState().setLocationError(SECURE_CONTEXT_MSG);
-  } else {
-    useLocationStore.getState().setLocationError(LOCATION_DENIED_MSG);
-  }
+  useLocationStore
+    .getState()
+    .setLocationError(
+      geoErrorMessage(!balanced.ok ? balanced.err : high.ok ? undefined : high.err),
+    );
   return false;
 }
 
