@@ -113,6 +113,47 @@ async function findTrip(driverId: string, tripId: string, tx = db) {
   return trip;
 }
 
+const EMPTY_PASSENGER_FIELDS = {
+  passenger_name: null as string | null,
+  passenger_avatar_url: null as string | null,
+  passenger_phone: null as string | null,
+  passenger_rating: null as number | null,
+};
+
+/** Join passenger display fields onto a trip row (mutations return bare trips.*). */
+export async function attachPassengerFields<T extends { passenger_id?: string | null }>(
+  trip: T,
+  tx: typeof db = db,
+) {
+  const passengerId = trip.passenger_id;
+  if (!passengerId) {
+    return { ...trip, ...EMPTY_PASSENGER_FIELDS };
+  }
+
+  const [row] = await tx
+    .select({
+      passenger_name: users.full_name,
+      passenger_avatar_url: users.avatar_url,
+      passenger_phone: users.phone,
+      passenger_rating: sql<number | null>`(
+        SELECT ROUND(AVG(r.score)::numeric, 1)::float
+        FROM ${ratings} r
+        WHERE r.ratee_id = ${passengerId}
+      )`,
+    })
+    .from(users)
+    .where(eq(users.id, passengerId))
+    .limit(1);
+
+  return {
+    ...trip,
+    passenger_name: row?.passenger_name ?? null,
+    passenger_avatar_url: row?.passenger_avatar_url ?? null,
+    passenger_phone: row?.passenger_phone ?? null,
+    passenger_rating: row?.passenger_rating ?? null,
+  };
+}
+
 async function transitionTrip(driverId: string, tripId: string, targetStatus: string) {
   return db.transaction(async (tx) => {
     const trip = await findTrip(driverId, tripId, tx);
@@ -152,7 +193,7 @@ async function transitionTrip(driverId: string, tripId: string, targetStatus: st
     }
 
     const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
-    return updated;
+    return attachPassengerFields(updated, tx);
   });
 }
 
@@ -538,7 +579,7 @@ export const tripService = {
         broadcastToPassenger(trip.passenger_id, updated);
       }
 
-      return updated;
+      return attachPassengerFields(updated, tx);
     });
   },
 

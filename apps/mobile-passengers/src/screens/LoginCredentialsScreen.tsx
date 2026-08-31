@@ -72,14 +72,14 @@ export function LoginCredentialsScreen() {
           });
         }
         if (err) throw err;
-        clearDraft();
         const outcome = classifySignUpResult(data, trimmedEmail);
         if (outcome.kind === 'session') {
-          registerPassenger(phoneTrimmed).catch(() => {});
+          clearDraft();
+          registerPassenger(phoneTrimmed, fullName ?? undefined).catch(() => {});
           replace('LocationPermissions');
         } else if (outcome.kind === 'needs_verify') {
           // confirmation_sent_at means Supabase accepted the send; delivery is SMTP/spam.
-          // User can resend on VerifyEmail (type signup).
+          // User can resend on VerifyEmail (type signup). Keep draft name until verified.
           replace('VerifyEmail', { email: trimmedEmail });
         } else {
           setLoading(false);
@@ -95,7 +95,11 @@ export function LoginCredentialsScreen() {
         });
         if (err) throw err;
         if (data.session) {
-          registerPassenger().catch(() => {});
+          const metaName =
+            (data.user?.user_metadata as { full_name?: string } | undefined)?.full_name ??
+            fullName ??
+            undefined;
+          registerPassenger(undefined, metaName).catch(() => {});
           replace('LocationPermissions');
         }
       }

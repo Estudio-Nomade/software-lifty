@@ -11,6 +11,7 @@ import { RatingStars } from '../components/RatingStars';
 import { SponsorBanner } from '../components/SponsorBanner';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { mergeTripUpdate } from '../lib/mergeTrip';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
@@ -188,8 +189,10 @@ export const IncomingRequestScreen: React.FC = () => {
     setLoading(true);
     try {
       const response = await apiClient.post(`/trips/${trip.id}/accept`);
-      const acceptedTrip = { ...trip, ...(response.data?.data ?? response.data) };
-      setActiveTrip(acceptedTrip);
+      const acceptedTrip = mergeTripUpdate(trip, response.data);
+      if (acceptedTrip) {
+        setActiveTrip(acceptedTrip);
+      }
       setAccepted(true);
       navigation.replace('Navigation');
     } catch (err: any) {

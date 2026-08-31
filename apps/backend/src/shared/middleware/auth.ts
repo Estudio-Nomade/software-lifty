@@ -103,6 +103,30 @@ function realGetUser(token: string): Promise<AuthUser | null> {
   });
 }
 
+function metadataFullName(supabaseUser: User): string | null {
+  const meta = supabaseUser.user_metadata as Record<string, unknown> | undefined;
+  const raw =
+    (typeof meta?.full_name === 'string' && meta.full_name) ||
+    (typeof meta?.name === 'string' && meta.name) ||
+    null;
+  const trimmed = raw?.trim() || null;
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+}
+
+/** Backfill users.full_name from Supabase metadata when the DB row has none. */
+async function maybeBackfillFullName(
+  userId: string,
+  currentName: string | null,
+  metaName: string | null,
+) {
+  if (!metaName) return;
+  if (currentName?.trim()) return;
+  await db
+    .update(users)
+    .set({ full_name: metaName, updated_at: new Date() })
+    .where(eq(users.id, userId));
+}
+
 async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
   const email = supabaseUser.email?.trim() || null;
   const rawPhone =
@@ -113,18 +137,21 @@ async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
   // Empty phone strings must become NULL: `users.phone` is UNIQUE, and multiple
   // empty-string rows would violate the constraint on account creation.
   const phone = rawPhone?.trim() || null;
+  const fullName = metadataFullName(supabaseUser);
 
   const [existing] = await db
     .select({
       id: users.id,
       email: users.email,
       phone: users.phone,
+      full_name: users.full_name,
     })
     .from(users)
     .where(eq(users.id, supabaseUser.id))
     .limit(1);
 
   if (existing) {
+    await maybeBackfillFullName(existing.id, existing.full_name, fullName);
     const role = await deriveRole(existing.id);
     return {
       id: existing.id,
@@ -142,12 +169,14 @@ async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
         id: users.id,
         email: users.email,
         phone: users.phone,
+        full_name: users.full_name,
       })
       .from(users)
       .where(eq(users.email, email))
       .limit(1);
 
     if (byEmail) {
+      await maybeBackfillFullName(byEmail.id, byEmail.full_name, fullName);
       const role = await deriveRole(byEmail.id);
       return {
         id: byEmail.id,
@@ -164,6 +193,8 @@ async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
       id: supabaseUser.id,
       email,
       phone,
+      full_name: fullName,
+      // Role is refined by deriveRole (driver profile / passenger profile).
       role: 'driver',
     })
     .returning({

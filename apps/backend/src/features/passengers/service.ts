@@ -5,7 +5,37 @@ import { logger } from '../../shared/lib/logger';
 import type { AuthUser } from '../../shared/middleware/auth';
 
 export const passengersService = {
-  async register(userId: string, phone?: string) {
+  async register(userId: string, phone?: string, fullName?: string) {
+    const trimmedName = fullName?.trim() || null;
+    if (trimmedName) {
+      await db
+        .update(users)
+        .set({ full_name: trimmedName, updated_at: new Date() })
+        .where(eq(users.id, userId));
+    }
+
+    if (phone?.trim()) {
+      const phoneTrimmed = phone.trim();
+      const [owner] = await db
+        .select({ id: users.id, phone: users.phone })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (owner && !owner.phone) {
+        const [taken] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(and(eq(users.phone, phoneTrimmed), ne(users.id, userId)))
+          .limit(1);
+        if (!taken) {
+          await db
+            .update(users)
+            .set({ phone: phoneTrimmed, updated_at: new Date() })
+            .where(eq(users.id, userId));
+        }
+      }
+    }
+
     const [existing] = await db
       .select()
       .from(passengerProfiles)
