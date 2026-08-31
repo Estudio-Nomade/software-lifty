@@ -50,7 +50,28 @@ const C = {
 type Proc = ReturnType<typeof Bun.spawn>;
 
 const children: Proc[] = [];
+const recentLogs = new Map<string, string[]>();
+const LOG_RING = 40;
 let shuttingDown = false;
+
+function pushLog(label: string, line: string): void {
+  const ring = recentLogs.get(label) ?? [];
+  ring.push(line);
+  if (ring.length > LOG_RING) ring.shift();
+  recentLogs.set(label, ring);
+}
+
+function dumpRecentLogs(label: string): void {
+  const ring = recentLogs.get(label) ?? [];
+  if (ring.length === 0) {
+    process.stdout.write(`${C.dim}${pad(label)}${C.reset} (no child logs captured)\n`);
+    return;
+  }
+  process.stdout.write(`${C.dim}${pad(label)}${C.reset} last ${ring.length} log lines:\n`);
+  for (const line of ring) {
+    process.stdout.write(`${C.dim}  | ${line}${C.reset}\n`);
+  }
+}
 
 function pad(label: string, width = 11): string {
   return label.length >= width ? label : label.padEnd(width);
@@ -140,12 +161,15 @@ async function pipeStream(
           idx = buffer.indexOf('\n');
           continue;
         }
+        pushLog(label, line);
         process.stdout.write(`${color}${pad(label)}${C.reset} ${line}\n`);
         idx = buffer.indexOf('\n');
       }
     }
     if (buffer.length > 0) {
-      process.stdout.write(`${color}${pad(label)}${C.reset} ${buffer.replace(/\r$/, '')}\n`);
+      const tail = buffer.replace(/\r$/, '');
+      pushLog(label, tail);
+      process.stdout.write(`${color}${pad(label)}${C.reset} ${tail}\n`);
     }
   } catch {
     // stream closed
@@ -175,28 +199,44 @@ function spawn(
   pipeStream(proc.stderr, label, color);
   proc.exited
     .then((code) => {
-      process.stdout.write(`${C.dim}${pad(label)}${C.reset} exited (code ${code})\n`);
+      const tone = code === 0 || code === null ? C.dim : C.red;
+      process.stdout.write(
+        `${tone}${pad(label)}${C.reset} exited (code ${code})${
+          code && code !== 0 ? ' — Metro on this port is DOWN' : ''
+        }\n`,
+      );
     })
     .catch(() => {});
   return proc;
 }
 
+async function probeMetro(host: string, port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://${host}:${port}/status`, {
+      signal: AbortSignal.timeout(1500),
+    });
+    const body = await res.text();
+    return res.ok && body.includes('packager-status:running');
+  } catch {
+    return false;
+  }
+}
+
 async function waitForMetro(port: number, label: string, host: string): Promise<boolean> {
-  const url = `http://${host}:${port}/status`;
+  // Probe LAN first (QR host), then loopback — covers bind-only-localhost misconfig.
+  const hosts = host === '127.0.0.1' || host === 'localhost' ? [host] : [host, '127.0.0.1'];
   const deadline = Date.now() + METRO_READY_TIMEOUT_MS;
-  process.stdout.write(`${C.dim}${pad(label)}${C.reset} waiting for Metro on ${host}:${port}...\n`);
+  process.stdout.write(
+    `${C.dim}${pad(label)}${C.reset} waiting for Metro on ${hosts.map((h) => `${h}:${port}`).join(' | ')}...\n`,
+  );
   while (Date.now() < deadline) {
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
-      const body = await res.text();
-      if (res.ok && body.includes('packager-status:running')) {
+    for (const h of hosts) {
+      if (await probeMetro(h, port)) {
         process.stdout.write(
-          `${C.green}${pad(label)}${C.reset} Metro ready (http://${host}:${port})\n`,
+          `${C.green}${pad(label)}${C.reset} Metro ready (http://${h}:${port})\n`,
         );
         return true;
       }
-    } catch {
-      // not up yet
     }
     await Bun.sleep(METRO_POLL_MS);
   }
@@ -204,6 +244,21 @@ async function waitForMetro(port: number, label: string, host: string): Promise<
     `${C.red}${pad(label)}${C.reset} Metro not ready after ${METRO_READY_TIMEOUT_MS / 1000}s\n`,
   );
   return false;
+}
+
+function reportMetroFailure(label: string, name: string, port: number, host: string): void {
+  process.stderr.write(
+    [
+      `${C.red}${pad(label)}${C.reset} ${name} Metro never became ready on :${port}.`,
+      '  QR for this app will NOT be printed (Expo Go would fail).',
+      `  curl -sS http://127.0.0.1:${port}/status`,
+      `  curl -sS http://${host}:${port}/status`,
+      `  Solo esta app: bun run ${port === DRIVER_PORT ? 'dev:driver' : 'dev:passenger'}`,
+      '  Si ves PluginError / missing app.plugin.js: bun install (root) y revisá plugins en app.json.',
+      '',
+    ].join('\n'),
+  );
+  dumpRecentLogs(label);
 }
 
 /** Pre-warm the Android Hermes bundle so Expo Go's first scan does not time out. */
@@ -333,6 +388,13 @@ async function main(): Promise<void> {
     waitForMetro(PASSENGER_PORT, '[pasajeros]', host),
   ]);
 
+  if (!driverReady) {
+    reportMetroFailure('[conductor]', 'Conductor (driver)', DRIVER_PORT, host);
+  }
+  if (!passengerReady) {
+    reportMetroFailure('[pasajeros]', 'Pasajero (passenger)', PASSENGER_PORT, host);
+  }
+
   await Promise.all([
     driverReady ? prewarmBundle(DRIVER_PORT, '[conductor]', host) : Promise.resolve(),
     passengerReady ? prewarmBundle(PASSENGER_PORT, '[pasajeros]', host) : Promise.resolve(),
@@ -343,6 +405,17 @@ async function main(): Promise<void> {
   }
   if (passengerReady) {
     await printAppQr('[pasajeros]', C.magenta, 'Pasajero (passenger)', PASSENGER_PORT, host);
+  }
+
+  if (!driverReady || !passengerReady) {
+    process.stdout.write(
+      `${C.yellow}${C.bold}⚠ Dev stack parcialmente listo${C.reset} — faltó QR de ${[
+        !driverReady ? 'conductor' : null,
+        !passengerReady ? 'pasajero' : null,
+      ]
+        .filter(Boolean)
+        .join(' + ')}. Revisá logs rojos arriba.\n\n`,
+    );
   }
 
   process.stdout.write(
