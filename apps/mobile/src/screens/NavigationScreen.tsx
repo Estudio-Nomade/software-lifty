@@ -26,6 +26,7 @@ import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
 import { buildTripCancelledParams } from '../lib/cancellation';
 import { haversineDistance } from '../lib/geo';
 import { startTracking, stopTracking } from '../lib/location';
+import { mergeTripUpdate } from '../lib/mergeTrip';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -108,8 +109,9 @@ export const NavigationScreen: React.FC = () => {
         if (enRouteResolvedRef.current) return;
         enRouteResolvedRef.current = true;
         const storeTrip = useTripStore.getState().trip;
-        if (storeTrip) {
-          useTripStore.getState().setActiveTrip({ ...storeTrip, ...res.data });
+        const merged = mergeTripUpdate(storeTrip, res.data);
+        if (merged) {
+          useTripStore.getState().setActiveTrip(merged);
         }
         setEnRouteStatus('success');
       })
@@ -172,8 +174,9 @@ export const NavigationScreen: React.FC = () => {
         lng: locationLng,
       });
       const storeTrip = useTripStore.getState().trip;
-      if (storeTrip) {
-        useTripStore.getState().setActiveTrip({ ...storeTrip, ...res.data });
+      const merged = mergeTripUpdate(storeTrip, res.data);
+      if (merged) {
+        useTripStore.getState().setActiveTrip(merged);
       }
       navigation.navigate('WaitingPassenger');
     } catch (err: any) {
@@ -211,8 +214,9 @@ export const NavigationScreen: React.FC = () => {
     try {
       const res = await apiClient.post(`/trips/${trip.id}/en-route`);
       const storeTrip = useTripStore.getState().trip;
-      if (storeTrip) {
-        useTripStore.getState().setActiveTrip({ ...storeTrip, ...res.data });
+      const merged = mergeTripUpdate(storeTrip, res.data);
+      if (merged) {
+        useTripStore.getState().setActiveTrip(merged);
       }
       setEnRouteStatus('success');
     } catch {

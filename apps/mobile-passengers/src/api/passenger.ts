@@ -1,8 +1,14 @@
 import { api } from './client';
 import type { FareEstimate, PassengerProfile, PlaceSuggestion, Trip, TripMessage } from './types';
 
-export async function registerPassenger(phone?: string): Promise<PassengerProfile> {
-  const { data } = await api.post<PassengerProfile>('/passenger/register', { phone });
+export async function registerPassenger(
+  phone?: string,
+  fullName?: string,
+): Promise<PassengerProfile> {
+  const body: { phone?: string; full_name?: string } = {};
+  if (phone) body.phone = phone;
+  if (fullName?.trim()) body.full_name = fullName.trim();
+  const { data } = await api.post<PassengerProfile>('/passenger/register', body);
   return data;
 }
 

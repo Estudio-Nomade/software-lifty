@@ -275,6 +275,51 @@ describe('Trip State Machine', () => {
     expect(events[4].to_status).toBe('in_trip');
   });
 
+  test('5a2. start returns passenger_name when passenger_id is set', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+
+    const db = getDb();
+    const [passenger] = await db
+      .insert(users)
+      .values({ phone: '+549****6666', full_name: 'Seba Pax', role: 'passenger' })
+      .returning({ id: users.id });
+
+    const { data: trip } = await request(
+      'POST',
+      '/api/trips',
+      {
+        origin_lat: -31.9,
+        origin_lng: -65.0,
+        dest_lat: -31.88,
+        dest_lng: -65.02,
+        vehicle_type: 'car',
+        distance_km: 5,
+        duration_minutes: 15,
+        passenger_id: passenger.id,
+      },
+      token,
+    );
+
+    const { data: accepted } = await request('POST', `/api/trips/${trip.id}/accept`, undefined, token);
+    expect(accepted.passenger_name).toBe('Seba Pax');
+
+    await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
+
+    const { status, data } = await request(
+      'POST',
+      `/api/trips/${trip.id}/start`,
+      { verification_code: accepted.verification_code },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.status).toBe('in_trip');
+    expect(data.passenger_name).toBe('Seba Pax');
+    expect(data.passenger_phone).toBe('+549****6666');
+  });
+
   test('5b. start with wrong verification_code fails', async () => {
     const token = await registerAndGetToken(phone, password);
     await createDriverRow(token);

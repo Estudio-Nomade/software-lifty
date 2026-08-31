@@ -8,7 +8,7 @@ import { sendPushToUser } from '../../shared/lib/push';
 import { listBlockedDriverIds } from '../cancellations/blocks';
 import { getPassengerVisibility } from '../cancellations/metrics';
 import { getCancellationConfig } from '../cancellations/service';
-import { broadcastTripRequest } from '../trips/service';
+import { attachPassengerFields, broadcastTripRequest } from '../trips/service';
 
 const OFFER_TIMEOUT_MS = 20_000;
 const DEFAULT_MATCH_RADIUS_KM = 8;
@@ -132,12 +132,12 @@ export async function matchAndBroadcast(
     return { drivers_found: 0 };
   }
 
-  let offerPayload: Record<string, unknown> = assigned;
+  let offerPayload: Record<string, unknown> = await attachPassengerFields(assigned);
   if (trip.passenger_id) {
     const config = await getCancellationConfig();
     const vis = await getPassengerVisibility(trip.passenger_id, config);
     offerPayload = {
-      ...assigned,
+      ...offerPayload,
       passenger_cancel_visible: vis.visible,
       passenger_cancel_rate_pct: vis.ratePct,
       passenger_cancel_count_30d: vis.count,

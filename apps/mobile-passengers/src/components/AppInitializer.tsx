@@ -53,13 +53,14 @@ function SessionRestore() {
 
 function PassengerProfileRegistrar() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const fullName = useAuthStore((s) => s.fullName);
   const registeredRef = useRef(false);
 
   useEffect(() => {
     if (!isAuthenticated || registeredRef.current) return;
     registeredRef.current = true;
-    registerPassenger().catch(() => {});
-  }, [isAuthenticated]);
+    registerPassenger(undefined, fullName ?? undefined).catch(() => {});
+  }, [isAuthenticated, fullName]);
 
   return null;
 }

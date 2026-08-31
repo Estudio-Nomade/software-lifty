@@ -22,6 +22,7 @@ import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTripChat } from '../hooks/useTripChat';
 import { buildTripCancelledParams } from '../lib/cancellation';
+import { mergeTripUpdate } from '../lib/mergeTrip';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
@@ -106,8 +107,9 @@ export const WaitingPassengerScreen: React.FC = () => {
       });
       setShowVerificationModal(false);
       const storeTrip = useTripStore.getState().trip;
-      if (storeTrip) {
-        useTripStore.getState().setActiveTrip({ ...storeTrip, ...res.data });
+      const merged = mergeTripUpdate(storeTrip, res.data);
+      if (merged) {
+        useTripStore.getState().setActiveTrip(merged);
       }
       navigation.navigate('TripInProgress');
     } catch (err: any) {

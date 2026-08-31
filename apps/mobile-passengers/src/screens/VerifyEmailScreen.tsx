@@ -11,18 +11,22 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { registerPassenger } from '../api/passenger';
 import { Button } from '../components/Button';
 import { OTPInput } from '../components/OTPInput';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { resendSignupEmailOtp, verifySignupEmailOtp } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
+import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 import { theme } from '../theme';
 
 export function VerifyEmailScreen() {
   const { goBack, replace } = useAppNavigation();
   const params = useLocalSearchParams<{ email?: string }>();
   const email = params.email ?? '';
+  const draftFullName = useRegistrationDraftStore((s) => s.fullName);
+  const clearDraft = useRegistrationDraftStore((s) => s.clear);
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +47,16 @@ export function VerifyEmailScreen() {
     try {
       // Signup confirmation OTP first; email OTP fallback (parity with driver useAuth).
       await verifySignupEmailOtp(supabase, email, code);
+
+      const metaName =
+        draftFullName ||
+        (
+          (await supabase.auth.getUser()).data.user?.user_metadata as
+            | { full_name?: string }
+            | undefined
+        )?.full_name;
+      await registerPassenger(undefined, metaName ?? undefined).catch(() => {});
+      clearDraft();
       replace('LocationPermissions');
     } catch (e) {
       setError(getFriendlyAuthError(e));

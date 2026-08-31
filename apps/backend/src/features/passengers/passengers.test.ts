@@ -152,4 +152,37 @@ describe('Passenger Profile', () => {
     expect(status).toBe(401);
     expect(data.error).toBe('Unauthorized');
   });
+
+  test('POST /register persists full_name onto users', async () => {
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({
+        phone: '+549****5555',
+        email: 'noname@example.com',
+        role: 'passenger',
+        full_name: null,
+      })
+      .returning({ id: users.id });
+    const token = await createTestToken(user.id);
+
+    const { status } = await request(
+      'POST',
+      '/api/passenger/register',
+      { phone: '+549****5555', full_name: 'Sebastian Vallejo' },
+      token,
+    );
+    expect(status).toBe(200);
+
+    const [row] = await db
+      .select({ full_name: users.full_name })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+    expect(row.full_name).toBe('Sebastian Vallejo');
+
+    const profile = await request('GET', '/api/passenger/profile', undefined, token);
+    expect(profile.status).toBe(200);
+    expect(profile.data.full_name).toBe('Sebastian Vallejo');
+  });
 });

@@ -21,6 +21,7 @@ import { useDynamicRouting } from '../hooks/useDynamicRouting';
 import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
 import { haversineDistance } from '../lib/geo';
 import { startTracking, stopTracking } from '../lib/location';
+import { mergeTripUpdate } from '../lib/mergeTrip';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -62,6 +63,27 @@ export const TripInProgressScreen: React.FC = () => {
     };
   }, []);
 
+  // If the store trip lost passenger display fields (bare mutation payloads),
+  // refresh once from GET /trips/:id which joins users.full_name.
+  useEffect(() => {
+    if (!trip?.id) return;
+    if (trip.passenger_name) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiClient.get(`/trips/${trip.id}`);
+        if (cancelled) return;
+        const merged = mergeTripUpdate(useTripStore.getState().trip, res.data);
+        if (merged) useTripStore.getState().setActiveTrip(merged);
+      } catch {
+        // best-effort
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [trip?.id, trip?.passenger_name]);
+
   const handleCompleteTrip = async () => {
     if (!trip?.id) return;
     setCompleting(true);
@@ -70,11 +92,12 @@ export const TripInProgressScreen: React.FC = () => {
         lat: locationLat,
         lng: locationLng,
       });
-      const tripData = response.data?.data ?? response.data;
       const storeTrip = useTripStore.getState().trip;
-      if (storeTrip) {
-        useTripStore.getState().setActiveTrip({ ...storeTrip, ...tripData });
+      const merged = mergeTripUpdate(storeTrip, response.data);
+      if (merged) {
+        useTripStore.getState().setActiveTrip(merged);
       }
+      const tripData = mergeTripUpdate(null, response.data) ?? response.data?.data ?? response.data;
       navigation.navigate('TripComplete', {
         amount: String(tripData?.total_fare ?? 2500),
         commission: String(tripData?.platform_fee ?? 500),
