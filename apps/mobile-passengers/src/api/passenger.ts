@@ -22,6 +22,25 @@ export async function updateProfile(profile: Partial<PassengerProfile>): Promise
   return data;
 }
 
+export async function uploadProfilePhoto(
+  uri: string,
+  fileName = 'avatar.jpg',
+  mimeType = 'image/jpeg',
+): Promise<{ file_url: string; avatar_url: string }> {
+  const formData = new FormData();
+  formData.append('file', { uri, type: mimeType, name: fileName } as unknown as Blob);
+
+  const { data } = await api.post<{ file_url: string; avatar_url: string }>(
+    '/passenger/profile/photo',
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    },
+  );
+
+  return data;
+}
+
 export async function estimateFare(params: {
   origin_lat: number;
   origin_lng: number;

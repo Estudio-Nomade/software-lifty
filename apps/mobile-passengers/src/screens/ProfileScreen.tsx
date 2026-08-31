@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
 import {
   Alert,
@@ -13,7 +14,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { getProfile, updateProfile } from '../api/passenger';
+import { getProfile, updateProfile, uploadProfilePhoto } from '../api/passenger';
+import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
@@ -22,6 +24,7 @@ import { buildSosWhatsAppUrl } from '../lib/supportContact';
 import { useAuthStore } from '../store/authStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
+import { compressImage } from '../utils/image';
 
 interface MenuItem {
   icon: keyof typeof Ionicons.glyphMap;
@@ -38,29 +41,26 @@ export function ProfileScreen() {
   const setFullName = useAuthStore((s) => s.setFullName);
   const activeTrip = useRideStore((s) => s.activeTrip);
   const [phone, setPhone] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const [editVisible, setEditVisible] = useState(false);
   const [editFullName, setEditFullName] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editPhotoUri, setEditPhotoUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     getProfile()
       .then((profile) => {
         setPhone(profile.phone ?? '');
+        setAvatarUrl(profile.avatar_url ?? null);
         if (profile.full_name) setFullName(profile.full_name);
       })
       .catch(() => {});
   }, [setFullName]);
 
   const displayName = fullName || email?.split('@')[0] || 'Usuario';
-  const initials = displayName
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -74,21 +74,56 @@ export function ProfileScreen() {
   const openEdit = () => {
     setEditFullName(fullName ?? '');
     setEditPhone(phone);
+    setEditPhotoUri(null);
     setEditVisible(true);
+  };
+
+  const handlePickPhoto = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert(
+        'No disponible',
+        'Cambiar la foto de perfil solo está disponible en el dispositivo (Expo Go).',
+      );
+      return;
+    }
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permiso denegado', 'Necesitamos acceso a la galería para cambiar tu foto.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets.length > 0) {
+      setEditPhotoUri(result.assets[0].uri);
+    }
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
+      if (editPhotoUri) {
+        const compressed = await compressImage(editPhotoUri);
+        const uploadResult = await uploadProfilePhoto(compressed.uri, 'avatar.jpg', 'image/jpeg');
+        setAvatarUrl(uploadResult.avatar_url ?? uploadResult.file_url);
+      }
+
       const updated = await updateProfile({
         full_name: editFullName.trim(),
         phone: editPhone.trim(),
       });
       if (updated.full_name) setFullName(updated.full_name);
       setPhone(updated.phone ?? '');
+      if (updated.avatar_url) setAvatarUrl(updated.avatar_url);
       setEditVisible(false);
+      setEditPhotoUri(null);
     } catch {
-      Alert.alert('Error', 'No se pudo guardar el perfil.');
+      Alert.alert('Error', 'No se pudo guardar el perfil. Revisá la conexión e intentá de nuevo.');
     } finally {
       setSaving(false);
     }
@@ -150,6 +185,8 @@ export function ProfileScreen() {
     </TouchableOpacity>
   );
 
+  const previewUri = editPhotoUri ?? avatarUrl;
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -162,9 +199,7 @@ export function ProfileScreen() {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.profileSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
+          <Avatar uri={avatarUrl} name={displayName} size={80} />
           <Text style={styles.name}>{fullName || displayName}</Text>
           {email && <Text style={styles.email}>{email}</Text>}
         </View>
@@ -204,6 +239,15 @@ export function ProfileScreen() {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
             >
+              <TouchableOpacity
+                style={styles.editAvatar}
+                onPress={handlePickPhoto}
+                activeOpacity={0.7}
+              >
+                <Avatar uri={previewUri} name={editFullName || displayName} size={72} />
+                <Text style={styles.editAvatarLabel}>Cambiar foto</Text>
+              </TouchableOpacity>
+
               <Input placeholder="Nombre" value={editFullName} onChangeText={setEditFullName} />
               <Input
                 placeholder="Teléfono"
@@ -253,19 +297,6 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.lg,
     padding: theme.spacing.xl,
     gap: theme.spacing.sm,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: theme.colors.deepBlue,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    fontSize: theme.fontSize['2xl'],
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
   },
   name: {
     fontSize: theme.fontSize.xl,
@@ -351,6 +382,16 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.lg,
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.deepBlue,
+  },
+  editAvatar: {
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
+  },
+  editAvatarLabel: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.primary,
   },
   emailRow: {
     flexDirection: 'row',

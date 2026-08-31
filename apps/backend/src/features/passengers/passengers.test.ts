@@ -10,9 +10,40 @@ import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
 import { passengerProfiles, users } from '../../shared/db/schema';
+import type { StorageProvider } from '../../shared/lib/storage';
 import { createTestToken } from '../../shared/testing/utils';
+import { setStorageForTesting } from './service';
+
+interface TestStorage extends StorageProvider {
+  uploaded: Map<string, string>;
+  deleted: string[];
+}
+
+function createTestStorage() {
+  const uploaded = new Map<string, string>();
+  const deleted: string[] = [];
+  const storage: TestStorage = {
+    uploaded,
+    deleted,
+    async uploadFile(_file: File, path: string) {
+      const url = `https://example.supabase.co/storage/v1/object/public/driver-documents/${path}`;
+      uploaded.set(path, url);
+      return url;
+    },
+    async deleteFile(path: string) {
+      deleted.push(path);
+    },
+    extractStoragePath(url: string | null) {
+      if (!url) return null;
+      const match = url.match(/\/driver-documents\/(.+)/);
+      return match ? match[1] : null;
+    },
+  };
+  return storage;
+}
 
 let app: any;
+let baseStorage: TestStorage;
 
 async function truncateTables() {
   const db = getDb();
@@ -49,11 +80,15 @@ async function registerPassenger(phone: string, fullName = 'Maria Lopez') {
 }
 
 beforeAll(() => {
+  baseStorage = createTestStorage();
+  setStorageForTesting(baseStorage);
   app = createApp();
 });
 
 beforeEach(async () => {
   await truncateTables();
+  baseStorage.uploaded.clear();
+  baseStorage.deleted.length = 0;
 });
 
 afterAll(async () => {
@@ -184,5 +219,59 @@ describe('Passenger Profile', () => {
     const profile = await request('GET', '/api/passenger/profile', undefined, token);
     expect(profile.status).toBe(200);
     expect(profile.data.full_name).toBe('Sebastian Vallejo');
+  });
+});
+
+describe('Passenger avatar photo upload', () => {
+  const phone = '+5492613333333';
+
+  async function uploadPhoto(token: string) {
+    const formData = new FormData();
+    formData.append('file', new Blob(['image-data'], { type: 'image/png' }), 'avatar.png');
+    const req = new Request('http://localhost/api/passenger/profile/photo', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    const res = await app.handle(req);
+    return { status: res.status, data: await res.json() };
+  }
+
+  test('POST /profile/photo uploads avatar and sets avatar_url', async () => {
+    const { token } = await registerPassenger(phone);
+
+    const { status, data } = await uploadPhoto(token);
+
+    expect(status).toBe(200);
+    expect(data.file_url).toBeString();
+    expect(data.file_url).toContain('avatars/passenger-');
+    expect(data.avatar_url).toBe(data.file_url);
+
+    const { data: profile } = await request('GET', '/api/passenger/profile', undefined, token);
+    expect(profile.avatar_url).toBe(data.file_url);
+  });
+
+  test('POST /profile/photo replaces old avatar_url on re-upload', async () => {
+    const { token } = await registerPassenger(phone);
+
+    const { data: first } = await uploadPhoto(token);
+    const { data: second } = await uploadPhoto(token);
+
+    expect(second.file_url).not.toBe(first.file_url);
+    expect(baseStorage.deleted.length).toBeGreaterThanOrEqual(1);
+
+    const { data: profile } = await request('GET', '/api/passenger/profile', undefined, token);
+    expect(profile.avatar_url).toBe(second.file_url);
+  });
+
+  test('POST /profile/photo without auth returns 401', async () => {
+    const formData = new FormData();
+    formData.append('file', new Blob(['data'], { type: 'image/png' }), 'avatar.png');
+    const req = new Request('http://localhost/api/passenger/profile/photo', {
+      method: 'POST',
+      body: formData,
+    });
+    const res = await app.handle(req);
+    expect(res.status).toBe(401);
   });
 });
