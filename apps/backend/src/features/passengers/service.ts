@@ -2,7 +2,14 @@ import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { passengerProfiles, users } from '../../shared/db/schema';
 import { logger } from '../../shared/lib/logger';
+import { type StorageProvider, supabaseStorage } from '../../shared/lib/storage';
 import type { AuthUser } from '../../shared/middleware/auth';
+
+let _storage: StorageProvider = supabaseStorage;
+
+export function setStorageForTesting(sp: StorageProvider) {
+  _storage = sp;
+}
 
 export const passengersService = {
   async register(userId: string, phone?: string, fullName?: string) {
@@ -132,5 +139,28 @@ export const passengersService = {
     }
 
     return this.getProfile(user);
+  },
+
+  async uploadAvatar(user: AuthUser, file: File) {
+    const [currentUser] = await db
+      .select({ avatar_url: users.avatar_url })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+
+    const oldPath = _storage.extractStoragePath(currentUser?.avatar_url ?? null);
+    if (oldPath) {
+      await _storage.deleteFile(oldPath);
+    }
+
+    const path = `avatars/passenger-${user.id}-${Date.now()}`;
+    const fileUrl = await _storage.uploadFile(file, path);
+
+    await db
+      .update(users)
+      .set({ avatar_url: fileUrl, updated_at: new Date() })
+      .where(eq(users.id, user.id));
+
+    return { file_url: fileUrl, avatar_url: fileUrl };
   },
 };

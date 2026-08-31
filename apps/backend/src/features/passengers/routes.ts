@@ -34,4 +34,14 @@ export const passengersRoutes = new Elysia({ prefix: '/passenger' })
         }),
       ),
     },
+  )
+  .post(
+    '/profile/photo',
+    ({ user, body, set }) => safeCall(() => passengersService.uploadAvatar(user, body.file), set),
+    {
+      requireAuth: true,
+      body: t.Object({
+        file: t.File({ maxSize: 10 * 1024 * 1024 }),
+      }),
+    },
   );

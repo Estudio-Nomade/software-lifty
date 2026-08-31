@@ -14,7 +14,8 @@
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
-        }
+        },
+        "NSPhotoLibraryUsageDescription": "Lifty necesita acceso a tu galería para la foto de perfil."
       }
     },
     "android": {
@@ -34,6 +35,12 @@
     },
     "plugins": [
       "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Lifty necesita acceso a tu galería para la foto de perfil."
+        }
+      ],
       [
         "expo-notifications",
         {
