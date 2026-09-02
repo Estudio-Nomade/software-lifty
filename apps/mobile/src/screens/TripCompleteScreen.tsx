@@ -102,7 +102,7 @@ export const TripCompleteScreen: React.FC = () => {
   const goOnline = () => {
     clearTrip();
     setActiveTab('home');
-    navigation.replace('Online');
+    navigation.replace('Active');
   };
 
   const handleCollect = async () => {

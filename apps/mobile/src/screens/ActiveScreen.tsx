@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -11,28 +11,36 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 import { apiClient, getValidated } from '../api/client';
+import { driverStatusSchema, earningsDailySchema } from '../api/types';
 import type { EarningsDaily } from '../api/types';
 import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
+import { GoButton } from '../components/GoButton';
 import { MapView } from '../components/MapView';
 import { Navbar } from '../components/Navbar';
 import { SideMenu } from '../components/SideMenu';
 import { Toggle } from '../components/Toggle';
+import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
-import { stopTracking } from '../lib/location';
+import { shouldShowPlatformDebt } from '../lib/commission';
+import { getCurrentPosition, stopTracking } from '../lib/location';
 import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
 import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const COLLAPSED_HEIGHT = 180;
-const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.45;
+const ONLINE_COLLAPSED = 180;
+const ONLINE_EXPANDED = SCREEN_HEIGHT * 0.45;
+const OFFLINE_PILL = 96;
+const OFFLINE_EXPANDED = SCREEN_HEIGHT * 0.45;
+
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -57,21 +65,25 @@ const havDistance = (a: { lat: number; lng: number }, b: { lat: number; lng: num
 
 export const ActiveScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const isOnline = useOnlineStore((s) => s.isOnline);
   const setOnline = useOnlineStore((s) => s.setOnline);
   const onlineSince = useOnlineStore((s) => s.onlineSince);
   const setOnlineSince = useOnlineStore((s) => s.setOnlineSince);
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
   const heatmapPoints = useHeatmapPolling();
   const [menuVisible, setMenuVisible] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [onlineTime, setOnlineTime] = useState(0);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [recenterKey, setRecenterKey] = useState(0);
-  const signedOutRef = useRef(false);
+  const [retryingLocation, setRetryingLocation] = useState(false);
   const signOut = useSignOut();
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
+  const locationError = useLocationStore((s) => s.locationError);
+  const hasLocation = locationLat != null && locationLng != null;
 
   const profileSchema = z.object({
     full_name: z.string(),
@@ -104,8 +116,42 @@ export const ActiveScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [onlineSince]);
 
+  const { data: driverStatus } = useQuery({
+    queryKey: ['driverStatus'],
+    queryFn: () => getValidated('/drivers/me/status', driverStatusSchema),
+    refetchInterval: 30_000,
+  });
+
+  const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
+
+  const {
+    data: earnings,
+    isLoading: earningsLoading,
+    isError: earningsIsError,
+    error: earningsError,
+    refetch: refetchEarnings,
+  } = useQuery<EarningsDaily>({
+    queryKey: ['earnings-daily'],
+    queryFn: () => getValidated('/drivers/me/earnings/daily', earningsDailySchema),
+    refetchInterval: 60_000,
+  });
+
   const connect = useCallback(async () => {
     setToggleError(null);
+
+    if (documentsPendingReview) {
+      setToggleError(
+        'Tenes documentos pendientes de revision. No podes conectarte hasta que sean aprobados.',
+      );
+      return;
+    }
+
+    if (!hasLocation) {
+      setToggleError('Necesitamos tu ubicacion para conectarte.');
+      return;
+    }
+
+    setConnecting(true);
     try {
       await apiClient.put('/drivers/me/online', { is_online: true });
       const { lat, lng, heading } = useLocationStore.getState();
@@ -119,8 +165,10 @@ export const ActiveScreen: React.FC = () => {
       setOnline(true);
     } catch (err: unknown) {
       setToggleError(err instanceof Error ? err.message : 'Error al conectar');
+    } finally {
+      setConnecting(false);
     }
-  }, [setOnline, setOnlineSince]);
+  }, [documentsPendingReview, hasLocation, setOnline, setOnlineSince]);
 
   const disconnect = useCallback(async () => {
     setToggleError(null);
@@ -159,20 +207,6 @@ export const ActiveScreen: React.FC = () => {
     [connect, disconnect],
   );
 
-  const goBackToHome = useCallback(() => {
-    navigation.replace('Online');
-  }, [navigation]);
-
-  const { data: earnings } = useQuery<EarningsDaily>({
-    queryKey: ['earnings-daily'],
-    queryFn: async () => {
-      const response = await apiClient.get('/drivers/me/earnings/daily');
-      return response.data.data ?? response.data;
-    },
-    refetchInterval: 60_000,
-    enabled: sheetExpanded && isOnline,
-  });
-
   const handleSnapChange = useCallback((index: number) => {
     setSheetExpanded(index === 1);
   }, []);
@@ -182,7 +216,7 @@ export const ActiveScreen: React.FC = () => {
       {
         label: 'Inicio',
         icon: 'home-outline' as const,
-        onPress: () => navigation.navigate('Online'),
+        onPress: () => navigation.navigate('Active'),
       },
       {
         label: 'Ganancias',
@@ -225,40 +259,154 @@ export const ActiveScreen: React.FC = () => {
   );
 
   const isOffCenter =
-    mapCenter && locationLat != null && locationLng != null
-      ? havDistance(mapCenter, { lat: locationLat, lng: locationLng }) > 10
+    mapCenter && hasLocation
+      ? havDistance(mapCenter, { lat: locationLat!, lng: locationLng! }) > 10
       : false;
+
+  const tabPad = theme.dimensions.tabBarHeight + insets.bottom;
+  const offlineCollapsed = OFFLINE_PILL + tabPad;
+  const offlineExpanded = OFFLINE_EXPANDED + tabPad;
+  const onlineCollapsed = ONLINE_COLLAPSED + tabPad;
+  const onlineExpanded = ONLINE_EXPANDED + tabPad;
+  const recenterBottom = (isOnline ? onlineCollapsed : offlineCollapsed) + theme.spacing.md;
+
+  const earningsAmountLabel = earnings ? formatCurrency(earnings.total) : '$0';
+
+  const renderOfflineSheetBody = () => {
+    if (!sheetExpanded) {
+      if (earningsLoading) {
+        return (
+          <View style={styles.pillRow}>
+            <Text style={styles.pillLabel}>Ganaste hoy</Text>
+            <SkeletonCard style={styles.pillSkeleton} />
+          </View>
+        );
+      }
+      if (earningsIsError) {
+        return (
+          <View style={styles.pillRow}>
+            <Text style={styles.pillLabel}>Ganaste hoy</Text>
+            <TouchableOpacity onPress={() => refetchEarnings()} activeOpacity={0.7}>
+              <Text style={styles.pillRetry}>Reintentar</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      }
+      return (
+        <View style={styles.pillRow}>
+          <Text style={styles.pillLabel}>Ganaste hoy</Text>
+          <Text style={styles.pillAmount}>{earningsAmountLabel}</Text>
+        </View>
+      );
+    }
+
+    if (earningsLoading) {
+      return <SkeletonCard style={styles.expandedSkeleton} />;
+    }
+
+    if (earningsIsError) {
+      const message =
+        earningsError instanceof Error ? earningsError.message : 'Error al cargar ganancias';
+      return (
+        <View style={styles.expandedBlock}>
+          <Text style={styles.metricsTitle}>Ganaste hoy</Text>
+          <Text style={styles.errorText}>{message}</Text>
+          <TouchableOpacity
+            style={styles.earningsButton}
+            onPress={() => refetchEarnings()}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.earningsButtonText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.expandedBlock}>
+        <Text style={styles.metricsTitle}>Ganaste hoy</Text>
+        <Text style={styles.expandedAmount}>{earningsAmountLabel}</Text>
+        {!earnings || earnings.total === 0 ? (
+          <Text style={styles.earningsSubtext}>Todavia no hiciste viajes hoy</Text>
+        ) : (
+          <>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Efectivo</Text>
+              <Text style={styles.metricValue}>{formatCurrency(earnings.cash)}</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Transferencia</Text>
+              <Text style={styles.metricValue}>{formatCurrency(earnings.transfer)}</Text>
+            </View>
+            {shouldShowPlatformDebt(earnings.platform_debt) ? (
+              <View style={styles.metricRow}>
+                <Text style={[styles.metricLabel, { color: theme.colors.dangerRed }]}>
+                  Deuda pendiente
+                </Text>
+                <Text style={[styles.metricValue, { color: theme.colors.dangerRed }]}>
+                  -{formatCurrency(earnings.platform_debt)}
+                </Text>
+              </View>
+            ) : null}
+          </>
+        )}
+        <TouchableOpacity
+          style={styles.earningsButton}
+          activeOpacity={0.8}
+          onPress={() => navigation.navigate('Earnings')}
+        >
+          <Text style={styles.earningsButtonText}>Ver ganancias</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
 
-      {locationLat != null && locationLng != null ? (
-        <>
-          <MapView
-            style={StyleSheet.absoluteFill as any}
-            followUserLocation
-            centerCoordinate={[locationLng, locationLat]}
-            userLocation={[locationLng, locationLat]}
-            heatmapPoints={heatmapPoints}
-            onMoveEnd={handleMapMove}
-            recenterKey={recenterKey}
-          />
-
-          {isOffCenter && (
-            <TouchableOpacity
-              style={styles.recenterButton}
-              onPress={handleRecenter}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="locate-outline" size={24} color={theme.colors.turquoise} />
-            </TouchableOpacity>
-          )}
-        </>
+      {hasLocation ? (
+        <MapView
+          style={StyleSheet.absoluteFill as object}
+          followUserLocation
+          centerCoordinate={[locationLng!, locationLat!]}
+          userLocation={[locationLng!, locationLat!]}
+          heatmapPoints={heatmapPoints}
+          onMoveEnd={handleMapMove}
+          recenterKey={recenterKey}
+        />
       ) : (
         <View style={styles.mapLoading}>
-          <ActivityIndicator size="large" color={theme.colors.turquoise} />
-          <Text style={styles.mapLoadingText}>Obteniendo ubicación...</Text>
+          {locationError ? (
+            <>
+              <Text style={styles.mapErrorText}>{locationError}</Text>
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={async () => {
+                  setRetryingLocation(true);
+                  try {
+                    await getCurrentPosition();
+                  } finally {
+                    setRetryingLocation(false);
+                  }
+                }}
+                disabled={retryingLocation}
+                accessibilityRole="button"
+                accessibilityLabel="Reintentar ubicacion"
+              >
+                {retryingLocation ? (
+                  <ActivityIndicator size="small" color={theme.colors.white} />
+                ) : (
+                  <Text style={styles.retryBtnText}>Reintentar</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <ActivityIndicator size="large" color={theme.colors.turquoise} />
+              <Text style={styles.mapLoadingText}>Obteniendo ubicacion...</Text>
+            </>
+          )}
         </View>
       )}
 
@@ -293,12 +441,32 @@ export const ActiveScreen: React.FC = () => {
         />
       </View>
 
+      {!isOnline && (
+        <>
+          <GoButton
+            onPress={connect}
+            loading={connecting}
+            disabled={!hasLocation || documentsPendingReview || connecting}
+          />
+          {documentsPendingReview && (
+            <View style={styles.goHint}>
+              <Text style={styles.reviewBannerText}>
+                Documentos pendientes de revision. No podes conectarte hasta tener los papeles en
+                regla.
+              </Text>
+            </View>
+          )}
+          {toggleError && !isOnline && (
+            <View style={styles.goHint}>
+              <Text style={styles.errorText}>{toggleError}</Text>
+            </View>
+          )}
+        </>
+      )}
+
       {isOnline ? (
-        <BottomSheet
-          snapPoints={[COLLAPSED_HEIGHT, EXPANDED_HEIGHT]}
-          onSnapChange={handleSnapChange}
-        >
-          <View style={styles.sheetContent}>
+        <BottomSheet snapPoints={[onlineCollapsed, onlineExpanded]} onSnapChange={handleSnapChange}>
+          <View style={[styles.sheetContent, { paddingBottom: tabPad }]}>
             <View style={styles.toggleRow}>
               <Text style={styles.statusOnline}>Estas conectado</Text>
               <Toggle value={true} onToggle={handleToggle} />
@@ -342,30 +510,21 @@ export const ActiveScreen: React.FC = () => {
           </View>
         </BottomSheet>
       ) : (
-        <View style={styles.offlineBar}>
-          <View style={styles.offlineBarContent}>
-            <View style={styles.offlineBarText}>
-              <Text style={styles.offlineBarTitle}>Conectate, empeza a viajar</Text>
-              <Text style={styles.offlineBarSubtitle}>Recibi solicitudes de viaje</Text>
-            </View>
-            <Toggle value={false} onToggle={handleToggle} />
+        <BottomSheet
+          snapPoints={[offlineCollapsed, offlineExpanded]}
+          onSnapChange={handleSnapChange}
+        >
+          <View style={[styles.sheetContent, { paddingBottom: tabPad }]}>
+            {renderOfflineSheetBody()}
           </View>
-          {toggleError && <Text style={styles.errorText}>{toggleError}</Text>}
-          <TouchableOpacity
-            style={styles.backHomeButton}
-            activeOpacity={0.8}
-            onPress={goBackToHome}
-          >
-            <Text style={styles.backHomeButtonText}>Volver al inicio</Text>
-          </TouchableOpacity>
-        </View>
+        </BottomSheet>
       )}
 
       <SideMenu visible={menuVisible} onClose={() => setMenuVisible(false)} menuItems={menuItems} />
 
       {isOffCenter && (
         <TouchableOpacity
-          style={styles.recenterButton}
+          style={[styles.recenterButton, { bottom: recenterBottom }]}
           onPress={handleRecenter}
           activeOpacity={0.8}
         >
@@ -408,60 +567,73 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
   },
-  ctaTitle: {
-    fontSize: theme.fontSize.lg,
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.deepBlue,
-    textAlign: 'center',
+  goHint: {
+    position: 'absolute',
+    left: theme.spacing.md,
+    right: theme.spacing.md,
+    top: '58%',
+    zIndex: 7,
+    alignItems: 'center',
   },
-  ctaSubtitle: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.mediumGray,
+  reviewBannerText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.dangerRed,
     textAlign: 'center',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    padding: theme.spacing.sm,
+    borderRadius: theme.radius.sm,
+    overflow: 'hidden',
   },
   sheetContent: {
     flex: 1,
     paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.md,
     alignItems: 'center',
     gap: theme.spacing.xs,
   },
-  offlineBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: theme.colors.white,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.lg,
-    paddingBottom: theme.spacing.xl,
-    zIndex: 20,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    gap: theme.spacing.md,
-  },
-  offlineBarContent: {
+  pillRow: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.md,
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.xs,
   },
-  offlineBarText: {
-    flex: 1,
-    gap: 2,
-  },
-  offlineBarTitle: {
+  pillLabel: {
     fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.mediumGray,
+  },
+  pillAmount: {
+    fontSize: theme.fontSize.xl,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
   },
-  offlineBarSubtitle: {
+  pillSkeleton: {
+    width: 96,
+    height: 28,
+  },
+  pillRetry: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.turquoise,
+  },
+  expandedBlock: {
+    width: '100%',
+    gap: theme.spacing.sm,
+  },
+  expandedAmount: {
+    fontSize: theme.fontSize['3xl'],
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.deepBlue,
+    textAlign: 'center',
+  },
+  expandedSkeleton: {
+    width: '100%',
+    height: 120,
+  },
+  earningsSubtext: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
+    textAlign: 'center',
   },
   toggleRow: {
     flexDirection: 'row',
@@ -475,11 +647,6 @@ const styles = StyleSheet.create({
   },
   statusOnlineTime: {
     fontSize: theme.fontSize.xs,
-    color: theme.colors.mediumGray,
-  },
-  statusOffline: {
-    fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
     color: theme.colors.mediumGray,
   },
   errorText: {
@@ -529,22 +696,8 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.bold,
   },
-  backHomeButton: {
-    marginTop: theme.spacing.md,
-    backgroundColor: theme.colors.deepBlue,
-    borderRadius: theme.radius.buttonRadius,
-    height: theme.dimensions.buttonHeight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backHomeButtonText: {
-    color: theme.colors.white,
-    fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
-  },
   recenterButton: {
     position: 'absolute',
-    bottom: 200,
     right: theme.spacing.md,
     width: 48,
     height: 48,
@@ -565,9 +718,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.colors.lightGray,
     gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
   },
   mapLoadingText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
+  },
+  mapErrorText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.dangerRed,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    marginTop: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radius.buttonRadius,
+    backgroundColor: theme.colors.turquoise,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  retryBtnText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.white,
   },
 });

@@ -45,7 +45,7 @@ export const DistrictTermsScreen: React.FC = () => {
     try {
       setSubmitting(true);
       await apiClient.put('/drivers/me/district', { district_id: districtId });
-      navigation.replace('Online');
+      navigation.replace('Active');
     } catch (err: any) {
       const message =
         err?.error?.message ??
