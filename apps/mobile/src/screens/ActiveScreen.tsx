@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect } from 'expo-router';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -21,6 +22,7 @@ import { BottomSheet } from '../components/BottomSheet';
 import { GoButton } from '../components/GoButton';
 import { MapView } from '../components/MapView';
 import { Navbar } from '../components/Navbar';
+import { PayoutMethodGateModal } from '../components/PayoutMethodGateModal';
 import { SideMenu } from '../components/SideMenu';
 import { Toggle } from '../components/Toggle';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
@@ -28,6 +30,7 @@ import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
+import { usePayoutMethodGate } from '../hooks/usePayoutMethodGate';
 import { shouldShowPlatformDebt } from '../lib/commission';
 import { getCurrentPosition, stopTracking } from '../lib/location';
 import { useLocationStore } from '../store/locationStore';
@@ -123,6 +126,13 @@ export const ActiveScreen: React.FC = () => {
   });
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
+  const { needsPayoutMethod, refreshPayoutMethods } = usePayoutMethodGate(driverStatus);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshPayoutMethods();
+    }, [refreshPayoutMethods]),
+  );
 
   const {
     data: earnings,
@@ -138,6 +148,11 @@ export const ActiveScreen: React.FC = () => {
 
   const connect = useCallback(async () => {
     setToggleError(null);
+
+    if (needsPayoutMethod) {
+      setToggleError('Necesitamos tu medio de cobro (CBU/CVU + alias) antes de conectarte.');
+      return;
+    }
 
     if (documentsPendingReview) {
       setToggleError(
@@ -168,7 +183,7 @@ export const ActiveScreen: React.FC = () => {
     } finally {
       setConnecting(false);
     }
-  }, [documentsPendingReview, hasLocation, setOnline, setOnlineSince]);
+  }, [documentsPendingReview, hasLocation, needsPayoutMethod, setOnline, setOnlineSince]);
 
   const disconnect = useCallback(async () => {
     setToggleError(null);
@@ -446,7 +461,7 @@ export const ActiveScreen: React.FC = () => {
           <GoButton
             onPress={connect}
             loading={connecting}
-            disabled={!hasLocation || documentsPendingReview || connecting}
+            disabled={!hasLocation || documentsPendingReview || needsPayoutMethod || connecting}
           />
           {documentsPendingReview && (
             <View style={styles.goHint}>
@@ -531,6 +546,15 @@ export const ActiveScreen: React.FC = () => {
           <Ionicons name="locate-outline" size={24} color={theme.colors.turquoise} />
         </TouchableOpacity>
       )}
+
+      <PayoutMethodGateModal
+        visible={needsPayoutMethod && !isOnline}
+        onAddMethod={() => {
+          refreshPayoutMethods();
+          navigation.navigate('PaymentMethod');
+        }}
+        onLogout={() => signOut.mutate()}
+      />
     </View>
   );
 };
