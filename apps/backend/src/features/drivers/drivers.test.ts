@@ -620,19 +620,29 @@ describe('Document step completeness', () => {
   const phone = '+5492619999999';
   const password = 'testPass123';
 
-  test('status stays in documents step until all 8 doc types uploaded', async () => {
+  // Canonical required set (no background_check_back — single-sided cert).
+  test('DOC_TYPES matches mobile-aligned canonical set', () => {
+    expect([...DOC_TYPES].sort()).toEqual(
+      [
+        'background_check_front',
+        'insurance_back',
+        'insurance_front',
+        'license_back',
+        'license_front',
+        'registration_back',
+        'registration_front',
+        'rndg_front',
+      ].sort(),
+    );
+    expect(DOC_TYPES).not.toContain('background_check_back');
+  });
+
+  test('status stays in documents step until all required doc types uploaded', async () => {
     const { token, driverId } = await fullOnboarding(phone, password);
-    const seven = [
-      'license_front',
-      'license_back',
-      'registration_front',
-      'registration_back',
-      'insurance_front',
-      'insurance_back',
-      'background_check_front',
-    ];
+    // All required except rndg_front → still documents.
+    const incomplete = DOC_TYPES.filter((t) => t !== 'rndg_front');
     await getDb().insert(driverDocuments).values(
-      seven.map((doc_type) => ({
+      incomplete.map((doc_type) => ({
         driver_id: driverId,
         doc_type,
         file_url: 'https://x.com/f.png',
@@ -651,7 +661,7 @@ describe('Document step completeness', () => {
   test('duplicate doc types do not complete the documents step', async () => {
     const { token, driverId } = await fullOnboarding(phone, password);
     await getDb().insert(driverDocuments).values(
-      Array.from({ length: 8 }, () => ({
+      Array.from({ length: DOC_TYPES.length }, () => ({
         driver_id: driverId,
         doc_type: 'license_front',
         file_url: 'https://x.com/f.png',
@@ -667,7 +677,7 @@ describe('Document step completeness', () => {
     expect(data.step).toBe('documents');
   });
 
-  test('all distinct doc types move driver to review', async () => {
+  test('all distinct required doc types move driver to review', async () => {
     const { token, driverId } = await fullOnboarding(phone, password);
     await getDb().insert(driverDocuments).values(
       DOC_TYPES.map((doc_type) => ({
@@ -684,6 +694,41 @@ describe('Document step completeness', () => {
     );
     const data = await res.json();
     expect(data.step).toBe('review');
+  });
+
+  test('last required upload via addDocument sets status=review', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    const allButLast = DOC_TYPES.slice(0, -1);
+    const last = DOC_TYPES[DOC_TYPES.length - 1]!;
+
+    await getDb().insert(driverDocuments).values(
+      allButLast.map((doc_type) => ({
+        driver_id: driverId,
+        doc_type,
+        file_url: 'https://x.com/f.png',
+      })),
+    );
+
+    const before = await request('GET', '/api/drivers/me/status', undefined, token);
+    expect(before.data.step).toBe('documents');
+
+    const { status, data } = await request(
+      'POST',
+      '/api/drivers/me/documents',
+      { doc_type: last, file_url: 'https://x.com/last.png' },
+      token,
+    );
+    expect(status).toBe(200);
+    expect(data.step).toBe('review');
+    expect(data.status).toBe('under_review');
+
+    const [driver] = await getDb()
+      .select({ status: drivers.status, admin_review_status: drivers.admin_review_status })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(driver!.status).toBe('review');
+    expect(driver!.admin_review_status).toBe('pending');
   });
 });
 
