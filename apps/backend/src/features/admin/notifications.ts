@@ -187,7 +187,10 @@ async function gatherDriverData(driverId: string): Promise<{
 export async function notifyAdminNewDriver(driverId: string): Promise<void> {
   try {
     const data = await gatherDriverData(driverId);
-    if (!data) return;
+    if (!data) {
+      logger.warn('[ADMIN-NOTIFY] Skipped new-driver email: driver data not found', { driverId });
+      return;
+    }
 
     const token = generateApprovalToken();
     await db.update(drivers).set({ approval_token: token }).where(eq(drivers.id, driverId));
@@ -203,7 +206,9 @@ export async function notifyAdminNewDriver(driverId: string): Promise<void> {
     ]);
 
     if (recipients.size === 0) {
-      logger.info('[ADMIN-NOTIFY] No admin recipients configured');
+      logger.warn('[ADMIN-NOTIFY] No admin recipients configured — new-driver email skipped', {
+        driverId,
+      });
       return;
     }
 
@@ -237,9 +242,23 @@ ${docsHtml}
 <br/><br/>
 <p style="color:#888;font-size:12px">ID: ${driverId}</p>`;
 
+    logger.info('[ADMIN-NOTIFY] Sending new-driver email', {
+      driverId,
+      recipients: recipients.size,
+    });
+
+    let sent = 0;
     for (const email of recipients) {
-      await sendEmail(email, subject, html);
+      const ok = await sendEmail(email, subject, html);
+      if (ok) sent += 1;
+      else logger.error('[ADMIN-NOTIFY] Failed to send new-driver email to recipient', { email });
     }
+
+    logger.info('[ADMIN-NOTIFY] New-driver email result', {
+      driverId,
+      sent,
+      total: recipients.size,
+    });
   } catch (err) {
     logger.error('[ADMIN-NOTIFY] Failed to send', (err as Error).message);
   }

@@ -456,7 +456,13 @@ export const driversService = {
         .set({ status: 'review', admin_review_status: 'pending', updated_at: new Date() })
         .where(eq(drivers.id, driver.id));
 
-      notifyAdminNewDriver(driver.id);
+      void notifyAdminNewDriver(driver.id);
+    } else if (!hasAllRequiredDocs(docsList)) {
+      logger.info('[DOCS] Docs incomplete — not entering review / notifying admin', {
+        driverId: driver.id,
+        uploaded: docsList.map((d) => d.doc_type).sort(),
+        missing: DOC_TYPES.filter((t) => !docsList.some((d) => d.doc_type === t)),
+      });
     }
 
     const result = await this.getMyStatus(user);
@@ -521,7 +527,13 @@ export const driversService = {
         .set({ status: 'review', admin_review_status: 'pending', updated_at: new Date() })
         .where(eq(drivers.id, driver.id));
 
-      notifyAdminNewDriver(driver.id);
+      void notifyAdminNewDriver(driver.id);
+    } else if (!hasAllRequiredDocs(docsList)) {
+      logger.info('[DOCS] Docs incomplete — not entering review / notifying admin', {
+        driverId: driver.id,
+        uploaded: docsList.map((d) => d.doc_type).sort(),
+        missing: DOC_TYPES.filter((t) => !docsList.some((d) => d.doc_type === t)),
+      });
     }
 
     return { file_url: fileUrl };
@@ -681,7 +693,7 @@ export const driversService = {
         docType,
       });
 
-      notifyAdminNewDriver(driver.id);
+      void notifyAdminNewDriver(driver.id);
     }
 
     return {

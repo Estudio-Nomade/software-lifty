@@ -10,12 +10,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { ApiError } from '../api/types';
+import { getValidated } from '../api/client';
+import { ApiError, driverStatusSchema } from '../api/types';
 import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
+import { resolveReviewGate } from '../lib/reviewGate';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 import { compressImage } from '../utils/image';
@@ -71,6 +73,8 @@ export const OnboardingStep2Screen: React.FC = () => {
     background_check: initialSideState(),
     rndg: initialSideState(),
   });
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const allUploaded = Object.entries(docs).every(([docType, doc]) =>
     DOC_SIDES[docType as DocType].every((side) => doc[side].uploaded),
@@ -213,8 +217,24 @@ export const OnboardingStep2Screen: React.FC = () => {
     }));
   }, []);
 
-  const handleVerify = useCallback(() => {
-    navigation.navigate('WaitingApproval');
+  const handleVerify = useCallback(async () => {
+    setVerifying(true);
+    setVerifyError(null);
+    try {
+      const status = await getValidated('/drivers/me/status', driverStatusSchema);
+      const gate = resolveReviewGate(status.step);
+      if (!gate.ok) {
+        setVerifyError(gate.message);
+        return;
+      }
+      navigation.navigate('WaitingApproval');
+    } catch (err: unknown) {
+      setVerifyError(
+        err instanceof Error ? err.message : 'No pudimos verificar tu estado. Reintenta.',
+      );
+    } finally {
+      setVerifying(false);
+    }
   }, [navigation]);
 
   return (
@@ -291,11 +311,13 @@ export const OnboardingStep2Screen: React.FC = () => {
           </View>
         ))}
 
+        {verifyError ? <Text style={styles.verifyError}>{verifyError}</Text> : null}
+
         <Button
-          title="ENVIAR DOCUMENTOS"
+          title={verifying ? 'VERIFICANDO…' : 'ENVIAR DOCUMENTOS'}
           onPress={handleVerify}
           style={styles.button}
-          disabled={!allUploaded}
+          disabled={!allUploaded || verifying}
         />
       </ScrollView>
     </View>
@@ -399,6 +421,12 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xs,
     color: theme.colors.turquoise,
     fontWeight: theme.fontWeight.medium,
+  },
+  verifyError: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.dangerRed,
+    textAlign: 'center',
+    width: 343,
   },
   button: {
     width: 343,
