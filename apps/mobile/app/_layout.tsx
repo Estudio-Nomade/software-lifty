@@ -20,7 +20,6 @@ import { TabBarProvider, useTabBar } from '../src/context/TabBarContext';
 import { useAppNavigation } from '../src/hooks/useAppNavigation';
 import { queryClient } from '../src/lib/queryClient';
 import { isTabBarRoute } from '../src/lib/tabBarRoutes';
-import { useOnlineStore } from '../src/store/onlineStore';
 import { theme } from '../src/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -28,12 +27,11 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 function TabBarShell() {
   const { activeTab, setActiveTab } = useTabBar();
   const navigation = useAppNavigation();
-  const isOnline = useOnlineStore((s) => s.isOnline);
   const pathname = usePathname();
 
   const handleTabPress = (tab: TabKey) => {
     setActiveTab(tab);
-    if (tab === 'home') navigation.navigate(isOnline ? 'Active' : 'Online');
+    if (tab === 'home') navigation.navigate('Active');
     if (tab === 'earnings') navigation.navigate('Earnings');
     if (tab === 'trips') navigation.navigate('TripHistory');
     if (tab === 'profile') navigation.navigate('Profile');

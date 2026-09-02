@@ -54,7 +54,7 @@ export const TripCancelledScreen: React.FC = () => {
 
   const goHome = () => {
     clearTrip();
-    navigation.replace('Online');
+    navigation.replace('Active');
   };
 
   return (

@@ -13,13 +13,11 @@ import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { shouldShowPlatformDebt } from '../lib/commission';
-import { useOnlineStore } from '../store/onlineStore';
 import { theme } from '../theme';
 
 export const EarningsScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const signOut = useSignOut();
-  const isOnline = useOnlineStore((s) => s.isOnline);
   const { setActiveTab } = useTabBar();
   const [menuVisible, setMenuVisible] = React.useState(false);
 
@@ -42,7 +40,7 @@ export const EarningsScreen: React.FC = () => {
       {
         label: 'Inicio',
         icon: 'home-outline' as const,
-        onPress: () => navigation.navigate(isOnline ? 'Active' : 'Online'),
+        onPress: () => navigation.navigate('Active'),
       },
       {
         label: 'Ganancias',
@@ -72,7 +70,7 @@ export const EarningsScreen: React.FC = () => {
         dividerTop: true,
       },
     ],
-    [navigation, signOut, isOnline],
+    [navigation, signOut],
   );
 
   const formatCurrency = (amount: number) =>

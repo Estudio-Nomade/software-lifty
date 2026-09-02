@@ -86,7 +86,7 @@ export function handleNotificationResponse(
       navigate('Profile');
       break;
     case 'kyc:approved':
-      navigate('Online');
+      navigate('Active');
       break;
     case 'kyc:rejected':
       navigate('WaitingApproval');
@@ -102,7 +102,7 @@ export function handleNotificationResponse(
       break;
     }
     case 'trip:rated':
-      navigate('Online');
+      navigate('Active');
       break;
     default:
       break;

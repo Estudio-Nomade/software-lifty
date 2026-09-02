@@ -78,7 +78,7 @@ export function AuthRedirectWatcher() {
     // accepting a trip: `setActiveTrip` → `replace('Navigation')`). A trip in
     // any active status is authoritative regardless of its `updated_at` age.
     if (hasActiveTrip(trip)) return;
-    replace('Online');
+    replace('Active');
   }, [sessionRestored, isAuthenticated, driverStatus, segments, trip, replace]);
 
   return null;
