@@ -28,6 +28,7 @@ import {
   formatStreetLabel,
   resolveAddressLabel,
 } from '../../utils/resolveAddressLabel';
+import { Platform } from 'react-native';
 
 describe('toMapCoordinate', () => {
   it('returns [lng, lat] MapLibre/GeoJSON order (not [lat, lng])', () => {
@@ -148,6 +149,49 @@ describe('requestFreshPosition (native path)', () => {
 
     expect(fix).toBeNull();
     expect(useLocationStore.getState().locationError).toMatch(/ubicación/i);
+  });
+});
+
+describe('requestFreshPosition (web insecure context)', () => {
+  const originalOS = Platform.OS;
+  const originalIsSecureContext = (globalThis as { isSecureContext?: boolean }).isSecureContext;
+  const originalLocation = (globalThis as { location?: unknown }).location;
+
+  const setWeb = (secure: boolean) => {
+    Object.defineProperty(Platform, 'OS', { value: 'web', configurable: true });
+    (globalThis as { isSecureContext?: boolean }).isSecureContext = secure;
+    (globalThis as { location?: unknown }).location = secure
+      ? { hostname: 'localhost' }
+      : { hostname: '192.168.0.153' };
+  };
+
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { value: originalOS, configurable: true });
+    (globalThis as { isSecureContext?: boolean }).isSecureContext = originalIsSecureContext;
+    (globalThis as { location?: unknown }).location = originalLocation;
+  });
+
+  it('fails fast with an honest secure-context message on LAN IP (no GPS spinner)', async () => {
+    useLocationStore.setState({ current: null, permissionGranted: false, locationError: null });
+    setWeb(false);
+
+    const fix = await requestFreshPosition();
+
+    expect(fix).toBeNull();
+    expect(useLocationStore.getState().current).toBeNull();
+    expect(useLocationStore.getState().locationError).toMatch(/bloquea el GPS/i);
+    expect(useLocationStore.getState().locationError).toMatch(/localhost:8083/);
+  });
+
+  it('does not report secure-context on localhost (secure origin)', async () => {
+    useLocationStore.setState({ current: null, permissionGranted: false, locationError: null });
+    setWeb(true);
+
+    // No navigator.geolocation in this runtime → generic denied message, not the LAN one.
+    const fix = await requestFreshPosition();
+
+    expect(fix).toBeNull();
+    expect(useLocationStore.getState().locationError).not.toMatch(/bloquea el GPS/i);
   });
 });
 
