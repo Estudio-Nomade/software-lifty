@@ -20,6 +20,8 @@ interface NavbarProps {
   avatarName?: string;
   avatarUrl?: string | null;
   style?: ViewStyle;
+  /** `bar` = solid full-width (default). `floating` = transparent chrome over map. */
+  variant?: 'bar' | 'floating';
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -35,16 +37,28 @@ export const Navbar: React.FC<NavbarProps> = ({
   avatarName,
   avatarUrl,
   style,
+  variant = 'bar',
 }) => {
   const insets = useSafeAreaInsets();
   const navigation = useAppNavigation();
+  const floating = variant === 'floating';
 
   const renderLeft = () => {
     if (leftElement) return leftElement;
     if (showHamburger) {
       return (
-        <TouchableOpacity onPress={onHamburgerPress} style={styles.iconButton}>
-          <Ionicons name="menu" size={24} color={theme.colors.white} />
+        <TouchableOpacity
+          onPress={onHamburgerPress}
+          style={[styles.iconButton, floating && styles.floatingControl]}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Abrir menú"
+        >
+          <Ionicons
+            name="menu"
+            size={24}
+            color={floating ? theme.colors.deepBlue : theme.colors.white}
+          />
         </TouchableOpacity>
       );
     }
@@ -78,16 +92,22 @@ export const Navbar: React.FC<NavbarProps> = ({
     <View
       style={[
         styles.container,
+        floating ? styles.floatingContainer : null,
         {
-          backgroundColor,
+          backgroundColor: floating ? 'transparent' : backgroundColor,
           paddingTop: insets.top,
           height: theme.dimensions.navbarHeight + insets.top,
         },
         style,
       ]}
+      pointerEvents="box-none"
     >
       {renderLeft()}
-      {title ? <Text style={styles.title}>{title}</Text> : <View style={{ flex: 1 }} />}
+      {title && !floating ? (
+        <Text style={styles.title}>{title}</Text>
+      ) : (
+        <View style={{ flex: 1 }} />
+      )}
       {renderRight()}
     </View>
   );
@@ -101,6 +121,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing.md,
     width: '100%',
+  },
+  floatingContainer: {
+    backgroundColor: 'transparent',
+  },
+  floatingControl: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 44,
+    padding: 0,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
   },
   backButton: {
     padding: theme.spacing.xs,
