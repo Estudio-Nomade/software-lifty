@@ -538,7 +538,7 @@ export const ActiveScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   headerOverlay: {
     position: 'absolute',
@@ -716,7 +716,7 @@ const styles = StyleSheet.create({
     ...(StyleSheet.absoluteFill as object),
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,
   },
