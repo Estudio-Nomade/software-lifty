@@ -29,7 +29,92 @@ async function retry<T>(fn: () => Promise<T>, attempts = 3, delayMs = 1000): Pro
   throw new Error('Unreachable');
 }
 
-export async function uploadFile(file: File, path: string): Promise<string> {
+const MIME_EXT: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'application/pdf': 'pdf',
+};
+
+const EXT_MIME: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  pdf: 'application/pdf',
+};
+
+/** Ops-friendly folder label from full_name; path-safe, keeps spaces. */
+export function sanitizeDriverFolderName(fullName: string | null | undefined): string {
+  const cleaned = (fullName ?? '')
+    .normalize('NFC')
+    .split('')
+    .map((ch) => {
+      const code = ch.charCodeAt(0);
+      if (code < 32 || '/\\?%*:|"<>'.includes(ch)) return ' ';
+      return ch;
+    })
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 40)
+    .replace(/\.+$/g, '')
+    .trim();
+  return cleaned.length > 0 ? cleaned : 'sin-nombre';
+}
+
+export function extensionForMime(mime: string | null | undefined): string {
+  if (!mime) return 'jpg';
+  const base = mime.split(';')[0]?.trim().toLowerCase() ?? '';
+  return MIME_EXT[base] ?? 'jpg';
+}
+
+export function contentTypeForFile(file: { type?: string; name?: string }): string {
+  const raw = file.type?.split(';')[0]?.trim().toLowerCase();
+  if (raw && MIME_EXT[raw]) return raw === 'image/jpg' ? 'image/jpeg' : raw;
+  const name = file.name ?? '';
+  const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : undefined;
+  if (ext && EXT_MIME[ext]) return EXT_MIME[ext];
+  return 'image/jpeg';
+}
+
+export function buildDriverDocumentPath(opts: {
+  fullName: string | null | undefined;
+  driverId: string;
+  docType: string;
+  file: { type?: string; name?: string };
+  now?: number;
+}): string {
+  const folder = sanitizeDriverFolderName(opts.fullName);
+  const shortId = opts.driverId.slice(0, 8);
+  const ext = extensionForMime(contentTypeForFile(opts.file));
+  const ts = opts.now ?? Date.now();
+  return `drivers/${folder}_${shortId}/${opts.docType}-${ts}.${ext}`;
+}
+
+export function buildDriverAvatarPath(opts: {
+  fullName: string | null | undefined;
+  ownerId: string;
+  file: { type?: string; name?: string };
+  now?: number;
+}): string {
+  const folder = sanitizeDriverFolderName(opts.fullName);
+  const shortId = opts.ownerId.slice(0, 8);
+  const ext = extensionForMime(contentTypeForFile(opts.file));
+  const ts = opts.now ?? Date.now();
+  return `avatars/${folder}_${shortId}-${ts}.${ext}`;
+}
+
+export type UploadFileOptions = {
+  contentType?: string;
+};
+
+export async function uploadFile(
+  file: File,
+  path: string,
+  options?: UploadFileOptions,
+): Promise<string> {
   const client = getClient();
   if (!client) {
     throw new Error(
@@ -37,8 +122,12 @@ export async function uploadFile(file: File, path: string): Promise<string> {
     );
   }
 
+  const contentType = options?.contentType ?? contentTypeForFile(file);
   const { data, error } = await retry(() =>
-    client.storage.from('driver-documents').upload(path, file, { upsert: true }),
+    client.storage.from('driver-documents').upload(path, file, {
+      upsert: true,
+      contentType,
+    }),
   );
   if (error) throw new Error(`Upload failed: ${error.message}`);
 
@@ -87,7 +176,7 @@ export function extractStoragePath(url: string | null): string | null {
 }
 
 export interface StorageProvider {
-  uploadFile(file: File, path: string): Promise<string>;
+  uploadFile(file: File, path: string, options?: UploadFileOptions): Promise<string>;
   deleteFile(path: string): Promise<void>;
   extractStoragePath(url: string | null): string | null;
 }
