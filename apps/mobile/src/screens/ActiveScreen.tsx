@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -20,13 +20,10 @@ import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
 import { GoButton } from '../components/GoButton';
 import { MapView } from '../components/MapView';
-import { Navbar } from '../components/Navbar';
-import { SideMenu } from '../components/SideMenu';
 import { Toggle } from '../components/Toggle';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
 import { shouldShowPlatformDebt } from '../lib/commission';
 import { getCurrentPosition, stopTracking } from '../lib/location';
@@ -73,13 +70,11 @@ export const ActiveScreen: React.FC = () => {
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const heatmapPoints = useHeatmapPolling();
-  const [menuVisible, setMenuVisible] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [onlineTime, setOnlineTime] = useState(0);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [recenterKey, setRecenterKey] = useState(0);
   const [retryingLocation, setRetryingLocation] = useState(false);
-  const signOut = useSignOut();
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
   const locationError = useLocationStore((s) => s.locationError);
@@ -210,53 +205,6 @@ export const ActiveScreen: React.FC = () => {
   const handleSnapChange = useCallback((index: number) => {
     setSheetExpanded(index === 1);
   }, []);
-
-  const menuItems = useMemo(
-    () => [
-      {
-        label: 'Inicio',
-        icon: 'home-outline' as const,
-        onPress: () => navigation.navigate('Active'),
-      },
-      {
-        label: 'Ganancias',
-        icon: 'wallet-outline' as const,
-        onPress: () => navigation.navigate('Earnings'),
-      },
-      {
-        label: 'Metodo de cobro',
-        icon: 'card-outline' as const,
-        onPress: () => navigation.navigate('PaymentMethod'),
-      },
-      {
-        label: 'Perfil',
-        icon: 'person-outline' as const,
-        onPress: () => navigation.navigate('Profile'),
-      },
-      {
-        label: 'Historial de viajes',
-        icon: 'document-text-outline' as const,
-        onPress: () => navigation.navigate('TripHistory'),
-      },
-      ...(isOnline
-        ? [
-            {
-              label: 'Desconectarse',
-              icon: 'power-outline' as const,
-              onPress: () => handleToggle(false),
-              dividerTop: true,
-            },
-          ]
-        : []),
-      {
-        label: 'Cerrar sesion',
-        icon: 'log-out-outline' as const,
-        onPress: () => signOut.mutateAsync(),
-        danger: true,
-      },
-    ],
-    [navigation, signOut, handleToggle, isOnline],
-  );
 
   const isOffCenter =
     mapCenter && hasLocation
@@ -410,37 +358,30 @@ export const ActiveScreen: React.FC = () => {
         </View>
       )}
 
-      <View style={styles.headerOverlay} pointerEvents="box-none">
-        <Navbar
-          variant="floating"
-          showHamburger
-          showBack={false}
-          onHamburgerPress={() => setMenuVisible(true)}
-          rightElement={
-            <View style={styles.headerRight}>
-              {isOnline && (
-                <TouchableOpacity
-                  style={styles.connectedBadge}
-                  activeOpacity={0.7}
-                  onPress={() => handleToggle(false)}
-                >
-                  <Text style={styles.connectedBadgeText}>Conectado</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.floatingAvatar}
-                activeOpacity={0.7}
-                onPress={() => navigation.navigate('Profile')}
-              >
-                <Avatar
-                  uri={profile?.avatar_url ?? null}
-                  name={profile?.full_name ?? ''}
-                  size={44}
-                />
-              </TouchableOpacity>
-            </View>
-          }
-        />
+      <View
+        style={[styles.headerOverlay, { paddingTop: insets.top + theme.spacing.sm }]}
+        pointerEvents="box-none"
+      >
+        <View style={styles.headerRight} pointerEvents="box-none">
+          {isOnline && (
+            <TouchableOpacity
+              style={styles.connectedBadge}
+              activeOpacity={0.7}
+              onPress={() => handleToggle(false)}
+            >
+              <Text style={styles.connectedBadgeText}>Conectado</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.floatingAvatar}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('Profile')}
+            accessibilityRole="button"
+            accessibilityLabel="Ir a perfil"
+          >
+            <Avatar uri={profile?.avatar_url ?? null} name={profile?.full_name ?? ''} size={44} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {!isOnline && (
@@ -522,8 +463,6 @@ export const ActiveScreen: React.FC = () => {
         </BottomSheet>
       )}
 
-      <SideMenu visible={menuVisible} onClose={() => setMenuVisible(false)} menuItems={menuItems} />
-
       {isOffCenter && (
         <TouchableOpacity
           style={[styles.recenterButton, { bottom: recenterBottom }]}
@@ -548,6 +487,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+    paddingHorizontal: theme.spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
   },
   headerRight: {
     flexDirection: 'row',
@@ -569,10 +511,6 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
     fontSize: 12,
     fontWeight: theme.fontWeight.medium,
-  },
-  avatarButton: {
-    width: 44,
-    height: 44,
   },
   floatingAvatar: {
     width: 44,
