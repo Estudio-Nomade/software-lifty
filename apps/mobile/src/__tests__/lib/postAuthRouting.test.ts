@@ -25,4 +25,13 @@ describe('routeForDriverStatus', () => {
     const r = routeForDriverStatus({ status: 'pending', step: 'kyc' });
     expect(r.screen).toBe('KYCVerify');
   });
+
+  it('routes approved drivers with district to Active home', () => {
+    const r = routeForDriverStatus({
+      status: 'approved',
+      step: 'approved',
+      has_district: true,
+    });
+    expect(r.screen).toBe('Active');
+  });
 });

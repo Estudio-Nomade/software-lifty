@@ -28,7 +28,6 @@ import { Text } from '../components/ui/Text';
 import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
-import { useOnlineStore } from '../store/onlineStore';
 import { theme } from '../theme';
 import { compressImage } from '../utils/image';
 import { uploadPhotoToBackend } from '../utils/upload';
@@ -128,7 +127,6 @@ function tvfTone(pct: number): string {
 export const ProfileScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const signOut = useSignOut();
-  const isOnline = useOnlineStore((s) => s.isOnline);
   const { setActiveTab } = useTabBar();
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -179,7 +177,7 @@ export const ProfileScreen: React.FC = () => {
       {
         label: 'Inicio',
         icon: 'home-outline' as const,
-        onPress: () => navigation.navigate(isOnline ? 'Active' : 'Online'),
+        onPress: () => navigation.navigate('Active'),
       },
       {
         label: 'Ganancias',
@@ -209,7 +207,7 @@ export const ProfileScreen: React.FC = () => {
         dividerTop: true,
       },
     ],
-    [navigation, signOut, isOnline],
+    [navigation, signOut],
   );
 
   const openEdit = () => {

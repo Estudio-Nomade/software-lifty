@@ -127,7 +127,7 @@ export const IncomingRequestScreen: React.FC = () => {
         .catch(() => {})
         .finally(() => {
           if (acceptingRef.current) return;
-          navigation.navigate('Online');
+          navigation.navigate('Active');
         });
       return;
     }
@@ -227,7 +227,7 @@ export const IncomingRequestScreen: React.FC = () => {
     try {
       await apiClient.post(`/trips/${trip.id}/reject`);
     } catch {}
-    navigation.navigate('Online');
+    navigation.navigate('Active');
   };
 
   return (

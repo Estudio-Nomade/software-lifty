@@ -57,7 +57,7 @@ export const UnderReviewScreen: React.FC = () => {
         useNativeDriver: true,
       }).start();
       const timer = setTimeout(() => {
-        navigation.replace('Online');
+        navigation.replace('Active');
       }, 1500);
       return () => clearTimeout(timer);
     }

@@ -22,7 +22,7 @@ export const STEP_ROUTE: Record<string, StepRoute> = {
   vehicle: { screen: 'OnboardingVehicle', storeStatus: 'pending' },
   documents: { screen: 'OnboardingStep2', storeStatus: 'pending' },
   review: { screen: 'WaitingApproval', storeStatus: 'under_review' },
-  approved: { screen: 'Online', storeStatus: 'approved' },
+  approved: { screen: 'Active', storeStatus: 'approved' },
 };
 
 /**
@@ -58,7 +58,7 @@ export function routeForDriverStatus(driverData: DriverStatus): {
 
   if (status === 'approved') {
     if (!has_district) return { screen: 'SelectProvince', status: 'approved' };
-    return { screen: 'Online', status: 'approved' };
+    return { screen: 'Active', status: 'approved' };
   }
   if (status === 'under_review') return { screen: 'WaitingApproval', status: 'under_review' };
 

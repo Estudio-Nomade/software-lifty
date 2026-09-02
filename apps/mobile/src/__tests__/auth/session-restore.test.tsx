@@ -68,7 +68,7 @@ describe('AuthRedirectWatcher', () => {
     expect(mockRouterReplace).not.toHaveBeenCalled();
   });
 
-  test('redirects to /online when authenticated on a public route', async () => {
+  test('redirects to /active when authenticated on a public route', async () => {
     mockIsAuthenticated = true;
     mockSegments = [''];
     mockDriverStatus = 'approved';
@@ -78,21 +78,21 @@ describe('AuthRedirectWatcher', () => {
       render(React.createElement(AuthRedirectWatcher));
     });
 
-    expect(mockRouterReplace).toHaveBeenCalledWith('/online');
+    expect(mockRouterReplace).toHaveBeenCalledWith('/active');
   });
 
-  test('does not redirect to /online when authenticated on a private route', async () => {
+  test('does not redirect to /active when authenticated on a private route', async () => {
     mockIsAuthenticated = true;
-    mockSegments = ['online'];
+    mockSegments = ['active'];
 
     await act(async () => {
       render(React.createElement(AuthRedirectWatcher));
     });
 
-    expect(mockRouterReplace).not.toHaveBeenCalledWith('/online');
+    expect(mockRouterReplace).not.toHaveBeenCalledWith('/active');
   });
 
-  test('redirects to /online when approved on a trip route without a live trip', async () => {
+  test('redirects to /active when approved on a trip route without a live trip', async () => {
     mockIsAuthenticated = true;
     mockDriverStatus = 'approved';
     mockSegments = ['waiting-passenger'];
@@ -102,7 +102,7 @@ describe('AuthRedirectWatcher', () => {
       render(React.createElement(AuthRedirectWatcher));
     });
 
-    expect(mockRouterReplace).toHaveBeenCalledWith('/online');
+    expect(mockRouterReplace).toHaveBeenCalledWith('/active');
   });
 
   test('does not redirect when approved on a trip route with a live trip', async () => {
@@ -120,7 +120,7 @@ describe('AuthRedirectWatcher', () => {
       render(React.createElement(AuthRedirectWatcher));
     });
 
-    expect(mockRouterReplace).not.toHaveBeenCalledWith('/online');
+    expect(mockRouterReplace).not.toHaveBeenCalledWith('/active');
   });
 
   test('does not redirect after accepting a trip (accepted trip on navigation route)', async () => {
@@ -138,7 +138,7 @@ describe('AuthRedirectWatcher', () => {
       render(React.createElement(AuthRedirectWatcher));
     });
 
-    expect(mockRouterReplace).not.toHaveBeenCalledWith('/online');
+    expect(mockRouterReplace).not.toHaveBeenCalledWith('/active');
   });
 
   test('does not redirect off a trip route when the trip is stale but still active', async () => {
@@ -158,7 +158,7 @@ describe('AuthRedirectWatcher', () => {
       render(React.createElement(AuthRedirectWatcher));
     });
 
-    expect(mockRouterReplace).not.toHaveBeenCalledWith('/online');
+    expect(mockRouterReplace).not.toHaveBeenCalledWith('/active');
   });
 
   test('does not redirect a non-approved driver off a trip route', async () => {
@@ -171,7 +171,7 @@ describe('AuthRedirectWatcher', () => {
       render(React.createElement(AuthRedirectWatcher));
     });
 
-    expect(mockRouterReplace).not.toHaveBeenCalledWith('/online');
+    expect(mockRouterReplace).not.toHaveBeenCalledWith('/active');
   });
 
   test('redirects to / exactly once when needsRedirect is set', async () => {
@@ -209,7 +209,7 @@ describe('AuthRedirectWatcher', () => {
       render(React.createElement(AuthRedirectWatcher));
     });
 
-    expect(mockRouterReplace).toHaveBeenCalledWith('/online');
+    expect(mockRouterReplace).toHaveBeenCalledWith('/active');
     expect(mockRouterReplace).toHaveBeenCalledTimes(1);
   });
 });

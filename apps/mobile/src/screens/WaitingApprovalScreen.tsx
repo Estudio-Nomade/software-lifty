@@ -33,7 +33,7 @@ export const WaitingApprovalScreen: React.FC = () => {
         <Button
           title="Saltar >> Online (DEV)"
           variant="cta"
-          onPress={() => navigation.replace('Online')}
+          onPress={() => navigation.replace('Active')}
           style={styles.exitButton}
         />
       )}
