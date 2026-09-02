@@ -12,22 +12,34 @@ import { getDb, resetDb } from '../../shared/db/client';
 import { districts, driverDocuments, driverLocations, drivers, users, vehicles } from '../../shared/db/schema';
 import { DOC_TYPES } from '../../shared/lib/documents';
 import { getRedis } from '../../shared/lib/redis';
-import { extractStoragePath, type StorageProvider } from '../../shared/lib/storage';
+import {
+  buildDriverAvatarPath,
+  buildDriverDocumentPath,
+  contentTypeForFile,
+  extensionForMime,
+  extractStoragePath,
+  sanitizeDriverFolderName,
+  type StorageProvider,
+} from '../../shared/lib/storage';
 import { createTestToken } from '../../shared/testing/utils';
 import { setStorageForTesting } from './service';
 
 interface TestStorage extends StorageProvider {
   uploaded: Map<string, string>;
   deleted: string[];
+  lastUploadOptions: Array<{ path: string; contentType?: string }>;
 }
 
 function createTestStorage() {
   const uploaded = new Map<string, string>();
   const deleted: string[] = [];
+  const lastUploadOptions: Array<{ path: string; contentType?: string }> = [];
   const storage: TestStorage = {
     uploaded,
     deleted,
-    async uploadFile(_file: File, path: string) {
+    lastUploadOptions,
+    async uploadFile(_file: File, path: string, options?: { contentType?: string }) {
+      lastUploadOptions.push({ path, contentType: options?.contentType });
       const url = `https://example.supabase.co/storage/v1/object/public/driver-documents/${path}`;
       uploaded.set(path, url);
       return url;
@@ -806,6 +818,92 @@ describe('extractStoragePath', () => {
       'https://abc.supabase.co/storage/v1/object/sign/driver-documents/drivers/doc-123',
     );
     expect(path).toBe('drivers/doc-123');
+  });
+});
+
+describe('driver storage path naming', () => {
+  test('sanitizeDriverFolderName keeps readable full name and strips path junk', () => {
+    expect(sanitizeDriverFolderName('  Juan Pérez  ')).toBe('Juan Pérez');
+    expect(sanitizeDriverFolderName('A/B\\C?D*E')).toBe('A B C D E');
+    expect(sanitizeDriverFolderName('')).toBe('sin-nombre');
+    expect(sanitizeDriverFolderName(null)).toBe('sin-nombre');
+    expect(sanitizeDriverFolderName('x'.repeat(80)).length).toBe(40);
+  });
+
+  test('extensionForMime and contentTypeForFile map common types', () => {
+    expect(extensionForMime('image/jpeg')).toBe('jpg');
+    expect(extensionForMime('application/pdf')).toBe('pdf');
+    expect(contentTypeForFile({ type: 'image/png', name: 'x.bin' })).toBe('image/png');
+    expect(contentTypeForFile({ type: '', name: 'doc.pdf' })).toBe('application/pdf');
+  });
+
+  test('buildDriverDocumentPath uses full name + short uuid + ext', () => {
+    const path = buildDriverDocumentPath({
+      fullName: 'María Nóbile',
+      driverId: 'fea758fb-4fb5-4b80-b77b-16376d433473',
+      docType: 'license_front',
+      file: { type: 'image/jpeg', name: 'photo.jpg' },
+      now: 1700000000000,
+    });
+    expect(path).toBe('drivers/María Nóbile_fea758fb/license_front-1700000000000.jpg');
+  });
+
+  test('buildDriverAvatarPath uses full name + short id + ext', () => {
+    const path = buildDriverAvatarPath({
+      fullName: 'Juan Perez',
+      ownerId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+      file: { type: 'image/png', name: 'a.png' },
+      now: 100,
+    });
+    expect(path).toBe('avatars/Juan Perez_aaaaaaaa-100.png');
+  });
+
+  test('POST /me/documents/upload stores path with driver name folder and contentType', async () => {
+    const phone = '+5492614444001';
+    const { token, driverId } = await fullOnboarding(phone, 'testPass123');
+    const testStorage = createTestStorage();
+    setStorageForTesting(testStorage);
+
+    const formData = new FormData();
+    formData.append('file', new Blob(['jpeg-bytes'], { type: 'image/jpeg' }), 'license.jpg');
+    formData.append('doc_type', 'license_front');
+    const res = await app.handle(
+      new Request('http://localhost/api/drivers/me/documents/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      }),
+    );
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.file_url).toContain('drivers/Juan Perez_');
+    expect(data.file_url).toContain(`${driverId.slice(0, 8)}/license_front-`);
+    expect(data.file_url).toMatch(/\.jpg$/);
+
+    const uploadedPath = [...testStorage.uploaded.keys()][0]!;
+    expect(uploadedPath.startsWith(`drivers/Juan Perez_${driverId.slice(0, 8)}/`)).toBe(true);
+    expect(testStorage.lastUploadOptions[0]?.contentType).toBe('image/jpeg');
+  });
+
+  test('POST /me/photo uses named avatar path', async () => {
+    const { token, driverId } = await fullOnboarding('+5492614444002', 'testPass123');
+    const testStorage = createTestStorage();
+    setStorageForTesting(testStorage);
+
+    const formData = new FormData();
+    formData.append('file', new Blob(['image-data'], { type: 'image/png' }), 'avatar.png');
+    const res = await app.handle(
+      new Request('http://localhost/api/drivers/me/photo', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      }),
+    );
+    const data = await res.json();
+    expect(res.status).toBe(200);
+    expect(data.file_url).toContain(`avatars/Juan Perez_${driverId.slice(0, 8)}-`);
+    expect(data.file_url).toMatch(/\.png$/);
+    expect(testStorage.lastUploadOptions[0]?.contentType).toBe('image/png');
   });
 });
 

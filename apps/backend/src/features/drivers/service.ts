@@ -12,7 +12,13 @@ import {
 import { DOC_TYPES } from '../../shared/lib/documents';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { logger } from '../../shared/lib/logger';
-import { type StorageProvider, supabaseStorage } from '../../shared/lib/storage';
+import {
+  type StorageProvider,
+  buildDriverAvatarPath,
+  buildDriverDocumentPath,
+  contentTypeForFile,
+  supabaseStorage,
+} from '../../shared/lib/storage';
 
 let _storage: StorageProvider = supabaseStorage;
 
@@ -475,8 +481,14 @@ export const driversService = {
     }
 
     const [driver] = await db
-      .select({ id: drivers.id, status: drivers.status, kyc_status: drivers.kyc_status })
+      .select({
+        id: drivers.id,
+        status: drivers.status,
+        kyc_status: drivers.kyc_status,
+        full_name: users.full_name,
+      })
       .from(drivers)
+      .innerJoin(users, eq(users.id, drivers.user_id))
       .where(eq(drivers.user_id, user.id))
       .limit(1);
 
@@ -490,8 +502,14 @@ export const driversService = {
       );
     }
 
-    const path = `${driver.id}/${docType}-${Date.now()}`;
-    const fileUrl = await _storage.uploadFile(file, path);
+    const contentType = contentTypeForFile(file);
+    const path = buildDriverDocumentPath({
+      fullName: driver.full_name,
+      driverId: driver.id,
+      docType,
+      file,
+    });
+    const fileUrl = await _storage.uploadFile(file, path, { contentType });
 
     await db
       .update(driverDocuments)
@@ -547,7 +565,7 @@ export const driversService = {
       .limit(1);
 
     const [currentUser] = await db
-      .select({ avatar_url: users.avatar_url })
+      .select({ avatar_url: users.avatar_url, full_name: users.full_name })
       .from(users)
       .where(eq(users.id, user.id))
       .limit(1);
@@ -557,8 +575,13 @@ export const driversService = {
       await _storage.deleteFile(oldPath);
     }
 
-    const path = `avatars/${driver?.id ?? user.id}-${Date.now()}`;
-    const fileUrl = await _storage.uploadFile(file, path);
+    const contentType = contentTypeForFile(file);
+    const path = buildDriverAvatarPath({
+      fullName: currentUser?.full_name,
+      ownerId: driver?.id ?? user.id,
+      file,
+    });
+    const fileUrl = await _storage.uploadFile(file, path, { contentType });
 
     await db
       .update(users)
@@ -604,8 +627,13 @@ export const driversService = {
     }
 
     const [driver] = await db
-      .select({ id: drivers.id, status: drivers.status })
+      .select({
+        id: drivers.id,
+        status: drivers.status,
+        full_name: users.full_name,
+      })
       .from(drivers)
+      .innerJoin(users, eq(users.id, drivers.user_id))
       .where(eq(drivers.user_id, user.id))
       .limit(1);
 
@@ -642,8 +670,14 @@ export const driversService = {
       }
     }
 
-    const path = `${driver.id}/${docType}-${Date.now()}`;
-    const fileUrl = await _storage.uploadFile(file, path);
+    const contentType = contentTypeForFile(file);
+    const path = buildDriverDocumentPath({
+      fullName: driver.full_name,
+      driverId: driver.id,
+      docType,
+      file,
+    });
+    const fileUrl = await _storage.uploadFile(file, path, { contentType });
 
     // Supersede any prior non-superseded doc of the same type.
     await db

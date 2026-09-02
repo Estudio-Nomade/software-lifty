@@ -25,7 +25,7 @@ function createTestStorage() {
   const storage: TestStorage = {
     uploaded,
     deleted,
-    async uploadFile(_file: File, path: string) {
+    async uploadFile(_file: File, path: string, _options?: { contentType?: string }) {
       const url = `https://example.supabase.co/storage/v1/object/public/driver-documents/${path}`;
       uploaded.set(path, url);
       return url;

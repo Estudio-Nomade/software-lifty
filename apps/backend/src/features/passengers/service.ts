@@ -154,7 +154,9 @@ export const passengersService = {
     }
 
     const path = `avatars/passenger-${user.id}-${Date.now()}`;
-    const fileUrl = await _storage.uploadFile(file, path);
+    const fileUrl = await _storage.uploadFile(file, path, {
+      contentType: file.type || 'image/jpeg',
+    });
 
     await db
       .update(users)
