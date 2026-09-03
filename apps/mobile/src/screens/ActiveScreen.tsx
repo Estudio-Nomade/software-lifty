@@ -131,6 +131,9 @@ export const ActiveScreen: React.FC = () => {
   });
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
+  const awaitingApproval =
+    driverStatus?.status === 'under_review' || driverStatus?.step === 'review';
+  const connectBlocked = documentsPendingReview || awaitingApproval;
 
   const {
     data: earnings,
@@ -156,6 +159,13 @@ export const ActiveScreen: React.FC = () => {
   const connect = useCallback(async () => {
     setToggleError(null);
     setConnectFeedback(null);
+
+    if (awaitingApproval) {
+      setToggleError(
+        'Tu cuenta está en revisión. Te avisamos cuando esté aprobada para que puedas conectarte.',
+      );
+      return;
+    }
 
     if (documentsPendingReview) {
       showConnectFeedback(feedbackForConnectBlock('docs_pending'));
@@ -184,7 +194,7 @@ export const ActiveScreen: React.FC = () => {
     } finally {
       setConnecting(false);
     }
-  }, [documentsPendingReview, hasLocation, setOnline, setOnlineSince, showConnectFeedback]);
+  }, [awaitingApproval, documentsPendingReview, hasLocation, setOnline, setOnlineSince]);
 
   const disconnect = useCallback(async () => {
     setToggleError(null);
@@ -458,7 +468,35 @@ export const ActiveScreen: React.FC = () => {
         />
       </View>
 
-      {!isOnline && <GoButton onPress={connect} loading={connecting} disabled={connecting} />}
+      {!isOnline && (
+        <>
+          <GoButton
+            onPress={connect}
+            loading={connecting}
+            disabled={!hasLocation || connectBlocked || connecting}
+          />
+          {awaitingApproval && (
+            <View style={styles.goHint}>
+              <Text style={styles.reviewBannerText}>
+                Cuenta en revisión. Podés mirar el mapa; te avisamos cuando puedas conectarte.
+              </Text>
+            </View>
+          )}
+          {!awaitingApproval && documentsPendingReview && (
+            <View style={styles.goHint}>
+              <Text style={styles.reviewBannerText}>
+                Documentos pendientes de revision. No podes conectarte hasta tener los papeles en
+                regla.
+              </Text>
+            </View>
+          )}
+          {toggleError && !isOnline && (
+            <View style={styles.goHint}>
+              <Text style={styles.errorText}>{toggleError}</Text>
+            </View>
+          )}
+        </>
+      )}
 
       {isOnline ? (
         <BottomSheet snapPoints={[onlineCollapsed, onlineExpanded]} onSnapChange={handleSnapChange}>

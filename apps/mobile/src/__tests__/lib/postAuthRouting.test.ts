@@ -7,6 +7,11 @@ describe('STEP_ROUTE order', () => {
     expect(STEP_ROUTE.vehicle.screen).toBe('OnboardingVehicle');
     expect(STEP_ROUTE.documents.screen).toBe('OnboardingStep2');
   });
+
+  it('sends review to Active map home', () => {
+    expect(STEP_ROUTE.review.screen).toBe('Active');
+    expect(STEP_ROUTE.review.storeStatus).toBe('under_review');
+  });
 });
 
 describe('routeForDriverStatus', () => {
@@ -33,5 +38,20 @@ describe('routeForDriverStatus', () => {
       has_district: true,
     });
     expect(r.screen).toBe('Active');
+  });
+
+  it('routes review step to Active (map home while awaiting approval)', () => {
+    const r = routeForDriverStatus({
+      status: 'under_review',
+      step: 'review',
+    });
+    expect(r.screen).toBe('Active');
+    expect(r.status).toBe('under_review');
+  });
+
+  it('routes under_review status without step to Active', () => {
+    const r = routeForDriverStatus({ status: 'under_review' });
+    expect(r.screen).toBe('Active');
+    expect(r.status).toBe('under_review');
   });
 });

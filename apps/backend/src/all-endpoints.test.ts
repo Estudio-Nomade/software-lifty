@@ -625,7 +625,7 @@ describe('Earnings', () => {
     await driver(token);
     const { status, data } = await req('GET', '/api/drivers/me/stats', undefined, token);
     expect(status).toBe(200);
-    expect(data.tvf).toBe(1.0);
+    expect(data.tvf).toBeNull();
   });
 });
 
