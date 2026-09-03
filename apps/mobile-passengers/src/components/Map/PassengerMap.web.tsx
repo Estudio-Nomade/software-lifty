@@ -180,6 +180,6 @@ const styles = StyleSheet.create({
     ...(StyleSheet.absoluteFillObject as object),
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
   },
 });

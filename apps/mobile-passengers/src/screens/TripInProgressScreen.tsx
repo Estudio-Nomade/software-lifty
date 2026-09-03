@@ -291,10 +291,10 @@ export function TripInProgressScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.lightGray },
+  safe: { flex: 1, backgroundColor: theme.colors.background },
   mapArea: {
     flex: 1,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
   },
   mapFill: {
     flex: 1,
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
   },
   codeCard: {
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     borderRadius: theme.radius.md,
     padding: theme.spacing.md,
     alignItems: 'center',

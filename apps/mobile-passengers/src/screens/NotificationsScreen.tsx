@@ -57,7 +57,7 @@ export function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.lightGray },
+  safe: { flex: 1, backgroundColor: theme.colors.background },
   header: {
     height: theme.dimensions.navbarHeight,
     backgroundColor: theme.colors.deepBlue,
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },

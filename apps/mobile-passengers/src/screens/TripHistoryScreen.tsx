@@ -206,7 +206,7 @@ export function TripHistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.lightGray },
+  safe: { flex: 1, backgroundColor: theme.colors.background },
   body: { flex: 1 },
   list: { flex: 1 },
   header: {

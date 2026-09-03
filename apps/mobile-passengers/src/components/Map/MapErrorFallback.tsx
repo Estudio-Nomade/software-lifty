@@ -23,7 +23,7 @@ const styles = StyleSheet.create({
   errorContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
   },
   errorText: {

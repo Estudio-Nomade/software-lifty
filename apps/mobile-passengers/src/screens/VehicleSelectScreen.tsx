@@ -296,7 +296,7 @@ export function VehicleSelectScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
   },
   navbar: {
     height: theme.dimensions.navbarHeight,
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
   },
   mapContainer: {
     height: 160,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
   },
   mapFill: {
     flex: 1,

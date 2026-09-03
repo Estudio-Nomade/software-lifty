@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
   },
   fareCard: {
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     borderRadius: theme.radius.md,
     padding: theme.spacing.md,
     flexDirection: 'row',
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },

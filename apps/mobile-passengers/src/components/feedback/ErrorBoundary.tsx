@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
   debugBox: {
     width: '100%',
     maxHeight: 200,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     borderRadius: theme.radius.md,
     marginBottom: theme.spacing.lg,
   },
