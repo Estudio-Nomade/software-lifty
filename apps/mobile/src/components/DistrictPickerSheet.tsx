@@ -259,8 +259,13 @@ export const DistrictPickerSheet: React.FC<DistrictPickerSheetProps> = ({
                   ) : null}
                 </View>
               ) : (
-                <>
-                  <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+                <View style={styles.termsColumn}>
+                  <ScrollView
+                    style={styles.scroll}
+                    contentContainerStyle={styles.scrollContent}
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator
+                  >
                     {terms ? (
                       <View style={styles.section}>
                         <Text style={styles.sectionTitle}>Términos y Condiciones</Text>
@@ -284,7 +289,7 @@ export const DistrictPickerSheet: React.FC<DistrictPickerSheetProps> = ({
                       disabled={submitting || loadingDetail || !termsReady}
                     />
                   </View>
-                </>
+                </View>
               )}
             </View>
           )}
@@ -305,16 +310,19 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 400,
+    height: SHEET_MAX_HEIGHT,
     maxHeight: SHEET_MAX_HEIGHT,
     backgroundColor: theme.colors.white,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.lg,
     gap: theme.spacing.sm,
+    overflow: 'hidden',
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexShrink: 0,
   },
   headerSpacer: { width: 24 },
   backText: {
@@ -328,22 +336,27 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.bold,
   },
   body: {
-    flexGrow: 1,
-    flexShrink: 1,
+    flex: 1,
+    minHeight: 0,
     gap: theme.spacing.md,
-    minHeight: 200,
+  },
+  termsColumn: {
+    flex: 1,
+    minHeight: 0,
   },
   title: {
     fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
+    flexShrink: 0,
   },
   subtitle: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
     lineHeight: 20,
+    flexShrink: 0,
   },
-  listFlex: { flexGrow: 1, flexShrink: 1 },
+  listFlex: { flex: 1, minHeight: 0 },
   list: { gap: theme.spacing.sm, paddingBottom: theme.spacing.sm },
   item: {
     backgroundColor: theme.colors.lightGray,
@@ -384,13 +397,21 @@ const styles = StyleSheet.create({
   dismissLink: {
     alignSelf: 'center',
     paddingVertical: theme.spacing.sm,
+    flexShrink: 0,
   },
   dismissLinkText: {
     color: theme.colors.mediumGray,
     fontSize: theme.fontSize.md,
   },
-  scroll: { flexGrow: 1, flexShrink: 1 },
-  scrollContent: { gap: theme.spacing.lg, paddingBottom: theme.spacing.md },
+  scroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  scrollContent: {
+    gap: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
+    flexGrow: 0,
+  },
   section: { gap: theme.spacing.sm },
   sectionTitle: {
     fontSize: theme.fontSize.lg,
@@ -403,6 +424,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   footer: {
+    flexShrink: 0,
     gap: theme.spacing.sm,
     borderTopWidth: 1,
     borderTopColor: theme.colors.lightGray,
