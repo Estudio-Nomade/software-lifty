@@ -14,6 +14,7 @@ const FEE_ARS = 600;
 
 interface CancellationMetrics {
   tvf_rate_pct: number | null;
+  cancel_rate_pct: number | null;
   tvf_completed: number;
   tvf_cancels: number;
   period_days: number;
@@ -28,15 +29,21 @@ interface CancellationMetrics {
   commission_active: boolean;
 }
 
-function tvfTone(pct: number): string {
-  if (pct < 50) return theme.colors.dangerRed;
-  if (pct < 70) return theme.colors.amber;
+function resolveCancelRatePct(metrics: CancellationMetrics): number | null {
+  if (metrics.cancel_rate_pct != null) return metrics.cancel_rate_pct;
+  if (metrics.tvf_rate_pct == null) return null;
+  return Math.round((100 - metrics.tvf_rate_pct) * 10) / 10;
+}
+
+function cancelTone(pct: number): string {
+  if (pct >= 95) return theme.colors.dangerRed;
+  if (pct >= 70) return theme.colors.amber;
   return theme.colors.success;
 }
 
-function tvfStatusLabel(pct: number): string {
-  if (pct < 50) return 'En riesgo';
-  if (pct < 70) return 'Cuidado';
+function cancelStatusLabel(pct: number): string {
+  if (pct >= 95) return 'En riesgo';
+  if (pct >= 70) return 'Cuidado';
   return 'En regla';
 }
 
@@ -46,17 +53,17 @@ const SITUATIONS: { icon: IconName; title: string; body: string }[] = [
   {
     icon: 'navigate',
     title: 'Vas en camino',
-    body: 'Si cancelás, no hay multa, pero sí cuenta para el TVF.',
+    body: 'Si cancelás, no hay multa, pero sí cuenta para la tasa de cancelación.',
   },
   {
     icon: 'time-outline',
     title: 'Llegaste y esperás',
-    body: 'Los primeros 5 minutos no podés cancelar. Después podés marcar no-show. Cobrás $600 y no te baja el TVF.',
+    body: 'Los primeros 5 minutos no podés cancelar. Después podés marcar no-show. Cobrás $600 y no te sube la tasa.',
   },
   {
     icon: 'person-outline',
     title: 'El pasajero cancela',
-    body: 'Si ya pasaron 2 minutos desde que aceptaste, o si ya llegaste, cobrás $600. No te baja el TVF.',
+    body: 'Si ya pasaron 2 minutos desde que aceptaste, o si ya llegaste, cobrás $600. No te sube la tasa.',
   },
   {
     icon: 'car-sport-outline',
@@ -67,17 +74,17 @@ const SITUATIONS: { icon: IconName; title: string; body: string }[] = [
 
 const THRESHOLDS: { title: string; body: string; color: string }[] = [
   {
-    title: '70% o más',
+    title: 'Menos de 70%',
     body: 'Tu cuenta está en regla. Recibís viajes con normalidad.',
     color: theme.colors.success,
   },
   {
-    title: 'Menos de 70%',
-    body: 'Te mandamos un aviso. Si sigue bajando, tu cuenta puede ir a revisión.',
+    title: '70% o más',
+    body: 'Te mandamos un aviso. Si sigue subiendo, tu cuenta puede ir a revisión.',
     color: theme.colors.amber,
   },
   {
-    title: 'Menos de 50%',
+    title: '95% o más',
     body: 'Dejás de recibir ofertas hasta que soporte revise tu cuenta.',
     color: theme.colors.dangerRed,
   },
@@ -130,19 +137,20 @@ export const CancellationPolicyScreen: React.FC = () => {
     }
 
     const denominator = metrics.tvf_completed + metrics.tvf_cancels;
-    const hasSample = metrics.tvf_rate_pct != null && denominator > 0;
+    const cancelPct = resolveCancelRatePct(metrics);
+    const hasSample = cancelPct != null && denominator > 0;
 
     if (!hasSample) {
       return (
         <Card style={styles.heroCard}>
           <View style={styles.pill}>
-            <Text style={styles.pillText}>TVF</Text>
+            <Text style={styles.pillText}>CANCEL</Text>
           </View>
           <Text style={[styles.heroPct, { color: theme.colors.mediumGray }]}>—</Text>
-          <Text style={styles.heroCaption}>Tasa de Viajes Finalizados</Text>
+          <Text style={styles.heroCaption}>Tasa de cancelación</Text>
           <Text style={styles.heroFormula}>
-            Todavía no hay viajes que cuenten. El TVF aparece cuando completes o canceles un viaje
-            que sume a la tasa.
+            Todavía no hay viajes que cuenten. La tasa aparece cuando completes o canceles un viaje
+            que sume a la métrica.
           </Text>
           <View style={styles.progressTrack}>
             <View
@@ -159,21 +167,21 @@ export const CancellationPolicyScreen: React.FC = () => {
       );
     }
 
-    const pct = metrics.tvf_rate_pct as number;
-    const tone = tvfTone(pct);
+    const pct = cancelPct as number;
+    const tone = cancelTone(pct);
     const fill = Math.max(0, Math.min(100, pct));
-    const statusLabel = tvfStatusLabel(pct);
+    const statusLabel = cancelStatusLabel(pct);
 
     return (
       <Card style={styles.heroCard}>
         <View style={styles.pill}>
-          <Text style={styles.pillText}>TVF</Text>
+          <Text style={styles.pillText}>CANCEL</Text>
         </View>
         <Text style={[styles.heroPct, { color: tone }]}>{pct.toFixed(1)}%</Text>
-        <Text style={styles.heroCaption}>Tasa de Viajes Finalizados</Text>
+        <Text style={styles.heroCaption}>Tasa de cancelación</Text>
         <Text style={styles.heroFormula}>
           Completaste {metrics.tvf_completed} viajes y cancelaste {metrics.tvf_cancels} que cuentan.
-          TVF = viajes completados ÷ (completados + esas cancelaciones).
+          Tasa = cancelaciones que cuentan ÷ (completados + esas cancelaciones).
         </Text>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${fill}%`, backgroundColor: tone }]} />
@@ -194,23 +202,24 @@ export const CancellationPolicyScreen: React.FC = () => {
         {renderHero()}
 
         <Card style={styles.card}>
-          <Text style={styles.cardTitle}>¿Qué es el TVF?</Text>
+          <Text style={styles.cardTitle}>¿Qué es la tasa de cancelación?</Text>
           <Text style={styles.body}>
-            El TVF es tu <Text style={styles.bodyBold}>Tasa de Viajes Finalizados</Text>. Mide
-            cuántos viajes terminás versus cuántos cancelás vos.
+            Mide cuántos viajes <Text style={styles.bodyBold}>cancelás vos en camino</Text> frente a
+            los que completás. Cuanto más alta, peor.
           </Text>
           <Text style={styles.body}>
-            Solo bajan el TVF las cancelaciones que <Text style={styles.bodyBold}>hiciste vos</Text>{' '}
-            cuando ya habías aceptado y ibas en camino.
+            Solo suben la tasa las cancelaciones que{' '}
+            <Text style={styles.bodyBold}>hiciste vos</Text> cuando ya habías aceptado y ibas en
+            camino.
           </Text>
           <Text style={styles.body}>
-            No baja el TVF si el pasajero cancela, si no aparece después de 5 minutos, o si se corta
-            la búsqueda.
+            No sube si el pasajero cancela, si no aparece después de 5 minutos, o si se corta la
+            búsqueda.
           </Text>
           <View style={styles.ruleRow}>
             <Ionicons name="checkmark-circle" size={20} color={theme.colors.success} />
             <Text style={styles.ruleText}>
-              Pasajero cancela o no se presenta → no te baja el TVF
+              Pasajero cancela o no se presenta → no te sube la tasa
             </Text>
           </View>
           <View style={styles.ruleRow}>
@@ -246,7 +255,7 @@ export const CancellationPolicyScreen: React.FC = () => {
             paguen.
           </Text>
           <Text style={styles.body}>
-            Si cancelás vos en camino, no hay multa ni cobro. Solo impacta el TVF.
+            Si cancelás vos en camino, no hay multa ni cobro. Solo impacta la tasa de cancelación.
           </Text>
           {metrics && metrics.payouts_pending_ars > 0 ? (
             <View style={styles.payoutBanner}>
