@@ -14,6 +14,8 @@ interface SnackbarProps {
   message: string;
   tone?: SnackbarTone;
   distanceMeters?: number | null;
+  /** Extra lift above safe-area bottom (tab bar, sheet floor, FAB). */
+  bottomOffset?: number;
   onDismiss: () => void;
 }
 
@@ -30,6 +32,7 @@ export const Snackbar: React.FC<SnackbarProps> = ({
   message,
   tone = 'error',
   distanceMeters = null,
+  bottomOffset = 0,
   onDismiss,
 }) => {
   const insets = useSafeAreaInsets();
@@ -72,14 +75,10 @@ export const Snackbar: React.FC<SnackbarProps> = ({
   const isWarning = tone === 'warning';
   const accentColor = isWarning ? theme.colors.amber : theme.colors.dangerRed;
   const iconName = isWarning ? 'location' : 'alert-circle';
+  const bottom = insets.bottom + theme.spacing.md + bottomOffset;
 
   return (
-    <Animated.View
-      style={[
-        styles.snackbar,
-        { opacity, transform: [{ translateY }], bottom: insets.bottom + theme.spacing.md },
-      ]}
-    >
+    <Animated.View style={[styles.snackbar, { opacity, transform: [{ translateY }], bottom }]}>
       <View style={[styles.accentBar, { backgroundColor: accentColor }]} />
       <View style={[styles.iconBadge, { backgroundColor: `${accentColor}1A` }]}>
         <Ionicons name={iconName} size={26} color={accentColor} />

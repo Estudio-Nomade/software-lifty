@@ -1,0 +1,23 @@
+# Automatic HTTPS via Let's Encrypt when DOMAIN is a real public hostname.
+# Set DOMAIN in deploy/lightsail/.env (e.g. api.liftyviajes.com).
+#
+# DNS: A/AAAA record → Lightsail static IP before first start.
+# Lightsail networking: open TCP 80 and 443.
+
+{$DOMAIN:localhost} {
+	encode gzip
+	reverse_proxy api:3000
+
+	header {
+		# HSTS only meaningful on real HTTPS hosts
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
