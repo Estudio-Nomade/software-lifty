@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderTopLeftRadius: theme.radius.lg,
     borderTopRightRadius: theme.radius.lg,
     shadowColor: '#000',
@@ -144,6 +144,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: theme.colors.mediumGray,
+    backgroundColor: theme.colors.surfaceMuted,
   },
 });

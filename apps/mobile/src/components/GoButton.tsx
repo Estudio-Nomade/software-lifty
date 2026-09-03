@@ -3,21 +3,26 @@ import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-nat
 import { theme } from '../theme';
 import { Text } from './ui/Text';
 
+export const GO_SIZE = 88;
+
 interface GoButtonProps {
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
+  /** Distance from screen bottom to the GO circle (above sheet/tab bar). */
+  bottom: number;
 }
 
 export const GoButton: React.FC<GoButtonProps> = ({
   onPress,
   loading = false,
   disabled = false,
+  bottom,
 }) => {
   const isDisabled = disabled || loading;
 
   return (
-    <View style={styles.wrap} pointerEvents="box-none">
+    <View style={[styles.wrap, { bottom }]} pointerEvents="box-none">
       <TouchableOpacity
         style={[styles.button, isDisabled && styles.disabled]}
         onPress={onPress}
@@ -36,13 +41,12 @@ export const GoButton: React.FC<GoButtonProps> = ({
   );
 };
 
-const GO_SIZE = 88;
-
 const styles = StyleSheet.create({
   wrap: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    justifyContent: 'center',
     zIndex: 6,
   },
   button: {
