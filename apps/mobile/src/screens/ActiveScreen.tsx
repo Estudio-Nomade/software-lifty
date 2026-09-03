@@ -28,6 +28,7 @@ import { Snackbar } from '../components/feedback/Snackbar';
 import type { SnackbarTone } from '../components/feedback/Snackbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
 import { usePayoutMethodGate } from '../hooks/usePayoutMethodGate';
 import { shouldShowPlatformDebt } from '../lib/commission';
@@ -130,6 +131,7 @@ export const ActiveScreen: React.FC = () => {
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
   const { needsPayoutMethod, refreshPayoutMethods } = usePayoutMethodGate(driverStatus);
+  const signOut = useSignOut();
 
   useFocusEffect(
     useCallback(() => {
@@ -585,20 +587,6 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
     fontSize: 12,
     fontWeight: theme.fontWeight.medium,
-  },
-  floatingAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    overflow: 'hidden',
   },
   floatingAvatar: {
     width: 44,
