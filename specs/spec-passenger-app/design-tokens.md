@@ -8,9 +8,12 @@ Source of truth: `App pasajeros.pen` (Pencil). These are the canonical tokens af
 |---|---|---|
 | `primary` | `#00C2B3` | Brand teal — primary buttons, brand accents, links |
 | `deepBlue` | `#0D2B45` | Navy — navbar background, primary text on light bg |
-| `lightGray` | `#F1F4F6` | Light surface — secondary backgrounds, input fills |
+| `background` | `#EEF7F6` | Screen chrome / full-screen fill (off-white + soft teal tint) |
+| `surface` | `#FFFFFF` | Cards and elevated panels on top of background |
+| `surfaceMuted` | `#E3F0EE` | Soft wells, icon circles, empty plates |
+| `lightGray` | `#F1F4F6` | Secondary fills — input fills, 1px borders (not full-screen chrome) |
 | `mediumGray` | `#A8B1BA` | Muted text — labels, placeholders, captions |
-| `white` | `#FFFFFF` | Card surfaces, primary text on dark |
+| `white` | `#FFFFFF` | Alias of surface; primary text on dark |
 | `black` | `#000000` | True black (rare) |
 | `dangerRed` | `#E53935` | Destructive actions, errors, SOS |
 | `amber` | `#FFB020` | Promotional banners, warnings |

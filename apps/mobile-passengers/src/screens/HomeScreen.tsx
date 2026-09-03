@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
   },
   body: {
     flexGrow: 1,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
   },
   bodyContent: {
     paddingBottom: theme.spacing.md,
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
     height: 200,
     marginHorizontal: theme.spacing.md,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
     overflow: 'hidden',
   },
   mapFill: {

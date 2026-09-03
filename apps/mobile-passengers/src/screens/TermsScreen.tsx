@@ -97,7 +97,7 @@ function isHeading(text: string): boolean {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
   },
   header: {
     flexDirection: 'row',

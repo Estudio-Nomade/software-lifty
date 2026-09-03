@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   },
   detailCard: {
     width: '100%',
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     borderRadius: theme.radius.md,
     padding: theme.spacing.md,
     gap: theme.spacing.sm,
