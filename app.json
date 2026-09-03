@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "c55018f1-54ba-45e2-bf2b-2abb10e58206"
+      }
+    },
+    "android": {
+      "package": "com.martiyaquinta.lifty"
+    }
+  }
+}
