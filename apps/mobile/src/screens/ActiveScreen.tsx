@@ -414,7 +414,7 @@ export const ActiveScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
       {hasLocation ? (
         <MapView
@@ -461,9 +461,11 @@ export const ActiveScreen: React.FC = () => {
         </View>
       )}
 
-      <View style={styles.headerOverlay}>
+      <View style={styles.headerOverlay} pointerEvents="box-none">
         <Navbar
+          variant="floating"
           showHamburger
+          showBack={false}
           onHamburgerPress={() => setMenuVisible(true)}
           rightElement={
             <View style={styles.headerRight}>
@@ -477,7 +479,7 @@ export const ActiveScreen: React.FC = () => {
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                style={styles.avatarButton}
+                style={styles.floatingAvatar}
                 activeOpacity={0.7}
                 onPress={() => navigation.navigate('Profile')}
               >
@@ -630,7 +632,12 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.turquoise,
     borderRadius: theme.radius.full,
     paddingHorizontal: theme.spacing.sm + 2,
-    paddingVertical: 4,
+    paddingVertical: 6,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
   },
   connectedBadgeText: {
     color: theme.colors.white,
@@ -640,6 +647,20 @@ const styles = StyleSheet.create({
   avatarButton: {
     width: 44,
     height: 44,
+  },
+  floatingAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    overflow: 'hidden',
   },
   goHint: {
     position: 'absolute',
