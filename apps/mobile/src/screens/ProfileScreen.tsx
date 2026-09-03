@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from 'expo-router';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,7 +23,6 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { Navbar } from '../components/Navbar';
-import { SideMenu } from '../components/SideMenu';
 import { Text } from '../components/ui/Text';
 import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -139,8 +138,6 @@ export const ProfileScreen: React.FC = () => {
   const [editPhone, setEditPhone] = useState('');
   const [editPhotoUri, setEditPhotoUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [menuVisible, setMenuVisible] = useState(false);
-
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -171,44 +168,6 @@ export const ProfileScreen: React.FC = () => {
   const handleSignOut = () => {
     signOut.mutate();
   };
-
-  const menuItems = useMemo(
-    () => [
-      {
-        label: 'Inicio',
-        icon: 'home-outline' as const,
-        onPress: () => navigation.navigate('Active'),
-      },
-      {
-        label: 'Ganancias',
-        icon: 'wallet-outline' as const,
-        onPress: () => navigation.navigate('Earnings'),
-      },
-      {
-        label: 'Metodo de cobro',
-        icon: 'card-outline' as const,
-        onPress: () => navigation.navigate('PaymentMethod'),
-      },
-      {
-        label: 'Perfil',
-        icon: 'person-outline' as const,
-        onPress: () => {},
-      },
-      {
-        label: 'Historial de viajes',
-        icon: 'document-text-outline' as const,
-        onPress: () => navigation.navigate('TripHistory'),
-      },
-      {
-        label: 'Cerrar sesion',
-        icon: 'log-out-outline' as const,
-        onPress: () => signOut.mutate(),
-        danger: true,
-        dividerTop: true,
-      },
-    ],
-    [navigation, signOut],
-  );
 
   const openEdit = () => {
     if (!profile) return;
@@ -268,7 +227,7 @@ export const ProfileScreen: React.FC = () => {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-        <Navbar title="Perfil" showHamburger onHamburgerPress={() => setMenuVisible(true)} />
+        <Navbar title="Perfil" showBack={false} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.turquoise} />
         </View>
@@ -295,7 +254,7 @@ export const ProfileScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-      <Navbar title="Perfil" showHamburger onHamburgerPress={() => setMenuVisible(true)} />
+      <Navbar title="Perfil" showBack={false} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Card style={styles.profileCard} padding={theme.spacing.lg}>
@@ -417,6 +376,19 @@ export const ProfileScreen: React.FC = () => {
           })}
         </Card>
 
+        <Card>
+          <Text style={styles.sectionTitle}>Cobros</Text>
+          <TouchableOpacity
+            style={styles.infoRow}
+            onPress={() => navigation.navigate('PaymentMethod')}
+            accessibilityRole="button"
+            accessibilityLabel="Método de cobro"
+          >
+            <Text style={styles.infoLabel}>Método de cobro</Text>
+            <Text style={styles.docAction}>Administrar →</Text>
+          </TouchableOpacity>
+        </Card>
+
         <Button
           title="Cerrar sesion"
           variant="danger"
@@ -484,14 +456,6 @@ export const ProfileScreen: React.FC = () => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-
-      <SideMenu
-        visible={menuVisible}
-        onClose={() => setMenuVisible(false)}
-        userName={profile?.full_name}
-        avatarUrl={profile?.avatar_url ?? null}
-        menuItems={menuItems}
-      />
     </View>
   );
 };
