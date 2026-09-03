@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect } from 'expo-router';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -21,6 +22,7 @@ import { BottomSheet } from '../components/BottomSheet';
 import { GoButton } from '../components/GoButton';
 import { MapView } from '../components/MapView';
 import { Navbar } from '../components/Navbar';
+import { PayoutMethodGateModal } from '../components/PayoutMethodGateModal';
 import { SideMenu } from '../components/SideMenu';
 import { Toggle } from '../components/Toggle';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
@@ -30,6 +32,7 @@ import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
+import { usePayoutMethodGate } from '../hooks/usePayoutMethodGate';
 import { shouldShowPlatformDebt } from '../lib/commission';
 import {
   type ConnectBlockedFeedback,
@@ -131,6 +134,14 @@ export const ActiveScreen: React.FC = () => {
   });
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
+  const { needsPayoutMethod, refreshPayoutMethods } = usePayoutMethodGate(driverStatus);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshPayoutMethods();
+    }, [refreshPayoutMethods]),
+  );
+
   const awaitingApproval =
     driverStatus?.status === 'under_review' || driverStatus?.step === 'review';
   const connectBlocked = documentsPendingReview || awaitingApproval;
@@ -165,6 +176,11 @@ export const ActiveScreen: React.FC = () => {
       return;
     }
 
+    if (needsPayoutMethod) {
+      setToggleError('Necesitamos tu medio de cobro (CBU/CVU + alias) antes de conectarte.');
+      return;
+    }
+
     if (documentsPendingReview) {
       showConnectFeedback(feedbackForConnectBlock('docs_pending'));
       return;
@@ -196,6 +212,7 @@ export const ActiveScreen: React.FC = () => {
     awaitingApproval,
     documentsPendingReview,
     hasLocation,
+    needsPayoutMethod,
     setOnline,
     setOnlineSince,
     showConnectFeedback,
@@ -480,7 +497,7 @@ export const ActiveScreen: React.FC = () => {
           <GoButton
             onPress={connect}
             loading={connecting}
-            disabled={!hasLocation || connectBlocked || connecting}
+            disabled={!hasLocation || connectBlocked || needsPayoutMethod || connecting}
           />
           {awaitingApproval && (
             <View style={styles.goHint}>
@@ -573,6 +590,14 @@ export const ActiveScreen: React.FC = () => {
         </TouchableOpacity>
       )}
 
+      <PayoutMethodGateModal
+        visible={needsPayoutMethod && !isOnline}
+        onAddMethod={() => {
+          refreshPayoutMethods();
+          navigation.navigate('PaymentMethod');
+        }}
+        onLogout={() => signOut.mutate()}
+      />
       <Snackbar
         visible={connectFeedback != null}
         title={connectFeedback?.title ?? ''}
