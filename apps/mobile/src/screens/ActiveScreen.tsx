@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect } from 'expo-router';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -20,6 +21,7 @@ import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
 import { GoButton } from '../components/GoButton';
 import { MapView } from '../components/MapView';
+import { PayoutMethodGateModal } from '../components/PayoutMethodGateModal';
 import { Toggle } from '../components/Toggle';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { Snackbar } from '../components/feedback/Snackbar';
@@ -27,6 +29,7 @@ import type { SnackbarTone } from '../components/feedback/Snackbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
+import { usePayoutMethodGate } from '../hooks/usePayoutMethodGate';
 import { shouldShowPlatformDebt } from '../lib/commission';
 import {
   type ConnectBlockedFeedback,
@@ -126,6 +129,14 @@ export const ActiveScreen: React.FC = () => {
   });
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
+  const { needsPayoutMethod, refreshPayoutMethods } = usePayoutMethodGate(driverStatus);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshPayoutMethods();
+    }, [refreshPayoutMethods]),
+  );
+
   const awaitingApproval =
     driverStatus?.status === 'under_review' || driverStatus?.step === 'review';
   const connectBlocked = documentsPendingReview || awaitingApproval;
@@ -160,6 +171,11 @@ export const ActiveScreen: React.FC = () => {
       return;
     }
 
+    if (needsPayoutMethod) {
+      setToggleError('Necesitamos tu medio de cobro (CBU/CVU + alias) antes de conectarte.');
+      return;
+    }
+
     if (documentsPendingReview) {
       showConnectFeedback(feedbackForConnectBlock('docs_pending'));
       return;
@@ -191,6 +207,7 @@ export const ActiveScreen: React.FC = () => {
     awaitingApproval,
     documentsPendingReview,
     hasLocation,
+    needsPayoutMethod,
     setOnline,
     setOnlineSince,
     showConnectFeedback,
@@ -423,7 +440,7 @@ export const ActiveScreen: React.FC = () => {
           <GoButton
             onPress={connect}
             loading={connecting}
-            disabled={!hasLocation || connectBlocked || connecting}
+            disabled={!hasLocation || connectBlocked || needsPayoutMethod || connecting}
           />
           {awaitingApproval && (
             <View style={styles.goHint}>
@@ -514,6 +531,14 @@ export const ActiveScreen: React.FC = () => {
         </TouchableOpacity>
       )}
 
+      <PayoutMethodGateModal
+        visible={needsPayoutMethod && !isOnline}
+        onAddMethod={() => {
+          refreshPayoutMethods();
+          navigation.navigate('PaymentMethod');
+        }}
+        onLogout={() => signOut.mutate()}
+      />
       <Snackbar
         visible={connectFeedback != null}
         title={connectFeedback?.title ?? ''}
@@ -528,7 +553,7 @@ export const ActiveScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   headerOverlay: {
     position: 'absolute',
@@ -560,6 +585,20 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
     fontSize: 12,
     fontWeight: theme.fontWeight.medium,
+  },
+  floatingAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    overflow: 'hidden',
   },
   floatingAvatar: {
     width: 44,
@@ -724,7 +763,7 @@ const styles = StyleSheet.create({
     ...(StyleSheet.absoluteFill as object),
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,
   },

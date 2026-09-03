@@ -463,7 +463,7 @@ export const ProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
   },
   content: {
     alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
     padding: theme.spacing.md,
     paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.full,
     borderWidth: 2,
     borderColor: theme.colors.mediumGray,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',

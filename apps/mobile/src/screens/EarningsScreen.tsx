@@ -343,12 +343,12 @@ export const EarningsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
   },
   content: {
     alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
     paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },

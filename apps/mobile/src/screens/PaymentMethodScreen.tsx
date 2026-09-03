@@ -200,7 +200,7 @@ export const PaymentMethodScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
   },
   content: {
     alignItems: 'center',
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   },
   methodCard: {
     width: 343,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.md,
     flexDirection: 'row',
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
