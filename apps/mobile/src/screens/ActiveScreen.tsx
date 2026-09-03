@@ -568,6 +568,7 @@ export const ActiveScreen: React.FC = () => {
         title={connectFeedback?.title ?? ''}
         message={connectFeedback?.message ?? ''}
         tone={(connectFeedback?.tone ?? 'error') as SnackbarTone}
+        bottomOffset={sheetFloor + theme.spacing.sm}
         onDismiss={dismissConnectFeedback}
       />
     </View>
