@@ -123,6 +123,9 @@ export const ActiveScreen: React.FC = () => {
   });
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
+  const awaitingApproval =
+    driverStatus?.status === 'under_review' || driverStatus?.step === 'review';
+  const connectBlocked = documentsPendingReview || awaitingApproval;
 
   const {
     data: earnings,
@@ -138,6 +141,13 @@ export const ActiveScreen: React.FC = () => {
 
   const connect = useCallback(async () => {
     setToggleError(null);
+
+    if (awaitingApproval) {
+      setToggleError(
+        'Tu cuenta está en revisión. Te avisamos cuando esté aprobada para que puedas conectarte.',
+      );
+      return;
+    }
 
     if (documentsPendingReview) {
       setToggleError(
@@ -168,7 +178,7 @@ export const ActiveScreen: React.FC = () => {
     } finally {
       setConnecting(false);
     }
-  }, [documentsPendingReview, hasLocation, setOnline, setOnlineSince]);
+  }, [awaitingApproval, documentsPendingReview, hasLocation, setOnline, setOnlineSince]);
 
   const disconnect = useCallback(async () => {
     setToggleError(null);
@@ -446,9 +456,16 @@ export const ActiveScreen: React.FC = () => {
           <GoButton
             onPress={connect}
             loading={connecting}
-            disabled={!hasLocation || documentsPendingReview || connecting}
+            disabled={!hasLocation || connectBlocked || connecting}
           />
-          {documentsPendingReview && (
+          {awaitingApproval && (
+            <View style={styles.goHint}>
+              <Text style={styles.reviewBannerText}>
+                Cuenta en revisión. Podés mirar el mapa; te avisamos cuando puedas conectarte.
+              </Text>
+            </View>
+          )}
+          {!awaitingApproval && documentsPendingReview && (
             <View style={styles.goHint}>
               <Text style={styles.reviewBannerText}>
                 Documentos pendientes de revision. No podes conectarte hasta tener los papeles en
