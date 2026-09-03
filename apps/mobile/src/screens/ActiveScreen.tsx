@@ -161,9 +161,7 @@ export const ActiveScreen: React.FC = () => {
     setConnectFeedback(null);
 
     if (awaitingApproval) {
-      setToggleError(
-        'Tu cuenta está en revisión. Te avisamos cuando esté aprobada para que puedas conectarte.',
-      );
+      showConnectFeedback(feedbackForConnectBlock('not_approved'));
       return;
     }
 
@@ -194,7 +192,16 @@ export const ActiveScreen: React.FC = () => {
     } finally {
       setConnecting(false);
     }
-  }, [awaitingApproval, documentsPendingReview, hasLocation, setOnline, setOnlineSince]);
+  }, [
+    awaitingApproval,
+    documentsPendingReview,
+    hasLocation,
+    setOnline,
+    setOnlineSince,
+    showConnectFeedback,
+    feedbackForConnectBlock,
+    feedbackFromConnectError,
+  ]);
 
   const disconnect = useCallback(async () => {
     setToggleError(null);
