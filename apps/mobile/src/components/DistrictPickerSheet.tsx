@@ -287,6 +287,7 @@ export const DistrictPickerSheet: React.FC<DistrictPickerSheetProps> = ({
                       onPress={() => void handleAccept()}
                       loading={submitting}
                       disabled={submitting || loadingDetail || !termsReady}
+                      style={styles.acceptButton}
                     />
                   </View>
                 </View>
@@ -425,10 +426,16 @@ const styles = StyleSheet.create({
   },
   footer: {
     flexShrink: 0,
+    width: '100%',
+    alignItems: 'stretch',
     gap: theme.spacing.sm,
     borderTopWidth: 1,
     borderTopColor: theme.colors.lightGray,
     paddingTop: theme.spacing.md,
+  },
+  acceptButton: {
+    width: '100%',
+    alignSelf: 'stretch',
   },
   submitError: {
     color: theme.colors.dangerRed,
