@@ -120,7 +120,24 @@ bun test src/features/auth/auth.test.ts
 docker compose up          # Postgres + Redis + App en puerto 3000
 ```
 
-### Producción
+### Producción (AWS Lightsail — recomendado)
+
+El monorepo tiene un paquete listo en la raíz:
+
+```bash
+# ver deploy/lightsail/README.md
+bash deploy/lightsail/setup-server.sh   # una vez en la instancia
+cp deploy/lightsail/.env.example deploy/lightsail/.env
+./deploy/lightsail/deploy.sh --proxy    # API + Redis + Caddy HTTPS
+```
+
+Build de la imagen (desde la raíz del monorepo):
+
+```bash
+docker build -f deploy/lightsail/Dockerfile -t lifty-api .
+```
+
+### Producción (compose legacy en esta carpeta)
 
 ```bash
 # 1. Configurar .env.production (basado en .env.production.example)
@@ -132,6 +149,8 @@ docker compose -f docker-compose.prod.yml up -d
 # 3. Con Postgres self-hosted
 docker compose -f docker-compose.prod.yml --profile self-hosted up -d
 ```
+
+> Preferí `deploy/lightsail/` en monorepo: el lockfile de Bun vive en la raíz y el Dockerfile legacy de esta carpeta asume context local.
 
 ## Estructura del proyecto
 

@@ -40,6 +40,24 @@ describe('routeForDriverStatus', () => {
     expect(r.screen).toBe('Active');
   });
 
+  it('routes approved drivers without district to Active (picker on GO)', () => {
+    const r = routeForDriverStatus({
+      status: 'approved',
+      step: 'approved',
+      has_district: false,
+    });
+    expect(r.screen).toBe('Active');
+    expect(r.screen).not.toBe('SelectProvince');
+  });
+
+  it('routes approved status without step and without district to Active', () => {
+    const r = routeForDriverStatus({
+      status: 'approved',
+      has_district: false,
+    });
+    expect(r.screen).toBe('Active');
+  });
+
   it('routes review step to Active (map home while awaiting approval)', () => {
     const r = routeForDriverStatus({
       status: 'under_review',

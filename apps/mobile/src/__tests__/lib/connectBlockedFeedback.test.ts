@@ -36,4 +36,18 @@ describe('connectBlockedFeedback', () => {
     expect(feedback.message).toBe('boom');
     expect(feedback.tone).toBe('error');
   });
+
+  it('maps DISTRICT_REQUIRED as warning fallback', () => {
+    const err = new ApiError({
+      error: {
+        code: 'DISTRICT_REQUIRED',
+        message: 'Debes seleccionar un municipio antes de conectarte.',
+        status: 400,
+      },
+      meta: { timestamp: new Date().toISOString() },
+    });
+    const feedback = feedbackFromConnectError(err);
+    expect(feedback.title).toBe('Elegí tu municipio');
+    expect(feedback.tone).toBe('warning');
+  });
 });
