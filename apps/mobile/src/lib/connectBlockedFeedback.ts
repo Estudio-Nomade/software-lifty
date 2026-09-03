@@ -23,6 +23,11 @@ const BY_CODE: Record<string, ConnectBlockedFeedback> = {
     message: 'Activá el GPS o concedé permiso de ubicación para conectarte.',
     tone: 'warning',
   },
+  DISTRICT_REQUIRED: {
+    title: 'Elegí tu municipio',
+    message: 'Seleccioná en qué municipio vas a trabajar para conectarte.',
+    tone: 'warning',
+  },
 };
 
 export function feedbackForConnectBlock(
