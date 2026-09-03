@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 import { apiClient, getValidated } from '../api/client';
 import { driverStatusSchema, earningsDailySchema } from '../api/types';
-import type { EarningsDaily } from '../api/types';
+import type { DriverStatus, EarningsDaily } from '../api/types';
 import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
 import { DistrictPickerSheet } from '../components/DistrictPickerSheet';
@@ -136,7 +136,6 @@ export const ActiveScreen: React.FC = () => {
   });
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
-  const hasDistrict = driverStatus?.has_district;
   const { needsPayoutMethod, refreshPayoutMethods } = usePayoutMethodGate(driverStatus);
   const signOut = useSignOut();
 
@@ -211,7 +210,8 @@ export const ActiveScreen: React.FC = () => {
       return;
     }
 
-    if (shouldOpenDistrictPicker({ hasDistrict })) {
+    const latest = queryClient.getQueryData<DriverStatus>(['driverStatus']);
+    if (shouldOpenDistrictPicker({ hasDistrict: latest?.has_district })) {
       setDistrictSheetVisible(true);
       return;
     }
@@ -242,17 +242,15 @@ export const ActiveScreen: React.FC = () => {
     documentsPendingReview,
     hasLocation,
     needsPayoutMethod,
-    hasDistrict,
+    queryClient,
     setOnline,
     setOnlineSince,
     showConnectFeedback,
-    feedbackForConnectBlock,
-    feedbackFromConnectError,
   ]);
 
   const handleDistrictAssigned = useCallback(async () => {
     setDistrictSheetVisible(false);
-    await queryClient.invalidateQueries({ queryKey: ['driverStatus'] });
+    await queryClient.refetchQueries({ queryKey: ['driverStatus'] });
     await connect();
   }, [connect, queryClient]);
 
