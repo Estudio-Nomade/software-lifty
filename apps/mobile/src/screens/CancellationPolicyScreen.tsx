@@ -13,7 +13,7 @@ import { theme } from '../theme';
 const FEE_ARS = 600;
 
 interface CancellationMetrics {
-  tvf_rate_pct: number;
+  tvf_rate_pct: number | null;
   tvf_completed: number;
   tvf_cancels: number;
   period_days: number;
@@ -129,9 +129,38 @@ export const CancellationPolicyScreen: React.FC = () => {
       );
     }
 
-    const pct = metrics.tvf_rate_pct;
-    const tone = tvfTone(pct);
     const denominator = metrics.tvf_completed + metrics.tvf_cancels;
+    const hasSample = metrics.tvf_rate_pct != null && denominator > 0;
+
+    if (!hasSample) {
+      return (
+        <Card style={styles.heroCard}>
+          <View style={styles.pill}>
+            <Text style={styles.pillText}>TVF</Text>
+          </View>
+          <Text style={[styles.heroPct, { color: theme.colors.mediumGray }]}>—</Text>
+          <Text style={styles.heroCaption}>Tasa de Viajes Finalizados</Text>
+          <Text style={styles.heroFormula}>
+            Todavía no hay viajes que cuenten. El TVF aparece cuando completes o canceles un viaje
+            que sume a la tasa.
+          </Text>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: '0%', backgroundColor: theme.colors.mediumGray },
+              ]}
+            />
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: theme.colors.mediumGray }]}>
+            <Text style={styles.statusBadgeText}>Sin datos</Text>
+          </View>
+        </Card>
+      );
+    }
+
+    const pct = metrics.tvf_rate_pct as number;
+    const tone = tvfTone(pct);
     const fill = Math.max(0, Math.min(100, pct));
     const statusLabel = tvfStatusLabel(pct);
 
@@ -142,16 +171,10 @@ export const CancellationPolicyScreen: React.FC = () => {
         </View>
         <Text style={[styles.heroPct, { color: tone }]}>{pct.toFixed(1)}%</Text>
         <Text style={styles.heroCaption}>Tasa de Viajes Finalizados</Text>
-        {denominator === 0 ? (
-          <Text style={styles.heroFormula}>
-            Todavía no hay viajes que cuenten. Tu TVF arranca en 100%.
-          </Text>
-        ) : (
-          <Text style={styles.heroFormula}>
-            Completaste {metrics.tvf_completed} viajes y cancelaste {metrics.tvf_cancels} que
-            cuentan. TVF = viajes completados ÷ (completados + esas cancelaciones).
-          </Text>
-        )}
+        <Text style={styles.heroFormula}>
+          Completaste {metrics.tvf_completed} viajes y cancelaste {metrics.tvf_cancels} que cuentan.
+          TVF = viajes completados ÷ (completados + esas cancelaciones).
+        </Text>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${fill}%`, backgroundColor: tone }]} />
         </View>
