@@ -21,7 +21,8 @@ export const STEP_ROUTE: Record<string, StepRoute> = {
   kyc: { screen: 'KYCVerify', storeStatus: 'pending' },
   vehicle: { screen: 'OnboardingVehicle', storeStatus: 'pending' },
   documents: { screen: 'OnboardingStep2', storeStatus: 'pending' },
-  review: { screen: 'WaitingApproval', storeStatus: 'under_review' },
+  // Review lands on the map-first home (Active). Connect stays blocked until approved.
+  review: { screen: 'Active', storeStatus: 'under_review' },
   approved: { screen: 'Active', storeStatus: 'approved' },
 };
 
@@ -60,7 +61,7 @@ export function routeForDriverStatus(driverData: DriverStatus): {
     if (!has_district) return { screen: 'SelectProvince', status: 'approved' };
     return { screen: 'Active', status: 'approved' };
   }
-  if (status === 'under_review') return { screen: 'WaitingApproval', status: 'under_review' };
+  if (status === 'under_review') return { screen: 'Active', status: 'under_review' };
 
   return { screen: 'OnboardingStep1', status: 'pending' };
 }

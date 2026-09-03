@@ -57,7 +57,7 @@ interface ProfileData {
 }
 
 interface CancellationMetrics {
-  tvf_rate_pct: number;
+  tvf_rate_pct: number | null;
   tvf_completed: number;
   tvf_cancels: number;
   period_days: number;
@@ -288,7 +288,11 @@ export const ProfileScreen: React.FC = () => {
         {metrics ? (
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel={`Cancelaciones. TVF ${metrics.tvf_rate_pct.toFixed(1)} por ciento. Abrir explicación`}
+            accessibilityLabel={
+              metrics.tvf_rate_pct == null
+                ? 'Cancelaciones. TVF sin datos. Abrir explicación'
+                : `Cancelaciones. TVF ${metrics.tvf_rate_pct.toFixed(1)} por ciento. Abrir explicación`
+            }
             activeOpacity={0.7}
             onPress={() => navigation.navigate('CancellationPolicy')}
           >
@@ -297,10 +301,20 @@ export const ProfileScreen: React.FC = () => {
                 <Text style={styles.cancellationTitle}>Cancelaciones</Text>
                 <Ionicons name="chevron-forward" size={20} color={theme.colors.mediumGray} />
               </View>
-              <Text style={[styles.cancellationValue, { color: tvfTone(metrics.tvf_rate_pct) }]}>
-                {metrics.tvf_rate_pct.toFixed(1)}%
+              {metrics.tvf_rate_pct == null ? (
+                <Text style={[styles.cancellationValue, { color: theme.colors.mediumGray }]}>
+                  —
+                </Text>
+              ) : (
+                <Text style={[styles.cancellationValue, { color: tvfTone(metrics.tvf_rate_pct) }]}>
+                  {metrics.tvf_rate_pct.toFixed(1)}%
+                </Text>
+              )}
+              <Text style={styles.metricSubline}>
+                {metrics.tvf_rate_pct == null
+                  ? 'TVF · sin viajes que cuenten'
+                  : `TVF · últimos ${metrics.period_days} días`}
               </Text>
-              <Text style={styles.metricSubline}>TVF · últimos {metrics.period_days} días</Text>
               <Text style={styles.cancellationHint}>Tocá para ver cómo funciona</Text>
             </Card>
           </TouchableOpacity>

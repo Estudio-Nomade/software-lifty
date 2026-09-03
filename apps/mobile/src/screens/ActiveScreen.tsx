@@ -22,10 +22,17 @@ import { GoButton } from '../components/GoButton';
 import { MapView } from '../components/MapView';
 import { Toggle } from '../components/Toggle';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
+import { Snackbar } from '../components/feedback/Snackbar';
+import type { SnackbarTone } from '../components/feedback/Snackbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
 import { shouldShowPlatformDebt } from '../lib/commission';
+import {
+  type ConnectBlockedFeedback,
+  feedbackForConnectBlock,
+  feedbackFromConnectError,
+} from '../lib/connectBlockedFeedback';
 import { getCurrentPosition, stopTracking } from '../lib/location';
 import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
@@ -68,6 +75,7 @@ export const ActiveScreen: React.FC = () => {
   const onlineSince = useOnlineStore((s) => s.onlineSince);
   const setOnlineSince = useOnlineStore((s) => s.setOnlineSince);
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const [connectFeedback, setConnectFeedback] = useState<ConnectBlockedFeedback | null>(null);
   const [connecting, setConnecting] = useState(false);
   const heatmapPoints = useHeatmapPolling();
   const [sheetExpanded, setSheetExpanded] = useState(false);
@@ -118,6 +126,9 @@ export const ActiveScreen: React.FC = () => {
   });
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
+  const awaitingApproval =
+    driverStatus?.status === 'under_review' || driverStatus?.step === 'review';
+  const connectBlocked = documentsPendingReview || awaitingApproval;
 
   const {
     data: earnings,
@@ -131,18 +142,31 @@ export const ActiveScreen: React.FC = () => {
     refetchInterval: 60_000,
   });
 
+  const showConnectFeedback = useCallback((feedback: ConnectBlockedFeedback) => {
+    setToggleError(null);
+    setConnectFeedback(feedback);
+  }, []);
+
+  const dismissConnectFeedback = useCallback(() => {
+    setConnectFeedback(null);
+  }, []);
+
   const connect = useCallback(async () => {
     setToggleError(null);
+    setConnectFeedback(null);
+
+    if (awaitingApproval) {
+      showConnectFeedback(feedbackForConnectBlock('not_approved'));
+      return;
+    }
 
     if (documentsPendingReview) {
-      setToggleError(
-        'Tenes documentos pendientes de revision. No podes conectarte hasta que sean aprobados.',
-      );
+      showConnectFeedback(feedbackForConnectBlock('docs_pending'));
       return;
     }
 
     if (!hasLocation) {
-      setToggleError('Necesitamos tu ubicacion para conectarte.');
+      showConnectFeedback(feedbackForConnectBlock('no_location'));
       return;
     }
 
@@ -159,14 +183,24 @@ export const ActiveScreen: React.FC = () => {
       AsyncStorage.setItem(ONLINE_SINCE_KEY, String(now)).catch(() => {});
       setOnline(true);
     } catch (err: unknown) {
-      setToggleError(err instanceof Error ? err.message : 'Error al conectar');
+      showConnectFeedback(feedbackFromConnectError(err));
     } finally {
       setConnecting(false);
     }
-  }, [documentsPendingReview, hasLocation, setOnline, setOnlineSince]);
+  }, [
+    awaitingApproval,
+    documentsPendingReview,
+    hasLocation,
+    setOnline,
+    setOnlineSince,
+    showConnectFeedback,
+    feedbackForConnectBlock,
+    feedbackFromConnectError,
+  ]);
 
   const disconnect = useCallback(async () => {
     setToggleError(null);
+    setConnectFeedback(null);
     try {
       await apiClient.put('/drivers/me/online', { is_online: false });
 
@@ -389,9 +423,16 @@ export const ActiveScreen: React.FC = () => {
           <GoButton
             onPress={connect}
             loading={connecting}
-            disabled={!hasLocation || documentsPendingReview || connecting}
+            disabled={!hasLocation || connectBlocked || connecting}
           />
-          {documentsPendingReview && (
+          {awaitingApproval && (
+            <View style={styles.goHint}>
+              <Text style={styles.reviewBannerText}>
+                Cuenta en revisión. Podés mirar el mapa; te avisamos cuando puedas conectarte.
+              </Text>
+            </View>
+          )}
+          {!awaitingApproval && documentsPendingReview && (
             <View style={styles.goHint}>
               <Text style={styles.reviewBannerText}>
                 Documentos pendientes de revision. No podes conectarte hasta tener los papeles en
@@ -472,6 +513,14 @@ export const ActiveScreen: React.FC = () => {
           <Ionicons name="locate-outline" size={24} color={theme.colors.turquoise} />
         </TouchableOpacity>
       )}
+
+      <Snackbar
+        visible={connectFeedback != null}
+        title={connectFeedback?.title ?? ''}
+        message={connectFeedback?.message ?? ''}
+        tone={(connectFeedback?.tone ?? 'error') as SnackbarTone}
+        onDismiss={dismissConnectFeedback}
+      />
     </View>
   );
 };

@@ -189,7 +189,7 @@ export const earningsService = {
     const completed7d = tvfStats?.completed ?? 0;
     const cancelledEarly7d = tvfStats?.cancelled_early ?? 0;
     const total7d = completed7d + cancelledEarly7d;
-    const tvf = total7d === 0 ? 1.0 : Math.round((completed7d / total7d) * 100) / 100;
+    const tvf = total7d === 0 ? null : Math.round((completed7d / total7d) * 100) / 100;
 
     const totalTrips = tripStats?.total ?? 0;
     const completedTrips = tripStats?.completed ?? 0;
