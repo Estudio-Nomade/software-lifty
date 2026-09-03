@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
@@ -19,6 +19,7 @@ import { driverStatusSchema, earningsDailySchema } from '../api/types';
 import type { EarningsDaily } from '../api/types';
 import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
+import { DistrictPickerSheet } from '../components/DistrictPickerSheet';
 import { GO_SIZE, GoButton } from '../components/GoButton';
 import { MapView } from '../components/MapView';
 import { PayoutMethodGateModal } from '../components/PayoutMethodGateModal';
@@ -38,6 +39,7 @@ import {
   feedbackFromConnectError,
 } from '../lib/connectBlockedFeedback';
 import { getCurrentPosition, startTracking, stopTracking } from '../lib/location';
+import { isDistrictRequiredError, shouldOpenDistrictPicker } from '../lib/shouldOpenDistrictPicker';
 import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -76,6 +78,7 @@ const havDistance = (a: { lat: number; lng: number }, b: { lat: number; lng: num
 export const ActiveScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const isOnline = useOnlineStore((s) => s.isOnline);
   const setOnline = useOnlineStore((s) => s.setOnline);
   const onlineSince = useOnlineStore((s) => s.onlineSince);
@@ -83,6 +86,7 @@ export const ActiveScreen: React.FC = () => {
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [connectFeedback, setConnectFeedback] = useState<ConnectBlockedFeedback | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [districtSheetVisible, setDistrictSheetVisible] = useState(false);
   const heatmapPoints = useHeatmapPolling();
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [onlineTime, setOnlineTime] = useState(0);
@@ -132,6 +136,7 @@ export const ActiveScreen: React.FC = () => {
   });
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
+  const hasDistrict = driverStatus?.has_district;
   const { needsPayoutMethod, refreshPayoutMethods } = usePayoutMethodGate(driverStatus);
   const signOut = useSignOut();
 
@@ -206,6 +211,11 @@ export const ActiveScreen: React.FC = () => {
       return;
     }
 
+    if (shouldOpenDistrictPicker({ hasDistrict })) {
+      setDistrictSheetVisible(true);
+      return;
+    }
+
     setConnecting(true);
     try {
       await apiClient.put('/drivers/me/online', { is_online: true });
@@ -219,6 +229,10 @@ export const ActiveScreen: React.FC = () => {
       AsyncStorage.setItem(ONLINE_SINCE_KEY, String(now)).catch(() => {});
       setOnline(true);
     } catch (err: unknown) {
+      if (isDistrictRequiredError(err)) {
+        setDistrictSheetVisible(true);
+        return;
+      }
       showConnectFeedback(feedbackFromConnectError(err));
     } finally {
       setConnecting(false);
@@ -228,12 +242,19 @@ export const ActiveScreen: React.FC = () => {
     documentsPendingReview,
     hasLocation,
     needsPayoutMethod,
+    hasDistrict,
     setOnline,
     setOnlineSince,
     showConnectFeedback,
     feedbackForConnectBlock,
     feedbackFromConnectError,
   ]);
+
+  const handleDistrictAssigned = useCallback(async () => {
+    setDistrictSheetVisible(false);
+    await queryClient.invalidateQueries({ queryKey: ['driverStatus'] });
+    await connect();
+  }, [connect, queryClient]);
 
   const disconnect = useCallback(async () => {
     setToggleError(null);
@@ -562,6 +583,13 @@ export const ActiveScreen: React.FC = () => {
           navigation.navigate('PaymentMethod');
         }}
         onLogout={() => signOut.mutate()}
+      />
+      <DistrictPickerSheet
+        visible={districtSheetVisible}
+        onDismiss={() => setDistrictSheetVisible(false)}
+        onAssigned={() => {
+          void handleDistrictAssigned();
+        }}
       />
       <Snackbar
         visible={connectFeedback != null}
