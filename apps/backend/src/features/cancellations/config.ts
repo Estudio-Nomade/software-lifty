@@ -18,8 +18,9 @@ export const DEFAULT_CANCELLATION_CONFIG: CancellationConfig = {
   suspendHours: 72,
   visibilityMinCancels: 5,
   tvfWindowDays: 30,
-  tvfWarnBp: 7000,
-  tvfBlockBp: 5000,
+  // Completion-rate bp: warn when completion < 30% (cancel ≥ 70%), block when < 5% (cancel ≥ 95%).
+  tvfWarnBp: 3000,
+  tvfBlockBp: 500,
   tickMs: 5000,
 };
 

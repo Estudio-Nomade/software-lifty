@@ -480,10 +480,13 @@ export const cancellationService = {
     const tvfCancels = snapshot?.total_tvf_cancels ?? 0;
     const hasTvfSample = tvfCompleted + tvfCancels > 0;
     const tvfRatePct = hasTvfSample ? Math.round((snapshot?.tvf_rate_bp ?? 0) / 10) / 10 : null;
+    const cancelRatePct =
+      hasTvfSample && tvfRatePct != null ? Math.round((100 - tvfRatePct) * 10) / 10 : null;
     const debt = Number(driver?.platform_debt ?? 0);
 
     return {
       tvf_rate_pct: tvfRatePct,
+      cancel_rate_pct: cancelRatePct,
       tvf_completed: tvfCompleted,
       tvf_cancels: tvfCancels,
       period_days: config.tvfWindowDays,

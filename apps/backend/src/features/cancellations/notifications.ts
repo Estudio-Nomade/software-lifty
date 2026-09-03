@@ -51,8 +51,8 @@ export function notifyCancelRateWarning(passengerId: string) {
 
 export function notifyTvfWarning(driverUserId: string) {
   sendPushToUser(driverUserId, {
-    title: 'TVF bajo',
-    body: 'Tu TVF está por debajo del 70%. Si baja del 50%, tu cuenta será desactivada.',
+    title: 'Tasa de cancelación alta',
+    body: 'Tu tasa de cancelación superó el 70%. Si llega al 95% o más, dejás de recibir ofertas hasta revisión de soporte.',
     data: { type: 'tvf:warning' },
   });
 }

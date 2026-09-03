@@ -57,6 +57,7 @@ interface ProfileData {
 
 interface CancellationMetrics {
   tvf_rate_pct: number | null;
+  cancel_rate_pct: number | null;
   tvf_completed: number;
   tvf_cancels: number;
   period_days: number;
@@ -69,6 +70,12 @@ interface CancellationMetrics {
   debt_cap_ars: number;
   debt_remaining_ars: number;
   commission_active: boolean;
+}
+
+function resolveCancelRatePct(metrics: CancellationMetrics): number | null {
+  if (metrics.cancel_rate_pct != null) return metrics.cancel_rate_pct;
+  if (metrics.tvf_rate_pct == null) return null;
+  return Math.round((100 - metrics.tvf_rate_pct) * 10) / 10;
 }
 
 // Maps a backend doc_type back to the UploadDocument screen's docType param.
@@ -117,9 +124,9 @@ function docsStatusIcon(docs: DriverDocument[]): React.JSX.Element {
   return <Ionicons name="time-outline" size={18} color={theme.colors.amber} />;
 }
 
-function tvfTone(pct: number): string {
-  if (pct < 50) return theme.colors.dangerRed;
-  if (pct < 70) return theme.colors.amber;
+function cancelTone(pct: number): string {
+  if (pct >= 95) return theme.colors.dangerRed;
+  if (pct >= 70) return theme.colors.amber;
   return theme.colors.success;
 }
 
@@ -288,9 +295,9 @@ export const ProfileScreen: React.FC = () => {
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel={
-              metrics.tvf_rate_pct == null
-                ? 'Cancelaciones. TVF sin datos. Abrir explicación'
-                : `Cancelaciones. TVF ${metrics.tvf_rate_pct.toFixed(1)} por ciento. Abrir explicación`
+              resolveCancelRatePct(metrics) == null
+                ? 'Cancelaciones. Tasa de cancelación sin datos. Abrir explicación'
+                : `Cancelaciones. Tasa de cancelación ${resolveCancelRatePct(metrics)?.toFixed(1)} por ciento. Abrir explicación`
             }
             activeOpacity={0.7}
             onPress={() => navigation.navigate('CancellationPolicy')}
@@ -300,19 +307,25 @@ export const ProfileScreen: React.FC = () => {
                 <Text style={styles.cancellationTitle}>Cancelaciones</Text>
                 <Ionicons name="chevron-forward" size={20} color={theme.colors.mediumGray} />
               </View>
-              {metrics.tvf_rate_pct == null ? (
-                <Text style={[styles.cancellationValue, { color: theme.colors.mediumGray }]}>
-                  —
-                </Text>
-              ) : (
-                <Text style={[styles.cancellationValue, { color: tvfTone(metrics.tvf_rate_pct) }]}>
-                  {metrics.tvf_rate_pct.toFixed(1)}%
-                </Text>
-              )}
+              {(() => {
+                const cancelPct = resolveCancelRatePct(metrics);
+                if (cancelPct == null) {
+                  return (
+                    <Text style={[styles.cancellationValue, { color: theme.colors.mediumGray }]}>
+                      —
+                    </Text>
+                  );
+                }
+                return (
+                  <Text style={[styles.cancellationValue, { color: cancelTone(cancelPct) }]}>
+                    {cancelPct.toFixed(1)}%
+                  </Text>
+                );
+              })()}
               <Text style={styles.metricSubline}>
-                {metrics.tvf_rate_pct == null
-                  ? 'TVF · sin viajes que cuenten'
-                  : `TVF · últimos ${metrics.period_days} días`}
+                {resolveCancelRatePct(metrics) == null
+                  ? 'Tasa de cancelación · sin viajes que cuenten'
+                  : `Tasa de cancelación · últimos ${metrics.period_days} días`}
               </Text>
               <Text style={styles.cancellationHint}>Tocá para ver cómo funciona</Text>
             </Card>
@@ -386,6 +399,30 @@ export const ProfileScreen: React.FC = () => {
           >
             <Text style={styles.infoLabel}>Método de cobro</Text>
             <Text style={styles.docAction}>Administrar →</Text>
+          </TouchableOpacity>
+        </Card>
+
+        <Card>
+          <Text style={styles.sectionTitle}>Ayuda</Text>
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => navigation.navigate('Terms', { from: 'profile' })}
+            accessibilityRole="button"
+            accessibilityLabel="Términos y condiciones"
+          >
+            <Ionicons name="document-text-outline" size={20} color={theme.colors.deepBlue} />
+            <Text style={styles.menuLabel}>Términos y condiciones</Text>
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.mediumGray} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => navigation.navigate('Support')}
+            accessibilityRole="button"
+            accessibilityLabel="Soporte"
+          >
+            <Ionicons name="help-circle-outline" size={20} color={theme.colors.deepBlue} />
+            <Text style={styles.menuLabel}>Soporte</Text>
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.mediumGray} />
           </TouchableOpacity>
         </Card>
 
@@ -606,6 +643,20 @@ const styles = StyleSheet.create({
   docAction: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.turquoise,
+    fontWeight: theme.fontWeight.medium,
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.lightGray,
+  },
+  menuLabel: {
+    flex: 1,
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.deepBlue,
     fontWeight: theme.fontWeight.medium,
   },
   reviewBanner: {

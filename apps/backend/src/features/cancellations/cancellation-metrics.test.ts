@@ -114,6 +114,7 @@ describe('GET /api/drivers/me/cancellation-metrics', () => {
 
     expect(status).toBe(200);
     expect(data.tvf_rate_pct).toBeNull();
+    expect(data.cancel_rate_pct).toBeNull();
     expect(data.tvf_completed).toBe(0);
     expect(data.tvf_cancels).toBe(0);
     expect(data.period_days).toBe(30);
@@ -197,6 +198,7 @@ describe('GET /api/drivers/me/cancellation-metrics', () => {
     expect(metrics.tvf_cancels).toBe(1);
     expect(metrics.tvf_completed).toBe(0);
     expect(metrics.tvf_rate_pct).toBe(0);
+    expect(metrics.cancel_rate_pct).toBe(100);
   });
 
   test('no_show does not count for TVF and creates a pending payout', async () => {
@@ -248,6 +250,7 @@ describe('GET /api/drivers/me/cancellation-metrics', () => {
     expect(metrics.driver_cancels).toBe(0);
     expect(metrics.tvf_cancels).toBe(0);
     expect(metrics.tvf_rate_pct).toBeNull();
+    expect(metrics.cancel_rate_pct).toBeNull();
     expect(metrics.payouts_pending_ars).toBe(600);
     expect(metrics.payouts_paid_ars).toBe(0);
   });

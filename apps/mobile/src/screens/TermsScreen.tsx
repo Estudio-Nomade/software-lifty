@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import type React from 'react';
 import { useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, View } from 'react-native';
@@ -11,11 +12,21 @@ import { theme } from '../theme';
 
 export const TermsScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const params = useLocalSearchParams<{ from?: string }>();
   const setTermsAccepted = useAuthStore((s) => s.setTermsAccepted);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const fromProfile = params.from === 'profile';
+  const isReadMode = fromProfile || isAuthenticated;
+
   const handleAccept = async () => {
+    if (isReadMode) {
+      navigation.goBack();
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -84,10 +95,11 @@ export const TermsScreen: React.FC = () => {
       <View style={styles.footer}>
         {error !== null && <Text style={styles.errorText}>{error}</Text>}
         <Button
-          title={loading ? '' : 'ACEPTAR Y CONTINUAR'}
+          title={isReadMode ? 'VOLVER' : loading ? '' : 'ACEPTAR Y CONTINUAR'}
           onPress={handleAccept}
-          loading={loading}
-          disabled={loading}
+          loading={!isReadMode && loading}
+          disabled={!isReadMode && loading}
+          variant={isReadMode ? 'outline' : 'primary'}
           style={styles.button}
         />
       </View>
