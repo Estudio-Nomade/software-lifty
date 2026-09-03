@@ -1,0 +1,97 @@
+# Lifty API on AWS Lightsail (instance).
+# Run from monorepo root OR from this directory (scripts set COMPOSE_FILE).
+#
+# Services:
+#   api   — Bun/Elysia backend (Supabase = managed Postgres/Auth/Storage)
+#   redis — required for rate limit + location cache
+#   caddy — reverse proxy + automatic HTTPS (profile: proxy)
+#
+# Quick start:
+#   cp deploy/lightsail/.env.example deploy/lightsail/.env   # fill secrets
+#   ./deploy/lightsail/deploy.sh
+
+name: lifty
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
+    command: >
+      sh -c 'redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"'
+    volumes:
+      - lifty_redis:/data
+    healthcheck:
+      # CMD-SHELL so REDIS_PASSWORD from container env is expanded
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - lifty_net
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/lightsail/Dockerfile
+    image: lifty-api:latest
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # Prefer compose Redis; override REDIS_URL in .env only if using managed Redis.
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    # Without Caddy: expose API on host (Lightsail firewall → open 3000 or 80 via iptables).
+    # With profile=proxy: only Caddy publishes 80/443; api stays on internal network.
+    ports:
+      - "${API_PUBLISH_PORT:-3000}:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://127.0.0.1:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - lifty_net
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["proxy"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - lifty_caddy_data:/data
+      - lifty_caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - lifty_net
+
+networks:
+  lifty_net:
+    driver: bridge
+
+volumes:
+  lifty_redis:
+  lifty_caddy_data:
+  lifty_caddy_config:
