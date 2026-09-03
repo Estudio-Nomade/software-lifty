@@ -476,13 +476,16 @@ export const cancellationService = {
       .from(driverFeePayouts)
       .where(eq(driverFeePayouts.driver_id, driverId));
 
-    const tvfRateBp = snapshot?.tvf_rate_bp ?? 10000;
+    const tvfCompleted = snapshot?.total_completed ?? 0;
+    const tvfCancels = snapshot?.total_tvf_cancels ?? 0;
+    const hasTvfSample = tvfCompleted + tvfCancels > 0;
+    const tvfRatePct = hasTvfSample ? Math.round((snapshot?.tvf_rate_bp ?? 0) / 10) / 10 : null;
     const debt = Number(driver?.platform_debt ?? 0);
 
     return {
-      tvf_rate_pct: Math.round(tvfRateBp / 10) / 10,
-      tvf_completed: snapshot?.total_completed ?? 0,
-      tvf_cancels: snapshot?.total_tvf_cancels ?? 0,
+      tvf_rate_pct: tvfRatePct,
+      tvf_completed: tvfCompleted,
+      tvf_cancels: tvfCancels,
       period_days: config.tvfWindowDays,
       total_cancels: cancelAgg?.total ?? 0,
       driver_cancels: cancelAgg?.driver_cancels ?? 0,
