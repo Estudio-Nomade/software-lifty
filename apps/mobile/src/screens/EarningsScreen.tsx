@@ -1,25 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import React from 'react';
+import type React from 'react';
 import { ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { apiClient } from '../api/client';
 import type { EarningsDaily } from '../api/types';
 import { Card } from '../components/Card';
 import { Navbar } from '../components/Navbar';
-import { SideMenu } from '../components/SideMenu';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { Text } from '../components/ui/Text';
 import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { useSignOut } from '../hooks/useAuth';
 import { shouldShowPlatformDebt } from '../lib/commission';
 import { theme } from '../theme';
 
 export const EarningsScreen: React.FC = () => {
   const navigation = useAppNavigation();
-  const signOut = useSignOut();
   const { setActiveTab } = useTabBar();
-  const [menuVisible, setMenuVisible] = React.useState(false);
 
   const {
     data: earnings,
@@ -34,44 +30,6 @@ export const EarningsScreen: React.FC = () => {
     },
     refetchInterval: 60_000,
   });
-
-  const menuItems = React.useMemo(
-    () => [
-      {
-        label: 'Inicio',
-        icon: 'home-outline' as const,
-        onPress: () => navigation.navigate('Active'),
-      },
-      {
-        label: 'Ganancias',
-        icon: 'wallet-outline' as const,
-        onPress: () => {},
-      },
-      {
-        label: 'Metodo de cobro',
-        icon: 'card-outline' as const,
-        onPress: () => navigation.navigate('PaymentMethod'),
-      },
-      {
-        label: 'Perfil',
-        icon: 'person-outline' as const,
-        onPress: () => navigation.navigate('Profile'),
-      },
-      {
-        label: 'Historial de viajes',
-        icon: 'document-text-outline' as const,
-        onPress: () => navigation.navigate('TripHistory'),
-      },
-      {
-        label: 'Cerrar sesion',
-        icon: 'log-out-outline' as const,
-        onPress: () => signOut.mutate(),
-        danger: true,
-        dividerTop: true,
-      },
-    ],
-    [navigation, signOut],
-  );
 
   const formatCurrency = (amount: number) =>
     `$${amount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -100,7 +58,7 @@ export const EarningsScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-      <Navbar title="Cobros" showHamburger onHamburgerPress={() => setMenuVisible(true)} />
+      <Navbar title="Cobros" showBack={false} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading ? (
@@ -378,8 +336,6 @@ export const EarningsScreen: React.FC = () => {
           </>
         )}
       </ScrollView>
-
-      <SideMenu visible={menuVisible} onClose={() => setMenuVisible(false)} menuItems={menuItems} />
     </View>
   );
 };
