@@ -39,7 +39,11 @@ import {
   feedbackFromConnectError,
 } from '../lib/connectBlockedFeedback';
 import { getCurrentPosition, startTracking, stopTracking } from '../lib/location';
-import { isDistrictRequiredError, shouldOpenDistrictPicker } from '../lib/shouldOpenDistrictPicker';
+import {
+  hasDistrictFromCache,
+  isDistrictRequiredError,
+  shouldOpenDistrictPicker,
+} from '../lib/shouldOpenDistrictPicker';
 import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -211,7 +215,7 @@ export const ActiveScreen: React.FC = () => {
     }
 
     const latest = queryClient.getQueryData<DriverStatus>(['driverStatus']);
-    if (shouldOpenDistrictPicker({ hasDistrict: latest?.has_district })) {
+    if (shouldOpenDistrictPicker({ hasDistrict: hasDistrictFromCache(latest) })) {
       setDistrictSheetVisible(true);
       return;
     }
@@ -250,8 +254,16 @@ export const ActiveScreen: React.FC = () => {
 
   const handleDistrictAssigned = useCallback(async () => {
     setDistrictSheetVisible(false);
-    await queryClient.refetchQueries({ queryKey: ['driverStatus'] });
-    await connect();
+    // Lock GO for the whole refetch→connect window so a second tap cannot race.
+    // Refetch must finish before connect so getQueryData(['driverStatus']) is fresh
+    // (has_district true) and shouldOpenDistrictPicker does not reopen the sheet.
+    setConnecting(true);
+    try {
+      await queryClient.refetchQueries({ queryKey: ['driverStatus'] });
+      await connect();
+    } finally {
+      setConnecting(false);
+    }
   }, [connect, queryClient]);
 
   const disconnect = useCallback(async () => {

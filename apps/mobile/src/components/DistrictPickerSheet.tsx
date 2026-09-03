@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -42,10 +42,13 @@ export const DistrictPickerSheet: React.FC<DistrictPickerSheetProps> = ({
   const [selected, setSelected] = useState<District | null>(null);
   const [terms, setTerms] = useState<string | null>(null);
   const [privacy, setPrivacy] = useState<string | null>(null);
+  /** District id whose terms/privacy are currently loaded — must match selected on accept. */
+  const [termsDistrictId, setTermsDistrictId] = useState<string | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const detailGenRef = useRef(0);
 
   const fetchDistricts = useCallback(async () => {
     try {
@@ -64,43 +67,59 @@ export const DistrictPickerSheet: React.FC<DistrictPickerSheetProps> = ({
 
   useEffect(() => {
     if (!visible) return;
+    detailGenRef.current += 1;
     setStep('list');
     setSelected(null);
     setTerms(null);
     setPrivacy(null);
+    setTermsDistrictId(null);
     setDetailError(null);
     setSubmitError(null);
     setSubmitting(false);
+    setLoadingDetail(false);
     void fetchDistricts();
   }, [visible, fetchDistricts]);
 
   const handleSelect = async (district: District) => {
+    if (loadingDetail || submitting) return;
+    const gen = ++detailGenRef.current;
     setSelected(district);
     setStep('terms');
     setDetailError(null);
     setSubmitError(null);
     setTerms(null);
     setPrivacy(null);
+    setTermsDistrictId(null);
     try {
       setLoadingDetail(true);
       const { data: body } = await apiClient.get(`/districts/${district.id}`);
+      if (gen !== detailGenRef.current) return;
       const payload = body?.data ?? body;
       setTerms(payload.terms_and_conditions ?? null);
       setPrivacy(payload.privacy_policy ?? null);
+      setTermsDistrictId(district.id);
     } catch (err: unknown) {
+      if (gen !== detailGenRef.current) return;
       const message =
         err instanceof Error ? err.message : 'No se pudieron cargar los términos del municipio';
       setDetailError(message);
     } finally {
-      setLoadingDetail(false);
+      if (gen === detailGenRef.current) {
+        setLoadingDetail(false);
+      }
     }
   };
 
   const handleBackToList = () => {
-    if (submitting) return;
+    if (submitting || loadingDetail) return;
+    detailGenRef.current += 1;
     setStep('list');
     setDetailError(null);
     setSubmitError(null);
+    setTerms(null);
+    setPrivacy(null);
+    setTermsDistrictId(null);
+    setLoadingDetail(false);
   };
 
   const handleDismiss = () => {
@@ -109,7 +128,9 @@ export const DistrictPickerSheet: React.FC<DistrictPickerSheetProps> = ({
   };
 
   const handleAccept = async () => {
-    if (!selected || submitting) return;
+    if (!selected || submitting || loadingDetail) return;
+    // Accept only when loaded terms belong to the currently selected district.
+    if (termsDistrictId !== selected.id) return;
     try {
       setSubmitting(true);
       setSubmitError(null);
@@ -128,11 +149,14 @@ export const DistrictPickerSheet: React.FC<DistrictPickerSheetProps> = ({
     }
   };
 
+  const termsReady = selected != null && termsDistrictId === selected.id && !loadingDetail;
+
   const renderItem = ({ item }: { item: District }) => (
     <TouchableOpacity
       style={styles.item}
       onPress={() => void handleSelect(item)}
       activeOpacity={0.7}
+      disabled={loadingDetail || submitting}
     >
       <Text style={styles.itemName}>{item.name}</Text>
       <Text style={styles.itemProvince}>{item.province}</Text>
@@ -205,6 +229,7 @@ export const DistrictPickerSheet: React.FC<DistrictPickerSheetProps> = ({
                   keyExtractor={(item) => item.id}
                   contentContainerStyle={styles.list}
                   style={styles.listFlex}
+                  pointerEvents={loadingDetail || submitting ? 'none' : 'auto'}
                 />
               )}
               <TouchableOpacity
@@ -256,7 +281,7 @@ export const DistrictPickerSheet: React.FC<DistrictPickerSheetProps> = ({
                       variant="cta"
                       onPress={() => void handleAccept()}
                       loading={submitting}
-                      disabled={submitting || loadingDetail}
+                      disabled={submitting || loadingDetail || !termsReady}
                     />
                   </View>
                 </>
