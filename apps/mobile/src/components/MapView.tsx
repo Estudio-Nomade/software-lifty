@@ -470,7 +470,7 @@ export const MapView: React.FC<MapViewProps> = ({
     () =>
       generateMapHtml({
         turquoise: theme.colors.turquoise,
-        lightGray: theme.colors.lightGray,
+        lightGray: theme.colors.background,
         amber: theme.colors.amber,
       }),
     [],
@@ -723,18 +723,18 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
   },
   loadingOverlay: {
     ...(StyleSheet.absoluteFill as object),
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
   },
   errorContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
   },
   errorText: {

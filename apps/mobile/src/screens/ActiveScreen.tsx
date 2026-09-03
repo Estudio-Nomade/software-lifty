@@ -19,7 +19,7 @@ import { driverStatusSchema, earningsDailySchema } from '../api/types';
 import type { EarningsDaily } from '../api/types';
 import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
-import { GoButton } from '../components/GoButton';
+import { GO_SIZE, GoButton } from '../components/GoButton';
 import { MapView } from '../components/MapView';
 import { PayoutMethodGateModal } from '../components/PayoutMethodGateModal';
 import { Toggle } from '../components/Toggle';
@@ -37,7 +37,7 @@ import {
   feedbackForConnectBlock,
   feedbackFromConnectError,
 } from '../lib/connectBlockedFeedback';
-import { getCurrentPosition, stopTracking } from '../lib/location';
+import { getCurrentPosition, startTracking, stopTracking } from '../lib/location';
 import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -48,6 +48,8 @@ const ONLINE_COLLAPSED = 180;
 const ONLINE_EXPANDED = SCREEN_HEIGHT * 0.45;
 const OFFLINE_PILL = 96;
 const OFFLINE_EXPANDED = SCREEN_HEIGHT * 0.45;
+/** Gap between GO circle bottom edge and collapsed offline sheet top. */
+const GO_SHEET_GAP = theme.spacing.lg;
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -136,8 +138,24 @@ export const ActiveScreen: React.FC = () => {
   useFocusEffect(
     useCallback(() => {
       refreshPayoutMethods();
+      // Warm GPS on home (cold start + return from other screens). Offline map needs
+      // a live watch; online tracking is also owned by LocationSync (idempotent).
+      void getCurrentPosition();
+      void startTracking();
+      return () => {
+        if (!useOnlineStore.getState().isOnline) {
+          void stopTracking();
+        }
+      };
     }, [refreshPayoutMethods]),
   );
+
+  // After disconnect, LocationSync stops the watch — restart so the map keeps following.
+  useEffect(() => {
+    if (isOnline) return;
+    void getCurrentPosition();
+    void startTracking();
+  }, [isOnline]);
 
   const awaitingApproval =
     driverStatus?.status === 'under_review' || driverStatus?.step === 'review';
@@ -269,7 +287,10 @@ export const ActiveScreen: React.FC = () => {
   const offlineExpanded = OFFLINE_EXPANDED + tabPad;
   const onlineCollapsed = ONLINE_COLLAPSED + tabPad;
   const onlineExpanded = ONLINE_EXPANDED + tabPad;
-  const recenterBottom = (isOnline ? onlineCollapsed : offlineCollapsed) + theme.spacing.md;
+  const sheetFloor = isOnline ? onlineCollapsed : offlineCollapsed;
+  const goBottom = sheetFloor + GO_SHEET_GAP;
+  const goHintBottom = goBottom + GO_SIZE + theme.spacing.sm;
+  const recenterBottom = sheetFloor + theme.spacing.md;
 
   const earningsAmountLabel = earnings ? formatCurrency(earnings.total) : '$0';
 
@@ -443,16 +464,17 @@ export const ActiveScreen: React.FC = () => {
             onPress={connect}
             loading={connecting}
             disabled={!hasLocation || connectBlocked || needsPayoutMethod || connecting}
+            bottom={goBottom}
           />
           {awaitingApproval && (
-            <View style={styles.goHint}>
+            <View style={[styles.goHint, { bottom: goHintBottom }]}>
               <Text style={styles.reviewBannerText}>
                 Cuenta en revisión. Podés mirar el mapa; te avisamos cuando puedas conectarte.
               </Text>
             </View>
           )}
           {!awaitingApproval && documentsPendingReview && (
-            <View style={styles.goHint}>
+            <View style={[styles.goHint, { bottom: goHintBottom }]}>
               <Text style={styles.reviewBannerText}>
                 Documentos pendientes de revision. No podes conectarte hasta tener los papeles en
                 regla.
@@ -460,7 +482,7 @@ export const ActiveScreen: React.FC = () => {
             </View>
           )}
           {toggleError && !isOnline && (
-            <View style={styles.goHint}>
+            <View style={[styles.goHint, { bottom: goHintBottom }]}>
               <Text style={styles.errorText}>{toggleError}</Text>
             </View>
           )}
@@ -606,18 +628,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: theme.spacing.md,
     right: theme.spacing.md,
-    top: '58%',
     zIndex: 7,
     alignItems: 'center',
   },
   reviewBannerText: {
     fontSize: theme.fontSize.xs,
-    color: theme.colors.dangerRed,
+    color: theme.colors.deepBlue,
     textAlign: 'center',
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: 'rgba(255,255,255,0.94)',
     padding: theme.spacing.sm,
     borderRadius: theme.radius.sm,
     overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.surfaceMuted,
   },
   sheetContent: {
     flex: 1,
@@ -706,8 +729,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: theme.spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.lightGray,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.surfaceMuted,
   },
   metricLabel: {
     fontSize: theme.fontSize.sm,
@@ -737,7 +760,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 5,

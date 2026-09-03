@@ -23,6 +23,9 @@ export interface MapViewProps {
   userIcon?: 'car' | 'moto' | 'camioneta' | 'person' | null;
   style?: import('react-native').ViewStyle;
   onError?: () => void;
+  onMoveEnd?: (center: { lat: number; lng: number }) => void;
+  recenterKey?: number;
+  onFollowingChange?: (following: boolean) => void;
 }
 
 export const DEFAULT_ZOOM = 15;
