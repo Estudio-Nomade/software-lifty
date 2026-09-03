@@ -36,7 +36,7 @@ export function routeForDriverStatus(driverData: DriverStatus): {
   status: DriverStatusValue;
   blockedMessage?: string;
 } {
-  const { status, step, has_district } = driverData;
+  const { status, step } = driverData;
 
   if (status === 'rejected') {
     return {
@@ -51,14 +51,10 @@ export function routeForDriverStatus(driverData: DriverStatus): {
 
   const byStep = step ? STEP_ROUTE[step] : undefined;
   if (byStep) {
-    if (step === 'approved' && !has_district) {
-      return { screen: 'SelectProvince', status: 'approved' };
-    }
     return { screen: byStep.screen, status: byStep.storeStatus };
   }
 
   if (status === 'approved') {
-    if (!has_district) return { screen: 'SelectProvince', status: 'approved' };
     return { screen: 'Active', status: 'approved' };
   }
   if (status === 'under_review') return { screen: 'Active', status: 'under_review' };
