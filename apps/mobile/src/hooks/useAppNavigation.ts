@@ -10,6 +10,7 @@ const SCREEN_TO_ROUTE = {
   LoginCredentials: '/login-credentials',
   ForgotPassword: '/forgot-password',
   Terms: '/terms',
+  Support: '/support',
   TripHistory: '/trip-history',
   OnboardingStep1: '/onboarding-step1',
   OnboardingStep2: '/onboarding-step2',
@@ -61,6 +62,9 @@ const BACK_FALLBACK: Record<string, string> = {
   'waiting-approval': 'OnboardingStep2',
   'select-district': 'SelectProvince',
   'district-terms': 'SelectDistrict',
+  support: 'Profile',
+  terms: 'Profile',
+  'cancellation-policy': 'Profile',
 };
 
 export function useAppNavigation() {
