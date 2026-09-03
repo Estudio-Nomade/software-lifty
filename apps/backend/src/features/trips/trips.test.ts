@@ -714,9 +714,16 @@ describe('Trip State Machine', () => {
     const driverId = await createDriverRow(token);
 
     const db = getDb();
+    // Rate 0 = "Lanzamiento" phase (month 1). Pin the start date to the current
+    // month so the trip is always created in phase 1 regardless of when CI runs.
+    const now = new Date();
+    const currentMonthStart = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(
+      2,
+      '0',
+    )}-01`;
     await db
       .update(platformConfig)
-      .set({ value: '2026-08-01' })
+      .set({ value: currentMonthStart })
       .where(eq(platformConfig.key, 'commission_start_date'));
 
     const { tripId } = await completeTrip(token);
