@@ -5,6 +5,12 @@ export const theme = {
     lightGray: '#EDF1F5',
     mediumGray: '#8A93A0',
     white: '#FFFFFF',
+    /** App chrome / full-screen fill (warm off-white, not cold Win98 gray). */
+    background: '#F4F6F8',
+    /** Cards and elevated panels on top of background. */
+    surface: '#FFFFFF',
+    /** Soft section plates, chips, empty wells. */
+    surfaceMuted: '#E8EEF2',
     dangerRed: '#FF6B6B',
     amber: '#FFB020',
     success: '#34C759',
