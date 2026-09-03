@@ -24,11 +24,18 @@ import { Navbar } from '../components/Navbar';
 import { SideMenu } from '../components/SideMenu';
 import { Toggle } from '../components/Toggle';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
+import { Snackbar } from '../components/feedback/Snackbar';
+import type { SnackbarTone } from '../components/feedback/Snackbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
 import { shouldShowPlatformDebt } from '../lib/commission';
+import {
+  type ConnectBlockedFeedback,
+  feedbackForConnectBlock,
+  feedbackFromConnectError,
+} from '../lib/connectBlockedFeedback';
 import { getCurrentPosition, stopTracking } from '../lib/location';
 import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
@@ -71,6 +78,7 @@ export const ActiveScreen: React.FC = () => {
   const onlineSince = useOnlineStore((s) => s.onlineSince);
   const setOnlineSince = useOnlineStore((s) => s.setOnlineSince);
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const [connectFeedback, setConnectFeedback] = useState<ConnectBlockedFeedback | null>(null);
   const [connecting, setConnecting] = useState(false);
   const heatmapPoints = useHeatmapPolling();
   const [menuVisible, setMenuVisible] = useState(false);
@@ -139,25 +147,31 @@ export const ActiveScreen: React.FC = () => {
     refetchInterval: 60_000,
   });
 
+  const showConnectFeedback = useCallback((feedback: ConnectBlockedFeedback) => {
+    setToggleError(null);
+    setConnectFeedback(feedback);
+  }, []);
+
+  const dismissConnectFeedback = useCallback(() => {
+    setConnectFeedback(null);
+  }, []);
+
   const connect = useCallback(async () => {
     setToggleError(null);
+    setConnectFeedback(null);
 
     if (awaitingApproval) {
-      setToggleError(
-        'Tu cuenta está en revisión. Te avisamos cuando esté aprobada para que puedas conectarte.',
-      );
+      showConnectFeedback(feedbackForConnectBlock('not_approved'));
       return;
     }
 
     if (documentsPendingReview) {
-      setToggleError(
-        'Tenes documentos pendientes de revision. No podes conectarte hasta que sean aprobados.',
-      );
+      showConnectFeedback(feedbackForConnectBlock('docs_pending'));
       return;
     }
 
     if (!hasLocation) {
-      setToggleError('Necesitamos tu ubicacion para conectarte.');
+      showConnectFeedback(feedbackForConnectBlock('no_location'));
       return;
     }
 
@@ -174,14 +188,24 @@ export const ActiveScreen: React.FC = () => {
       AsyncStorage.setItem(ONLINE_SINCE_KEY, String(now)).catch(() => {});
       setOnline(true);
     } catch (err: unknown) {
-      setToggleError(err instanceof Error ? err.message : 'Error al conectar');
+      showConnectFeedback(feedbackFromConnectError(err));
     } finally {
       setConnecting(false);
     }
-  }, [awaitingApproval, documentsPendingReview, hasLocation, setOnline, setOnlineSince]);
+  }, [
+    awaitingApproval,
+    documentsPendingReview,
+    hasLocation,
+    setOnline,
+    setOnlineSince,
+    showConnectFeedback,
+    feedbackForConnectBlock,
+    feedbackFromConnectError,
+  ]);
 
   const disconnect = useCallback(async () => {
     setToggleError(null);
+    setConnectFeedback(null);
     try {
       await apiClient.put('/drivers/me/online', { is_online: false });
 
@@ -548,6 +572,14 @@ export const ActiveScreen: React.FC = () => {
           <Ionicons name="locate-outline" size={24} color={theme.colors.turquoise} />
         </TouchableOpacity>
       )}
+
+      <Snackbar
+        visible={connectFeedback != null}
+        title={connectFeedback?.title ?? ''}
+        message={connectFeedback?.message ?? ''}
+        tone={(connectFeedback?.tone ?? 'error') as SnackbarTone}
+        onDismiss={dismissConnectFeedback}
+      />
     </View>
   );
 };
