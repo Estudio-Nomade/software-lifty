@@ -202,7 +202,7 @@ describe('Earnings + Stats + TVF', () => {
     expect(data.rating_avg).toBe(0);
     expect(data.total_trips).toBe(0);
     expect(data.completion_rate).toBe(0);
-    expect(data.tvf).toBe(1.0);
+    expect(data.tvf).toBeNull();
     expect(data.seniority_days).toBeGreaterThanOrEqual(0);
     expect(data.total_earnings).toBe(0);
   });
@@ -278,7 +278,7 @@ describe('Earnings + Stats + TVF', () => {
     expect(data.tvf).toBe(0.5);
   });
 
-  test('GET /stats TVF returns 1.0 when no recent trips', async () => {
+  test('GET /stats TVF returns null when no recent trips', async () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);
     const db = getDb();
@@ -319,7 +319,7 @@ describe('Earnings + Stats + TVF', () => {
     expect(status).toBe(200);
     expect(data.total_trips).toBe(2);
     expect(data.completion_rate).toBe(0.5);
-    expect(data.tvf).toBe(1.0);
+    expect(data.tvf).toBeNull();
   });
 
   test('GET /stats includes total_earnings', async () => {
