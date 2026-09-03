@@ -7,6 +7,7 @@ import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { stripHtml } from '../lib/stripHtml';
 import { theme } from '../theme';
 
 export const DistrictTermsScreen: React.FC = () => {
@@ -97,10 +98,6 @@ export const DistrictTermsScreen: React.FC = () => {
     </View>
   );
 };
-
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '');
-}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.white },
