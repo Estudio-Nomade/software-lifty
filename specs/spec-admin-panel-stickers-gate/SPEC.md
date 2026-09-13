@@ -24,7 +24,7 @@ sources:
 
 | # | Decisión | Valor |
 |---|----------|--------|
-| D1 | Dónde vive el panel ops | `apps/admin` (última app del monorepo) |
+| D1 | Dónde vive el panel ops | `LIfty/apps/admin` (fuera del monorepo, hermano de `software-lifty`) |
 | D2 | Web de tránsito en este monorepo | **No.** Ya existe fuera del repo. |
 | D3 | Stickers vs online | **Hard gate.** Sin identificación emitida → no `is_online`. |
 | D4 | Quién marca “stickers entregados” | **Web-tránsito** (sistema de verdad de la entrega física). |
@@ -57,16 +57,16 @@ Sin esto el panel admin aprueba gente que igual no debería manejar, o el candad
    - Manejar error `STICKERS_REQUIRED` si el backend corta.
    - Cuando status pase a `issued`, permitir online (siguen valiendo district + docs gates existentes).
 
-### Phase 2 — `apps/admin` MVP ops
+### Phase 2 — Admin ops MVP (`/home/marti/Documentos/LIfty/apps/admin`)
 
-Web desktop-first en monorepo:
+Web desktop-first **fuera** del monorepo (mismo nivel que `web-transito`):
 
-1. Login Supabase; solo `users.role === 'admin'` (403/redirect si no).
+1. Login Supabase Lifty; solo `users.role === 'admin'` (403/redirect si no).
 2. Cola pendientes → `GET /admin/drivers/pending`.
 3. Ficha → `GET /admin/drivers/:id` (persona, KYC, vehículos, docs con preview/link, distrito).
 4. Aprobar / rechazar + notes → `POST /admin/drivers/:id/review`.
 5. En ficha: badge **Identificación:** pendiente retiro / emitida / revocada (solo lectura en MVP).
-6. Script root `dev:admin` **aparte** de `dev-all` (no romper QR Expo).
+6. Dev: `cd ../apps/admin && bun run dev` (:5174). **No** workspace monorepo / **no** `dev-all`.
 
 ### Phase 3 — (opcional, fuera del MVP de esta SPEC si no hay tiempo)
 
@@ -98,7 +98,7 @@ Web desktop-first en monorepo:
 
 - id: CAP-5
   phase: 2
-  intent: Un admin Lifty revisa la cola y aprueba/rechaza desde `apps/admin` sin depender del mail one-click.
+  intent: Un admin Lifty revisa la cola y aprueba/rechaza desde `LIfty/apps/admin` sin depender del mail one-click.
   success: Login admin → lista pending → ficha con docs → approve/reject refleja en DB igual que la API actual; usuario `role=driver` no entra al panel.
 
 - id: CAP-6
@@ -136,7 +136,7 @@ Web desktop-first en monorepo:
 ## Success signal
 
 - Phase 1: tests backend cubren approve → online denied → issue bridge → online ok; typecheck/lint OK; mobile no invita a conducir sin stickers.
-- Phase 2: `apps/admin` en dev permite el loop completo de review; conductor no-admin no entra.
+- Phase 2: `LIfty/apps/admin` en dev permite el loop completo de review; conductor no-admin no entra.
 - Las dos Supabase siguen separadas; el único acoplamiento es el contrato HTTP del bridge.
 
 ## Order of work (implementación)
@@ -145,5 +145,5 @@ Web desktop-first en monorepo:
 2. Approve paths + `toggleOnline` + `getStatus` + tests
 3. Bridge route + tests de auth secret
 4. Copy notifications + mobile mínimo
-5. Scaffold `apps/admin` + cola/ficha/review + badge
+5. Scaffold `LIfty/apps/admin` (fuera monorepo) + cola/ficha/review + badge
 6. Documentar para el equipo de web-tránsito el payload del bridge (`transit-bridge.md` final)

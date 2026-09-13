@@ -35,26 +35,14 @@ Estimación para implementación. Ajustar si el árbol se mueve.
 - `apps/mobile/src/lib/notifications.ts` / handlers — copy o tipo `identification:issued` si se agrega
 - Tests mobile si hay coverage del toggle/status
 
-## Phase 2 — apps/admin (new package)
+## Phase 2 — admin ops (fuera monorepo)
 
-### Create
-- `apps/admin/package.json`
-- `apps/admin/tsconfig.json`
-- `apps/admin/vite.config.ts`
-- `apps/admin/index.html`
-- `apps/admin/src/main.tsx`
-- `apps/admin/src/App.tsx`
-- `apps/admin/src/lib/supabase.ts`
-- `apps/admin/src/lib/api.ts`
-- `apps/admin/src/pages/Login.tsx`
-- `apps/admin/src/pages/PendingQueue.tsx`
-- `apps/admin/src/pages/DriverDetail.tsx`
-- `apps/admin/.env.example`
+### Create (path absoluto)
+- `/home/marti/Documentos/LIfty/apps/admin/**` (Vite + shadcn; no workspace monorepo)
 
-### Modify
-- Root `package.json` — workspace ya `apps/*`; script `dev:admin`
-- Root `AGENTS.md` — mencionar `apps/admin` + `bun run dev:admin`
-- Opcional: `turbo.json` pipeline typecheck/build admin
+### Modify monorepo
+- Root `AGENTS.md` — documentar path externo `LIfty/apps/admin`
+- **No** `dev:admin` en monorepo root; **no** turbo package
 
 ## Explicitly not touched (this SPEC)
 

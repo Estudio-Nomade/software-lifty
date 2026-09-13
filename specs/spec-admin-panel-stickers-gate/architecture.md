@@ -9,12 +9,12 @@ flowchart LR
   subgraph liftyMono["Monorepo software-lifty"]
     mobileDrv["apps/mobile conductor"]
     mobilePax["apps/mobile-passengers"]
-    adminWeb["apps/admin ops"]
     api["apps/backend Elysia"]
     sbLifty[("Supabase Lifty DB + Auth")]
   end
 
   subgraph afuera["Fuera del monorepo"]
+    adminWeb["LIfty/apps/admin ops"]
     transitWeb["Web tránsito"]
     sbTransit[("Supabase tránsito")]
   end
@@ -112,34 +112,28 @@ if turning on:
 
 Matching ya filtra `is_online=true`; no confiar solo en eso para writes: el gate está en toggle.
 
-## `apps/admin` (Phase 2)
+## Admin ops (Phase 2) — fuera del monorepo
 
 ```
-apps/admin/
-  package.json          @lifty/admin
+/home/marti/Documentos/LIfty/apps/admin/
+  package.json
   vite.config.ts
   index.html
   src/main.tsx
-  src/App.tsx           router
+  src/App.tsx
   src/lib/supabase.ts
-  src/lib/api.ts        fetch + Bearer
-  src/pages/Login.tsx
-  src/pages/PendingQueue.tsx
-  src/pages/DriverDetail.tsx
+  src/lib/api.ts
+  src/pages/...
 ```
 
 - Auth: same Supabase **Lifty** project as mobile (publishable key + session).
-- API base: `VITE_API_URL` → backend.
-- After login, call something cheap (`/auth/me` o pending list); if role ≠ admin, sign out + error.
-- No shared UI kit mandatory with Expo; keep simple.
+- API base: `VITE_API_URL` → monorepo backend `:3001`.
+- After login, call `/auth/me` o pending list; if role ≠ admin, sign out + error.
+- **Not** a Bun workspace of `software-lifty` (same pattern as `web-transito`).
 
-Root `package.json`:
-
-```json
-"dev:admin": "bun run --filter @lifty/admin dev"
+```bash
+cd /home/marti/Documentos/LIfty/apps/admin && bun run dev   # :5174
 ```
-
-**Do not** wire into `scripts/dev-all.ts` in MVP (QR mobile stability).
 
 ## Mobile conductor (Phase 1 mínimo)
 
@@ -152,7 +146,7 @@ Root `package.json`:
 
 | Surface | Auth |
 |---------|------|
-| Admin UI + `/admin/*` | Supabase JWT + `users.role=admin` |
+| Admin UI (`LIfty/apps/admin`) + `/admin/*` | Supabase JWT + `users.role=admin` |
 | Bridge issue | Shared secret header only (server-server) |
 | Driver app | Supabase JWT driver; **cannot** call bridge |
 | One-click email approve | existing token; only platform axis |
@@ -165,8 +159,8 @@ Rate-limit bridge by IP + secret failure logging.
 |-----|------|---------|
 | `TRANSIT_BRIDGE_SECRET` | backend Lifty | validate bridge |
 | same secret | web-tránsito server | send bridge calls |
-| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | apps/admin | Lifty auth |
-| `VITE_API_URL` | apps/admin | backend |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | LIfty/apps/admin | Lifty auth |
+| `VITE_API_URL` | LIfty/apps/admin | monorepo backend |
 
 ## Out of scope architecture
 
