@@ -7,6 +7,7 @@
 - **Backend**: Bun + Elysia + Drizzle ORM + PostgreSQL (Supabase) — `apps/backend`
 - **Mobile (driver)**: Expo SDK 54 + React 19 + react-native 0.81 — `apps/mobile`
 - **Mobile (passenger)**: Expo SDK 54 + React 19 + react-native 0.81 — `apps/mobile-passengers`
+- **Admin (ops)**: Vite + React 19 + shadcn/ui + Tailwind v4 — `apps/admin` (puerto **5174**; **no** en `dev-all`)
 - **Pre-commit**: Lefthook (biome on staged files) + Commitlint (conventional commits)
 - **CI**: GitHub Actions (lint, typecheck, test via turbo)
 
@@ -46,6 +47,7 @@ bun run dev:driver     # solo app conductor (Expo Go / Metro LAN)
 bun run dev:driver:web # conductor en browser (Metro --web, puerto 8081)
 bun run dev:passenger  # solo app pasajeros (Expo Go / Metro LAN)
 bun run dev:passenger:web # pasajero en browser (puerto 8083)
+bun run dev:admin      # panel ops Lifty (Vite :5174) — aparte de dev-all
 bun run typecheck      # turbo typecheck (both apps)
 bun run test           # turbo test (both apps)
 bun run lint           # biome check all
@@ -98,7 +100,8 @@ software-lifty/
 ├── apps/
 │   ├── backend/            # @lifty/backend — Elysia API
 │   ├── mobile/             # @lifty/mobile — Expo driver app
-│   └── mobile-passengers/  # @lifty/mobile-passengers — Expo passenger app
+│   ├── mobile-passengers/  # @lifty/mobile-passengers — Expo passenger app
+│   └── admin/              # @lifty/admin — panel ops (shadcn)
 ├── specs/             # Product specs
 ├── turbo.json         # Turborepo pipeline
 ├── biome.json         # Linter + formatter config
@@ -147,6 +150,14 @@ Quick ref:
 - Same Expo SDK 54 family as the driver app
 - expo-router (file-based routing)
 - Theme tokens from `App-pasajeros.pen` via `src/theme/index.ts`
+
+### Admin (`apps/admin`)
+Panel ops Lifty (cola de review + ficha). Ver `apps/admin/README.md`.
+- `bun run dev:admin` → http://127.0.0.1:5174
+- Auth: Supabase Lifty (`wabdd…`) + `users.role === 'admin'`
+- API: `VITE_API_URL` → backend `:3001`
+- Stickers/identificación: **solo lectura** en ficha; emisión vía bridge tránsito (no force-issue en MVP)
+- **No** cablear en `scripts/dev-all.ts`
 
 ## Tech Debt
 1. ~~**Backend test script**: `"test": "echo \"Error: no test specified\"` — arreglar para que corra los 194 tests existentes~~ ✅ arreglado (`"test": "bun test"`, 206 tests)

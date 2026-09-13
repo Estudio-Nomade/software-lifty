@@ -12,6 +12,7 @@
     "dev:passenger": "bun run --filter @lifty/mobile-passengers dev",
     "dev:passenger:clear": "bun run --filter @lifty/mobile-passengers dev:clear",
     "dev:passenger:web": "bun run --filter @lifty/mobile-passengers web",
+    "dev:admin": "bun run --filter @lifty/admin dev",
     "build": "turbo build",
     "test": "turbo test --filter=@lifty/backend",
     "typecheck": "turbo typecheck",
