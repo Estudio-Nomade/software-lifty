@@ -11,7 +11,23 @@ describe('connectBlockedFeedback', () => {
       tone: 'warning',
     });
     expect(feedbackForConnectBlock('docs_pending').title).toBe('Documentos en revisión');
+    expect(feedbackForConnectBlock('stickers').title).toBe('Falta la identificación');
     expect(feedbackForConnectBlock('no_location').title).toBe('Falta tu ubicación');
+  });
+
+  it('maps STICKERS_REQUIRED API errors', () => {
+    const err = new ApiError({
+      error: {
+        code: 'STICKERS_REQUIRED',
+        message: 'Retirá la identificación / stickers en tránsito de tu municipio antes de conectarte.',
+        status: 409,
+      },
+      meta: { timestamp: new Date().toISOString() },
+    });
+    const feedback = feedbackFromConnectError(err);
+    expect(feedback.title).toBe('Falta la identificación');
+    expect(feedback.message).toMatch(/tránsito/i);
+    expect(feedback.tone).toBe('warning');
   });
 
   it('maps DRIVER_NOT_APPROVED API errors without raw backend string', () => {

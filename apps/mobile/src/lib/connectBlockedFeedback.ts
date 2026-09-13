@@ -18,6 +18,17 @@ const BY_CODE: Record<string, ConnectBlockedFeedback> = {
     message: 'No podés conectarte hasta que aprueben tus papeles.',
     tone: 'warning',
   },
+  DOCUMENTS_UNDER_REVIEW: {
+    title: 'Documentos en revisión',
+    message: 'No podés conectarte hasta que aprueben tus papeles.',
+    tone: 'warning',
+  },
+  STICKERS_REQUIRED: {
+    title: 'Falta la identificación',
+    message:
+      'Retirá los stickers / identificación en tránsito de tu municipio. Cuando te los entreguen, vas a poder conectarte.',
+    tone: 'warning',
+  },
   LOCATION_REQUIRED: {
     title: 'Falta tu ubicación',
     message: 'Activá el GPS o concedé permiso de ubicación para conectarte.',
@@ -31,10 +42,11 @@ const BY_CODE: Record<string, ConnectBlockedFeedback> = {
 };
 
 export function feedbackForConnectBlock(
-  reason: 'not_approved' | 'docs_pending' | 'no_location',
+  reason: 'not_approved' | 'docs_pending' | 'stickers' | 'no_location',
 ): ConnectBlockedFeedback {
   if (reason === 'not_approved') return BY_CODE.DRIVER_NOT_APPROVED;
   if (reason === 'docs_pending') return BY_CODE.DOCS_PENDING_REVIEW;
+  if (reason === 'stickers') return BY_CODE.STICKERS_REQUIRED;
   return BY_CODE.LOCATION_REQUIRED;
 }
 

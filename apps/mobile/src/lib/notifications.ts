@@ -88,6 +88,9 @@ export function handleNotificationResponse(
     case 'kyc:approved':
       navigate('Active');
       break;
+    case 'identification:issued':
+      navigate('Active');
+      break;
     case 'kyc:rejected':
       navigate('WaitingApproval');
       break;
