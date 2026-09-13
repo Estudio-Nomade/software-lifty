@@ -25,6 +25,8 @@ export const adminService = {
         status: drivers.status,
         kyc_status: users.kyc_status,
         admin_review_status: drivers.admin_review_status,
+        identification_status: drivers.identification_status,
+        identification_issued_at: drivers.identification_issued_at,
         created_at: drivers.created_at,
         documents_submitted: sql<number>`(SELECT COUNT(*) FROM ${driverDocuments} WHERE ${driverDocuments.driver_id} = ${drivers.id})::int`,
       })
@@ -51,6 +53,10 @@ export const adminService = {
         admin_review_status: drivers.admin_review_status,
         admin_reviewed_at: drivers.admin_reviewed_at,
         admin_review_notes: drivers.admin_review_notes,
+        identification_status: drivers.identification_status,
+        identification_issued_at: drivers.identification_issued_at,
+        identification_external_ref: drivers.identification_external_ref,
+        district_id: drivers.district_id,
         created_at: drivers.created_at,
       })
       .from(drivers)
@@ -93,6 +99,7 @@ export const adminService = {
         id: drivers.id,
         status: drivers.status,
         admin_review_status: drivers.admin_review_status,
+        identification_status: drivers.identification_status,
       })
       .from(drivers)
       .where(eq(drivers.id, driverId))
@@ -105,6 +112,10 @@ export const adminService = {
     }
 
     const newStatus = action === 'approve' ? 'approved' : 'rejected';
+    const identificationPatch =
+      action === 'approve' && driver.identification_status !== 'issued'
+        ? { identification_status: 'pending_pickup' as const }
+        : {};
 
     await db
       .update(drivers)
@@ -115,6 +126,7 @@ export const adminService = {
         admin_reviewed_at: new Date(),
         admin_review_notes: notes ?? null,
         documents_pending_review: false,
+        ...identificationPatch,
         updated_at: new Date(),
       })
       .where(eq(drivers.id, driverId));

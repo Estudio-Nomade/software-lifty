@@ -244,7 +244,12 @@ describe('Driver Profile', () => {
       .limit(1);
     await db
       .update(drivers)
-      .set({ status: 'approved', district_id: district.id })
+      .set({
+        status: 'approved',
+        district_id: district.id,
+        identification_status: 'issued',
+        identification_issued_at: new Date(),
+      })
       .where(eq(drivers.user_id, userId));
 
     const { status, data } = await request(
