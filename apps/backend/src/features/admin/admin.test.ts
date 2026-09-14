@@ -263,4 +263,24 @@ describe('Admin', () => {
     const res = await request('GET', '/api/admin/commission/current', undefined, adminToken);
     expect(res.status).toBe(200);
   });
+
+  test('GET /admin/commission/start-date returns default when unset', async () => {
+    const adminToken = await createAdminToken();
+    const db = getDb();
+    await db.delete(platformConfig);
+    const res = await request('GET', '/api/admin/commission/start-date', undefined, adminToken);
+    expect(res.status).toBe(200);
+    expect(res.data.start_date).toBe('2026-10-01');
+    expect(res.data.configured).toBe(false);
+  });
+
+  test('GET /admin/commission/current works when now is before start_date', async () => {
+    const adminToken = await createAdminToken();
+    // Future launch relative to "today" in CI/local — clamp to month 1
+    await request('PUT', '/api/admin/commission/start-date', { value: '2099-01-01' }, adminToken);
+    const res = await request('GET', '/api/admin/commission/current', undefined, adminToken);
+    expect(res.status).toBe(200);
+    expect(res.data.currentMonth).toBe(1);
+    expect(res.data.phase).toBeString();
+  });
 });

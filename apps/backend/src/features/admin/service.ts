@@ -213,9 +213,8 @@ export const adminService = {
       .where(eq(platformConfig.key, 'commission_start_date'))
       .limit(1);
 
-    if (!row) throw new NotFoundError('commission_start_date not configured');
-
-    return { start_date: row.value };
+    // Align with getCommissionConfig fallback when unset (ops can still PUT a real date).
+    return { start_date: row?.value ?? '2026-10-01', configured: Boolean(row) };
   },
 
   async updateCommissionStartDate(value: string) {
