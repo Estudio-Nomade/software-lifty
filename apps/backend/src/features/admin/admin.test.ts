@@ -135,6 +135,9 @@ describe('Admin', () => {
     expect(data.documents).toBeArray();
     expect(data.documents.length).toBe(8);
     expect(data.identification_status).toBeDefined();
+    expect(data).toHaveProperty('district_name');
+    expect(data).toHaveProperty('district_province');
+    expect(data.vehicles[0].vehicle_type).toBeDefined();
   });
 
   test('POST /drivers/:id/review approve', async () => {
