@@ -2,6 +2,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import {
   commissionPhases,
+  districts,
   driverDocuments,
   drivers,
   platformConfig,
@@ -57,16 +58,31 @@ export const adminService = {
         identification_issued_at: drivers.identification_issued_at,
         identification_external_ref: drivers.identification_external_ref,
         district_id: drivers.district_id,
+        district_name: districts.name,
+        district_province: districts.province,
         created_at: drivers.created_at,
       })
       .from(drivers)
       .innerJoin(users, eq(drivers.user_id, users.id))
+      .leftJoin(districts, eq(drivers.district_id, districts.id))
       .where(eq(drivers.id, driverId))
       .limit(1);
 
     if (!driver) throw new NotFoundError('Driver not found');
 
-    const vehicleRows = await db.select().from(vehicles).where(eq(vehicles.driver_id, driver.id));
+    const vehicleRows = await db
+      .select({
+        id: vehicles.id,
+        brand: vehicles.brand,
+        model: vehicles.model,
+        year: vehicles.year,
+        color: vehicles.color,
+        plate: vehicles.plate,
+        vehicle_type: vehicles.vehicle_type,
+        created_at: vehicles.created_at,
+      })
+      .from(vehicles)
+      .where(eq(vehicles.driver_id, driver.id));
 
     const documentRows = await db
       .select({
@@ -197,9 +213,8 @@ export const adminService = {
       .where(eq(platformConfig.key, 'commission_start_date'))
       .limit(1);
 
-    if (!row) throw new NotFoundError('commission_start_date not configured');
-
-    return { start_date: row.value };
+    // Align with getCommissionConfig fallback when unset (ops can still PUT a real date).
+    return { start_date: row?.value ?? '2026-10-01', configured: Boolean(row) };
   },
 
   async updateCommissionStartDate(value: string) {

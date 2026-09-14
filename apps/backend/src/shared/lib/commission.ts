@@ -47,6 +47,7 @@ export async function getCommissionConfig(
   const dateStr = await getConfig(db, 'commission_start_date');
   if (!dateStr) {
     const devStartDate = new Date('2026-10-01T00:00:00Z');
+    // Before launch date → treat as month 1 (Lanzamiento), never month ≤ 0.
     const devMonth = Math.max(1, differenceInCalendarMonths(now, devStartDate) + 1);
     const [devPhase] = await db
       .select()
@@ -63,7 +64,8 @@ export async function getCommissionConfig(
   }
 
   const startDate = new Date(`${dateStr}T00:00:00Z`);
-  const currentMonth = differenceInCalendarMonths(now, startDate) + 1;
+  // Before start_date (ops set future launch) → month 1, not 0 / negative.
+  const currentMonth = Math.max(1, differenceInCalendarMonths(now, startDate) + 1);
 
   const [phase] = await db
     .select()
