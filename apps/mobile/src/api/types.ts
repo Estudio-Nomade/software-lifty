@@ -56,6 +56,8 @@ export const driverStatusSchema = z.object({
   step: z.enum(['profile', 'kyc', 'vehicle', 'documents', 'review', 'approved']).optional(),
   kyc_status: z.string().optional(),
   documents_pending_review: z.boolean().optional(),
+  identification_status: z.enum(['pending_pickup', 'issued', 'revoked']).optional(),
+  can_go_online: z.boolean().optional(),
   admin_review_notes: z.string().nullable().optional(),
   has_district: z.boolean().optional(),
   district: z

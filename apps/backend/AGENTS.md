@@ -96,3 +96,32 @@ Si `supabase db push` falla porque la migracion ya existe en la DB pero no en el
 
 ### Schema Drizzle
 Las definiciones de schema en `src/shared/db/schema/` son la fuente de verdad para Drizzle ORM. Las migraciones de Supabase deben mantenerse sincronizadas con estas definiciones.
+
+## Transit bridge (stickers / identification)
+
+Server-to-server only. web-tránsito confirms physical sticker delivery.
+
+```
+POST /api/internal/transit/identification/issue
+Authorization: Bearer <TRANSIT_BRIDGE_SECRET>
+# or X-Transit-Bridge-Secret: <TRANSIT_BRIDGE_SECRET>
+```
+
+Body: `{ "driver_id": "<uuid drivers.id>", "issued_at"?: ISO, "external_ref"?: string, "district_id"?: uuid }`
+
+- Sets `drivers.identification_status = issued` (+ issued_at, optional external_ref).
+- Does **not** auto-online. Does **not** change platform review status.
+- Fail closed if `TRANSIT_BRIDGE_SECRET` unset (503 `BRIDGE_NOT_CONFIGURED`).
+- Platform not approved → 409 `PLATFORM_NOT_APPROVED`.
+- Idempotent if already `issued` → 200.
+
+### Online gates (`PUT /api/drivers/me/online` when turning on)
+
+1. `documents_pending_review` → 409 `DOCUMENTS_UNDER_REVIEW`
+2. `status !== 'approved'` → 403 `DRIVER_NOT_APPROVED`
+3. no `district_id` → 400 `DISTRICT_REQUIRED`
+4. `identification_status !== 'issued'` → 409 `STICKERS_REQUIRED`
+
+Env: `TRANSIT_BRIDGE_SECRET` (backend `.env` only — never mobile / `VITE_*`).
+
+Contract: `specs/spec-admin-panel-stickers-gate/transit-bridge.md`

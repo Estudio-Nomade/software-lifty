@@ -148,6 +148,15 @@ Quick ref:
 - expo-router (file-based routing)
 - Theme tokens from `App-pasajeros.pen` via `src/theme/index.ts`
 
+### Admin ops (fuera del monorepo)
+Panel ops Lifty vive en **`../apps/admin`** (hermano de `software-lifty`, no workspace).
+- Path: `/home/marti/Documentos/LIfty/apps/admin`
+- Dev: `cd ../apps/admin && bun install && bun run dev` → http://127.0.0.1:5174
+- Auth: Supabase Lifty (`wabdd…`) + `users.role === 'admin'`
+- API: `VITE_API_URL` → backend monorepo `:3001`
+- Stickers: solo lectura; emisión vía bridge tránsito
+- **No** cablear en `scripts/dev-all.ts`
+
 ## Tech Debt
 1. ~~**Backend test script**: `"test": "echo \"Error: no test specified\"` — arreglar para que corra los 194 tests existentes~~ ✅ arreglado (`"test": "bun test"`, 206 tests)
 2. ~~**Frontend test script**: Jest instalado pero sin script `test` en package.json — agregarlo~~ ✅ arreglado (PR #28: `"test": "jest"`, 6/6 tests pasando)

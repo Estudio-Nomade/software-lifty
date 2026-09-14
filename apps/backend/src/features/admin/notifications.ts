@@ -60,8 +60,10 @@ export async function notifyDriverApproved(driverEmail: string, driverName: stri
   try {
     const subject = 'Tus documentos fueron aprobados';
     const html = `
-      <p>Hola <strong>${driverName}</strong>,</p>
-      <p>Tus documentos fueron <strong>aprobados</strong>. Ya podes empezar a conducir con Lifty.</p>
+      <p>Hola <strong>${sanitize(driverName)}</strong>,</p>
+      <p>Tus documentos fueron <strong>aprobados</strong> por Lifty.</p>
+      <p>Para poder conectarte y aceptar viajes, tenés que <strong>retirar la identificación / stickers en el área de tránsito de tu municipio</strong>.</p>
+      <p>Cuando te los entreguen, te avisamos y vas a poder conectarte en la app.</p>
     `;
     await sendEmail(driverEmail, subject, html);
   } catch (err) {

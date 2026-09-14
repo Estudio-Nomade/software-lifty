@@ -16,6 +16,7 @@ import { passengersRoutes } from './features/passengers/routes';
 import { paymentMethodsRoutes } from './features/payment-methods/routes';
 import { ratingsRoutes } from './features/ratings/routes';
 import { sosRoutes } from './features/sos/routes';
+import { transitBridgeRoutes } from './features/transit-bridge/routes';
 import { tripRoutes, tripWebhookRoute } from './features/trips/routes';
 import { tripService } from './features/trips/service';
 import { getDb, getPool, resetDb } from './shared/db/client';
@@ -94,6 +95,7 @@ export function createApp(customAuthPlugin?: typeof authPlugin) {
         .use(authRoutes)
         .use(adminApproveRoute)
         .use(adminRoutes)
+        .use(transitBridgeRoutes)
         .use(fuelPriceRoutes)
         .use(paymentMethodsRoutes)
         .use(kycRoutes)

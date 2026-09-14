@@ -95,6 +95,7 @@ export const driversService = {
         admin_review_status: drivers.admin_review_status,
         admin_review_notes: drivers.admin_review_notes,
         documents_pending_review: drivers.documents_pending_review,
+        identification_status: drivers.identification_status,
       })
       .from(drivers)
       .where(eq(drivers.user_id, user.id))
@@ -106,6 +107,9 @@ export const driversService = {
     }
 
     const documentsPendingReview = driver.documents_pending_review;
+    const identificationStatus = driver.identification_status;
+    const canGoOnline =
+      driver.status === 'approved' && !documentsPendingReview && identificationStatus === 'issued';
 
     // Terminal admin states.
     if (driver.status === 'suspended') {
@@ -113,6 +117,8 @@ export const driversService = {
         status: 'suspended',
         step: 'approved',
         documents_pending_review: documentsPendingReview,
+        identification_status: identificationStatus,
+        can_go_online: false,
       };
     }
     if (driver.status === 'approved') {
@@ -121,6 +127,8 @@ export const driversService = {
         status: 'approved',
         step: 'approved',
         documents_pending_review: documentsPendingReview,
+        identification_status: identificationStatus,
+        can_go_online: canGoOnline && !!district,
         has_district: !!district,
         district: district ?? undefined,
       };
@@ -198,6 +206,7 @@ export const driversService = {
         is_online: drivers.is_online,
         documents_pending_review: drivers.documents_pending_review,
         district_id: drivers.district_id,
+        identification_status: drivers.identification_status,
       })
       .from(drivers)
       .where(eq(drivers.user_id, user.id))
@@ -222,6 +231,14 @@ export const driversService = {
         'Debes seleccionar un municipio antes de conectarte.',
         400,
         'DISTRICT_REQUIRED',
+      );
+    }
+
+    if (isOnline && driver.identification_status !== 'issued') {
+      throw new AppError(
+        'Retirá la identificación / stickers en tránsito de tu municipio antes de conectarte.',
+        409,
+        'STICKERS_REQUIRED',
       );
     }
 

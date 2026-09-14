@@ -34,6 +34,11 @@ export const drivers = pgTable('drivers', {
   approved_at: timestamp('approved_at'),
   platform_debt: doublePrecision('platform_debt').default(0).notNull(),
   last_heartbeat: timestamp('last_heartbeat', { withTimezone: true }),
+  identification_status: varchar('identification_status', { length: 30 })
+    .notNull()
+    .default('pending_pickup'),
+  identification_issued_at: timestamp('identification_issued_at', { withTimezone: true }),
+  identification_external_ref: text('identification_external_ref'),
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull(),
 });

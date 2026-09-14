@@ -134,6 +134,7 @@ describe('Admin', () => {
     expect(data.vehicles[0].brand).toBe('Toyota');
     expect(data.documents).toBeArray();
     expect(data.documents.length).toBe(8);
+    expect(data.identification_status).toBeDefined();
   });
 
   test('POST /drivers/:id/review approve', async () => {
@@ -158,6 +159,7 @@ describe('Admin', () => {
     expect(driver!.admin_review_notes).toBe('All good');
     expect(driver!.admin_reviewed_by).toBeString();
     expect(driver!.admin_reviewed_at).toBeDefined();
+    expect(driver!.identification_status).toBe('pending_pickup');
   });
 
   test('POST /drivers/:id/review reject', async () => {

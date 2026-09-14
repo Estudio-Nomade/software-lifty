@@ -140,6 +140,10 @@ export const ActiveScreen: React.FC = () => {
   });
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
+  const stickersPending =
+    driverStatus?.status === 'approved' &&
+    driverStatus?.identification_status != null &&
+    driverStatus.identification_status !== 'issued';
   const { needsPayoutMethod, refreshPayoutMethods } = usePayoutMethodGate(driverStatus);
   const signOut = useSignOut();
 
@@ -167,7 +171,7 @@ export const ActiveScreen: React.FC = () => {
 
   const awaitingApproval =
     driverStatus?.status === 'under_review' || driverStatus?.step === 'review';
-  const connectBlocked = documentsPendingReview || awaitingApproval;
+  const connectBlocked = documentsPendingReview || awaitingApproval || stickersPending;
 
   const {
     data: earnings,
@@ -209,6 +213,11 @@ export const ActiveScreen: React.FC = () => {
       return;
     }
 
+    if (stickersPending) {
+      showConnectFeedback(feedbackForConnectBlock('stickers'));
+      return;
+    }
+
     if (!hasLocation) {
       showConnectFeedback(feedbackForConnectBlock('no_location'));
       return;
@@ -244,6 +253,7 @@ export const ActiveScreen: React.FC = () => {
   }, [
     awaitingApproval,
     documentsPendingReview,
+    stickersPending,
     hasLocation,
     needsPayoutMethod,
     queryClient,
@@ -507,8 +517,16 @@ export const ActiveScreen: React.FC = () => {
           {!awaitingApproval && documentsPendingReview && (
             <View style={[styles.goHint, { bottom: goHintBottom }]}>
               <Text style={styles.reviewBannerText}>
-                Documentos pendientes de revision. No podes conectarte hasta tener los papeles en
+                Documentos pendientes de revisión. No podés conectarte hasta tener los papeles en
                 regla.
+              </Text>
+            </View>
+          )}
+          {!awaitingApproval && !documentsPendingReview && stickersPending && (
+            <View style={[styles.goHint, { bottom: goHintBottom }]}>
+              <Text style={styles.reviewBannerText}>
+                Retirá los stickers / identificación en tránsito de tu municipio. Cuando te los
+                entreguen, vas a poder conectarte.
               </Text>
             </View>
           )}
