@@ -140,10 +140,24 @@ export const ActiveScreen: React.FC = () => {
   });
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
-  const stickersPending =
+  const identificationPhase = driverStatus?.identification_phase;
+  const stickersPendingPickup =
     driverStatus?.status === 'approved' &&
     driverStatus?.identification_status != null &&
-    driverStatus.identification_status !== 'issued';
+    driverStatus.identification_status !== 'issued' &&
+    identificationPhase !== 'issued';
+  const stickersPaused =
+    identificationPhase === 'paused' ||
+    (driverStatus?.identification_blocks_online === true &&
+      driverStatus?.identification_status === 'pending_pickup');
+  const stickersRevoked =
+    identificationPhase === 'revoked' || driverStatus?.identification_status === 'revoked';
+  // Soft reminder during grace/reminder — does NOT block GO.
+  const stickersReminder =
+    stickersPendingPickup &&
+    !stickersPaused &&
+    !stickersRevoked &&
+    (driverStatus?.identification_show_reminder ?? true);
   const { needsPayoutMethod, refreshPayoutMethods } = usePayoutMethodGate(driverStatus);
   const signOut = useSignOut();
 
@@ -171,7 +185,8 @@ export const ActiveScreen: React.FC = () => {
 
   const awaitingApproval =
     driverStatus?.status === 'under_review' || driverStatus?.step === 'review';
-  const connectBlocked = documentsPendingReview || awaitingApproval || stickersPending;
+  const connectBlocked =
+    documentsPendingReview || awaitingApproval || stickersPaused || stickersRevoked;
 
   const {
     data: earnings,
@@ -213,8 +228,13 @@ export const ActiveScreen: React.FC = () => {
       return;
     }
 
-    if (stickersPending) {
-      showConnectFeedback(feedbackForConnectBlock('stickers'));
+    if (stickersRevoked) {
+      showConnectFeedback(feedbackForConnectBlock('stickers_revoked'));
+      return;
+    }
+
+    if (stickersPaused) {
+      showConnectFeedback(feedbackForConnectBlock('stickers_overdue'));
       return;
     }
 
@@ -253,7 +273,8 @@ export const ActiveScreen: React.FC = () => {
   }, [
     awaitingApproval,
     documentsPendingReview,
-    stickersPending,
+    stickersPaused,
+    stickersRevoked,
     hasLocation,
     needsPayoutMethod,
     queryClient,
@@ -522,14 +543,42 @@ export const ActiveScreen: React.FC = () => {
               </Text>
             </View>
           )}
-          {!awaitingApproval && !documentsPendingReview && stickersPending && (
+          {!awaitingApproval && !documentsPendingReview && stickersPaused && (
             <View style={[styles.goHint, { bottom: goHintBottom }]}>
               <Text style={styles.reviewBannerText}>
-                Retirá los stickers / identificación en tránsito de tu municipio. Cuando te los
-                entreguen, vas a poder conectarte.
+                Cuenta suspendida: pasaron 30 días sin retirar los stickers en tránsito. Retiralos
+                en tu municipio para reactivar la cuenta.
               </Text>
             </View>
           )}
+          {!awaitingApproval && !documentsPendingReview && stickersRevoked && !stickersPaused && (
+            <View style={[styles.goHint, { bottom: goHintBottom }]}>
+              <Text style={styles.reviewBannerText}>
+                Tu identificación fue revocada. Contactá a soporte o tránsito de tu municipio.
+              </Text>
+            </View>
+          )}
+          {!awaitingApproval &&
+            !documentsPendingReview &&
+            stickersReminder &&
+            !stickersPaused &&
+            !stickersRevoked && (
+              <View style={[styles.goHint, { bottom: goHintBottom }]}>
+                <Text style={styles.reviewBannerText}>
+                  {identificationPhase === 'reminder'
+                    ? `Recordatorio: ya pasaron ${driverStatus?.identification_days_since_approval ?? 20}+ días. Retirá los stickers en tránsito; a los 30 días se suspende la cuenta${
+                        driverStatus?.identification_days_until_pause != null
+                          ? ` (quedan ${driverStatus.identification_days_until_pause} días)`
+                          : ''
+                      }.`
+                    : `Recordá retirar los stickers / identificación en tránsito. Tenés 30 días desde la aprobación; después se suspende la cuenta${
+                        driverStatus?.identification_days_until_pause != null
+                          ? ` (quedan ${driverStatus.identification_days_until_pause} días)`
+                          : ''
+                      }.`}
+                </Text>
+              </View>
+            )}
           {toggleError && !isOnline && (
             <View style={[styles.goHint, { bottom: goHintBottom }]}>
               <Text style={styles.errorText}>{toggleError}</Text>

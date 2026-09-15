@@ -38,9 +38,18 @@ stateDiagram-v2
   note right of PlatformApproved
     admin_review_status = approved
     identification_status = pending_pickup
-    is_online must stay false
+    approved_at set
+    online OK with banner (grace under 20d, reminder 20-29d)
+  end note
+  PlatformApproved --> GraceOnline: approve clock starts
+  GraceOnline --> PausedNoStickers: day >= 30 without issue
+  note right of PausedNoStickers
+    STICKERS_PICKUP_OVERDUE (cuenta suspendida)
+    force offline until transit issues
   end note
   PlatformApproved --> ReadyToDrive: transit bridge issue
+  GraceOnline --> ReadyToDrive: transit bridge issue
+  PausedNoStickers --> ReadyToDrive: transit bridge issue
   note right of ReadyToDrive
     identification_status = issued
     toggleOnline allowed if other gates pass
@@ -50,9 +59,9 @@ stateDiagram-v2
 ```
 
 **Axis A — Platform review** (Lifty admin): `drivers.status` / `admin_review_status`, documents, KYC.  
-**Axis B — Physical identification** (tránsito via bridge): `identification_status`.
+**Axis B — Physical identification** (tránsito via bridge): `identification_status` + reloj desde `approved_at` (20d reminder / 30d suspensión).
 
-Conducir requiere **ambos** + `district_id` + no `documents_pending_review` (gates ya existentes).
+Conducir requiere Axis A + `district_id` + no docs pending. Axis B **no** bloquea online hasta suspensión (30d) o `revoked`.
 
 ## Data model (Lifty)
 
@@ -94,10 +103,10 @@ Al **approve** plataforma: si status identification es null/legacy → `pending_
 | Approve API | `features/admin/service.ts` `reviewDriver` | set identification pending; copy |
 | Approve one-click | `features/admin/approve.ts` | idem |
 | Notify copy | `features/admin/notifications.ts` | no “ya conducir” |
-| Online gate | `features/drivers/service.ts` `toggleOnline` | `STICKERS_REQUIRED` |
-| Status payload | `getStatus` / profile | expose `identification_status` |
-| Bridge | **new** `features/admin` o `features/transit-bridge` | issue endpoint |
-| Admin list/detail | `adminService` | return identification fields |
+| Online gate | `features/drivers/service.ts` `toggleOnline` + heartbeat | plazo 20/30; `STICKERS_PICKUP_OVERDUE` / `STICKERS_REVOKED` |
+| Status payload | `getMyStatus` | expose `identification_status` + phase/flags |
+| Bridge | `features/transit-bridge` | issue endpoint |
+| Admin list/detail | `adminService` | return identification fields + phase |
 
 ### `toggleOnline` gate order (conceptual)
 
@@ -106,11 +115,15 @@ if turning on:
   deny if documents_pending_review     → DOCUMENTS_UNDER_REVIEW
   deny if status !== 'approved'        → DRIVER_NOT_APPROVED
   deny if !district_id                 → DISTRICT_REQUIRED
-  deny if identification_status !== 'issued' → STICKERS_REQUIRED
+  evaluate stickers clock (approved_at):
+    pending_pickup < 30d               → allow (soft reminder UI; stronger from day 20)
+    pending_pickup >= 30d              → STICKERS_PICKUP_OVERDUE (+ force offline / suspend)
+    revoked                            → STICKERS_REVOKED
+    issued                             → no sticker block
   else set is_online true
 ```
 
-Matching ya filtra `is_online=true`; no confiar solo en eso para writes: el gate está en toggle.
+Matching ya filtra `is_online=true`; no confiar solo en eso para writes: el gate está en toggle (+ heartbeat force-offline).
 
 ## Admin ops (Phase 2) — fuera del monorepo
 

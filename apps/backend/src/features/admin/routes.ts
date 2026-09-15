@@ -46,6 +46,31 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
     { requireAuth: true },
   )
   .get(
+    '/drivers',
+    ({ user, set, query }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      const q = query as {
+        q?: string;
+        status?: string;
+        identification_status?: string;
+        limit?: string;
+        offset?: string;
+      };
+      return safeCall(
+        () =>
+          adminService.listDrivers({
+            q: q.q,
+            status: q.status,
+            identification_status: q.identification_status,
+            limit: q.limit ? Number(q.limit) : undefined,
+            offset: q.offset ? Number(q.offset) : undefined,
+          }),
+        set,
+      );
+    },
+    { requireAuth: true },
+  )
+  .get(
     '/drivers/:driver_id',
     ({ user, params, set }) => {
       if (!isAdmin(user, set)) return { error: 'Forbidden' };

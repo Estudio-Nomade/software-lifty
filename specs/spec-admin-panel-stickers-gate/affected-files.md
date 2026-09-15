@@ -16,12 +16,15 @@ Estimación para implementación. Ajustar si el árbol se mueve.
 ### Modify
 - `apps/backend/src/shared/db/schema/drivers.ts` — columnas identification_*
 - `apps/backend/src/shared/db/schema/index.ts` — si re-exporta
-- `apps/backend/src/features/admin/service.ts` — approve → pending_pickup; detail/list fields
+- `apps/backend/src/features/admin/service.ts` — approve → pending_pickup; detail/list fields; `listDrivers` registry
+- `apps/backend/src/features/admin/routes.ts` — `GET /admin/drivers`
+- `apps/backend/src/shared/db/schema/users.ts` + migration — `document_number` (DNI)
 - `apps/backend/src/features/admin/approve.ts` — same semantics + copy push
 - `apps/backend/src/features/admin/notifications.ts` — copy mail approve
 - `apps/backend/src/features/admin/admin.test.ts` — assertions identification + online
 - `apps/backend/src/features/drivers/service.ts` — `toggleOnline`, `getStatus` (y profile si aplica)
-- `apps/backend/src/features/drivers/drivers.test.ts` — STICKERS_REQUIRED
+- `apps/backend/src/features/drivers/drivers.test.ts` — online gates + stickers deadline
+- `apps/backend/src/shared/lib/identification-deadline.ts` (+ test) — 20d reminder / 30d suspensión
 - `apps/backend/src/index.ts` (o router root) — mount bridge routes
 - `apps/backend/AGENTS.md` — documentar bridge + env `TRANSIT_BRIDGE_SECRET`
 - env examples / setup scripts si existen (`.env.example`) — **sin** secret real

@@ -23,11 +23,23 @@ const BY_CODE: Record<string, ConnectBlockedFeedback> = {
     message: 'No podés conectarte hasta que aprueben tus papeles.',
     tone: 'warning',
   },
+  /** @deprecated hard-block on missing stickers; kept for older backends */
   STICKERS_REQUIRED: {
     title: 'Falta la identificación',
     message:
       'Retirá los stickers / identificación en tránsito de tu municipio. Cuando te los entreguen, vas a poder conectarte.',
     tone: 'warning',
+  },
+  STICKERS_PICKUP_OVERDUE: {
+    title: 'Cuenta suspendida',
+    message:
+      'Pasaron 30 días sin retirar los stickers en tránsito. Retiralos en tu municipio para reactivar la cuenta y volver a conectarte.',
+    tone: 'error',
+  },
+  STICKERS_REVOKED: {
+    title: 'Identificación revocada',
+    message: 'Tu identificación fue revocada. Contactá a soporte o tránsito de tu municipio.',
+    tone: 'error',
   },
   LOCATION_REQUIRED: {
     title: 'Falta tu ubicación',
@@ -42,10 +54,18 @@ const BY_CODE: Record<string, ConnectBlockedFeedback> = {
 };
 
 export function feedbackForConnectBlock(
-  reason: 'not_approved' | 'docs_pending' | 'stickers' | 'no_location',
+  reason:
+    | 'not_approved'
+    | 'docs_pending'
+    | 'stickers'
+    | 'stickers_overdue'
+    | 'stickers_revoked'
+    | 'no_location',
 ): ConnectBlockedFeedback {
   if (reason === 'not_approved') return BY_CODE.DRIVER_NOT_APPROVED;
   if (reason === 'docs_pending') return BY_CODE.DOCS_PENDING_REVIEW;
+  if (reason === 'stickers_overdue') return BY_CODE.STICKERS_PICKUP_OVERDUE;
+  if (reason === 'stickers_revoked') return BY_CODE.STICKERS_REVOKED;
   if (reason === 'stickers') return BY_CODE.STICKERS_REQUIRED;
   return BY_CODE.LOCATION_REQUIRED;
 }

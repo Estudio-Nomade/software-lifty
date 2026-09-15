@@ -72,13 +72,13 @@ export async function approveDriver(token: string): Promise<{ message: string }>
 
   sendPushToUser(driver.user_id, {
     title: 'Documentos aprobados',
-    body: 'Tus docs están OK. Retirá la identificación en tránsito de tu municipio para poder conectarte.',
+    body: 'Tus docs están OK. Tenés 30 días para retirar los stickers en tránsito; si se pasa ese plazo la cuenta se suspende.',
     data: { type: 'kyc:approved' },
   }).catch((err) => {
     logger.error('[ADMIN-APPROVE] Push failed', (err as Error).message);
   });
 
   return {
-    message: `Conductor ${userRow?.full_name ?? driver.id} aprobado. Debe retirar stickers en tránsito antes de conectarse.`,
+    message: `Conductor ${userRow?.full_name ?? driver.id} aprobado. Debe retirar stickers en tránsito (plazo 30 días; después se suspende).`,
   };
 }

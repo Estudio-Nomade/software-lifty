@@ -120,7 +120,13 @@ Body: `{ "driver_id": "<uuid drivers.id>", "issued_at"?: ISO, "external_ref"?: s
 1. `documents_pending_review` → 409 `DOCUMENTS_UNDER_REVIEW`
 2. `status !== 'approved'` → 403 `DRIVER_NOT_APPROVED`
 3. no `district_id` → 400 `DISTRICT_REQUIRED`
-4. `identification_status !== 'issued'` → 409 `STICKERS_REQUIRED`
+4. Stickers / identification (clock from `approved_at` / `admin_reviewed_at`):
+   - `pending_pickup` &lt; 30 days → **allowed** (soft banner; stronger reminder from day 20)
+   - `pending_pickup` ≥ 30 days → 409 `STICKERS_PICKUP_OVERDUE` (account **suspended**; force offline)
+   - `revoked` → 409 `STICKERS_REVOKED`
+   - `issued` → no sticker block
+
+Heartbeat also force-offlines if stickers become overdue/revoked while online.
 
 Env: `TRANSIT_BRIDGE_SECRET` (backend `.env` only — never mobile / `VITE_*`).
 

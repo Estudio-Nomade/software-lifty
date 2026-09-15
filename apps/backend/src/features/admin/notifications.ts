@@ -62,8 +62,8 @@ export async function notifyDriverApproved(driverEmail: string, driverName: stri
     const html = `
       <p>Hola <strong>${sanitize(driverName)}</strong>,</p>
       <p>Tus documentos fueron <strong>aprobados</strong> por Lifty.</p>
-      <p>Para poder conectarte y aceptar viajes, tenés que <strong>retirar la identificación / stickers en el área de tránsito de tu municipio</strong>.</p>
-      <p>Cuando te los entreguen, te avisamos y vas a poder conectarte en la app.</p>
+      <p>Ya podés usar la app. Recordá <strong>retirar la identificación / stickers en el área de tránsito de tu municipio</strong>.</p>
+      <p><strong>Plazo:</strong> tenés <strong>30 días</strong> para retirar los stickers en tránsito. Si se pasa ese plazo, la cuenta se <strong>suspende</strong> hasta que tránsito confirme la entrega.</p>
     `;
     await sendEmail(driverEmail, subject, html);
   } catch (err) {
