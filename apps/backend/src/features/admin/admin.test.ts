@@ -137,7 +137,37 @@ describe('Admin', () => {
     expect(data.identification_status).toBeDefined();
     expect(data).toHaveProperty('district_name');
     expect(data).toHaveProperty('district_province');
+    expect(data).toHaveProperty('registry_id');
     expect(data.vehicles[0].vehicle_type).toBeDefined();
+  });
+
+  test('GET /drivers lists all registered drivers', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+    const db = getDb();
+    const [drvUser] = await db
+      .select({ user_id: drivers.user_id })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    await db
+      .update(users)
+      .set({ document_number: '30111222', document_number_last4: '1222' })
+      .where(eq(users.id, drvUser!.user_id));
+
+    const all = await request('GET', '/api/admin/drivers', undefined, adminToken);
+    expect(all.status).toBe(200);
+    expect(all.data.items).toBeArray();
+    expect(all.data.total).toBeGreaterThanOrEqual(1);
+    const row = all.data.items.find((d: { id: string }) => d.id === driverId);
+    expect(row).toBeDefined();
+    expect(row.document_number).toBe('30111222');
+    expect(row.registry_id).toBe('30111222');
+    expect(row).toHaveProperty('identification_phase');
+
+    const byDni = await request('GET', '/api/admin/drivers?q=30111222', undefined, adminToken);
+    expect(byDni.status).toBe(200);
+    expect(byDni.data.items.some((d: { id: string }) => d.id === driverId)).toBe(true);
   });
 
   test('POST /drivers/:id/review approve', async () => {

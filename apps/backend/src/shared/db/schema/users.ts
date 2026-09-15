@@ -12,5 +12,7 @@ export const users = pgTable('users', {
   kyc_status: varchar('kyc_status', { length: 30 }).notNull().default('pending'),
   verified_name: varchar('verified_name', { length: 255 }),
   verified_document_hash: varchar('verified_document_hash', { length: 64 }),
+  /** Full national ID / DNI for ops registry (admin + transit join). */
+  document_number: varchar('document_number', { length: 32 }),
   document_number_last4: varchar('document_number_last4', { length: 4 }),
 });

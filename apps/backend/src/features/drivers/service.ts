@@ -11,6 +11,7 @@ import {
 } from '../../shared/db/schema';
 import { DOC_TYPES } from '../../shared/lib/documents';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
+import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
 import { logger } from '../../shared/lib/logger';
 import {
   type StorageProvider,
@@ -96,6 +97,9 @@ export const driversService = {
         admin_review_notes: drivers.admin_review_notes,
         documents_pending_review: drivers.documents_pending_review,
         identification_status: drivers.identification_status,
+        approved_at: drivers.approved_at,
+        admin_reviewed_at: drivers.admin_reviewed_at,
+        created_at: drivers.created_at,
       })
       .from(drivers)
       .where(eq(drivers.user_id, user.id))
@@ -108,8 +112,14 @@ export const driversService = {
 
     const documentsPendingReview = driver.documents_pending_review;
     const identificationStatus = driver.identification_status;
+    const identification = evaluateIdentificationDeadline({
+      identification_status: identificationStatus,
+      approved_at: driver.approved_at,
+      admin_reviewed_at: driver.admin_reviewed_at,
+      created_at: driver.created_at,
+    });
     const canGoOnline =
-      driver.status === 'approved' && !documentsPendingReview && identificationStatus === 'issued';
+      driver.status === 'approved' && !documentsPendingReview && !identification.blocks_online;
 
     // Terminal admin states.
     if (driver.status === 'suspended') {
@@ -118,6 +128,11 @@ export const driversService = {
         step: 'approved',
         documents_pending_review: documentsPendingReview,
         identification_status: identificationStatus,
+        identification_phase: identification.phase,
+        identification_blocks_online: true,
+        identification_show_reminder: identification.show_reminder,
+        identification_days_until_pause: identification.days_until_pause,
+        identification_pause_at: identification.pause_at,
         can_go_online: false,
       };
     }
@@ -128,6 +143,12 @@ export const driversService = {
         step: 'approved',
         documents_pending_review: documentsPendingReview,
         identification_status: identificationStatus,
+        identification_phase: identification.phase,
+        identification_blocks_online: identification.blocks_online,
+        identification_show_reminder: identification.show_reminder,
+        identification_days_until_pause: identification.days_until_pause,
+        identification_pause_at: identification.pause_at,
+        identification_days_since_approval: identification.days_since_approval,
         can_go_online: canGoOnline && !!district,
         has_district: !!district,
         district: district ?? undefined,
@@ -207,6 +228,9 @@ export const driversService = {
         documents_pending_review: drivers.documents_pending_review,
         district_id: drivers.district_id,
         identification_status: drivers.identification_status,
+        approved_at: drivers.approved_at,
+        admin_reviewed_at: drivers.admin_reviewed_at,
+        created_at: drivers.created_at,
       })
       .from(drivers)
       .where(eq(drivers.user_id, user.id))
@@ -234,12 +258,36 @@ export const driversService = {
       );
     }
 
-    if (isOnline && driver.identification_status !== 'issued') {
-      throw new AppError(
-        'Retirá la identificación / stickers en tránsito de tu municipio antes de conectarte.',
-        409,
-        'STICKERS_REQUIRED',
-      );
+    if (isOnline) {
+      const identification = evaluateIdentificationDeadline({
+        identification_status: driver.identification_status,
+        approved_at: driver.approved_at,
+        admin_reviewed_at: driver.admin_reviewed_at,
+        created_at: driver.created_at,
+      });
+
+      if (identification.phase === 'revoked') {
+        throw new AppError(
+          'Tu identificación fue revocada. Contactá a soporte o tránsito de tu municipio.',
+          409,
+          'STICKERS_REVOKED',
+        );
+      }
+
+      if (identification.phase === 'paused') {
+        // Force offline if somehow still marked online past the pause window.
+        if (driver.is_online) {
+          await db
+            .update(drivers)
+            .set({ is_online: false, last_heartbeat: null, updated_at: new Date() })
+            .where(eq(drivers.id, driver.id));
+        }
+        throw new AppError(
+          'Tu cuenta está suspendida: pasaron 30 días sin retirar los stickers / identificación en tránsito. Retiralos para reactivar la cuenta.',
+          409,
+          'STICKERS_PICKUP_OVERDUE',
+        );
+      }
     }
 
     await db
@@ -262,12 +310,41 @@ export const driversService = {
 
   async heartbeat(user: AuthUser, body?: { lat?: number; lng?: number; heading?: number }) {
     const [driver] = await db
-      .select({ id: drivers.id })
+      .select({
+        id: drivers.id,
+        is_online: drivers.is_online,
+        identification_status: drivers.identification_status,
+        approved_at: drivers.approved_at,
+        admin_reviewed_at: drivers.admin_reviewed_at,
+        created_at: drivers.created_at,
+      })
       .from(drivers)
       .where(eq(drivers.user_id, user.id))
       .limit(1);
 
     if (!driver) throw new NotFoundError('Onboarding not started');
+
+    const identification = evaluateIdentificationDeadline({
+      identification_status: driver.identification_status,
+      approved_at: driver.approved_at,
+      admin_reviewed_at: driver.admin_reviewed_at,
+      created_at: driver.created_at,
+    });
+
+    // Past 30d without stickers → force offline even if they were online during grace.
+    if (driver.is_online && identification.blocks_online) {
+      await db
+        .update(drivers)
+        .set({ is_online: false, last_heartbeat: null, updated_at: new Date() })
+        .where(eq(drivers.id, driver.id));
+      throw new AppError(
+        identification.phase === 'revoked'
+          ? 'Tu identificación fue revocada. Contactá a soporte o tránsito de tu municipio.'
+          : 'Tu cuenta está suspendida: pasaron 30 días sin retirar los stickers / identificación en tránsito. Retiralos para reactivar la cuenta.',
+        409,
+        identification.phase === 'revoked' ? 'STICKERS_REVOKED' : 'STICKERS_PICKUP_OVERDUE',
+      );
+    }
 
     const now = new Date();
 

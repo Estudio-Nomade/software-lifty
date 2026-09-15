@@ -148,6 +148,7 @@ export const kycService = {
       }
 
       userUpdateData.verified_document_hash = docHash;
+      userUpdateData.document_number = webhookData.documentNumber.trim();
       userUpdateData.document_number_last4 = last4;
     }
 

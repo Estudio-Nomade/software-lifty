@@ -26,7 +26,7 @@ sources:
 |---|----------|--------|
 | D1 | Dónde vive el panel ops | `LIfty/apps/admin` (fuera del monorepo, hermano de `software-lifty`) |
 | D2 | Web de tránsito en este monorepo | **No.** Ya existe fuera del repo. |
-| D3 | Stickers vs online | **Hard gate.** Sin identificación emitida → no `is_online`. |
+| D3 | Stickers vs online | **Plazo + suspensión.** Tras approve de plataforma el conductor **puede** conectarse. Recordatorio reforzado desde día **20**. Si a los **30 días** no retiró stickers/logos → cuenta **suspendida** (no `is_online`) hasta que tránsito emita. `revoked` sigue bloqueando. |
 | D4 | Quién marca “stickers entregados” | **Web-tránsito** (sistema de verdad de la entrega física). |
 | D5 | Cómo se enteran las dos Supabase | **Puente explícito:** web-tránsito llama API interna de Lifty (no DB compartida, no lectura cruzada). |
 | D6 | Ejes de estado | **Dos ejes:** (A) review plataforma docs/KYC · (B) identification stickers. |
@@ -46,16 +46,21 @@ Sin esto el panel admin aprueba gente que igual no debería manejar, o el candad
    - **Cambia:** no habilitar conducción plena solo por eso.
    - Setear `identification_status=pending_pickup` (si aún no `issued`).
    - Copy mail/push: docs OK → **retirar identificación en tránsito**; **no** “ya podés conducir”.
-3. **`toggleOnline(true)`** rechaza si `identification_status !== 'issued'` con código estable `STICKERS_REQUIRED` (403 o 409; un solo código en toda la API).
-4. **`GET /drivers/me/status`** expone `identification_status` (y flags derivados claros para la app).
+3. **`toggleOnline(true)` / plazos stickers** (ancla = `approved_at` / `admin_reviewed_at`):
+   - `pending_pickup` **&lt; 30d** → online **permitido** (banner retiro; refuerzo desde día 20).
+   - `pending_pickup` **≥ 30d** → 409 `STICKERS_PICKUP_OVERDUE` + fuerza offline (cuenta **suspendida**).
+   - `revoked` → 409 `STICKERS_REVOKED`.
+   - `issued` → sin bloqueo por stickers.
+4. **`GET /drivers/me/status`** expone `identification_status` + fase derivada (`grace` | `reminder` | `paused` | …) y flags (`identification_blocks_online`, días hasta suspensión).
 5. **Endpoint interno de puente** (detalle en `transit-bridge.md`):
    - `POST /api/internal/transit/identification/issue`
    - Auth: secret compartido (header), **no** JWT de usuario conductor.
-   - Efecto: `identification_status=issued`, timestamp, opcional external_ref; push al conductor “ya podés conectarte”.
+   - Efecto: `identification_status=issued`, timestamp, opcional external_ref; push al conductor; desbloquea si estaba suspendido.
 6. **Mobile conductor (mínimo):**
-   - Si docs/admin OK pero stickers `pending_pickup`: puede estar en home/mapa según routing actual, pero **toggle online bloqueado** + mensaje “Retirá los stickers en tránsito de tu municipio”.
-   - Manejar error `STICKERS_REQUIRED` si el backend corta.
-   - Cuando status pase a `issued`, permitir online (siguen valiendo district + docs gates existentes).
+   - Si docs/admin OK y stickers `pending_pickup` en gracia/reminder: **puede conectar**; cartel de retiro + contador a 30d.
+   - Si fase `paused` (≥30d): **toggle bloqueado** + cartel “cuenta suspendida por no retirar stickers/logos”.
+   - Manejar `STICKERS_PICKUP_OVERDUE` / `STICKERS_REVOKED` (y legacy `STICKERS_REQUIRED` si aparece).
+   - Cuando status pase a `issued`, quitar banner y seguir con district + docs gates.
 
 ### Phase 2 — Admin ops MVP (`/home/marti/Documentos/LIfty/apps/admin`)
 
@@ -78,12 +83,17 @@ Web desktop-first **fuera** del monorepo (mismo nivel que `web-transito`):
 
 - id: CAP-1
   phase: 1
-  intent: Tras aprobar docs en Lifty, el conductor queda con identificación `pending_pickup` y **no** puede ponerse online.
-  success: `POST /admin/drivers/:id/review` action approve → DB `identification_status=pending_pickup`; `PUT .../online {is_online:true}` → error `STICKERS_REQUIRED`; matching no lo ve online.
+  intent: Tras aprobar docs en Lifty, el conductor queda `pending_pickup` y **puede** ponerse online durante la gracia (hasta 30d).
+  success: approve → `identification_status=pending_pickup` + `approved_at` set; `PUT .../online {is_online:true}` → 200 en gracia; status expone `identification_phase=grace|reminder`.
+
+- id: CAP-1b
+  phase: 1
+  intent: A los 30 días sin retiro, la cuenta se suspende hasta emisión en tránsito.
+  success: con `approved_at` hace ≥30d y `pending_pickup`, online → 409 `STICKERS_PICKUP_OVERDUE`; tras bridge issue → online OK.
 
 - id: CAP-2
   phase: 1
-  intent: Cuando web-tránsito confirma entrega, Lifty marca identificación emitida y habilita el gate de stickers.
+  intent: Cuando web-tránsito confirma entrega, Lifty marca identificación emitida y limpia el plazo/pausa.
   success: `POST /api/internal/transit/identification/issue` con secret válido y driver resoluble → `identification_status=issued` + `identification_issued_at` set; el mismo driver puede `toggleOnline(true)` si cumple el resto de gates (approved, district, no docs pending).
 
 - id: CAP-3
@@ -93,26 +103,31 @@ Web desktop-first **fuera** del monorepo (mismo nivel que `web-transito`):
 
 - id: CAP-4
   phase: 1
-  intent: La app conductor comunica el estado “falta tránsito” sin mentir “ya podés manejar”.
-  success: `GET /drivers/me/status` incluye `identification_status`; UI bloquea conectar y muestra copy de retiro; push/mail de approve plataforma ya no dicen que puede conducir de inmediato.
+  intent: La app conductor comunica plazos de retiro sin bloquear online en gracia, y muestra cartel de suspensión a los 30d.
+  success: status incluye fase/flags; UI banner de retiro en gracia/reminder; bloquea + cartel suspensión en `paused`; mail/push de approve mencionan plazo 30d.
 
 - id: CAP-5
   phase: 2
   intent: Un admin Lifty revisa la cola y aprueba/rechaza desde `LIfty/apps/admin` sin depender del mail one-click.
   success: Login admin → lista pending → ficha con docs → approve/reject refleja en DB igual que la API actual; usuario `role=driver` no entra al panel.
 
+- id: CAP-5b
+  phase: 2
+  intent: El panel lista **todos** los conductores registrados (no solo pendientes), con ID operativo = DNI (`document_number`) y datos útiles de ops.
+  success: `GET /admin/drivers` + pantalla Conductores; columnas DNI/registry_id, contacto, municipio, review, stickers/fase, patente, online; búsqueda por DNI/nombre/tel.
+
 - id: CAP-6
   phase: 2
   intent: El panel muestra el estado de stickers (dato Lifty) sin implementar ventanilla de entrega.
-  success: Ficha driver muestra badge según `identification_status`; no hay botón MVP “marcar entregado” (eso es tránsito).
+  success: Ficha driver muestra badge según `identification_status` + fase plazo; no hay botón MVP “marcar entregado” (eso es tránsito).
 
 ## Constraints
 
 - **No unificar Supabase** de Lifty y web-tránsito en esta SPEC.
 - **No construir UI de tránsito** ni rol `transit` en `apps/admin`.
 - **No self-report** del conductor (“ya retiré stickers”) como camino feliz.
-- **Hard gate en backend**, no solo UI (mismo criterio que `documents_pending_review`).
-- Gates existentes se **conservan y acumulan**: `documents_pending_review`, `status===approved` (review plataforma), `district_id`, **más** stickers issued.
+- **Plazo stickers en backend** (no solo UI): gracia/reminder online OK; suspensión ≥30d y `revoked` bloquean como `documents_pending_review`.
+- Gates existentes se **conservan y acumulan**: `documents_pending_review`, `status===approved`, `district_id`, **más** bloqueo stickers solo si suspendido/revocado.
 - One-click `GET /admin/approve?token=` se alinea al mismo semántica de approve plataforma + `pending_pickup` (no bypasea stickers).
 - Secret del puente solo en env server-side (`TRANSIT_BRIDGE_SECRET` o nombre acordado); nunca en apps mobile ni en `VITE_*` públicos.
 - Proyecto sigue **sin prod CD**; admin y bridge en dev/local hasta que el monorepo cambie de status.

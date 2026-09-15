@@ -57,6 +57,14 @@ export const driverStatusSchema = z.object({
   kyc_status: z.string().optional(),
   documents_pending_review: z.boolean().optional(),
   identification_status: z.enum(['pending_pickup', 'issued', 'revoked']).optional(),
+  identification_phase: z
+    .enum(['issued', 'revoked', 'grace', 'reminder', 'paused', 'unknown'])
+    .optional(),
+  identification_blocks_online: z.boolean().optional(),
+  identification_show_reminder: z.boolean().optional(),
+  identification_days_until_pause: z.number().nullable().optional(),
+  identification_pause_at: z.string().nullable().optional(),
+  identification_days_since_approval: z.number().nullable().optional(),
   can_go_online: z.boolean().optional(),
   admin_review_notes: z.string().nullable().optional(),
   has_district: z.boolean().optional(),

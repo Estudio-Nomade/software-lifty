@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import {
   commissionPhases,
@@ -11,8 +11,13 @@ import {
 } from '../../shared/db/schema';
 import { getCommissionConfig } from '../../shared/lib/commission';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
+import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { notifyDriverApproved, notifyDriverRejected } from './notifications';
+
+function escapeIlike(raw: string): string {
+  return raw.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
 
 export const adminService = {
   async listPending() {
@@ -23,6 +28,8 @@ export const adminService = {
         full_name: users.full_name,
         email: users.email,
         phone: users.phone,
+        document_number: users.document_number,
+        document_number_last4: users.document_number_last4,
         status: drivers.status,
         kyc_status: users.kyc_status,
         admin_review_status: drivers.admin_review_status,
@@ -39,6 +46,117 @@ export const adminService = {
     return rows;
   },
 
+  /**
+   * Full driver registry for ops (not only pending review).
+   * ID operativo preferido: document_number (DNI).
+   */
+  async listDrivers(opts?: {
+    q?: string;
+    status?: string;
+    identification_status?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const limit = Math.min(Math.max(opts?.limit ?? 100, 1), 200);
+    const offset = Math.max(opts?.offset ?? 0, 0);
+    const q = opts?.q?.trim();
+
+    const filters = [];
+    if (opts?.status) filters.push(eq(drivers.status, opts.status));
+    if (opts?.identification_status) {
+      filters.push(eq(drivers.identification_status, opts.identification_status));
+    }
+    if (q) {
+      const pattern = `%${escapeIlike(q)}%`;
+      filters.push(
+        or(
+          ilike(users.full_name, pattern),
+          ilike(users.email, pattern),
+          ilike(users.phone, pattern),
+          ilike(users.document_number, pattern),
+          ilike(users.verified_name, pattern),
+          sql`cast(${drivers.id} as text) ilike ${pattern}`,
+        ),
+      );
+    }
+
+    const whereClause = filters.length ? and(...filters) : undefined;
+
+    const rows = await db
+      .select({
+        id: drivers.id,
+        user_id: drivers.user_id,
+        full_name: users.full_name,
+        verified_name: users.verified_name,
+        email: users.email,
+        phone: users.phone,
+        document_number: users.document_number,
+        document_number_last4: users.document_number_last4,
+        status: drivers.status,
+        kyc_status: users.kyc_status,
+        admin_review_status: drivers.admin_review_status,
+        identification_status: drivers.identification_status,
+        identification_issued_at: drivers.identification_issued_at,
+        approved_at: drivers.approved_at,
+        admin_reviewed_at: drivers.admin_reviewed_at,
+        is_online: drivers.is_online,
+        district_id: drivers.district_id,
+        district_name: districts.name,
+        district_province: districts.province,
+        created_at: drivers.created_at,
+        total_trips: drivers.total_trips,
+        plate: sql<string | null>`(
+          SELECT ${vehicles.plate} FROM ${vehicles}
+          WHERE ${vehicles.driver_id} = ${drivers.id}
+          ORDER BY ${vehicles.created_at} DESC
+          LIMIT 1
+        )`,
+        vehicle_type: sql<string | null>`(
+          SELECT ${vehicles.vehicle_type} FROM ${vehicles}
+          WHERE ${vehicles.driver_id} = ${drivers.id}
+          ORDER BY ${vehicles.created_at} DESC
+          LIMIT 1
+        )`,
+      })
+      .from(drivers)
+      .innerJoin(users, eq(drivers.user_id, users.id))
+      .leftJoin(districts, eq(drivers.district_id, districts.id))
+      .where(whereClause)
+      .orderBy(desc(drivers.created_at))
+      .limit(limit)
+      .offset(offset);
+
+    const enriched = rows.map((row) => {
+      const identification = evaluateIdentificationDeadline({
+        identification_status: row.identification_status,
+        approved_at: row.approved_at,
+        admin_reviewed_at: row.admin_reviewed_at,
+        created_at: row.created_at,
+      });
+      return {
+        ...row,
+        /** Ops-facing ID: DNI if known, else last4, else short driver uuid. */
+        registry_id:
+          row.document_number?.trim() ||
+          (row.document_number_last4 ? `****${row.document_number_last4}` : row.id.slice(0, 8)),
+        identification_phase: identification.phase,
+        identification_blocks_online: identification.blocks_online,
+        identification_days_until_pause: identification.days_until_pause,
+        identification_days_since_approval: identification.days_since_approval,
+        identification_pause_at: identification.pause_at,
+      };
+    });
+
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(drivers)
+      .innerJoin(users, eq(drivers.user_id, users.id))
+      .leftJoin(districts, eq(drivers.district_id, districts.id))
+      .where(whereClause);
+
+    return { items: enriched, total: count, limit, offset };
+  },
+
   async getDriverDetail(driverId: string) {
     const [driver] = await db
       .select({
@@ -50,6 +168,7 @@ export const adminService = {
         status: drivers.status,
         kyc_status: users.kyc_status,
         verified_name: users.verified_name,
+        document_number: users.document_number,
         document_number_last4: users.document_number_last4,
         admin_review_status: drivers.admin_review_status,
         admin_reviewed_at: drivers.admin_reviewed_at,
@@ -57,10 +176,13 @@ export const adminService = {
         identification_status: drivers.identification_status,
         identification_issued_at: drivers.identification_issued_at,
         identification_external_ref: drivers.identification_external_ref,
+        approved_at: drivers.approved_at,
+        is_online: drivers.is_online,
         district_id: drivers.district_id,
         district_name: districts.name,
         district_province: districts.province,
         created_at: drivers.created_at,
+        total_trips: drivers.total_trips,
       })
       .from(drivers)
       .innerJoin(users, eq(drivers.user_id, users.id))
@@ -97,8 +219,25 @@ export const adminService = {
       .where(eq(driverDocuments.driver_id, driver.id))
       .orderBy(driverDocuments.created_at);
 
+    const identification = evaluateIdentificationDeadline({
+      identification_status: driver.identification_status,
+      approved_at: driver.approved_at,
+      admin_reviewed_at: driver.admin_reviewed_at,
+      created_at: driver.created_at,
+    });
+
     return {
       ...driver,
+      registry_id:
+        driver.document_number?.trim() ||
+        (driver.document_number_last4
+          ? `****${driver.document_number_last4}`
+          : driver.id.slice(0, 8)),
+      identification_phase: identification.phase,
+      identification_blocks_online: identification.blocks_online,
+      identification_days_until_pause: identification.days_until_pause,
+      identification_pause_at: identification.pause_at,
+      identification_days_since_approval: identification.days_since_approval,
       vehicles: vehicleRows,
       documents: documentRows,
     };
@@ -128,6 +267,7 @@ export const adminService = {
     }
 
     const newStatus = action === 'approve' ? 'approved' : 'rejected';
+    const now = new Date();
     const identificationPatch =
       action === 'approve' && driver.identification_status !== 'issued'
         ? { identification_status: 'pending_pickup' as const }
@@ -139,22 +279,19 @@ export const adminService = {
         status: newStatus,
         admin_review_status: newStatus,
         admin_reviewed_by: adminUser.id,
-        admin_reviewed_at: new Date(),
+        admin_reviewed_at: now,
         admin_review_notes: notes ?? null,
         documents_pending_review: false,
+        ...(action === 'approve' ? { approved_at: now } : {}),
         ...identificationPatch,
-        updated_at: new Date(),
+        updated_at: now,
       })
       .where(eq(drivers.id, driverId));
 
     // Resolve the pending documents in line with the admin's decision.
     await db
       .update(driverDocuments)
-      .set(
-        action === 'approve'
-          ? { status: 'approved', verified_at: new Date() }
-          : { status: 'rejected' },
-      )
+      .set(action === 'approve' ? { status: 'approved', verified_at: now } : { status: 'rejected' })
       .where(
         and(eq(driverDocuments.driver_id, driverId), eq(driverDocuments.status, 'pending_review')),
       );

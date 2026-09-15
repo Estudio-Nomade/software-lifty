@@ -9,7 +9,7 @@ Las dos apps tienen **Supabase distintas**. Este documento es el único acoplami
 | System | Owns |
 |--------|------|
 | Web-tránsito | Ventanilla, stock, operador municipal, “se entregó sticker X”, su propia DB |
-| Lifty backend | `identification_status`, hard gate `is_online`, push al conductor |
+| Lifty backend | `identification_status`, plazos 30/90 + pausa online, push al conductor |
 | Lifty `apps/admin` | Solo **lee** el estado de identificación en la ficha |
 
 ## Endpoint (Lifty) — final
@@ -122,7 +122,8 @@ curl -sS -X POST "$API/api/internal/transit/identification/issue" \
 1. Issue sin secret → deny  
 2. Issue secret mal → deny  
 3. Issue driver inexistente → 404  
-4. Approve platform → online → `STICKERS_REQUIRED`  
+4. Approve platform → online en gracia → 200  
+4b. `approved_at` ≥30d + pending → online → `STICKERS_PICKUP_OVERDUE`  
 5. Issue → online → 200 (con district + approved + no docs pending)  
 6. Issue dos veces → 200 idempotent  
 7. Driver JWT no puede issue  

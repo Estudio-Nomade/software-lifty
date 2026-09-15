@@ -81,6 +81,8 @@ async function createApprovedDriverWithDistrict(): Promise<{
       kyc_status: 'approved',
       documents_pending_review: false,
       identification_status: 'pending_pickup',
+      approved_at: new Date(),
+      admin_reviewed_at: new Date(),
       district_id: districtId,
     })
     .returning({ id: drivers.id });
@@ -233,17 +235,17 @@ describe('Transit bridge identification issue', () => {
     expect(second.data.idempotent).toBe(true);
   });
 
-  test('approve → online STICKERS_REQUIRED → issue → online OK', async () => {
+  test('approve → online OK during grace → issue still OK', async () => {
     const { driverId, token } = await createApprovedDriverWithDistrict();
 
-    const blocked = await request(
+    const onlineGrace = await request(
       'PUT',
       '/api/drivers/me/online',
       { is_online: true },
       { Authorization: `Bearer ${token}` },
     );
-    expect(blocked.status).toBe(409);
-    expect((blocked.data.error as { code: string }).code).toBe('STICKERS_REQUIRED');
+    expect(onlineGrace.status).toBe(200);
+    expect(onlineGrace.data.is_online).toBe(true);
 
     const issue = await request(
       'POST',
@@ -263,13 +265,51 @@ describe('Transit bridge identification issue', () => {
     expect(online.data.is_online).toBe(true);
   });
 
-  test('GET status exposes identification_status', async () => {
+  test('pending_pickup past 30d → online STICKERS_PICKUP_OVERDUE → issue unlocks', async () => {
+    const { driverId, token } = await createApprovedDriverWithDistrict();
+    const db = getDb();
+    const ninetyOneDaysAgo = new Date(Date.now() - 91 * 24 * 60 * 60 * 1000);
+    await db
+      .update(drivers)
+      .set({ approved_at: ninetyOneDaysAgo, admin_reviewed_at: ninetyOneDaysAgo })
+      .where(eq(drivers.id, driverId));
+
+    const blocked = await request(
+      'PUT',
+      '/api/drivers/me/online',
+      { is_online: true },
+      { Authorization: `Bearer ${token}` },
+    );
+    expect(blocked.status).toBe(409);
+    expect((blocked.data.error as { code: string }).code).toBe('STICKERS_PICKUP_OVERDUE');
+
+    const issue = await request(
+      'POST',
+      '/api/internal/transit/identification/issue',
+      { driver_id: driverId },
+      { Authorization: 'Bearer test-transit-bridge-secret-dev-only' },
+    );
+    expect(issue.status).toBe(200);
+
+    const online = await request(
+      'PUT',
+      '/api/drivers/me/online',
+      { is_online: true },
+      { Authorization: `Bearer ${token}` },
+    );
+    expect(online.status).toBe(200);
+    expect(online.data.is_online).toBe(true);
+  });
+
+  test('GET status exposes identification_status + grace phase', async () => {
     const { token } = await createApprovedDriverWithDistrict();
     const { status, data } = await request('GET', '/api/drivers/me/status', undefined, {
       Authorization: `Bearer ${token}`,
     });
     expect(status).toBe(200);
     expect(data.identification_status).toBe('pending_pickup');
-    expect(data.can_go_online).toBe(false);
+    expect(data.identification_phase).toBe('grace');
+    expect(data.identification_blocks_online).toBe(false);
+    expect(data.can_go_online).toBe(true);
   });
 });
