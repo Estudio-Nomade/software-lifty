@@ -17,7 +17,7 @@ sources:
 ## Why
 
 1. **Ops sin panel.** La aprobación de conductores hoy vive en mail one-click + API (`features/admin`). No hay UI en el monorepo. Eso no escala para revisar docs todos los días.
-2. **Dos islas de datos.** Lifty y **web-tránsito** usan **Supabase distintas**. Lifty no se entera sola de que el conductor retiró stickers/calcomanías en el municipio.
+  2. **Una sola Supabase de negocio (`wabdd…`).** Admin, web-tránsito, mobile y backend comparten el mismo Auth issuer + Postgres. Las mutaciones sensibles de ops siguen pasando por la API Elysia (no PostgREST cruzado improvisado).
 3. **Regla de negocio cerrada:** sin stickers retirados en tránsito, el conductor **no puede conducir** (`is_online` bloqueado). Hoy, al aprobar docs, el backend pone `status=approved` y el copy dice que ya puede usar Lifty — eso **salta** el paso tránsito.
 
 ## Decisiones locked (no reabrir en implementación)
@@ -28,7 +28,7 @@ sources:
 | D2 | Web de tránsito en este monorepo | **No.** Ya existe fuera del repo. |
 | D3 | Stickers vs online | **Plazo + suspensión.** Tras approve de plataforma el conductor **puede** conectarse. Recordatorio reforzado desde día **20**. Si a los **30 días** no retiró stickers/logos → cuenta **suspendida** (no `is_online`) hasta que tránsito emita. `revoked` sigue bloqueando. |
 | D4 | Quién marca “stickers entregados” | **Web-tránsito** (sistema de verdad de la entrega física). |
-| D5 | Cómo se enteran las dos Supabase | **Puente explícito:** web-tránsito llama API interna de Lifty (no DB compartida, no lectura cruzada). |
+| D5 | Auth + datos | **Misma Supabase canónica `wabdd…`.** Mutaciones de stickers vía API JWT `role=transit|admin` (`/api/transit/*`) y/o bridge secret server-to-server. No PostgREST directo para issue. |
 | D6 | Ejes de estado | **Dos ejes:** (A) review plataforma docs/KYC · (B) identification stickers. |
 
 ## What changes (por fase)
@@ -123,7 +123,7 @@ Web desktop-first **fuera** del monorepo (mismo nivel que `web-transito`):
 
 ## Constraints
 
-- **No unificar Supabase** de Lifty y web-tránsito en esta SPEC.
+- **Una sola Supabase canónica (`wabdd…`)** para Auth paneles + backend + mobile. Legacy `dlqvos` / `ykchnss` retired after cutover (freeze, no delete day-0).
 - **No construir UI de tránsito** ni rol `transit` en `apps/admin`.
 - **No self-report** del conductor (“ya retiré stickers”) como camino feliz.
 - **Plazo stickers en backend** (no solo UI): gracia/reminder online OK; suspensión ≥30d y `revoked` bloquean como `documents_pending_review`.
@@ -152,7 +152,7 @@ Web desktop-first **fuera** del monorepo (mismo nivel que `web-transito`):
 
 - Phase 1: tests backend cubren approve → online denied → issue bridge → online ok; typecheck/lint OK; mobile no invita a conducir sin stickers.
 - Phase 2: `LIfty/apps/admin` en dev permite el loop completo de review; conductor no-admin no entra.
-- Las dos Supabase siguen separadas; el único acoplamiento es el contrato HTTP del bridge.
+- Misma Supabase `wabdd`; paneles consumen datos de conductores vía API (`/api/admin/*`, `/api/transit/*`); bridge secret opcional server-to-server.
 
 ## Order of work (implementación)
 
