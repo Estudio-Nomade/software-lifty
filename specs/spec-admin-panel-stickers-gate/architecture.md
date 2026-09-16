@@ -10,21 +10,21 @@ flowchart LR
     mobileDrv["apps/mobile conductor"]
     mobilePax["apps/mobile-passengers"]
     api["apps/backend Elysia"]
-    sbLifty[("Supabase Lifty DB + Auth")]
   end
 
   subgraph afuera["Fuera del monorepo"]
     adminWeb["LIfty/apps/admin ops"]
     transitWeb["Web tránsito"]
-    sbTransit[("Supabase tránsito")]
   end
 
-  mobileDrv -->|JWT Bearer| api
-  mobilePax -->|JWT Bearer| api
-  adminWeb -->|JWT admin| api
+  sbLifty[("Supabase wabdd Auth+DB+Storage")]
+
+  mobileDrv -->|JWT wabdd| api
+  mobilePax -->|JWT wabdd| api
+  adminWeb -->|JWT role=admin| api
+  transitWeb -->|JWT role=transit| api
+  transitWeb -.->|"optional bridge secret"| api
   api --> sbLifty
-  transitWeb --> sbTransit
-  transitWeb -->|"POST bridge secret issue stickers"| api
 ```
 
 ## Two axes of driver readiness
@@ -105,7 +105,8 @@ Al **approve** plataforma: si status identification es null/legacy → `pending_
 | Notify copy | `features/admin/notifications.ts` | no “ya conducir” |
 | Online gate | `features/drivers/service.ts` `toggleOnline` + heartbeat | plazo 20/30; `STICKERS_PICKUP_OVERDUE` / `STICKERS_REVOKED` |
 | Status payload | `getMyStatus` | expose `identification_status` + phase/flags |
-| Bridge | `features/transit-bridge` | issue endpoint |
+| Bridge secret | `features/transit-bridge` | server-to-server issue (kept) |
+| Transit JWT API | `features/transit` | `/api/transit/*` list/stats/issue for role transit\|admin |
 | Admin list/detail | `adminService` | return identification fields + phase |
 
 ### `toggleOnline` gate order (conceptual)
@@ -159,9 +160,10 @@ cd /home/marti/Documentos/LIfty/apps/admin && bun run dev   # :5174
 
 | Surface | Auth |
 |---------|------|
-| Admin UI (`LIfty/apps/admin`) + `/admin/*` | Supabase JWT + `users.role=admin` |
-| Bridge issue | Shared secret header only (server-server) |
-| Driver app | Supabase JWT driver; **cannot** call bridge |
+| Admin UI (`LIfty/apps/admin`) + `/admin/*` | JWT wabdd + `users.role=admin` |
+| Transit UI + `/api/transit/*` | JWT wabdd + `users.role=transit` **or** `admin` |
+| Bridge issue | Shared secret header only (server-server); optional path |
+| Driver app | JWT wabdd driver; **cannot** issue stickers |
 | One-click email approve | existing token; only platform axis |
 
 Rate-limit bridge by IP + secret failure logging.
@@ -177,6 +179,7 @@ Rate-limit bridge by IP + secret failure logging.
 
 ## Out of scope architecture
 
-- Unificar proyectos Supabase.
-- RLS cross-project.
-- Event bus / queue (overkill MVP; HTTP sync issue is enough).
+- Meter admin/tránsito en Turbo monorepo / `dev-all`.
+- PostgREST mutaciones ops desde el browser (paneles usan API).
+- Event bus / queue (overkill MVP; HTTP issue is enough).
+- Borrar proyectos legacy `dlqvos` / `ykchnss` el día del cutover (freeze first).

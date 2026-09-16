@@ -2,7 +2,8 @@
 
 Companion de `SPEC-admin-panel-stickers-gate`.
 
-Las dos apps tienen **Supabase distintas**. Este documento es el único acoplamiento permitido en MVP: HTTP server-to-server hacia el backend Lifty.
+**Auth canónico:** admin, web-tránsito, mobile y backend usan el mismo proyecto Supabase **`wabdd…`**.  
+Este documento cubre el **camino server-to-server** (secret). El camino feliz del panel municipal es JWT `role=transit|admin` → `POST /api/transit/drivers/:id/identification/issue` (misma lógica de issue).
 
 ## Responsibility split
 
@@ -12,7 +13,20 @@ Las dos apps tienen **Supabase distintas**. Este documento es el único acoplami
 | Lifty backend | `identification_status`, plazos 30/90 + pausa online, push al conductor |
 | Lifty `apps/admin` | Solo **lee** el estado de identificación en la ficha |
 
-## Endpoint (Lifty) — final
+## Endpoints (Lifty)
+
+### Browser / panel (preferred)
+
+```
+POST /api/transit/drivers/:id/identification/issue
+Authorization: Bearer <supabase_jwt_wabdd>
+```
+
+- Requires `users.role` in (`transit`, `admin`).
+- Body: `{ "issued_at"?, "external_ref"?, "batch"?, "notes"?, "district_id"? }`
+- Actor se toma del JWT (no confiar en actor del client).
+
+### Server-to-server bridge (kept)
 
 ```
 POST /api/internal/transit/identification/issue
