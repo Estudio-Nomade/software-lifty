@@ -2,6 +2,7 @@ import { swagger } from '@elysiajs/swagger';
 import { Elysia } from 'elysia';
 import { fuelPriceRoutes } from './features/admin/fuel-price/routes';
 import { adminApproveRoute, adminRoutes } from './features/admin/routes';
+import { transitOperatorsRoutes } from './features/admin/transit-operators/routes';
 import { authRoutes } from './features/auth/routes';
 import { cancellationService } from './features/cancellations/service';
 import { districtsRoutes } from './features/districts/routes';
@@ -99,6 +100,7 @@ export function createApp(customAuthPlugin?: typeof authPlugin) {
         .use(transitRoutes)
         .use(transitBridgeRoutes)
         .use(fuelPriceRoutes)
+        .use(transitOperatorsRoutes)
         .use(paymentMethodsRoutes)
         .use(kycRoutes)
         .use(tripRoutes)
