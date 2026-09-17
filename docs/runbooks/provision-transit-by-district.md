@@ -8,43 +8,43 @@
 
 Un user Auth `role=transit` por municipio, con `users.transit_district_id` apuntando al `districts.id` correspondiente. El panel web-transito elige municipio → login email/pass de ese municipio → API scopa drivers por `district_id`.
 
+## Vía canónica (ops)
+
+1. Abrí **lifty-admin** → **Operadores tránsito** (`/transit-operators`).
+2. **Nuevo operador** → elegí municipio → email sugerido `{slug}@liftyviajes.com` (editable) → password (generar o manual).
+3. Tras crear: modal con email + pass **una sola vez** → copiá y enviá por canal seguro.
+4. Acciones fila: **Reset pass**, **Cambiar municipio**.
+
+Backend: `POST/GET/PATCH /api/admin/transit-operators*` (solo `role=admin`). Auth Admin + upsert `users` (`role=transit`, `transit_district_id`). Un municipio = un operador activo (409 si ya existe).
+
 ## Prerequisites
 
 1. Migración `users.transit_district_id` aplicada (Drizzle `0043` / Supabase `20260917010000_user_transit_district`).
 2. Tabla `districts` con municipios activos (seed Córdoba).
-3. Backend apunta a la misma DB que provisionás (local `:5433` o pooler wabdd).
-4. service_role wabdd solo en shell local / password manager.
+3. Backend con `SUPABASE_URL` + `SUPABASE_SECRET_KEY` (o `SUPABASE_SERVICE_ROLE_KEY`) server-side, misma DB que provisionás (local `:5433` o pooler wabdd).
+4. Admin logueado con `users.role = admin`.
 
-## Email / password pattern (ops)
+## Email sugerido (slug)
 
-| Municipio (name exacto) | Email sugerido | Password inicial (ops-only) |
-|-------------------------|----------------|-----------------------------|
-| Villa Dolores | `villadolores@liftyviajes.com` | `Villadolorestransito` |
-| Villa de las Rosas | `villadelasrosas@liftyviajes.com` | `Villadelasrosastransito` |
-| Villa Sarmiento | `villasarmiento@liftyviajes.com` | `Villasarmientotransito` |
-| Mina Clavero | `minaclavero@liftyviajes.com` | `Minaclaverotransito` |
-| San Javier | `sanjavier@liftyviajes.com` | `Sanjaviertransito` |
-| Nono | `nono@liftyviajes.com` | `Nonotransito` |
-| Las Calles | `lascalles@liftyviajes.com` | `Lascallestransito` |
+| Municipio | Email |
+|-----------|-------|
+| Villa Dolores | `villadolores@liftyviajes.com` |
+| Villa de las Rosas | `villadelasrosas@liftyviajes.com` |
+| Villa Sarmiento | `villasarmiento@liftyviajes.com` |
+| Mina Clavero | `minaclavero@liftyviajes.com` |
+| San Javier | `sanjavier@liftyviajes.com` |
+| Nono | `nono@liftyviajes.com` |
+| Las Calles | `lascalles@liftyviajes.com` |
 
-**Guardar passwords reales** en:
+Passwords: solo en el modal del admin o en `~/Documentos/LIfty/.ops-local/` (chmod 600). **No** git.
 
-```text
-~/Documentos/LIfty/.ops-local/transit-municipio-passwords.txt
-chmod 600 ~/Documentos/LIfty/.ops-local/transit-municipio-passwords.txt
-```
+## Fallback SQL / CLI (bootstrap o disaster recovery)
 
-Ese path **no** va a git (`.ops-local` fuera de repos o en gitignore).
+Solo si el panel no está disponible:
 
-## Pasos por municipio
-
-1. **Auth Admin** (service_role wabdd): create user  
-   - email = patrón de la tabla  
-   - `email_confirm: true`  
-   - password = ops-only  
-2. Anotar Auth `user.id` (UUID).  
-3. Resolver `districts.id` por `name` exacto.  
-4. **Upsert** `public.users`:
+1. Auth Admin create user (`email_confirm: true`).
+2. Upsert `public.users` con `role=transit` + `transit_district_id`.
+3. `delete from drivers/passenger_profiles where user_id = :uid`.
 
 ```sql
 insert into public.users (id, email, role, full_name, transit_district_id)
@@ -65,24 +65,23 @@ delete from public.drivers where user_id = :uid;
 delete from public.passenger_profiles where user_id = :uid;
 ```
 
-5. Opcional: Auth `app_metadata.role = 'transit'`.  
-6. **Verify:**  
-   - `GET /api/auth/me` → `role: transit`, `transit_district_id`, `district_name`  
-   - `GET /api/transit/drivers` → solo drivers de ese distrito  
-   - `GET /api/admin/drivers/pending` → **403**
-
-## Deprecar transit global
-
-`transito@liftyviajes.com` sin `transit_district_id` queda **bloqueado** (403 en list/stats). Deprecar en docs; no crear transit “global” sin municipio. Soporte multi-municipio = cuenta `admin` + selector de municipio en UI (admin puede `?district_id=` o ver todos).
-
-## Script opcional
-
 ```bash
 cd apps/backend
-# Requiere SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY + DATABASE_URL
+# SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY + DATABASE_URL
 # No imprime passwords a stdout
 bun run scripts/provision-transit-districts.ts
 ```
+
+## Verify
+
+- `GET /api/auth/me` → `role: transit`, `transit_district_id`, `district_name`
+- `GET /api/transit/drivers` → solo drivers de ese distrito
+- `GET /api/admin/drivers/pending` con token transit → **403**
+- Segundo operador mismo `district_id` → **409**
+
+## Deprecar transit global
+
+`transito@liftyviajes.com` sin `transit_district_id` queda **bloqueado** (403 en list/stats). No crear transit “global” sin municipio. Soporte multi-municipio = cuenta `admin` + selector de municipio en UI (admin puede `?district_id=` o ver todos).
 
 ## UI smoke
 

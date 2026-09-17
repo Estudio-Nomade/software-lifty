@@ -1,0 +1,334 @@
+import { and, desc, eq, ne } from 'drizzle-orm';
+import { db } from '../../../shared/db/client';
+import { districts, drivers, passengerProfiles, users } from '../../../shared/db/schema';
+import {
+  AppError,
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+  ServiceUnavailableError,
+} from '../../../shared/lib/errors';
+import { logger } from '../../../shared/lib/logger';
+import { getAuthAdminClient } from './auth-admin';
+
+const MIN_PASSWORD = 8;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function assertPassword(password: string) {
+  if (password.length < MIN_PASSWORD) {
+    throw new BadRequestError(`La contraseña debe tener al menos ${MIN_PASSWORD} caracteres`);
+  }
+}
+
+function assertEmail(email: string) {
+  if (!EMAIL_RE.test(email)) {
+    throw new BadRequestError('Email inválido');
+  }
+}
+
+async function requireActiveDistrict(districtId: string) {
+  const [row] = await db
+    .select({ id: districts.id, name: districts.name, status: districts.status })
+    .from(districts)
+    .where(eq(districts.id, districtId))
+    .limit(1);
+
+  if (!row) throw new NotFoundError('Municipio no encontrado');
+  if (row.status !== 'active') throw new BadRequestError('Municipio inactivo');
+  return row;
+}
+
+async function assertDistrictFree(districtId: string, exceptUserId?: string) {
+  const filters = [eq(users.role, 'transit'), eq(users.transit_district_id, districtId)];
+  if (exceptUserId) filters.push(ne(users.id, exceptUserId));
+
+  const [existing] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(...filters))
+    .limit(1);
+
+  if (existing) {
+    throw new ConflictError('Este municipio ya tiene un operador de tránsito');
+  }
+}
+
+async function scrubDriverPassengerRows(userId: string) {
+  await db.delete(drivers).where(eq(drivers.user_id, userId));
+  await db.delete(passengerProfiles).where(eq(passengerProfiles.user_id, userId));
+}
+
+function authAdminFail(err: unknown): never {
+  const message = err instanceof Error ? err.message : 'Auth Admin error';
+  logger.error('[transit-operators] Auth Admin failed', { message });
+  throw new ServiceUnavailableError('No se pudo completar la operación en Auth');
+}
+
+export const transitOperatorsService = {
+  async listDistricts() {
+    const rows = await db
+      .select({
+        id: districts.id,
+        name: districts.name,
+        province: districts.province,
+        status: districts.status,
+      })
+      .from(districts)
+      .where(eq(districts.status, 'active'))
+      .orderBy(districts.name);
+
+    return { items: rows };
+  },
+
+  async listOperators() {
+    const rows = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        full_name: users.full_name,
+        transit_district_id: users.transit_district_id,
+        district_name: districts.name,
+        created_at: users.created_at,
+      })
+      .from(users)
+      .leftJoin(districts, eq(users.transit_district_id, districts.id))
+      .where(eq(users.role, 'transit'))
+      .orderBy(desc(users.created_at));
+
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        email: r.email,
+        full_name: r.full_name,
+        transit_district_id: r.transit_district_id,
+        district_name: r.district_name ?? null,
+        created_at: r.created_at,
+        banned: false,
+      })),
+    };
+  },
+
+  async createOperator(
+    input: { district_id: string; email: string; password: string; full_name?: string },
+    actorId: string,
+  ) {
+    const email = normalizeEmail(input.email);
+    assertEmail(email);
+    assertPassword(input.password);
+
+    const district = await requireActiveDistrict(input.district_id);
+    await assertDistrictFree(input.district_id);
+
+    const [emailTaken] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    if (emailTaken) throw new ConflictError('El email ya está en uso');
+
+    const fullName = input.full_name?.trim() || `Tránsito ${district.name}`;
+
+    let authUserId: string;
+    try {
+      const admin = getAuthAdminClient();
+      const { data, error } = await admin.auth.admin.createUser({
+        email,
+        password: input.password,
+        email_confirm: true,
+        app_metadata: { role: 'transit' },
+        user_metadata: { full_name: fullName },
+      });
+      if (error || !data.user?.id) {
+        const msg = error?.message?.toLowerCase() ?? '';
+        if (msg.includes('already') || msg.includes('registered') || msg.includes('exists')) {
+          throw new ConflictError('El email ya existe en Auth');
+        }
+        authAdminFail(error ?? new Error('createUser sin user'));
+      }
+      authUserId = data.user.id;
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      authAdminFail(err);
+    }
+
+    try {
+      await db
+        .insert(users)
+        .values({
+          id: authUserId,
+          email,
+          role: 'transit',
+          full_name: fullName,
+          transit_district_id: input.district_id,
+        })
+        .onConflictDoUpdate({
+          target: users.id,
+          set: {
+            email,
+            role: 'transit',
+            full_name: fullName,
+            transit_district_id: input.district_id,
+            updated_at: new Date(),
+          },
+        });
+
+      await scrubDriverPassengerRows(authUserId);
+    } catch (err) {
+      try {
+        const admin = getAuthAdminClient();
+        await admin.auth.admin.deleteUser(authUserId);
+      } catch {
+        /* best-effort rollback */
+      }
+      throw err;
+    }
+
+    logger.info('[transit-operators] created', {
+      operatorId: authUserId,
+      districtId: input.district_id,
+      actorId,
+    });
+
+    return {
+      id: authUserId,
+      email,
+      full_name: fullName,
+      transit_district_id: input.district_id,
+      district_name: district.name,
+      password: input.password,
+      created_at: new Date().toISOString(),
+    };
+  },
+
+  async patchOperator(
+    userId: string,
+    input: { district_id?: string; full_name?: string },
+    actorId: string,
+  ) {
+    const [op] = await db
+      .select({ id: users.id, role: users.role })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!op || op.role !== 'transit') throw new NotFoundError('Operador no encontrado');
+
+    const set: Partial<typeof users.$inferInsert> = { updated_at: new Date() };
+    let districtName: string | null = null;
+
+    if (input.district_id) {
+      const district = await requireActiveDistrict(input.district_id);
+      await assertDistrictFree(input.district_id, userId);
+      set.transit_district_id = input.district_id;
+      districtName = district.name;
+    }
+
+    if (input.full_name !== undefined) {
+      set.full_name = input.full_name.trim() || null;
+    }
+
+    if (Object.keys(set).length <= 1) {
+      throw new BadRequestError('Nada para actualizar');
+    }
+
+    const [updated] = await db.update(users).set(set).where(eq(users.id, userId)).returning({
+      id: users.id,
+      email: users.email,
+      full_name: users.full_name,
+      transit_district_id: users.transit_district_id,
+      created_at: users.created_at,
+    });
+
+    if (districtName == null && updated.transit_district_id) {
+      const [d] = await db
+        .select({ name: districts.name })
+        .from(districts)
+        .where(eq(districts.id, updated.transit_district_id))
+        .limit(1);
+      districtName = d?.name ?? null;
+    }
+
+    logger.info('[transit-operators] patched', {
+      operatorId: userId,
+      districtId: updated.transit_district_id,
+      actorId,
+    });
+
+    return {
+      id: updated.id,
+      email: updated.email,
+      full_name: updated.full_name,
+      transit_district_id: updated.transit_district_id,
+      district_name: districtName,
+      created_at: updated.created_at,
+    };
+  },
+
+  async resetPassword(userId: string, password: string, actorId: string) {
+    assertPassword(password);
+
+    const [op] = await db
+      .select({ id: users.id, role: users.role, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!op || op.role !== 'transit') throw new NotFoundError('Operador no encontrado');
+
+    try {
+      const admin = getAuthAdminClient();
+      const { error } = await admin.auth.admin.updateUserById(userId, { password });
+      if (error) authAdminFail(error);
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      authAdminFail(err);
+    }
+
+    logger.info('[transit-operators] password reset', {
+      operatorId: userId,
+      actorId,
+    });
+
+    return {
+      id: userId,
+      email: op.email,
+      password,
+      message: 'Contraseña actualizada. Guardala ahora; no se vuelve a mostrar.',
+    };
+  },
+
+  async disableOperator(userId: string, actorId: string) {
+    const [op] = await db
+      .select({ id: users.id, role: users.role, email: users.email })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!op || op.role !== 'transit') throw new NotFoundError('Operador no encontrado');
+
+    try {
+      const admin = getAuthAdminClient();
+      const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: '876000h' });
+      if (error) authAdminFail(error);
+    } catch (err) {
+      if (err instanceof AppError) throw err;
+      authAdminFail(err);
+    }
+
+    await db
+      .update(users)
+      .set({ transit_district_id: null, updated_at: new Date() })
+      .where(eq(users.id, userId));
+
+    logger.info('[transit-operators] disabled', {
+      operatorId: userId,
+      actorId,
+    });
+
+    return { id: userId, email: op.email, banned: true };
+  },
+};
