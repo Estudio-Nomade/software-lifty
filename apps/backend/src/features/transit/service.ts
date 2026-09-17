@@ -1,7 +1,7 @@
 import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { districts, drivers, users, vehicles } from '../../shared/db/schema';
-import { NotFoundError } from '../../shared/lib/errors';
+import { ForbiddenError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
 import { logger } from '../../shared/lib/logger';
 import type { AuthUser } from '../../shared/middleware/auth';
@@ -149,8 +149,63 @@ const selectFields = {
   )`,
 };
 
+export type TransitScope = {
+  /** Forced district for role=transit; optional filter for admin. */
+  districtId: string | null;
+};
+
+/** Resolve list/stats scope: transit forced to binding; admin optional query. */
+export async function resolveTransitScope(
+  actor: AuthUser,
+  queryDistrictId?: string | null,
+): Promise<TransitScope> {
+  if (actor.role === 'transit') {
+    const [row] = await db
+      .select({ transit_district_id: users.transit_district_id })
+      .from(users)
+      .where(eq(users.id, actor.id))
+      .limit(1);
+    const bound = row?.transit_district_id ?? null;
+    if (!bound) {
+      throw new ForbiddenError('Transit operator has no municipality assigned');
+    }
+    return { districtId: bound };
+  }
+
+  // admin: optional district filter
+  if (queryDistrictId) {
+    return { districtId: queryDistrictId };
+  }
+  return { districtId: null };
+}
+
+function approvedFilters(scope: TransitScope) {
+  const filters = [eq(drivers.status, 'approved'), eq(drivers.admin_review_status, 'approved')];
+  if (scope.districtId) {
+    filters.push(eq(drivers.district_id, scope.districtId));
+  }
+  return filters;
+}
+
 export const transitService = {
-  async getStats() {
+  async listActiveDistricts() {
+    const rows = await db
+      .select({
+        id: districts.id,
+        name: districts.name,
+        province: districts.province,
+        status: districts.status,
+      })
+      .from(districts)
+      .where(eq(districts.status, 'active'))
+      .orderBy(districts.name);
+
+    return { items: rows };
+  },
+
+  async getStats(scope: TransitScope) {
+    const base = approvedFilters(scope);
+
     const [totals] = await db
       .select({
         total_drivers: sql<number>`count(*)::int`,
@@ -162,9 +217,10 @@ export const transitService = {
         )::int`,
       })
       .from(drivers)
-      .where(and(eq(drivers.status, 'approved'), eq(drivers.admin_review_status, 'approved')));
+      .where(and(...base));
 
-    // suspended = platform-approved + pending_pickup past 30d pause window
+    const pendingFilters = [...base, eq(drivers.identification_status, 'pending_pickup')];
+
     const approvedPending = await db
       .select({
         identification_status: drivers.identification_status,
@@ -173,13 +229,7 @@ export const transitService = {
         created_at: drivers.created_at,
       })
       .from(drivers)
-      .where(
-        and(
-          eq(drivers.status, 'approved'),
-          eq(drivers.admin_review_status, 'approved'),
-          eq(drivers.identification_status, 'pending_pickup'),
-        ),
-      );
+      .where(and(...pendingFilters));
 
     let suspended = 0;
     for (const row of approvedPending) {
@@ -195,20 +245,23 @@ export const transitService = {
     };
   },
 
-  async listDrivers(opts?: {
-    q?: string;
-    identification_status?: string;
-    page?: number;
-    page_size?: number;
-    limit?: number;
-    offset?: number;
-  }) {
+  async listDrivers(
+    scope: TransitScope,
+    opts?: {
+      q?: string;
+      identification_status?: string;
+      page?: number;
+      page_size?: number;
+      limit?: number;
+      offset?: number;
+    },
+  ) {
     const pageSize = Math.min(Math.max(opts?.page_size ?? opts?.limit ?? 50, 1), 200);
     const page = Math.max(opts?.page ?? 1, 1);
     const offset = opts?.offset !== undefined ? Math.max(opts.offset, 0) : (page - 1) * pageSize;
     const q = opts?.q?.trim();
 
-    const filters = [eq(drivers.status, 'approved'), eq(drivers.admin_review_status, 'approved')];
+    const filters = approvedFilters(scope);
     if (opts?.identification_status) {
       filters.push(eq(drivers.identification_status, opts.identification_status));
     }
@@ -258,32 +311,66 @@ export const transitService = {
     };
   },
 
-  async getDriver(driverId: string) {
+  async getDriver(scope: TransitScope, driverId: string) {
+    const filters = [eq(drivers.id, driverId)];
+    if (scope.districtId) {
+      filters.push(eq(drivers.district_id, scope.districtId));
+    }
+
     const [row] = await db
       .select(selectFields)
       .from(drivers)
       .innerJoin(users, eq(drivers.user_id, users.id))
       .leftJoin(districts, eq(drivers.district_id, districts.id))
-      .where(eq(drivers.id, driverId))
+      .where(and(...filters))
       .limit(1);
 
     if (!row) throw new NotFoundError('Driver not found');
     return mapRow(row);
   },
 
-  async issueIdentification(actor: AuthUser, driverId: string, body: TransitIssueBody) {
+  async issueIdentification(
+    actor: AuthUser,
+    scope: TransitScope,
+    driverId: string,
+    body: TransitIssueBody,
+  ) {
+    const [driver] = await db
+      .select({ id: drivers.id, district_id: drivers.district_id })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+
+    if (!driver) throw new NotFoundError('Driver not found');
+
+    if (scope.districtId) {
+      // Only block when driver already belongs to a *different* municipality
+      if (driver.district_id && driver.district_id !== scope.districtId) {
+        throw new ForbiddenError('Driver belongs to another municipality');
+      }
+      // transit (or admin scoped): never allow writing a different district
+      if (body.district_id && body.district_id !== scope.districtId) {
+        throw new ForbiddenError('Cannot assign identification to another municipality');
+      }
+    }
+
+    const district_id = scope.districtId
+      ? (body.district_id ?? scope.districtId)
+      : body.district_id;
+
     const external_ref = body.external_ref ?? body.batch;
     const result = await transitBridgeService.issueIdentification({
       driver_id: driverId,
       issued_at: body.issued_at,
       external_ref,
-      district_id: body.district_id,
+      district_id,
     });
 
     logger.info('[TRANSIT] identification issued via JWT', {
       driverId: driverId.split('-')[0],
       actorId: actor.id.split('-')[0],
       actorRole: actor.role,
+      districtId: scope.districtId?.split('-')[0],
       notes: body.notes ? String(body.notes).slice(0, 80) : undefined,
       idempotent: result.idempotent,
     });

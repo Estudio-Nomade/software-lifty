@@ -45,8 +45,30 @@ async function request(
   return { status: res.status, data: data as Record<string, unknown> };
 }
 
-async function createStaff(role: 'admin' | 'transit'): Promise<{ userId: string; token: string }> {
+async function ensureDistrict(name = 'Villa Dolores'): Promise<string> {
   const db = getDb();
+  const existing = await db
+    .select({ id: districts.id })
+    .from(districts)
+    .where(eq(districts.name, name))
+    .limit(1);
+  if (existing[0]) return existing[0].id;
+  const [d] = await db
+    .insert(districts)
+    .values({ name, province: 'Córdoba', status: 'active' })
+    .returning({ id: districts.id });
+  return d.id;
+}
+
+async function createStaff(
+  role: 'admin' | 'transit',
+  opts?: { transit_district_id?: string | null },
+): Promise<{ userId: string; token: string; districtId: string | null }> {
+  const db = getDb();
+  let districtId: string | null = opts?.transit_district_id ?? null;
+  if (role === 'transit' && districtId === null && opts?.transit_district_id !== null) {
+    districtId = await ensureDistrict();
+  }
   const [user] = await db
     .insert(users)
     .values({
@@ -54,9 +76,10 @@ async function createStaff(role: 'admin' | 'transit'): Promise<{ userId: string;
       email: `${role}-${Math.random().toString(36).slice(2, 8)}@lifty.test`,
       full_name: role === 'admin' ? 'Admin Ops' : 'Transit Ops',
       role,
+      transit_district_id: role === 'transit' ? districtId : null,
     })
     .returning({ id: users.id });
-  return { userId: user.id, token: createTestToken(user.id) };
+  return { userId: user.id, token: createTestToken(user.id), districtId };
 }
 
 async function createApprovedDriver(opts?: {
@@ -64,6 +87,9 @@ async function createApprovedDriver(opts?: {
   full_name?: string;
   document_number?: string;
   approved_days_ago?: number;
+  district_id?: string;
+  district_name?: string;
+  plate?: string;
 }): Promise<{ userId: string; driverId: string; token: string; districtId: string }> {
   const db = getDb();
   const [user] = await db
@@ -78,17 +104,7 @@ async function createApprovedDriver(opts?: {
     })
     .returning({ id: users.id });
 
-  let districtId: string;
-  const existing = await db.select({ id: districts.id }).from(districts).limit(1);
-  if (existing[0]) {
-    districtId = existing[0].id;
-  } else {
-    const [d] = await db
-      .insert(districts)
-      .values({ name: 'Godoy Cruz', province: 'Mendoza', status: 'active' })
-      .returning({ id: districts.id });
-    districtId = d.id;
-  }
+  const districtId = opts?.district_id ?? (await ensureDistrict(opts?.district_name ?? 'Villa Dolores'));
 
   const approvedAt = opts?.approved_days_ago
     ? new Date(Date.now() - opts.approved_days_ago * 24 * 60 * 60 * 1000)
@@ -115,7 +131,7 @@ async function createApprovedDriver(opts?: {
     model: 'Corolla',
     year: 2020,
     color: 'Blanco',
-    plate: 'AB123CD',
+    plate: opts?.plate ?? `AB${String(Math.floor(Math.random() * 1e5)).padStart(5, '0')}`,
     vehicle_type: 'car',
   });
 
@@ -201,7 +217,7 @@ describe('Transit API JWT surface', () => {
     expect(row!.full_name).toBe('Ana Perez');
     expect(row!.document_number_last4).toBe('3456');
     expect(row!.identification_status).toBe('pending_pickup');
-    expect(row!.plate).toBe('AB123CD');
+    expect(row!.plate).toBeTruthy();
     expect(row!.lifty_status).toBe('approved');
   });
 
@@ -244,7 +260,7 @@ describe('Transit API JWT surface', () => {
     expect(data.id).toBe(driverId);
     expect(data.full_name).toBe('Detail Driver');
     expect(data.vehicle).toBeTruthy();
-    expect((data.vehicle as { plate: string }).plate).toBe('AB123CD');
+    expect((data.vehicle as { plate: string }).plate).toBeTruthy();
     // no full KYC dump / admin review notes required
     expect(data.admin_review_notes).toBeUndefined();
   });
@@ -318,5 +334,118 @@ describe('Transit API JWT surface', () => {
     const { token } = await createStaff('transit');
     const { status } = await request('GET', '/api/admin/drivers/pending', undefined, token);
     expect(status).toBe(403);
+  });
+
+  test('GET /api/transit/districts is public and returns active districts', async () => {
+    await ensureDistrict('Villa Dolores');
+    await ensureDistrict('Nono');
+
+    const { status, data } = await request('GET', '/api/transit/districts');
+    expect(status).toBe(200);
+    const items = data.items as Array<Record<string, unknown>>;
+    expect(Array.isArray(items)).toBe(true);
+    expect(items.length).toBeGreaterThanOrEqual(2);
+    expect(items.every((i) => i.status === 'active')).toBe(true);
+    expect(items.some((i) => i.name === 'Villa Dolores')).toBe(true);
+  });
+
+  test('transit scoped to own district: list hides other municipality drivers', async () => {
+    const villaId = await ensureDistrict('Villa Dolores');
+    const nonoId = await ensureDistrict('Nono');
+    const { token } = await createStaff('transit', { transit_district_id: villaId });
+
+    const villa = await createApprovedDriver({
+      full_name: 'Villa Driver',
+      document_number: '40111111',
+      district_id: villaId,
+    });
+    const nono = await createApprovedDriver({
+      full_name: 'Nono Driver',
+      document_number: '40222222',
+      district_id: nonoId,
+    });
+
+    const { status, data } = await request('GET', '/api/transit/drivers', undefined, token);
+    expect(status).toBe(200);
+    const items = data.items as Array<Record<string, unknown>>;
+    expect(items.some((i) => i.id === villa.driverId)).toBe(true);
+    expect(items.some((i) => i.id === nono.driverId)).toBe(false);
+
+    const otherDetail = await request(
+      'GET',
+      `/api/transit/drivers/${nono.driverId}`,
+      undefined,
+      token,
+    );
+    expect(otherDetail.status).toBe(404);
+  });
+
+  test('transit cannot issue identification cross-district', async () => {
+    const villaId = await ensureDistrict('Villa Dolores');
+    const nonoId = await ensureDistrict('Nono');
+    const { token } = await createStaff('transit', { transit_district_id: villaId });
+    const { driverId } = await createApprovedDriver({
+      district_id: nonoId,
+      document_number: '40333333',
+    });
+
+    const { status, data } = await request(
+      'POST',
+      `/api/transit/drivers/${driverId}/identification/issue`,
+      {},
+      token,
+    );
+    expect(status).toBe(403);
+    expect((data.error as { code: string }).code).toBe('FORBIDDEN');
+  });
+
+  test('transit without district binding → 403 on stats', async () => {
+    const { token } = await createStaff('transit', { transit_district_id: null });
+    const { status, data } = await request('GET', '/api/transit/stats', undefined, token);
+    expect(status).toBe(403);
+    expect((data.error as { code: string }).code).toBe('FORBIDDEN');
+  });
+
+  test('admin without district_id sees all; with district_id filters', async () => {
+    const villaId = await ensureDistrict('Villa Dolores');
+    const nonoId = await ensureDistrict('Nono');
+    const { token } = await createStaff('admin');
+    const villa = await createApprovedDriver({
+      full_name: 'Admin Villa',
+      document_number: '40444444',
+      district_id: villaId,
+    });
+    const nono = await createApprovedDriver({
+      full_name: 'Admin Nono',
+      document_number: '40555555',
+      district_id: nonoId,
+    });
+
+    const all = await request('GET', '/api/transit/drivers', undefined, token);
+    expect(all.status).toBe(200);
+    const allItems = all.data.items as Array<Record<string, unknown>>;
+    expect(allItems.some((i) => i.id === villa.driverId)).toBe(true);
+    expect(allItems.some((i) => i.id === nono.driverId)).toBe(true);
+
+    const filtered = await request(
+      'GET',
+      `/api/transit/drivers?district_id=${villaId}`,
+      undefined,
+      token,
+    );
+    expect(filtered.status).toBe(200);
+    const items = filtered.data.items as Array<Record<string, unknown>>;
+    expect(items.every((i) => i.district_id === villaId)).toBe(true);
+    expect(items.some((i) => i.id === nono.driverId)).toBe(false);
+  });
+
+  test('GET /api/auth/me exposes transit_district_id + district_name', async () => {
+    const villaId = await ensureDistrict('Villa Dolores');
+    const { token } = await createStaff('transit', { transit_district_id: villaId });
+    const { status, data } = await request('GET', '/api/auth/me', undefined, token);
+    expect(status).toBe(200);
+    expect(data.transit_district_id).toBe(villaId);
+    expect(data.district_name).toBe('Villa Dolores');
+    expect(data.role).toBe('transit');
   });
 });
