@@ -3,7 +3,7 @@ import { safeCall } from '../../shared/lib/route-utils';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { authGuard } from '../../shared/middleware/require-auth';
 import { transitDriverIdParams, transitIssueBody } from './schema';
-import { transitService } from './service';
+import { resolveTransitScope, transitService } from './service';
 
 function requireTransitOrAdmin(user: AuthUser, set: { status: number }): boolean {
   if (user.role !== 'transit' && user.role !== 'admin') {
@@ -20,13 +20,26 @@ function forbiddenBody() {
   };
 }
 
+function parseDistrictQuery(query: Record<string, unknown> | undefined): string | undefined {
+  const raw = query?.district_id;
+  return typeof raw === 'string' && raw.length > 0 ? raw : undefined;
+}
+
 export const transitRoutes = new Elysia({ prefix: '/transit' })
+  // Public catalog for pre-login municipality picker (active only; no secrets).
+  .get('/districts', ({ set }) => safeCall(() => transitService.listActiveDistricts(), set))
   .use(authGuard)
   .get(
     '/stats',
-    ({ user, set }) => {
+    ({ user, set, query }) => {
       if (!requireTransitOrAdmin(user, set)) return forbiddenBody();
-      return safeCall(() => transitService.getStats(), set);
+      return safeCall(async () => {
+        const scope = await resolveTransitScope(
+          user,
+          parseDistrictQuery(query as Record<string, unknown>),
+        );
+        return transitService.getStats(scope);
+      }, set);
     },
     { requireAuth: true },
   )
@@ -41,35 +54,47 @@ export const transitRoutes = new Elysia({ prefix: '/transit' })
         page_size?: string;
         limit?: string;
         offset?: string;
+        district_id?: string;
       };
-      return safeCall(
-        () =>
-          transitService.listDrivers({
-            q: q.q,
-            identification_status: q.identification_status,
-            page: q.page ? Number(q.page) : undefined,
-            page_size: q.page_size ? Number(q.page_size) : undefined,
-            limit: q.limit ? Number(q.limit) : undefined,
-            offset: q.offset ? Number(q.offset) : undefined,
-          }),
-        set,
-      );
+      return safeCall(async () => {
+        const scope = await resolveTransitScope(user, q.district_id);
+        return transitService.listDrivers(scope, {
+          q: q.q,
+          identification_status: q.identification_status,
+          page: q.page ? Number(q.page) : undefined,
+          page_size: q.page_size ? Number(q.page_size) : undefined,
+          limit: q.limit ? Number(q.limit) : undefined,
+          offset: q.offset ? Number(q.offset) : undefined,
+        });
+      }, set);
     },
     { requireAuth: true },
   )
   .get(
     '/drivers/:id',
-    ({ user, params, set }) => {
+    ({ user, params, set, query }) => {
       if (!requireTransitOrAdmin(user, set)) return forbiddenBody();
-      return safeCall(() => transitService.getDriver(params.id), set);
+      return safeCall(async () => {
+        const scope = await resolveTransitScope(
+          user,
+          parseDistrictQuery(query as Record<string, unknown>),
+        );
+        return transitService.getDriver(scope, params.id);
+      }, set);
     },
     { params: transitDriverIdParams, requireAuth: true },
   )
   .post(
     '/drivers/:id/identification/issue',
-    ({ user, params, body, set }) => {
+    ({ user, params, body, set, query }) => {
       if (!requireTransitOrAdmin(user, set)) return forbiddenBody();
-      return safeCall(() => transitService.issueIdentification(user, params.id, body), set);
+      return safeCall(async () => {
+        const scope = await resolveTransitScope(
+          user,
+          parseDistrictQuery(query as Record<string, unknown>),
+        );
+        return transitService.issueIdentification(user, scope, params.id, body);
+      }, set);
     },
     { params: transitDriverIdParams, body: transitIssueBody, requireAuth: true },
   );

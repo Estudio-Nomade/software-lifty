@@ -1,4 +1,5 @@
-import { boolean, integer, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import { districts } from './districts';
 
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -15,4 +16,8 @@ export const users = pgTable('users', {
   /** Full national ID / DNI for ops registry (admin + transit join). */
   document_number: varchar('document_number', { length: 32 }),
   document_number_last4: varchar('document_number_last4', { length: 4 }),
+  /** Municipality scope for role=transit staff. NULL = no district binding. */
+  transit_district_id: uuid('transit_district_id').references(() => districts.id, {
+    onDelete: 'set null',
+  }),
 });
