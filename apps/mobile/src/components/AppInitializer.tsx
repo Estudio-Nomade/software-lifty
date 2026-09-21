@@ -25,6 +25,8 @@ function SessionRestore() {
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token ?? null;
       if (!token) {
+        // Drop stale zustand persist (isAuthenticated/token) so unauthenticated
+        // users never get redirected into onboarding as if they had a session.
         useAuthStore.getState().clearAuthState();
         useAuthStore.getState().setSessionRestored(true);
         return;
