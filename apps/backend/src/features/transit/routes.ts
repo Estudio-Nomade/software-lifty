@@ -26,7 +26,7 @@ function parseDistrictQuery(query: Record<string, unknown> | undefined): string 
 }
 
 export const transitRoutes = new Elysia({ prefix: '/transit' })
-  // Public catalog for pre-login municipality picker (active only; no secrets).
+  // Public catalog for pre-login picker: active districts with ≥1 transit operator.
   .get('/districts', ({ set }) => safeCall(() => transitService.listActiveDistricts(), set))
   .use(authGuard)
   .get(

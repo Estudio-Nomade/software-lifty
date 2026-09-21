@@ -367,10 +367,16 @@ export const transitOperatorsService = {
       authAdminFail(err);
     }
 
+    // Drop transit grant so /auth/me is no longer role=transit (ban alone is not enough for panels).
     await db
       .update(users)
-      .set({ transit_district_id: null, updated_at: new Date() })
+      .set({
+        transit_district_id: null,
+        role: 'driver',
+        updated_at: new Date(),
+      })
       .where(eq(users.id, userId));
+    await scrubDriverPassengerRows(userId);
 
     logger.info('[transit-operators] disabled', {
       operatorId: userId,
