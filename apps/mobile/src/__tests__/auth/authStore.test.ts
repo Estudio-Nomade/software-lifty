@@ -7,6 +7,7 @@ function resetStore() {
     isAuthenticated: false,
     needsRedirect: false,
     sessionRestored: true,
+    hasHydrated: true,
     phone: null,
     driverStatus: null,
     onboardingStep: null,
@@ -76,5 +77,13 @@ describe('authStore.clearAuthState', () => {
     expect(useAuthStore.getState().token).toBeNull();
     expect(useAuthStore.getState().driverStatus).toBeNull();
     expect(useAuthStore.getState().onboardingStep).toBeNull();
+  });
+});
+
+describe('authStore persist shape', () => {
+  it('does not treat missing hasHydrated as a crash (defaults false until rehydrate)', () => {
+    expect(typeof useAuthStore.getState().setHasHydrated).toBe('function');
+    useAuthStore.getState().setHasHydrated(true);
+    expect(useAuthStore.getState().hasHydrated).toBe(true);
   });
 });

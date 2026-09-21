@@ -1,4 +1,4 @@
-import { STEP_ROUTE, routeForDriverStatus } from '../../lib/postAuthRouting';
+import { STEP_ROUTE, routeForDriverStatus, targetScreenFromStore } from '../../lib/postAuthRouting';
 
 describe('STEP_ROUTE order', () => {
   it('keeps KYC before vehicle before documents', () => {
@@ -71,5 +71,18 @@ describe('routeForDriverStatus', () => {
     const r = routeForDriverStatus({ status: 'under_review' });
     expect(r.screen).toBe('Active');
     expect(r.status).toBe('under_review');
+  });
+});
+
+describe('targetScreenFromStore', () => {
+  it('uses STEP_ROUTE when onboardingStep is set', () => {
+    expect(targetScreenFromStore('approved', 'approved')).toBe('Active');
+    expect(targetScreenFromStore('profile', 'pending')).toBe('OnboardingStep1');
+    expect(targetScreenFromStore('vehicle', 'pending')).toBe('OnboardingVehicle');
+  });
+
+  it('falls back to status when step is null', () => {
+    expect(targetScreenFromStore(null, 'approved')).toBe('Active');
+    expect(targetScreenFromStore(null, 'pending')).toBe('OnboardingStep1');
   });
 });

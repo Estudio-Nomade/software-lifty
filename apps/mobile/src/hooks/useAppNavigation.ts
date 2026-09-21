@@ -43,6 +43,16 @@ const SCREEN_TO_ROUTE = {
 
 export type ScreenName = keyof typeof SCREEN_TO_ROUTE;
 
+/** Pathname for a screen (`/active`). */
+export function pathForScreen(screen: ScreenName): string {
+  return SCREEN_TO_ROUTE[screen];
+}
+
+/** Expo-router segment for a screen (`active`). */
+export function segmentForScreen(screen: ScreenName): string {
+  return SCREEN_TO_ROUTE[screen].replace(/^\//, '');
+}
+
 export interface ScreenParams {
   KYCWebView: { url: string };
   UploadDocument: { docType: string; docLabel: string; mode?: string };

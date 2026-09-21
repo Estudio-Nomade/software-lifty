@@ -20,3 +20,11 @@ describe('unauthenticated route gate', () => {
     expect(isAllowedWithoutSession('waiting-approval')).toBe(false);
   });
 });
+
+describe('authenticated step-gate expectations', () => {
+  it('documents that onboarding-step1 is not a public entry (must be corrected by watcher)', () => {
+    // AuthRedirectWatcher STEP_GATED_ROUTES includes onboarding-step1;
+    // approved + that segment → replace /active (covered in session-restore tests).
+    expect(isAllowedWithoutSession('onboarding-step1')).toBe(false);
+  });
+});

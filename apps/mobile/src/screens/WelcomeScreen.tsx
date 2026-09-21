@@ -12,8 +12,13 @@ export const WelcomeScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const { loading } = useAuth();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const sessionRestored = useAuthStore((s) => s.sessionRestored);
+  const driverStatus = useAuthStore((s) => s.driverStatus);
+  const onboardingStep = useAuthStore((s) => s.onboardingStep);
 
-  if (loading) {
+  const waitingForRoute = isAuthenticated && driverStatus == null && onboardingStep == null;
+
+  if (loading || !sessionRestored || waitingForRoute) {
     return (
       <View style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />

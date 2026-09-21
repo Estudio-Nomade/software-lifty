@@ -21,8 +21,11 @@ import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useLogin } from '../hooks/useAuth';
 import { getFriendlyAuthError } from '../lib/authErrors';
-import { resolvePostAuthRoute } from '../lib/postAuthRouting';
-import { routeForDriverStatus } from '../lib/postAuthRouting';
+import {
+  applyDriverStatusToStore,
+  resolvePostAuthRoute,
+  routeForDriverStatus,
+} from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -113,8 +116,11 @@ export const LoginCredentialsScreen: React.FC = () => {
       const parsed = driverStatusSchema.safeParse(payload);
       const driverData = parsed.success ? parsed.data : (payload as DriverStatus);
 
+      applyDriverStatusToStore(driverData);
       const route = routeForDriverStatus(driverData);
-      setDriverStatus(route.status);
+      if (route.status) {
+        setDriverStatus(route.status);
+      }
 
       if (route.blockedMessage) {
         setError(route.blockedMessage);

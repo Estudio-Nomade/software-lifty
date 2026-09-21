@@ -20,13 +20,21 @@ import { DriverRealtimeProvider } from './DriverRealtimeProvider';
 import { LoadingOverlay } from './feedback/LoadingOverlay';
 
 function SessionRestore() {
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
+
   useEffect(() => {
+    // Wait for zustand persist so a late rehydrate cannot overwrite live status.
+    if (!hasHydrated) return;
+
+    let cancelled = false;
+
     const restore = async () => {
       const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+
       const token = data.session?.access_token ?? null;
       if (!token) {
-        // Drop stale zustand persist (isAuthenticated/token) so unauthenticated
-        // users never get redirected into onboarding as if they had a session.
+        // No live Supabase session → guest. Never keep stale routing fields.
         useAuthStore.getState().clearAuthState();
         useAuthStore.getState().setSessionRestored(true);
         return;
@@ -35,7 +43,7 @@ function SessionRestore() {
 
       try {
         const response = await apiClient.get('/auth/me');
-        const user = response.data;
+        const user = response.data?.data ?? response.data;
 
         try {
           const meRes = await apiClient.get('/drivers/me');
@@ -51,10 +59,23 @@ function SessionRestore() {
 
         try {
           const statusRes = await apiClient.get('/drivers/me/status');
-          const parsed = driverStatusSchema.safeParse(statusRes.data?.data ?? statusRes.data);
+          const payload = statusRes.data?.data ?? statusRes.data;
+          const parsed = driverStatusSchema.safeParse(payload);
           if (parsed.success) {
             useAuthStore.getState().setDriverStatus(parsed.data.status);
             useAuthStore.getState().setOnboardingStep(parsed.data.step ?? null);
+          } else if (payload && typeof payload === 'object' && 'status' in payload) {
+            // Schema drift must not leave step null → false Paso 1/3.
+            const raw = payload as { status?: string; step?: string | null };
+            if (raw.status) {
+              useAuthStore.getState().setDriverStatus(raw.status as never);
+            }
+            if (raw.step !== undefined) {
+              useAuthStore.getState().setOnboardingStep(raw.step ?? null);
+            }
+            console.log('[SessionRestore] status schema mismatch, applied raw fields');
+          } else {
+            console.log('[SessionRestore] /drivers/me/status unreadable payload');
           }
         } catch (statusErr: any) {
           console.log('[SessionRestore] /drivers/me/status ERROR:', statusErr?.message);
@@ -62,11 +83,17 @@ function SessionRestore() {
       } catch (err: any) {
         console.log('[SessionRestore] /auth/me ERROR:', err?.message);
       } finally {
-        useAuthStore.getState().setSessionRestored(true);
+        if (!cancelled) {
+          useAuthStore.getState().setSessionRestored(true);
+        }
       }
     };
+
     restore();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [hasHydrated]);
 
   return null;
 }

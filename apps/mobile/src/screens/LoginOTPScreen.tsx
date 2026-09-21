@@ -9,7 +9,7 @@ import { OTPInput } from '../components/OTPInput';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useVerifyEmail } from '../hooks/useAuth';
-import { routeForDriverStatus } from '../lib/postAuthRouting';
+import { applyDriverStatusToStore, routeForDriverStatus } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -46,6 +46,7 @@ export const LoginOTPScreen: React.FC = () => {
         const parsed = driverStatusSchema.safeParse(payload);
         const driverData = parsed.success ? parsed.data : (payload as DriverStatus);
 
+        applyDriverStatusToStore(driverData);
         const route = routeForDriverStatus(driverData);
         if (route.status) {
           setDriverStatus(route.status);

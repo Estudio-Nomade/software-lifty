@@ -85,15 +85,42 @@ export async function resolvePostAuthRoute(): Promise<PostAuthRoute> {
     const parsed = driverStatusSchema.safeParse(payload);
     const driverData = parsed.success ? parsed.data : (payload as DriverStatus);
 
-    if (driverData.status) {
-      useAuthStore.getState().setDriverStatus(driverData.status);
-    }
+    applyDriverStatusToStore(driverData);
 
     return routeForDriverStatus(driverData);
   } catch {
     // Just authenticated but status could not be read (new user / transient
     // error) — send them to the onboarding entry so they can complete setup.
     useAuthStore.getState().setDriverStatus('pending');
+    useAuthStore.getState().setOnboardingStep('profile');
     return { screen: 'OnboardingStep1', status: 'pending' };
   }
+}
+
+/** Mirror backend status into zustand so cold-open routing matches login. */
+export function applyDriverStatusToStore(driverData: DriverStatus): void {
+  const store = useAuthStore.getState();
+  if (driverData.status) {
+    store.setDriverStatus(driverData.status);
+  }
+  if (driverData.step !== undefined) {
+    store.setOnboardingStep(driverData.step ?? null);
+  }
+}
+
+/**
+ * Target screen from already-loaded store fields (after SessionRestore / login).
+ * Same table as login — used by AuthRedirectWatcher on cold open.
+ */
+export function targetScreenFromStore(
+  onboardingStep: string | null,
+  driverStatus: DriverStatusValue,
+): ScreenName | '' {
+  if (onboardingStep && STEP_ROUTE[onboardingStep]) {
+    return STEP_ROUTE[onboardingStep].screen;
+  }
+  return routeForDriverStatus({
+    status: driverStatus ?? 'pending',
+    step: onboardingStep as DriverStatus['step'],
+  }).screen;
 }

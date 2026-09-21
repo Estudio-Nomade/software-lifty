@@ -1,14 +1,13 @@
 import { useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
-import type { DriverStatus } from '../api/types';
-import { useAppNavigation } from '../hooks/useAppNavigation';
+import { segmentForScreen, useAppNavigation } from '../hooks/useAppNavigation';
 import {
   AUTH_FLOW_ROUTES,
   PUBLIC_ENTRY_ROUTES,
   isAllowedWithoutSession,
 } from '../lib/authRouteGate';
 import { hasActiveTrip } from '../lib/isLiveTrip';
-import { STEP_ROUTE, routeForDriverStatus } from '../lib/postAuthRouting';
+import { targetScreenFromStore } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { useTripStore } from '../store/tripStore';
 
@@ -19,6 +18,24 @@ const TRIP_ROUTES = [
   'trip-in-progress',
   'trip-complete',
 ];
+
+/**
+ * Routes that must match backend onboarding `step` / status.
+ * Stale browser URL (e.g. /onboarding-step1 after approval) must not stick.
+ * Leave profile/earnings/active alone when the driver is already past onboarding.
+ */
+const STEP_GATED_ROUTES = [
+  'onboarding-step1',
+  'onboarding-step2',
+  'onboarding-vehicle',
+  'kyc-verify',
+  'kyc-webview',
+  'waiting-approval',
+  'under-review',
+  'dni-scan',
+  'selfie',
+  'upload-document',
+] as const;
 
 export function AuthRedirectWatcher() {
   const needsRedirect = useAuthStore((s) => s.needsRedirect);
@@ -60,19 +77,35 @@ export function AuthRedirectWatcher() {
     router.replace('/');
   }, [sessionRestored, isAuthenticated, segments, router]);
 
-  // Authenticated on welcome/public entry → continue onboarding or home.
+  /**
+   * Authenticated cold open / stale URL:
+   * - welcome/public entry → go to step target (home or onboarding)
+   * - wrong onboarding screen (Paso 1/3 after approved, etc.) → correct screen
+   * Does not yank profile/earnings/trips or in-progress trip flows.
+   * Waits until SessionRestore wrote status/step — null/null must not mean Paso 1/3.
+   */
   useEffect(() => {
     if (!sessionRestored) return;
     if (needsRedirect) return;
-    if (!isAuthenticated || !(PUBLIC_ENTRY_ROUTES as readonly string[]).includes(segments[0] ?? ''))
-      return;
+    if (!isAuthenticated) return;
+    // Live status not loaded yet → do not guess OnboardingStep1.
+    if (onboardingStep == null && driverStatus == null) return;
 
-    const target = onboardingStep ? STEP_ROUTE[onboardingStep] : undefined;
-    const fallback = routeForDriverStatus({
-      status: driverStatus ?? 'pending',
-      step: onboardingStep as DriverStatus['step'],
-    });
-    const screen = target?.screen || fallback.screen || 'OnboardingStep1';
+    const current = segments[0] ?? '';
+    if (TRIP_ROUTES.includes(current)) return;
+    if ((AUTH_FLOW_ROUTES as readonly string[]).includes(current)) return;
+
+    const onPublicEntry = (PUBLIC_ENTRY_ROUTES as readonly string[]).includes(current);
+    const onStepGated = (STEP_GATED_ROUTES as readonly string[]).includes(current);
+    if (!onPublicEntry && !onStepGated) return;
+
+    const screen = targetScreenFromStore(onboardingStep, driverStatus);
+    // Empty string = rejected/suspended — leave private onboarding, land on welcome.
+    if (screen === '') {
+      if (onStepGated) router.replace('/');
+      return;
+    }
+    if (segmentForScreen(screen) === current) return;
 
     replace(screen);
   }, [
@@ -83,6 +116,7 @@ export function AuthRedirectWatcher() {
     driverStatus,
     replace,
     needsRedirect,
+    router,
   ]);
 
   useEffect(() => {

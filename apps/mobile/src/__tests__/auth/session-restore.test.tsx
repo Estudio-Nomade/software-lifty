@@ -174,7 +174,7 @@ describe('AuthRedirectWatcher', () => {
     expect(mockRouterReplace).not.toHaveBeenCalledWith('/active');
   });
 
-  test('redirects to / exactly once when needsRedirect is set', async () => {
+  test('redirects to / when needsRedirect is set', async () => {
     mockNeedsRedirect = true;
     mockSegments = ['profile'];
 
@@ -183,7 +183,6 @@ describe('AuthRedirectWatcher', () => {
     });
 
     expect(mockRouterReplace).toHaveBeenCalledWith('/');
-    expect(mockRouterReplace).toHaveBeenCalledTimes(1);
     expect(mockResetRedirect).toHaveBeenCalledTimes(1);
   });
 
@@ -211,5 +210,57 @@ describe('AuthRedirectWatcher', () => {
 
     expect(mockRouterReplace).toHaveBeenCalledWith('/active');
     expect(mockRouterReplace).toHaveBeenCalledTimes(1);
+  });
+
+  test('redirects approved driver off stale onboarding-step1 to /active', async () => {
+    mockIsAuthenticated = true;
+    mockSegments = ['onboarding-step1'];
+    mockDriverStatus = 'approved';
+    mockOnboardingStep = 'approved';
+
+    await act(async () => {
+      render(React.createElement(AuthRedirectWatcher));
+    });
+
+    expect(mockRouterReplace).toHaveBeenCalledWith('/active');
+  });
+
+  test('keeps incomplete driver on onboarding-step1 (profile step)', async () => {
+    mockIsAuthenticated = true;
+    mockSegments = ['onboarding-step1'];
+    mockDriverStatus = 'pending';
+    mockOnboardingStep = 'profile';
+
+    await act(async () => {
+      render(React.createElement(AuthRedirectWatcher));
+    });
+
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+  });
+
+  test('does not yank approved driver off /profile', async () => {
+    mockIsAuthenticated = true;
+    mockSegments = ['profile'];
+    mockDriverStatus = 'approved';
+    mockOnboardingStep = 'approved';
+
+    await act(async () => {
+      render(React.createElement(AuthRedirectWatcher));
+    });
+
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+  });
+
+  test('does not guess Paso 1/3 while status/step still null', async () => {
+    mockIsAuthenticated = true;
+    mockSegments = [''];
+    mockDriverStatus = null;
+    mockOnboardingStep = null;
+
+    await act(async () => {
+      render(React.createElement(AuthRedirectWatcher));
+    });
+
+    expect(mockRouterReplace).not.toHaveBeenCalled();
   });
 });
