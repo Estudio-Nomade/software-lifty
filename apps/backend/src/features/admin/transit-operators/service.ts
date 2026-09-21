@@ -9,7 +9,7 @@ import {
   ServiceUnavailableError,
 } from '../../../shared/lib/errors';
 import { logger } from '../../../shared/lib/logger';
-import { getAuthAdminClient } from './auth-admin';
+import { getAuthAdminClient, getAuthPasswordClient } from './auth-admin';
 
 const MIN_PASSWORD = 8;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -18,15 +18,46 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/** Same rules as web-transito login (`NFKC` + trim) so admin reset matches panel sign-in. */
+function normalizePassword(password: string): string {
+  return password.normalize('NFKC').trim();
+}
+
 function assertPassword(password: string) {
   if (password.length < MIN_PASSWORD) {
     throw new BadRequestError(`La contraseña debe tener al menos ${MIN_PASSWORD} caracteres`);
+  }
+  if (/\s/.test(password)) {
+    throw new BadRequestError('La contraseña no puede contener espacios');
   }
 }
 
 function assertEmail(email: string) {
   if (!EMAIL_RE.test(email)) {
     throw new BadRequestError('Email inválido');
+  }
+}
+
+/**
+ * Prove the password actually works with Supabase Auth password grant.
+ * Admin updateUserById can return OK while grant still fails (wrong project key, lag, etc.).
+ */
+async function verifyPasswordGrant(email: string, password: string): Promise<void> {
+  try {
+    const client = getAuthPasswordClient();
+    const { data, error } = await client.auth.signInWithPassword({ email, password });
+    if (error || !data.session?.access_token) {
+      const msg = error?.message ?? 'password grant failed';
+      logger.error('[transit-operators] password grant verify failed', { email, message: msg });
+      throw new ServiceUnavailableError(
+        'Auth no aceptó la contraseña nueva. Reintentá el reset; si sigue, revisá SUPABASE_* en el API.',
+      );
+    }
+    // Drop the probe session — operator will sign in from the panel.
+    await client.auth.signOut().catch(() => undefined);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    authAdminFail(err);
   }
 }
 
@@ -117,8 +148,9 @@ export const transitOperatorsService = {
     actorId: string,
   ) {
     const email = normalizeEmail(input.email);
+    const password = normalizePassword(input.password);
     assertEmail(email);
-    assertPassword(input.password);
+    assertPassword(password);
 
     const district = await requireActiveDistrict(input.district_id);
     await assertDistrictFree(input.district_id);
@@ -137,10 +169,10 @@ export const transitOperatorsService = {
       const admin = getAuthAdminClient();
       const { data, error } = await admin.auth.admin.createUser({
         email,
-        password: input.password,
+        password,
         email_confirm: true,
         app_metadata: { role: 'transit' },
-        user_metadata: { full_name: fullName },
+        user_metadata: { full_name: fullName, role: 'transit' },
       });
       if (error || !data.user?.id) {
         const msg = error?.message?.toLowerCase() ?? '';
@@ -177,6 +209,7 @@ export const transitOperatorsService = {
         });
 
       await scrubDriverPassengerRows(authUserId);
+      await verifyPasswordGrant(email, password);
     } catch (err) {
       try {
         const admin = getAuthAdminClient();
@@ -199,7 +232,7 @@ export const transitOperatorsService = {
       full_name: fullName,
       transit_district_id: input.district_id,
       district_name: district.name,
-      password: input.password,
+      password,
       created_at: new Date().toISOString(),
     };
   },
@@ -268,7 +301,8 @@ export const transitOperatorsService = {
     };
   },
 
-  async resetPassword(userId: string, password: string, actorId: string) {
+  async resetPassword(userId: string, passwordRaw: string, actorId: string) {
+    const password = normalizePassword(passwordRaw);
     assertPassword(password);
 
     const [op] = await db
@@ -278,15 +312,28 @@ export const transitOperatorsService = {
       .limit(1);
 
     if (!op || op.role !== 'transit') throw new NotFoundError('Operador no encontrado');
+    if (!op.email) throw new BadRequestError('El operador no tiene email en users');
+
+    const email = normalizeEmail(op.email);
 
     try {
       const admin = getAuthAdminClient();
-      const { error } = await admin.auth.admin.updateUserById(userId, { password });
+      // Force email_confirm so a previously-unconfirmed account can still log in after reset.
+      const { data, error } = await admin.auth.admin.updateUserById(userId, {
+        password,
+        email_confirm: true,
+        app_metadata: { role: 'transit' },
+      });
       if (error) authAdminFail(error);
+      if (!data.user?.id) authAdminFail(new Error('updateUserById sin user'));
     } catch (err) {
       if (err instanceof AppError) throw err;
       authAdminFail(err);
     }
+
+    // Must succeed against the same Auth host the panels use — otherwise UI would
+    // show "updated" while tránsito still gets invalid_credentials.
+    await verifyPasswordGrant(email, password);
 
     logger.info('[transit-operators] password reset', {
       operatorId: userId,
@@ -295,9 +342,10 @@ export const transitOperatorsService = {
 
     return {
       id: userId,
-      email: op.email,
+      email,
       password,
-      message: 'Contraseña actualizada. Guardala ahora; no se vuelve a mostrar.',
+      message:
+        'Contraseña actualizada y verificada en Auth. Guardala ahora; no se vuelve a mostrar.',
     };
   },
 
