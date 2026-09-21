@@ -336,17 +336,45 @@ describe('Transit API JWT surface', () => {
     expect(status).toBe(403);
   });
 
-  test('GET /api/transit/districts is public and returns active districts', async () => {
-    await ensureDistrict('Villa Dolores');
+  test('GET /api/transit/districts is public and only lists districts with transit operators', async () => {
+    const villaId = await ensureDistrict('Villa Dolores');
     await ensureDistrict('Nono');
+    await ensureDistrict('Mina Clavero');
 
-    const { status, data } = await request('GET', '/api/transit/districts');
-    expect(status).toBe(200);
-    const items = data.items as Array<Record<string, unknown>>;
+    // 0 operators → empty (even with active districts)
+    let res = await request('GET', '/api/transit/districts');
+    expect(res.status).toBe(200);
+    let items = res.data.items as Array<Record<string, unknown>>;
     expect(Array.isArray(items)).toBe(true);
-    expect(items.length).toBeGreaterThanOrEqual(2);
-    expect(items.every((i) => i.status === 'active')).toBe(true);
-    expect(items.some((i) => i.name === 'Villa Dolores')).toBe(true);
+    expect(items).toEqual([]);
+
+    // 1 operator on Villa Dolores → only VD
+    await createStaff('transit', { transit_district_id: villaId });
+    res = await request('GET', '/api/transit/districts');
+    expect(res.status).toBe(200);
+    items = res.data.items as Array<Record<string, unknown>>;
+    expect(items.length).toBe(1);
+    expect(items[0].name).toBe('Villa Dolores');
+    expect(items[0].status).toBe('active');
+    expect(items[0].id).toBe(villaId);
+    expect(items.some((i) => i.name === 'Nono')).toBe(false);
+    expect(items.some((i) => i.name === 'Mina Clavero')).toBe(false);
+    // no secrets in payload
+    expect(items.every((i) => !('email' in i) && !('password' in i))).toBe(true);
+
+    // 2 operators same district → still 1 item
+    await createStaff('transit', { transit_district_id: villaId });
+    res = await request('GET', '/api/transit/districts');
+    items = res.data.items as Array<Record<string, unknown>>;
+    expect(items.length).toBe(1);
+    expect(items[0].name).toBe('Villa Dolores');
+
+    // transit without district does not add a district
+    await createStaff('transit', { transit_district_id: null });
+    res = await request('GET', '/api/transit/districts');
+    items = res.data.items as Array<Record<string, unknown>>;
+    expect(items.length).toBe(1);
+    expect(items[0].name).toBe('Villa Dolores');
   });
 
   test('transit scoped to own district: list hides other municipality drivers', async () => {

@@ -188,15 +188,21 @@ function approvedFilters(scope: TransitScope) {
 }
 
 export const transitService = {
+  /**
+   * Public catalog for web-transito municipality picker.
+   * Only districts that have ≥1 transit operator (role=transit + transit_district_id)
+   * and are active. No emails/passwords. Distinct by district (2 ops same district → 1 item).
+   */
   async listActiveDistricts() {
     const rows = await db
-      .select({
+      .selectDistinct({
         id: districts.id,
         name: districts.name,
         province: districts.province,
         status: districts.status,
       })
       .from(districts)
+      .innerJoin(users, and(eq(users.transit_district_id, districts.id), eq(users.role, 'transit')))
       .where(eq(districts.status, 'active'))
       .orderBy(districts.name);
 
