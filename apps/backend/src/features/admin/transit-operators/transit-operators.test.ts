@@ -34,18 +34,39 @@ function mockAuthAdmin() {
           authUsers.set(id, { id, email, password: opts.password });
           return { data: { user: { id, email } }, error: null };
         }),
-        updateUserById: mock(async (id: string, opts: { password?: string; ban_duration?: string }) => {
-          const u = authUsers.get(id);
-          if (!u) return { data: { user: null }, error: { message: 'not found' } };
-          if (opts.password) u.password = opts.password;
-          if (opts.ban_duration) u.banned = true;
-          return { data: { user: { id } }, error: null };
-        }),
+        updateUserById: mock(
+          async (
+            id: string,
+            opts: { password?: string; ban_duration?: string; email_confirm?: boolean },
+          ) => {
+            const u = authUsers.get(id);
+            if (!u) return { data: { user: null }, error: { message: 'not found' } };
+            if (opts.password) u.password = opts.password;
+            if (opts.ban_duration) u.banned = true;
+            return { data: { user: { id } }, error: null };
+          },
+        ),
         deleteUser: mock(async (id: string) => {
           authUsers.delete(id);
           return { data: { user: null }, error: null };
         }),
       },
+      // Used by verifyPasswordGrant after create/reset — must mirror stored password.
+      signInWithPassword: mock(async (opts: { email: string; password: string }) => {
+        const email = opts.email.toLowerCase();
+        const u = [...authUsers.values()].find((x) => x.email === email);
+        if (!u || u.password !== opts.password) {
+          return { data: { session: null, user: null }, error: { message: 'Invalid login credentials' } };
+        }
+        return {
+          data: {
+            session: { access_token: `tok-${u.id}` },
+            user: { id: u.id, email: u.email },
+          },
+          error: null,
+        };
+      }),
+      signOut: mock(async () => ({ error: null })),
     },
   };
   setAuthAdminClientForTests(client as never);
@@ -246,6 +267,35 @@ describe('Admin transit operators', () => {
     expect(authUsers.get(created.data.id)?.password).toBe('NewSecret99');
   });
 
+  test('reset password trims + NFKC and rejects whitespace inside', async () => {
+    const adminToken = await createAdmin();
+    const district = await seedDistrict();
+    const created = await request(
+      'POST',
+      '/api/admin/transit-operators',
+      { district_id: district.id, email: 'trim@liftyviajes.com', password: 'SecretPass1' },
+      adminToken,
+    );
+
+    const trimmed = await request(
+      'POST',
+      `/api/admin/transit-operators/${created.data.id}/password`,
+      { password: '  TrimmedPass9  ' },
+      adminToken,
+    );
+    expect(trimmed.status).toBe(200);
+    expect(trimmed.data.password).toBe('TrimmedPass9');
+    expect(authUsers.get(created.data.id)?.password).toBe('TrimmedPass9');
+
+    const spaced = await request(
+      'POST',
+      `/api/admin/transit-operators/${created.data.id}/password`,
+      { password: 'bad pass 99' },
+      adminToken,
+    );
+    expect(spaced.status).toBe(400);
+  });
+
   test('short password → 400', async () => {
     const adminToken = await createAdmin();
     const district = await seedDistrict();
@@ -291,6 +341,11 @@ describe('Admin transit operators', () => {
           updateUserById: mock(async () => ({ data: { user: { id: plantedId } }, error: null })),
           deleteUser: mock(async () => ({ data: { user: null }, error: null })),
         },
+        signInWithPassword: mock(async () => ({
+          data: { session: { access_token: 'tok' }, user: { id: plantedId } },
+          error: null,
+        })),
+        signOut: mock(async () => ({ error: null })),
       },
     } as never);
 
