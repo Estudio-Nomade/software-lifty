@@ -5,8 +5,8 @@
 ## Stack
 - **Monorepo**: Bun Workspaces + Turborepo
 - **Backend**: Bun + Elysia + Drizzle ORM + PostgreSQL (Supabase) — `apps/backend`
-- **Mobile (driver)**: Expo SDK 55 + React 19.2 + react-native 0.83 — `apps/mobile`
-- **Mobile (passenger)**: Expo SDK 55 + React 19.2 + react-native 0.83 — `apps/mobile-passengers`
+- **Mobile (driver)**: Expo SDK 56 + React 19.2 + react-native 0.85 — `apps/mobile`
+- **Mobile (passenger)**: Expo SDK 56 + React 19.2 + react-native 0.85 — `apps/mobile-passengers`
 - **Pre-commit**: Lefthook (biome on staged files) + Commitlint (conventional commits)
 - **CI**: GitHub Actions (lint, typecheck, test via turbo)
 
@@ -136,7 +136,7 @@ Quick ref:
 ### Mobile driver (`apps/mobile`)
 See `apps/mobile/AGENTS.md` for full mobile docs.
 Quick ref:
-- Expo SDK 55, React 19.2, react-native 0.83, TypeScript 5.9
+- Expo SDK 56, React 19.2, react-native 0.85, TypeScript 6.0
 - expo-router (file-based routing)
 - React Compiler enabled
 - Theme: `src/theme/index.ts`, usar siempre `theme.colors.*`, etc.
@@ -144,7 +144,7 @@ Quick ref:
 ### Mobile passenger (`apps/mobile-passengers`)
 See `apps/mobile-passengers/AGENTS.md` for full passenger docs.
 Quick ref:
-- Same Expo SDK 55 family as the driver app
+- Same Expo SDK 56 family as the driver app
 - expo-router (file-based routing)
 - Theme tokens from `App-pasajeros.pen` via `src/theme/index.ts`
 

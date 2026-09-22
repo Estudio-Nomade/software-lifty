@@ -1,7 +1,7 @@
-# Lifty — Frontend (Expo SDK 55)
+# Lifty — Frontend (Expo SDK 56)
 
 ## Stack
-- **Expo SDK 55**, React 19.2, React Native 0.83, TypeScript 5.9 strict
+- **Expo SDK 56**, React 19.2, React Native 0.85, TypeScript 6.0 strict
 - **expo-router** (file-based routing)
 - React Compiler enabled (`experiments.reactCompiler: true` in app.json)
 - Entry: `expo-router/entry` in `package.json` main → `App.tsx` re-exports `expo-router/entry`
@@ -112,10 +112,12 @@ Key colors: `deepBlue` (#0F2A44), `turquoise` (#1BBFAE), `white`, `lightGray` (#
 - `TabBar` is a **custom UI component**, not a navigator. Tab switching calls `navigation.navigate()`.
 - `Navbar` uses `deepBlue` background by default
 
-## Key changes from SDK 54 → 55
-- Expo 54 → 55, React Native 0.81 → 0.83, React 19.1 → 19.2
+## Key changes from SDK 54 → 56
+- Expo 54 → 55 → 56; RN 0.81 → 0.83 → 0.85; React 19.2.x
 - New Architecture required (cannot disable)
+- Hermes v1 default (SDK 56); known memory regression with worklets → prefer SDK 57 next
 - `react-native-reanimated` 4.x requires `react-native-worklets`
-- Expo SDK packages use major version aligned with SDK (e.g. `expo-router@~55`)
+- Expo SDK packages major-aligned (e.g. `expo-router@~56`)
+- TypeScript 6: `StyleSheet.absoluteFillObject` → `StyleSheet.absoluteFill`
 - React Compiler enabled in app.json
 - `babel.config.js` deleted (babel-preset-expo is now implicit)
