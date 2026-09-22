@@ -43,7 +43,8 @@
       ],
       "expo-router",
       "expo-web-browser",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      "expo-status-bar"
     ]
   }
 }
