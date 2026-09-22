@@ -177,7 +177,7 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingOverlay: {
-    ...(StyleSheet.absoluteFillObject as object),
+    ...(StyleSheet.absoluteFill as object),
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: theme.colors.background,

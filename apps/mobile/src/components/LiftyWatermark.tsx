@@ -28,7 +28,7 @@ export const LiftyWatermark: React.FC<LiftyWatermarkProps> = ({ size = 80, opaci
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     pointerEvents: 'none',

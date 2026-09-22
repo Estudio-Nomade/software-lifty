@@ -119,7 +119,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ snapPoints, children, 
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   sheet: {
