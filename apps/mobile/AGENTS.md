@@ -1,8 +1,8 @@
-# Lifty — Frontend (Expo SDK 56)
+# Lifty — Frontend (Expo SDK 55)
 
 ## Stack
-- **Expo SDK 56**, React 19.2, React Native 0.85, TypeScript 6.0 strict
-- **expo-router** (file-based routing, SDK 56 migration from @react-navigation)
+- **Expo SDK 55**, React 19.2, React Native 0.83, TypeScript 5.9 strict
+- **expo-router** (file-based routing)
 - React Compiler enabled (`experiments.reactCompiler: true` in app.json)
 - Entry: `expo-router/entry` in `package.json` main → `App.tsx` re-exports `expo-router/entry`
 
@@ -63,7 +63,7 @@ LiftyApp/
 - **Root layout**: `app/_layout.tsx` defines the Stack navigator with `headerShown: false`.
 - **Adding a screen**: create `app/screen-name.tsx` that re-exports the screen component, then add the route mapping in `useAppNavigation.ts`.
 - **Navigating**: screens use `useAppNavigation()` hook → `navigate('ScreenName')` (same API as before). The hook maps old PascalCase names to kebab-case routes.
-- **Never** import from `@react-navigation/*` — removed in SDK 56 migration.
+- **Never** import from `@react-navigation/*` — use expo-router only.
 
 ## Trip flow & navigation guards (accept-trip redirect)
 
@@ -112,11 +112,10 @@ Key colors: `deepBlue` (#0F2A44), `turquoise` (#1BBFAE), `white`, `lightGray` (#
 - `TabBar` is a **custom UI component**, not a navigator. Tab switching calls `navigation.navigate()`.
 - `Navbar` uses `deepBlue` background by default
 
-## Key changes from SDK 53 → 56
-- `@react-navigation/*` → expo-router (file-based routing)
+## Key changes from SDK 54 → 55
+- Expo 54 → 55, React Native 0.81 → 0.83, React 19.1 → 19.2
+- New Architecture required (cannot disable)
+- `react-native-reanimated` 4.x requires `react-native-worklets`
+- Expo SDK packages use major version aligned with SDK (e.g. `expo-router@~55`)
 - React Compiler enabled in app.json
 - `babel.config.js` deleted (babel-preset-expo is now implicit)
-- `@babel/core` removed from devDependencies (implicit in Expo 56)
-- `StyleSheet.absoluteFillObject` → `StyleSheet.absoluteFill`
-- `splash` config removed from app.json (schema changed)
-- TypeScript 6.0, `baseUrl` deprecated — removed

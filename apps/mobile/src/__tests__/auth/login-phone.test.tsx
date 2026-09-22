@@ -13,6 +13,7 @@ jest.mock('expo-router', () => {
   };
   return {
     useRouter: jest.fn(() => router),
+    useSegments: jest.fn(() => []),
   };
 });
 
