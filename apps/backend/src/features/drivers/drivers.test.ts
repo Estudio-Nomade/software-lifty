@@ -732,6 +732,79 @@ describe('Document step completeness', () => {
     expect(data.step).toBe('review');
   });
 
+  // Docs complete via direct insert (legacy/seed path) without upload hook →
+  // getMyStatus must reconcile drivers.status to 'review' so admin pending sees them.
+  test('GET /me/status reconciles status=review when docs complete but status was not review', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await getDb().insert(driverDocuments).values(
+      DOC_TYPES.map((doc_type) => ({
+        driver_id: driverId,
+        doc_type,
+        file_url: 'https://x.com/f.png',
+      })),
+    );
+
+    const [before] = await getDb()
+      .select({ status: drivers.status, admin_review_status: drivers.admin_review_status })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(before!.status).not.toBe('review');
+
+    const res = await app.handle(
+      new Request('http://localhost/api/drivers/me/status', {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    );
+    const data = await res.json();
+    expect(data.step).toBe('review');
+    expect(data.status).toBe('under_review');
+
+    const [after] = await getDb()
+      .select({ status: drivers.status, admin_review_status: drivers.admin_review_status })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(after!.status).toBe('review');
+    expect(after!.admin_review_status).toBe('pending');
+  });
+
+  test('GET /me/status reconcile is idempotent when already in review', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await getDb().insert(driverDocuments).values(
+      DOC_TYPES.map((doc_type) => ({
+        driver_id: driverId,
+        doc_type,
+        file_url: 'https://x.com/f.png',
+      })),
+    );
+    await getDb()
+      .update(drivers)
+      .set({ status: 'review', admin_review_status: 'pending' })
+      .where(eq(drivers.id, driverId));
+
+    const res1 = await app.handle(
+      new Request('http://localhost/api/drivers/me/status', {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    );
+    expect((await res1.json()).step).toBe('review');
+
+    const res2 = await app.handle(
+      new Request('http://localhost/api/drivers/me/status', {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    );
+    expect((await res2.json()).step).toBe('review');
+
+    const [row] = await getDb()
+      .select({ status: drivers.status })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(row!.status).toBe('review');
+  });
+
   test('last required upload via addDocument sets status=review', async () => {
     const { token, driverId } = await fullOnboarding(phone, password);
     const allButLast = DOC_TYPES.slice(0, -1);
