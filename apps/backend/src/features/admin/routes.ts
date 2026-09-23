@@ -6,6 +6,7 @@ import { authGuard } from '../../shared/middleware/require-auth';
 import { clearBlock } from '../cancellations/blocks';
 import { cancellationService, getCancellationConfig } from '../cancellations/service';
 import { approveDriver } from './approve';
+import { adminPushService } from './push-service';
 import { driverIdParams, reviewBody, updatePhaseSchema, updateStartDateSchema } from './schema';
 import { adminService } from './service';
 
@@ -171,4 +172,44 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
       return safeCall(() => cancellationService.markPayoutPaid(params.id), set);
     },
     { requireAuth: true },
+  )
+  .get(
+    '/push/vapid-public-key',
+    ({ user, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => Promise.resolve(adminPushService.getVapidPublicKey()), set);
+    },
+    { requireAuth: true },
+  )
+  .post(
+    '/push-subscription',
+    ({ user, body, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminPushService.subscribe(user, body), set);
+    },
+    {
+      body: t.Object({
+        endpoint: t.String({ minLength: 8 }),
+        keys: t.Object({
+          p256dh: t.String({ minLength: 1 }),
+          auth: t.String({ minLength: 1 }),
+        }),
+      }),
+      requireAuth: true,
+    },
+  )
+  .delete(
+    '/push-subscription',
+    ({ user, body, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      const endpoint =
+        body && typeof body === 'object' && 'endpoint' in body
+          ? String((body as { endpoint?: string }).endpoint ?? '')
+          : undefined;
+      return safeCall(() => adminPushService.unsubscribe(user, endpoint), set);
+    },
+    {
+      body: t.Optional(t.Object({ endpoint: t.Optional(t.String()) })),
+      requireAuth: true,
+    },
   );

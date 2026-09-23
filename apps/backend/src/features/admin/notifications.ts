@@ -261,6 +261,24 @@ ${docsHtml}
       sent,
       total: recipients.size,
     });
+
+    try {
+      const { sendWebPushToAdmins } = await import('../../shared/lib/web-push');
+      const adminBase = process.env.ADMIN_APP_URL?.replace(/\/$/, '') || '';
+      const deepLink = adminBase ? `${adminBase}/drivers/${driverId}` : `/drivers/${driverId}`;
+      const pushSent = await sendWebPushToAdmins({
+        title: 'Nuevo conductor en review',
+        body: data.fullName ? `${data.fullName} listo para revisar` : 'Hay un conductor pendiente',
+        data: {
+          url: deepLink,
+          driverId,
+          type: 'new_driver_review',
+        },
+      });
+      logger.info('[ADMIN-NOTIFY] web-push sent', { driverId, sent: pushSent });
+    } catch (pushErr) {
+      logger.error('[ADMIN-NOTIFY] web-push failed', (pushErr as Error).message);
+    }
   } catch (err) {
     logger.error('[ADMIN-NOTIFY] Failed to send', (err as Error).message);
   }
