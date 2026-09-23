@@ -11,7 +11,7 @@ export type DocSide = 'front' | 'back';
 export const DOC_SIDES: Record<DocBase, DocSide[]> = {
   drivers_license: ['front', 'back'],
   vehicle_registration: ['front', 'back'],
-  vehicle_insurance: ['front', 'back'],
+  vehicle_insurance: ['front'],
   background_check: ['front'],
   rndg: ['front'],
 };

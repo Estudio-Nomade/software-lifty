@@ -637,12 +637,11 @@ describe('Document step completeness', () => {
   const phone = '+5492619999999';
   const password = 'testPass123';
 
-  // Canonical required set (no background_check_back — single-sided cert).
+  // Canonical required set: no background_check_back, no insurance_back.
   test('DOC_TYPES matches mobile-aligned canonical set', () => {
     expect([...DOC_TYPES].sort()).toEqual(
       [
         'background_check_front',
-        'insurance_back',
         'insurance_front',
         'license_back',
         'license_front',
@@ -652,6 +651,26 @@ describe('Document step completeness', () => {
       ].sort(),
     );
     expect(DOC_TYPES).not.toContain('background_check_back');
+    expect(DOC_TYPES).not.toContain('insurance_back');
+  });
+
+  test('all required docs without insurance_back moves driver to review', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await getDb().insert(driverDocuments).values(
+      DOC_TYPES.map((doc_type) => ({
+        driver_id: driverId,
+        doc_type,
+        file_url: 'https://x.com/f.png',
+      })),
+    );
+
+    const res = await app.handle(
+      new Request('http://localhost/api/drivers/me/status', {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    );
+    const data = await res.json();
+    expect(data.step).toBe('review');
   });
 
   test('status stays in documents step until all required doc types uploaded', async () => {

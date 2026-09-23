@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import type React from 'react';
 import { useCallback, useState } from 'react';
@@ -26,7 +27,7 @@ import { DOC_SIDES, type DocBase, type DocSide, uploadDocumentToBackend } from '
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 type DocType = DocBase;
-type PickMethod = 'camera' | 'gallery';
+type PickMethod = 'camera' | 'gallery' | 'pdf';
 
 const DOCS: { type: DocType; label: string }[] = [
   { type: 'drivers_license', label: 'Licencia de conducir' },
@@ -37,6 +38,17 @@ const DOCS: { type: DocType; label: string }[] = [
 ];
 
 const SIDE_LABELS: Record<DocSide, string> = { front: 'Frente', back: 'Dorso' };
+
+function allowsPdf(docType: DocType): boolean {
+  return docType === 'vehicle_insurance';
+}
+
+function sideLabelFor(docType: DocType, side: DocSide): string {
+  if (docType === 'vehicle_insurance' && DOC_SIDES[docType].length === 1) {
+    return 'Archivo o foto';
+  }
+  return SIDE_LABELS[side];
+}
 
 interface DocState {
   fileUri: string | null;
@@ -80,29 +92,27 @@ export const OnboardingStep2Screen: React.FC = () => {
     DOC_SIDES[docType as DocType].every((side) => doc[side].uploaded),
   );
 
+  const setSideError = useCallback((docType: DocType, side: DocSide, error: string) => {
+    setDocs((prev) => ({
+      ...prev,
+      [docType]: {
+        ...prev[docType],
+        [side]: { ...prev[docType][side], error },
+      },
+    }));
+  }, []);
+
   const handlePick = useCallback(
     async (docType: DocType, side: DocSide, method: PickMethod) => {
       if (!driverId) {
-        setDocs((prev) => ({
-          ...prev,
-          [docType]: {
-            ...prev[docType],
-            [side]: { ...prev[docType][side], error: 'Sesion no valida. Reincia la app.' },
-          },
-        }));
+        setSideError(docType, side, 'Sesion no valida. Reincia la app.');
         return;
       }
 
       if (method === 'camera') {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
-          setDocs((prev) => ({
-            ...prev,
-            [docType]: {
-              ...prev[docType],
-              [side]: { ...prev[docType][side], error: 'Permiso de camara denegado' },
-            },
-          }));
+          setSideError(docType, side, 'Permiso de camara denegado');
           return;
         }
       }
@@ -113,7 +123,19 @@ export const OnboardingStep2Screen: React.FC = () => {
       let fileSize: number | null = null;
 
       try {
-        if (method === 'camera') {
+        if (method === 'pdf') {
+          const result = await DocumentPicker.getDocumentAsync({
+            type: 'application/pdf',
+            copyToCacheDirectory: true,
+            multiple: false,
+          });
+          if (result.canceled || !result.assets?.[0]) return;
+          const asset = result.assets[0];
+          uri = asset.uri;
+          name = asset.name ?? `seguro_${Date.now()}.pdf`;
+          mimeType = asset.mimeType ?? 'application/pdf';
+          fileSize = asset.size ?? null;
+        } else if (method === 'camera') {
           const result = await ImagePicker.launchCameraAsync({
             mediaTypes: 'images',
             quality: 0.7,
@@ -138,23 +160,29 @@ export const OnboardingStep2Screen: React.FC = () => {
         }
 
         if (fileSize && fileSize > MAX_FILE_SIZE) {
-          setDocs((prev) => ({
-            ...prev,
-            [docType]: {
-              ...prev[docType],
-              [side]: { ...prev[docType][side], error: 'El archivo debe ser menor a 10MB' },
-            },
-          }));
+          setSideError(docType, side, 'El archivo debe ser menor a 10MB');
           return;
         }
 
-        try {
-          const compressed = await compressImage(uri!);
-          uri = compressed.uri;
-          name = name?.replace(/\.[^.]+$/, '.jpg') ?? `photo_${Date.now()}.jpg`;
-          mimeType = 'image/jpeg';
-        } catch (err) {
-          console.warn('Image compression failed, using original:', err);
+        const isPdf =
+          mimeType === 'application/pdf' ||
+          name?.toLowerCase().endsWith('.pdf') === true ||
+          method === 'pdf';
+
+        if (!isPdf) {
+          try {
+            const compressed = await compressImage(uri!);
+            uri = compressed.uri;
+            name = name?.replace(/\.[^.]+$/, '.jpg') ?? `photo_${Date.now()}.jpg`;
+            mimeType = 'image/jpeg';
+          } catch (err) {
+            console.warn('Image compression failed, using original:', err);
+          }
+        } else {
+          mimeType = 'application/pdf';
+          if (!name?.toLowerCase().endsWith('.pdf')) {
+            name = `${name ?? `seguro_${Date.now()}`}.pdf`.replace(/\.pdf\.pdf$/i, '.pdf');
+          }
         }
 
         setDocs((prev) => ({
@@ -207,7 +235,7 @@ export const OnboardingStep2Screen: React.FC = () => {
         }));
       }
     },
-    [driverId, navigation],
+    [driverId, navigation, setSideError],
   );
 
   const handleRetry = useCallback((docType: DocType, side: DocSide) => {
@@ -256,13 +284,20 @@ export const OnboardingStep2Screen: React.FC = () => {
               />
             </View>
             <Text style={styles.uploadTitle}>{doc.label}</Text>
+            {doc.type === 'vehicle_insurance' ? (
+              <Text style={styles.hintText}>
+                Alcanza un archivo o foto del seguro (PDF o imagen). No hace falta dorso.
+              </Text>
+            ) : null}
 
             {DOC_SIDES[doc.type].map((side) => {
               const state = docs[doc.type][side];
-              const label = SIDE_LABELS[side];
+              const label = sideLabelFor(doc.type, side);
+              const showSideLabel =
+                DOC_SIDES[doc.type].length > 1 || doc.type === 'vehicle_insurance';
               return (
                 <View key={side} style={styles.sideBlock}>
-                  <Text style={styles.sideLabel}>{label}</Text>
+                  {showSideLabel ? <Text style={styles.sideLabel}>{label}</Text> : null}
 
                   {state.uploaded ? (
                     <View style={styles.uploadedRow}>
@@ -294,6 +329,15 @@ export const OnboardingStep2Screen: React.FC = () => {
                       >
                         <Text style={styles.optionText}>Subir de galeria</Text>
                       </TouchableOpacity>
+                      {allowsPdf(doc.type) ? (
+                        <TouchableOpacity
+                          style={styles.uploadOption}
+                          onPress={() => handlePick(doc.type, side, 'pdf')}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.optionText}>Archivo PDF</Text>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                   )}
 
@@ -366,6 +410,12 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.deepBlue,
+  },
+  hintText: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.mediumGray,
+    textAlign: 'center',
+    width: '100%',
   },
   sideBlock: {
     width: '100%',
