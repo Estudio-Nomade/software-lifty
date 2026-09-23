@@ -1,8 +1,16 @@
 import { apiClient } from '../api/client';
 import type { DriverStatus } from '../api/types';
-import { driverStatusSchema } from '../api/types';
+import { ApiError, driverStatusSchema } from '../api/types';
 import type { ScreenName } from '../hooks/useAppNavigation';
 import { useAuthStore } from '../store/authStore';
+
+/** Network / CORS / timeout — do not invent pending onboarding. */
+export function isTransientStatusFailure(err: unknown): boolean {
+  if (err instanceof ApiError) {
+    return err.code === 'NETWORK_ERROR' || err.status === 0;
+  }
+  return false;
+}
 
 type DriverStatusValue = DriverStatus['status'] | null;
 
@@ -88,11 +96,18 @@ export async function resolvePostAuthRoute(): Promise<PostAuthRoute> {
     if (driverData.status) {
       useAuthStore.getState().setDriverStatus(driverData.status);
     }
+    if (driverData.step != null) {
+      useAuthStore.getState().setOnboardingStep(driverData.step);
+    }
 
     return routeForDriverStatus(driverData);
-  } catch {
-    // Just authenticated but status could not be read (new user / transient
-    // error) — send them to the onboarding entry so they can complete setup.
+  } catch (err) {
+    // CORS / offline / API down: leave status null so welcome can recover.
+    // Do not invent pending → OnboardingStep1 (that screen then fails too).
+    if (isTransientStatusFailure(err)) {
+      throw err;
+    }
+    // Non-network failure after auth (e.g. empty profile) — onboarding entry.
     useAuthStore.getState().setDriverStatus('pending');
     return { screen: 'OnboardingStep1', status: 'pending' };
   }

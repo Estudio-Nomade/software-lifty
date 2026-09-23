@@ -1,4 +1,9 @@
-import { STEP_ROUTE, routeForDriverStatus } from '../../lib/postAuthRouting';
+import { ApiError } from '../../api/types';
+import {
+  STEP_ROUTE,
+  isTransientStatusFailure,
+  routeForDriverStatus,
+} from '../../lib/postAuthRouting';
 
 describe('STEP_ROUTE order', () => {
   it('keeps KYC before vehicle before documents', () => {
@@ -71,5 +76,38 @@ describe('routeForDriverStatus', () => {
     const r = routeForDriverStatus({ status: 'under_review' });
     expect(r.screen).toBe('Active');
     expect(r.status).toBe('under_review');
+  });
+});
+
+describe('isTransientStatusFailure', () => {
+  it('treats network / timeout ApiErrors as transient (do not invent pending)', () => {
+    expect(
+      isTransientStatusFailure(
+        new ApiError({
+          error: {
+            code: 'NETWORK_ERROR',
+            message: 'Sin conexion.',
+            status: 0,
+          },
+          meta: { timestamp: new Date().toISOString() },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('does not treat validation / business errors as transient', () => {
+    expect(
+      isTransientStatusFailure(
+        new ApiError({
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'bad',
+            status: 400,
+          },
+          meta: { timestamp: new Date().toISOString() },
+        }),
+      ),
+    ).toBe(false);
+    expect(isTransientStatusFailure(new Error('boom'))).toBe(false);
   });
 });

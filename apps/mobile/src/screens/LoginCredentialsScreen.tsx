@@ -21,8 +21,11 @@ import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useLogin } from '../hooks/useAuth';
 import { getFriendlyAuthError } from '../lib/authErrors';
-import { resolvePostAuthRoute } from '../lib/postAuthRouting';
-import { routeForDriverStatus } from '../lib/postAuthRouting';
+import {
+  isTransientStatusFailure,
+  resolvePostAuthRoute,
+  routeForDriverStatus,
+} from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -46,7 +49,7 @@ export const LoginCredentialsScreen: React.FC = () => {
   const setDriverStatus = useAuthStore((s) => s.setDriverStatus);
 
   const login = useLogin();
-  const { sendEmailOtp, verifyEmailOtp, resendEmailOtp, signInWithGoogle } = useAuth();
+  const { sendEmailOtp, verifyEmailOtp, resendEmailOtp, signInWithGoogle, signOut } = useAuth();
 
   const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
   const termsAccepted = useAuthStore((s) => s.termsAccepted);
@@ -64,20 +67,35 @@ export const LoginCredentialsScreen: React.FC = () => {
   }, [cooldown]);
 
   const finishAuth = useCallback(async () => {
-    const route = await resolvePostAuthRoute();
-    if (route.blockedMessage) {
-      setError(route.blockedMessage);
-      return;
-    }
-
-    if (termsAccepted) {
-      if (route.screen) {
-        navigation.navigate(route.screen);
+    try {
+      const route = await resolvePostAuthRoute();
+      if (route.blockedMessage) {
+        setError(route.blockedMessage);
+        return;
       }
-    } else {
-      navigation.navigate('Terms');
+
+      if (termsAccepted) {
+        if (route.screen) {
+          navigation.navigate(route.screen);
+        }
+      } else {
+        navigation.navigate('Terms');
+      }
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'No pudimos hablar con el servidor de Lifty. Revisá conexión.';
+      setError(message);
+      if (isTransientStatusFailure(err)) {
+        try {
+          await signOut();
+        } catch {
+          useAuthStore.getState().clearAuthState();
+        }
+      }
     }
-  }, [navigation, termsAccepted]);
+  }, [navigation, termsAccepted, signOut]);
 
   const handleGoogle = useCallback(async () => {
     if (googleLoading) return;
@@ -115,6 +133,9 @@ export const LoginCredentialsScreen: React.FC = () => {
 
       const route = routeForDriverStatus(driverData);
       setDriverStatus(route.status);
+      if (driverData.step != null) {
+        useAuthStore.getState().setOnboardingStep(driverData.step);
+      }
 
       if (route.blockedMessage) {
         setError(route.blockedMessage);
@@ -130,8 +151,18 @@ export const LoginCredentialsScreen: React.FC = () => {
       }
     } catch (err: unknown) {
       const message =
-        err instanceof Error ? err.message : 'No se pudo verificar el estado de tu cuenta';
+        err instanceof Error
+          ? err.message
+          : 'No pudimos hablar con el servidor de Lifty. Revisá conexión.';
       setError(message);
+      // Auth OK + status fail must not leave store in limbo (welcome spinner / fake onboarding).
+      if (isTransientStatusFailure(err)) {
+        try {
+          await signOut();
+        } catch {
+          useAuthStore.getState().clearAuthState();
+        }
+      }
     }
   };
 

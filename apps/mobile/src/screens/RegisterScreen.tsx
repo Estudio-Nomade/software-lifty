@@ -19,14 +19,26 @@ import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useResendCode, useSignUp, useVerifyEmail } from '../hooks/useAuth';
 import { getFriendlyAuthError } from '../lib/authErrors';
-import { resolvePostAuthRoute } from '../lib/postAuthRouting';
+import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
+
+async function clearSessionAfterStatusFail(
+  err: unknown,
+  signOutFn: () => Promise<void>,
+): Promise<void> {
+  if (!isTransientStatusFailure(err)) return;
+  try {
+    await signOutFn();
+  } catch {
+    useAuthStore.getState().clearAuthState();
+  }
+}
 
 export const RegisterScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const setDriverStatus = useAuthStore((s) => s.setDriverStatus);
-  const { loading, signInWithGoogle } = useAuth();
+  const { loading, signInWithGoogle, signOut } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -59,10 +71,11 @@ export const RegisterScreen: React.FC = () => {
       }
     } catch (err) {
       setError(getFriendlyAuthError(err));
+      await clearSessionAfterStatusFail(err, signOut);
     } finally {
       setGoogleLoading(false);
     }
-  }, [googleLoading, signInWithGoogle, navigation]);
+  }, [googleLoading, signInWithGoogle, navigation, signOut]);
 
   const passwordMatch =
     password.length > 0 && confirmPassword.length > 0 && password === confirmPassword;
@@ -93,13 +106,18 @@ export const RegisterScreen: React.FC = () => {
 
       if (data.session) {
         // Email confirmation disabled — already authenticated; continue onboarding.
-        const route = await resolvePostAuthRoute();
-        if (route.blockedMessage) {
-          setError(route.blockedMessage);
-          return;
-        }
-        if (route.screen) {
-          navigation.replace(route.screen);
+        try {
+          const route = await resolvePostAuthRoute();
+          if (route.blockedMessage) {
+            setError(route.blockedMessage);
+            return;
+          }
+          if (route.screen) {
+            navigation.replace(route.screen);
+          }
+        } catch (statusErr: unknown) {
+          setError(getFriendlyAuthError(statusErr));
+          await clearSessionAfterStatusFail(statusErr, signOut);
         }
         return;
       }
@@ -149,6 +167,7 @@ export const RegisterScreen: React.FC = () => {
       }
     } catch (err: unknown) {
       setError(getFriendlyAuthError(err));
+      await clearSessionAfterStatusFail(err, signOut);
     }
   };
 

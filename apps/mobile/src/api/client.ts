@@ -157,15 +157,20 @@ apiClient.interceptors.response.use(
       error.code === 'ERR_CANCELED'
     ) {
       const errorMap: Record<string, string> = {
-        ERR_NETWORK: 'Sin conexion. Verifica que el backend este corriendo y tu internet funcione.',
+        ERR_NETWORK:
+          'No pudimos hablar con el servidor de Lifty. Revisá conexión o API (en browser: red/CORS).',
         ERR_TIMEOUT: 'Tiempo de espera agotado. El servidor no responde.',
         ERR_CANCELED: 'Solicitud cancelada.',
       };
+      let message = errorMap[error.code] ?? 'Sin conexion. Verifica tu internet.';
+      if (__DEV__ && error.code === 'ERR_NETWORK') {
+        message = `${message} URL: ${API_URL}`;
+      }
       return Promise.reject(
         new ApiError({
           error: {
             code: 'NETWORK_ERROR',
-            message: errorMap[error.code] ?? 'Sin conexion. Verifica tu internet.',
+            message,
             status: 0,
           },
           meta: { timestamp: new Date().toISOString() },
