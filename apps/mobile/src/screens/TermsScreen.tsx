@@ -7,6 +7,7 @@ import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
+import { isTermsReadMode } from '../lib/termsReadMode';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -14,12 +15,11 @@ export const TermsScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const params = useLocalSearchParams<{ from?: string }>();
   const setTermsAccepted = useAuthStore((s) => s.setTermsAccepted);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const termsAccepted = useAuthStore((s) => s.termsAccepted);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const fromProfile = params.from === 'profile';
-  const isReadMode = fromProfile || isAuthenticated;
+  const isReadMode = isTermsReadMode({ from: params.from, termsAccepted });
 
   const handleAccept = async () => {
     if (isReadMode) {
