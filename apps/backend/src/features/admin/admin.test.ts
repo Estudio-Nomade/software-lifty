@@ -170,14 +170,7 @@ describe('Admin', () => {
       .limit(1);
     expect(before!.status).not.toBe('review');
 
-    const empty = await request('GET', '/api/admin/drivers/pending', undefined, adminToken);
-    expect(empty.status).toBe(200);
-    expect(empty.data.some((d: { id: string }) => d.id === driverId)).toBe(false);
-
-    const st = await request('GET', '/api/drivers/me/status', undefined, driverToken);
-    expect(st.status).toBe(200);
-    expect(st.data.step).toBe('review');
-
+    // Admin pending list heals desync without waiting for driver GET /me/status.
     const pending = await request('GET', '/api/admin/drivers/pending', undefined, adminToken);
     expect(pending.status).toBe(200);
     expect(pending.data.some((d: { id: string }) => d.id === driverId)).toBe(true);
@@ -189,6 +182,41 @@ describe('Admin', () => {
       .limit(1);
     expect(after!.status).toBe('review');
     expect(after!.admin_review_status).toBe('pending');
+  });
+
+  test('POST review approve requires status=review (not only admin_review_status=pending)', async () => {
+    const adminToken = await createAdminToken();
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({
+        phone: '+5492616666666',
+        full_name: 'Early Approve',
+        role: 'driver',
+        kyc_status: 'approved',
+      })
+      .returning({ id: users.id });
+    const driverToken = await createTestToken(user.id);
+    const { data: step1 } = await request(
+      'PUT',
+      '/api/drivers/me',
+      { first_name: 'Early Approve' },
+      driverToken,
+    );
+    const driverId = step1.id as string;
+    await db
+      .update(drivers)
+      .set({ kyc_status: 'approved', admin_review_status: 'pending', status: 'pending' })
+      .where(eq(drivers.id, driverId));
+
+    const { status, data } = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      { action: 'approve' },
+      adminToken,
+    );
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('NOT_IN_REVIEW_QUEUE');
   });
 
   test('GET /drivers/:id returns full detail', async () => {

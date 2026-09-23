@@ -13,14 +13,35 @@ import { getCommissionConfig } from '../../shared/lib/commission';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
 import type { AuthUser } from '../../shared/middleware/auth';
+import { ensureDriverEnteredReview } from '../drivers/service';
 import { notifyDriverApproved, notifyDriverRejected } from './notifications';
 
 function escapeIlike(raw: string): string {
   return raw.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
+const NOT_PENDING_QUEUE = new Set(['review', 'approved', 'rejected', 'suspended']);
+
 export const adminService = {
+  /**
+   * Heal stuck drivers (docs complete, status still pending/step1/…) so ops
+   * queue matches product: register+docs → Pendientes → approve → Conductores.
+   */
+  async reconcilePendingQueue(): Promise<number> {
+    const candidates = await db.select({ id: drivers.id, status: drivers.status }).from(drivers);
+
+    let healed = 0;
+    for (const row of candidates) {
+      if (NOT_PENDING_QUEUE.has(row.status)) continue;
+      const ok = await ensureDriverEnteredReview(row.id);
+      if (ok) healed += 1;
+    }
+    return healed;
+  },
+
   async listPending() {
+    await this.reconcilePendingQueue();
+
     const rows = await db
       .select({
         id: drivers.id,
@@ -262,8 +283,27 @@ export const adminService = {
 
     if (!driver) throw new NotFoundError('Driver not found');
 
-    if (driver.admin_review_status !== 'pending') {
-      throw new AppError(`Driver already ${driver.admin_review_status}`, 400, 'ALREADY_REVIEWED');
+    // Terminal / already decided first (status leaves 'review' after approve/reject).
+    if (
+      driver.admin_review_status === 'approved' ||
+      driver.admin_review_status === 'rejected' ||
+      driver.status === 'approved' ||
+      driver.status === 'rejected'
+    ) {
+      throw new AppError(
+        `Driver already ${driver.admin_review_status || driver.status}`,
+        400,
+        'ALREADY_REVIEWED',
+      );
+    }
+    // Only drivers in the review queue can be approved/rejected.
+    // admin_review_status defaults to 'pending' at insert — do NOT treat that alone as reviewable.
+    if (driver.status !== 'review' || driver.admin_review_status !== 'pending') {
+      throw new AppError(
+        'El conductor aún no está en cola de review (faltan docs o no reconcilió status)',
+        409,
+        'NOT_IN_REVIEW_QUEUE',
+      );
     }
 
     const newStatus = action === 'approve' ? 'approved' : 'rejected';
