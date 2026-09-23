@@ -119,6 +119,78 @@ describe('Admin', () => {
     expect(data[0].documents_submitted).toBe(DOC_TYPES.length);
   });
 
+  // Docs present but drivers.status never flipped to review (desync with getMyStatus step=review).
+  // Driver GET /me/status must reconcile so pending queue lists them.
+  test('GET /drivers/pending includes driver after status reconcile via GET /me/status', async () => {
+    const adminToken = await createAdminToken();
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({
+        phone: '+5492617777777',
+        full_name: 'Desync Driver',
+        role: 'driver',
+        kyc_status: 'approved',
+      })
+      .returning({ id: users.id });
+    const driverToken = await createTestToken(user.id);
+
+    const { data: step1 } = await request(
+      'PUT',
+      '/api/drivers/me',
+      { first_name: 'Desync Driver' },
+      driverToken,
+    );
+    const driverId = step1.id as string;
+    await db.update(drivers).set({ kyc_status: 'approved' }).where(eq(drivers.id, driverId));
+    await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Ford',
+        vehicle_model: 'Ka',
+        vehicle_year: 2020,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'XYZ999',
+      },
+      driverToken,
+    );
+    await db.insert(driverDocuments).values(
+      DOC_TYPES.map((doc_type) => ({
+        driver_id: driverId,
+        doc_type,
+        file_url: `https://example.com/${doc_type}.pdf`,
+      })),
+    );
+
+    const [before] = await db
+      .select({ status: drivers.status })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(before!.status).not.toBe('review');
+
+    const empty = await request('GET', '/api/admin/drivers/pending', undefined, adminToken);
+    expect(empty.status).toBe(200);
+    expect(empty.data.some((d: { id: string }) => d.id === driverId)).toBe(false);
+
+    const st = await request('GET', '/api/drivers/me/status', undefined, driverToken);
+    expect(st.status).toBe(200);
+    expect(st.data.step).toBe('review');
+
+    const pending = await request('GET', '/api/admin/drivers/pending', undefined, adminToken);
+    expect(pending.status).toBe(200);
+    expect(pending.data.some((d: { id: string }) => d.id === driverId)).toBe(true);
+
+    const [after] = await db
+      .select({ status: drivers.status, admin_review_status: drivers.admin_review_status })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(after!.status).toBe('review');
+    expect(after!.admin_review_status).toBe('pending');
+  });
+
   test('GET /drivers/:id returns full detail', async () => {
     const adminToken = await createAdminToken();
     const { driverId } = await createReviewDriver();

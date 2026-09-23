@@ -46,6 +46,60 @@ function hasAllRequiredDocs(uploaded: { doc_type: string }[]): boolean {
   return DOC_TYPES.every((t) => types.has(t));
 }
 
+const TERMINAL_DRIVER_STATUSES = new Set(['approved', 'rejected', 'suspended']);
+
+/**
+ * Idempotent: if all required docs are present and the driver is not terminal,
+ * set status=review + admin_review_status=pending and notify admins once on transition.
+ * Closes desync where getMyStatus returns step=review without drivers.status='review'
+ * (listPending only filters status=review).
+ * @returns true if status transitioned into review this call
+ */
+async function ensureDriverEnteredReview(driverId: string): Promise<boolean> {
+  const [driver] = await db
+    .select({ id: drivers.id, status: drivers.status })
+    .from(drivers)
+    .where(eq(drivers.id, driverId))
+    .limit(1);
+
+  if (!driver) return false;
+  if (TERMINAL_DRIVER_STATUSES.has(driver.status)) return false;
+  if (driver.status === 'review') return false;
+
+  const docsList = await db
+    .select({ doc_type: driverDocuments.doc_type })
+    .from(driverDocuments)
+    .where(
+      and(
+        eq(driverDocuments.driver_id, driverId),
+        ne(driverDocuments.status, 'superseded'),
+        ne(driverDocuments.status, 'rejected'),
+      ),
+    );
+
+  if (!hasAllRequiredDocs(docsList)) {
+    logger.info('[DOCS] Docs incomplete — not entering review / notifying admin', {
+      driverId,
+      uploaded: docsList.map((d) => d.doc_type).sort(),
+      missing: DOC_TYPES.filter((t) => !docsList.some((d) => d.doc_type === t)),
+    });
+    return false;
+  }
+
+  await db
+    .update(drivers)
+    .set({ status: 'review', admin_review_status: 'pending', updated_at: new Date() })
+    .where(eq(drivers.id, driverId));
+
+  logger.info('[DOCS] Driver entered review queue', {
+    driverId: driverId.split('-')[0],
+    previousStatus: driver.status,
+  });
+
+  void notifyAdminNewDriver(driverId);
+  return true;
+}
+
 export const driversService = {
   async getPublicProfile(driverId: string) {
     const rows = await db
@@ -213,12 +267,21 @@ export const driversService = {
       return { status: 'pending', step: 'documents', kyc_status: 'approved' };
     }
 
+    // Reconcile DB status so admin pending queue (status=review) matches mobile step.
+    await ensureDriverEnteredReview(driver.id);
+
+    const [fresh] = await db
+      .select({ documents_pending_review: drivers.documents_pending_review })
+      .from(drivers)
+      .where(eq(drivers.id, driver.id))
+      .limit(1);
+
     // Everything submitted — awaiting admin review.
     return {
       status: 'under_review',
       step: 'review',
       kyc_status: 'approved',
-      documents_pending_review: documentsPendingReview,
+      documents_pending_review: fresh?.documents_pending_review ?? documentsPendingReview,
     };
   },
 
@@ -540,33 +603,9 @@ export const driversService = {
       file_url: data.file_url,
     });
 
-    const docsList = await db
-      .select({ doc_type: driverDocuments.doc_type })
-      .from(driverDocuments)
-      .where(
-        and(
-          eq(driverDocuments.driver_id, driver.id),
-          ne(driverDocuments.status, 'superseded'),
-          ne(driverDocuments.status, 'rejected'),
-        ),
-      );
-
-    // All required docs submitted → hand the driver to the admin review queue
-    // (adminService.listPending filters by status = 'review').
-    if (hasAllRequiredDocs(docsList) && driver.status !== 'approved') {
-      await db
-        .update(drivers)
-        .set({ status: 'review', admin_review_status: 'pending', updated_at: new Date() })
-        .where(eq(drivers.id, driver.id));
-
-      void notifyAdminNewDriver(driver.id);
-    } else if (!hasAllRequiredDocs(docsList)) {
-      logger.info('[DOCS] Docs incomplete — not entering review / notifying admin', {
-        driverId: driver.id,
-        uploaded: docsList.map((d) => d.doc_type).sort(),
-        missing: DOC_TYPES.filter((t) => !docsList.some((d) => d.doc_type === t)),
-      });
-    }
+    // All required docs → review queue (listPending filters status='review').
+    // getMyStatus also reconciles; call here so upload response is consistent.
+    await ensureDriverEnteredReview(driver.id);
 
     const result = await this.getMyStatus(user);
     return { message: 'Document uploaded', status: result.status, step: result.step };
@@ -625,31 +664,7 @@ export const driversService = {
       file_url: fileUrl,
     });
 
-    const docsList = await db
-      .select({ doc_type: driverDocuments.doc_type })
-      .from(driverDocuments)
-      .where(
-        and(
-          eq(driverDocuments.driver_id, driver.id),
-          ne(driverDocuments.status, 'superseded'),
-          ne(driverDocuments.status, 'rejected'),
-        ),
-      );
-
-    if (hasAllRequiredDocs(docsList) && driver.status !== 'approved') {
-      await db
-        .update(drivers)
-        .set({ status: 'review', admin_review_status: 'pending', updated_at: new Date() })
-        .where(eq(drivers.id, driver.id));
-
-      void notifyAdminNewDriver(driver.id);
-    } else if (!hasAllRequiredDocs(docsList)) {
-      logger.info('[DOCS] Docs incomplete — not entering review / notifying admin', {
-        driverId: driver.id,
-        uploaded: docsList.map((d) => d.doc_type).sort(),
-        missing: DOC_TYPES.filter((t) => !docsList.some((d) => d.doc_type === t)),
-      });
-    }
+    await ensureDriverEnteredReview(driver.id);
 
     return { file_url: fileUrl };
   },
