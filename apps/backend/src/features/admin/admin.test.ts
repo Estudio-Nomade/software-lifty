@@ -116,7 +116,7 @@ describe('Admin', () => {
     expect(data[0].id).toBe(driverId);
     expect(data[0].full_name).toBe('Test Driver');
     expect(data[0].status).toBe('review');
-    expect(data[0].documents_submitted).toBe(8);
+    expect(data[0].documents_submitted).toBe(DOC_TYPES.length);
   });
 
   test('GET /drivers/:id returns full detail', async () => {
@@ -133,7 +133,7 @@ describe('Admin', () => {
     expect(data.vehicles.length).toBe(1);
     expect(data.vehicles[0].brand).toBe('Toyota');
     expect(data.documents).toBeArray();
-    expect(data.documents.length).toBe(8);
+    expect(data.documents.length).toBe(DOC_TYPES.length);
     expect(data.identification_status).toBeDefined();
     expect(data).toHaveProperty('district_name');
     expect(data).toHaveProperty('district_province');

@@ -1,3 +1,4 @@
+import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type React from 'react';
@@ -22,6 +23,7 @@ import { DOC_SIDES, reuploadDocumentToBackend, uploadDocumentToBackend } from '.
 type DocType = DocBase;
 
 const SIDE_LABELS: Record<DocSide, string> = { front: 'Frente', back: 'Dorso' };
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 type SelectedFile = {
   uri: string;
@@ -29,6 +31,21 @@ type SelectedFile = {
   mimeType?: string;
   size?: number;
 };
+
+function allowsPdf(docType: DocType | undefined): boolean {
+  return docType === 'vehicle_insurance';
+}
+
+function sideLabelFor(
+  docType: DocType | undefined,
+  side: DocSide,
+  requiredSides: DocSide[],
+): string {
+  if (docType === 'vehicle_insurance' && requiredSides.length === 1) {
+    return 'Archivo o foto';
+  }
+  return SIDE_LABELS[side];
+}
 
 export const UploadDocumentScreen: React.FC = () => {
   const { docType, docLabel, mode } = useLocalSearchParams<{
@@ -106,6 +123,32 @@ export const UploadDocumentScreen: React.FC = () => {
     }
   };
 
+  const handlePdf = async (side: DocSide) => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'application/pdf',
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset = result.assets[0];
+    if (asset.size && asset.size > MAX_FILE_SIZE) {
+      Alert.alert('Archivo grande', 'El archivo debe ser menor a 10MB.');
+      return;
+    }
+
+    setSelectedFiles((prev) => ({
+      ...prev,
+      [side]: {
+        uri: asset.uri,
+        name: asset.name ?? `seguro_${Date.now()}.pdf`,
+        mimeType: asset.mimeType ?? 'application/pdf',
+        size: asset.size,
+      },
+    }));
+  };
+
   const handleUpload = async () => {
     if (!bothSelected || !docType) return;
 
@@ -120,7 +163,15 @@ export const UploadDocumentScreen: React.FC = () => {
         let uploadName = file.name;
         let uploadMimeType = file.mimeType || 'application/octet-stream';
 
-        if (uploadMimeType.startsWith('image/')) {
+        const isPdf =
+          uploadMimeType === 'application/pdf' || uploadName.toLowerCase().endsWith('.pdf');
+
+        if (isPdf) {
+          uploadMimeType = 'application/pdf';
+          if (!uploadName.toLowerCase().endsWith('.pdf')) {
+            uploadName = `${uploadName}.pdf`;
+          }
+        } else if (uploadMimeType.startsWith('image/')) {
           try {
             const compressed = await compressImage(uploadUri);
             uploadUri = compressed.uri;
@@ -167,16 +218,19 @@ export const UploadDocumentScreen: React.FC = () => {
         <Text style={styles.subtitle}>
           {isReupload
             ? 'Al reemplazar este documento, quedara pendiente de revision.'
-            : 'Subi el documento requerido'}
+            : docType === 'vehicle_insurance'
+              ? 'Subi un archivo o foto del seguro (PDF o imagen). No hace falta dorso.'
+              : 'Subi el documento requerido'}
         </Text>
 
         {requiredSides.map((side) => {
           const file = selectedFiles[side];
           const isImage = file?.mimeType?.startsWith('image/');
-          const label = SIDE_LABELS[side];
+          const label = sideLabelFor(docType, side, requiredSides);
+          const showSideTitle = requiredSides.length > 1 || docType === 'vehicle_insurance';
           return (
             <View key={side} style={styles.sideSection}>
-              <Text style={styles.sideTitle}>{label}</Text>
+              {showSideTitle ? <Text style={styles.sideTitle}>{label}</Text> : null}
               <View style={styles.preview}>
                 {file ? (
                   isImage ? (
@@ -220,6 +274,15 @@ export const UploadDocumentScreen: React.FC = () => {
                   >
                     <Text style={styles.optionText}>🖼 Subir de galeria</Text>
                   </TouchableOpacity>
+                  {allowsPdf(docType) ? (
+                    <TouchableOpacity
+                      style={styles.option}
+                      onPress={() => handlePdf(side)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.optionText}>📄 Archivo PDF</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               )}
             </View>

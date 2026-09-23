@@ -9,7 +9,10 @@ import {
   users,
   vehicles,
 } from '../../shared/db/schema';
-import { DOC_TYPES } from '../../shared/lib/documents';
+import {
+  VALID_DOC_TYPES as CANONICAL_VALID_DOC_TYPES,
+  DOC_TYPES,
+} from '../../shared/lib/documents';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
 import { logger } from '../../shared/lib/logger';
@@ -30,13 +33,13 @@ import type { AuthUser } from '../../shared/middleware/auth';
 import { notifyAdminNewDriver } from '../admin/notifications';
 import { upsertLocation } from '../location/service';
 
-const VALID_DOC_TYPES: readonly string[] = DOC_TYPES;
+const VALID_DOC_TYPES: readonly string[] = CANONICAL_VALID_DOC_TYPES;
 
 // Sensitive documents gate the driver's ability to go online: re-uploading one
 // forces a fresh admin review and pauses "online" until approved. The server —
 // never the client — decides sensitivity, so a driver can't dodge review by
-// mislabelling a doc_type.
-const SENSITIVE_DOC_TYPES = new Set<string>(DOC_TYPES);
+// mislabelling a doc_type. Includes optional legacy types (e.g. insurance_back).
+const SENSITIVE_DOC_TYPES = new Set<string>(CANONICAL_VALID_DOC_TYPES);
 
 function hasAllRequiredDocs(uploaded: { doc_type: string }[]): boolean {
   const types = new Set(uploaded.map((d) => d.doc_type));
