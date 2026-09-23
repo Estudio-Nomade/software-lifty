@@ -7,6 +7,7 @@ import {
   PUBLIC_ENTRY_ROUTES,
   isAllowedWithoutSession,
 } from '../lib/authRouteGate';
+import { isDriverStatusUnresolved } from '../lib/driverStatusGate';
 import { hasActiveTrip } from '../lib/isLiveTrip';
 import { STEP_ROUTE, routeForDriverStatus } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
@@ -51,21 +52,25 @@ export function AuthRedirectWatcher() {
    * Product rule: no session → never stay on onboarding/home/private.
    * Deep links, HMR, stale URLs, or persist race must bounce to welcome
    * (CREAR CUENTA / INICIAR SESION), not Paso 1/3.
+   * Sign-out (`needsRedirect`) owns its own bounce — skip to avoid double replace.
    */
   useEffect(() => {
     if (!sessionRestored) return;
+    if (needsRedirect) return;
     if (isAuthenticated) return;
     const current = segments[0] ?? '';
     if (isAllowedWithoutSession(current)) return;
     router.replace('/');
-  }, [sessionRestored, isAuthenticated, segments, router]);
+  }, [sessionRestored, isAuthenticated, segments, router, needsRedirect]);
 
   // Authenticated on welcome/public entry → continue onboarding or home.
+  // Auth without status/step (API/CORS fail after login) → stay; Welcome recovery UI.
   useEffect(() => {
     if (!sessionRestored) return;
     if (needsRedirect) return;
     if (!isAuthenticated || !(PUBLIC_ENTRY_ROUTES as readonly string[]).includes(segments[0] ?? ''))
       return;
+    if (isDriverStatusUnresolved(isAuthenticated, driverStatus, onboardingStep)) return;
 
     const target = onboardingStep ? STEP_ROUTE[onboardingStep] : undefined;
     const fallback = routeForDriverStatus({

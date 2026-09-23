@@ -17,7 +17,8 @@ import { Text } from '../components/ui/Text';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
-import { resolvePostAuthRoute } from '../lib/postAuthRouting';
+import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
+import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
 type Step = 'method' | 'email' | 'otp';
@@ -27,7 +28,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const AuthScreen: React.FC = () => {
   const navigation = useAppNavigation();
-  const { signInWithGoogle, sendEmailOtp, verifyEmailOtp, resendEmailOtp } = useAuth();
+  const { signInWithGoogle, sendEmailOtp, verifyEmailOtp, resendEmailOtp, signOut } = useAuth();
 
   const [step, setStep] = useState<Step>('method');
   const [email, setEmail] = useState('');
@@ -48,15 +49,26 @@ export const AuthScreen: React.FC = () => {
   // Shared post-authentication handoff: create/read the profile and route the
   // user to onboarding (new) or straight into the app (existing).
   const finishAuth = useCallback(async () => {
-    const route = await resolvePostAuthRoute();
-    if (route.blockedMessage) {
-      setError(route.blockedMessage);
-      return;
+    try {
+      const route = await resolvePostAuthRoute();
+      if (route.blockedMessage) {
+        setError(route.blockedMessage);
+        return;
+      }
+      if (route.screen) {
+        navigation.replace(route.screen);
+      }
+    } catch (err) {
+      setError(getFriendlyAuthError(err));
+      if (isTransientStatusFailure(err)) {
+        try {
+          await signOut();
+        } catch {
+          useAuthStore.getState().clearAuthState();
+        }
+      }
     }
-    if (route.screen) {
-      navigation.replace(route.screen);
-    }
-  }, [navigation]);
+  }, [navigation, signOut]);
 
   const handleGoogle = async () => {
     if (googleLoading) return;

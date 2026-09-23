@@ -18,13 +18,13 @@ import { Text } from '../components/ui/Text';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useForgotPassword, useResetPassword } from '../hooks/useAuth';
-import { resolvePostAuthRoute } from '../lib/postAuthRouting';
+import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
 export const ForgotPasswordScreen: React.FC = () => {
   const navigation = useAppNavigation();
-  const { loading } = useAuth();
+  const { loading, signOut } = useAuth();
 
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -88,9 +88,16 @@ export const ForgotPasswordScreen: React.FC = () => {
       } else {
         navigation.replace('Terms');
       }
-    } catch (err: any) {
-      const message = err?.message ?? 'Error al restablecer la contrasena';
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al restablecer la contrasena';
       setError(message);
+      if (isTransientStatusFailure(err)) {
+        try {
+          await signOut();
+        } catch {
+          useAuthStore.getState().clearAuthState();
+        }
+      }
     }
   };
 

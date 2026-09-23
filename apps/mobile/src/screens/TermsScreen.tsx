@@ -6,7 +6,7 @@ import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { resolvePostAuthRoute } from '../lib/postAuthRouting';
+import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -42,6 +42,9 @@ export const TermsScreen: React.FC = () => {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al verificar tu cuenta';
       setError(message);
+      if (isTransientStatusFailure(err)) {
+        useAuthStore.getState().clearAuthState();
+      }
     } finally {
       setLoading(false);
     }

@@ -48,9 +48,11 @@ export function getFriendlyAuthError(error: unknown): string {
     message.includes('network') ||
     message.includes('fetch') ||
     message.includes('connection') ||
-    message.includes('timeout')
+    message.includes('timeout') ||
+    message.includes('cors') ||
+    message.includes('servidor de lifty')
   ) {
-    return 'Sin conexion. Verifica tu internet e intenta de nuevo.';
+    return 'No pudimos hablar con el servidor de Lifty. Revisá conexión o API.';
   }
   if (message.includes('provider') || message.includes('oauth')) {
     return 'No se pudo iniciar sesion con ese proveedor. Intenta de nuevo.';

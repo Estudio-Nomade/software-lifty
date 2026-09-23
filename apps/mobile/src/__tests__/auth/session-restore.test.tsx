@@ -212,4 +212,17 @@ describe('AuthRedirectWatcher', () => {
     expect(mockRouterReplace).toHaveBeenCalledWith('/active');
     expect(mockRouterReplace).toHaveBeenCalledTimes(1);
   });
+
+  test('does not invent onboarding when status never arrived after login', async () => {
+    mockIsAuthenticated = true;
+    mockSegments = [''];
+    mockDriverStatus = null;
+    mockOnboardingStep = null;
+
+    await act(async () => {
+      render(React.createElement(AuthRedirectWatcher));
+    });
+
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+  });
 });
