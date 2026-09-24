@@ -183,6 +183,11 @@ export const driversService = {
         step: 'profile',
         kyc_status: 'pending',
         municipality_status: 'unset' as const,
+        address_line: null,
+        address_resolved_city: null,
+        address_resolved_province: null,
+        intended_district_id: null,
+        intended_district_name: null,
         has_district: false,
         show_municipality_waitlist_banner: false,
       };
