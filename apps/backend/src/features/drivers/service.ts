@@ -29,11 +29,20 @@ let _storage: StorageProvider = supabaseStorage;
 export function setStorageForTesting(sp: StorageProvider) {
   _storage = sp;
 }
+import { geocode } from '../../shared/lib/geo';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { notifyAdminNewDriver } from '../admin/notifications';
 import { upsertLocation } from '../location/service';
+import {
+  type MunicipalityResolveResult,
+  buildMunicipalityResult,
+  matchDistrict,
+  parseLocalityFromFormatted,
+} from './municipality';
 
 const VALID_DOC_TYPES: readonly string[] = CANONICAL_VALID_DOC_TYPES;
+
+const MIN_ADDRESS_LENGTH = 3;
 
 // Sensitive documents gate the driver's ability to go online: re-uploading one
 // forces a fresh admin review and pauses "online" until approved. The server —
@@ -157,6 +166,11 @@ export const driversService = {
         approved_at: drivers.approved_at,
         admin_reviewed_at: drivers.admin_reviewed_at,
         created_at: drivers.created_at,
+        municipality_status: drivers.municipality_status,
+        address_line: drivers.address_line,
+        address_resolved_city: drivers.address_resolved_city,
+        address_resolved_province: drivers.address_resolved_province,
+        intended_district_id: drivers.intended_district_id,
       })
       .from(drivers)
       .where(eq(drivers.user_id, user.id))
@@ -164,8 +178,17 @@ export const driversService = {
 
     // No driver row yet → user must complete their profile (step1).
     if (!driver) {
-      return { status: 'pending', step: 'profile', kyc_status: 'pending' };
+      return {
+        status: 'pending',
+        step: 'profile',
+        kyc_status: 'pending',
+        municipality_status: 'unset' as const,
+        has_district: false,
+        show_municipality_waitlist_banner: false,
+      };
     }
+
+    const municipalityFields = await this.buildMunicipalityStatusFields(driver);
 
     const documentsPendingReview = driver.documents_pending_review;
     const identificationStatus = driver.identification_status;
@@ -175,8 +198,12 @@ export const driversService = {
       admin_reviewed_at: driver.admin_reviewed_at,
       created_at: driver.created_at,
     });
+    const waitlisted = municipalityFields.municipality_status === 'waitlisted';
     const canGoOnline =
-      driver.status === 'approved' && !documentsPendingReview && !identification.blocks_online;
+      driver.status === 'approved' &&
+      !documentsPendingReview &&
+      !identification.blocks_online &&
+      !waitlisted;
 
     // Terminal admin states.
     if (driver.status === 'suspended') {
@@ -191,6 +218,7 @@ export const driversService = {
         identification_days_until_pause: identification.days_until_pause,
         identification_pause_at: identification.pause_at,
         can_go_online: false,
+        ...municipalityFields,
       };
     }
     if (driver.status === 'approved') {
@@ -207,8 +235,9 @@ export const driversService = {
         identification_pause_at: identification.pause_at,
         identification_days_since_approval: identification.days_since_approval,
         can_go_online: canGoOnline && !!district,
-        has_district: !!district,
         district: district ?? undefined,
+        ...municipalityFields,
+        has_district: !!district,
       };
     }
     if (driver.status === 'rejected' || driver.admin_review_status === 'rejected') {
@@ -217,11 +246,17 @@ export const driversService = {
         step: 'review',
         kyc_status: driver.kyc_status,
         admin_review_notes: driver.admin_review_notes,
+        ...municipalityFields,
       };
     }
 
     if (driver.status === 'kyc_pending') {
-      return { status: 'pending', step: 'kyc', kyc_status: driver.kyc_status };
+      return {
+        status: 'pending',
+        step: 'kyc',
+        kyc_status: driver.kyc_status,
+        ...municipalityFields,
+      };
     }
 
     if (driver.status === 'kyc_approved') {
@@ -234,10 +269,20 @@ export const driversService = {
     if (driver.kyc_status !== 'approved' && driver.status !== 'step1') {
       // DIDIT is still processing → keep the user on the waiting screen.
       if (driver.kyc_status === 'in_progress' || driver.kyc_status === 'under_review') {
-        return { status: 'under_review', step: 'kyc', kyc_status: driver.kyc_status };
+        return {
+          status: 'under_review',
+          step: 'kyc',
+          kyc_status: driver.kyc_status,
+          ...municipalityFields,
+        };
       }
       // pending / rejected / expired → user must (re)start verification.
-      return { status: 'pending', step: 'kyc', kyc_status: driver.kyc_status };
+      return {
+        status: 'pending',
+        step: 'kyc',
+        kyc_status: driver.kyc_status,
+        ...municipalityFields,
+      };
     }
 
     // KYC approved — vehicle required next.
@@ -248,7 +293,12 @@ export const driversService = {
       .limit(1);
 
     if (!vehicle) {
-      return { status: 'pending', step: 'vehicle', kyc_status: 'approved' };
+      return {
+        status: 'pending',
+        step: 'vehicle',
+        kyc_status: 'approved',
+        ...municipalityFields,
+      };
     }
 
     // Vehicle done — documents required next.
@@ -264,7 +314,12 @@ export const driversService = {
       );
 
     if (!hasAllRequiredDocs(docsList)) {
-      return { status: 'pending', step: 'documents', kyc_status: 'approved' };
+      return {
+        status: 'pending',
+        step: 'documents',
+        kyc_status: 'approved',
+        ...municipalityFields,
+      };
     }
 
     // Reconcile DB status so admin pending queue (status=review) matches mobile step.
@@ -282,6 +337,7 @@ export const driversService = {
       step: 'review',
       kyc_status: 'approved',
       documents_pending_review: fresh?.documents_pending_review ?? documentsPendingReview,
+      ...municipalityFields,
     };
   },
 
@@ -293,6 +349,7 @@ export const driversService = {
         is_online: drivers.is_online,
         documents_pending_review: drivers.documents_pending_review,
         district_id: drivers.district_id,
+        municipality_status: drivers.municipality_status,
         identification_status: drivers.identification_status,
         approved_at: drivers.approved_at,
         admin_reviewed_at: drivers.admin_reviewed_at,
@@ -314,6 +371,14 @@ export const driversService = {
 
     if (isOnline && driver.status !== 'approved') {
       throw new AppError('Todavia no estas aprobado para conectarte.', 403, 'DRIVER_NOT_APPROVED');
+    }
+
+    if (isOnline && driver.municipality_status === 'waitlisted') {
+      throw new AppError(
+        'Tu municipio todavía no está habilitado para hacer viajes. Te avisamos cuando abramos tu zona.',
+        403,
+        'MUNICIPALITY_NOT_ENABLED',
+      );
     }
 
     if (isOnline && !driver.district_id) {
@@ -436,6 +501,10 @@ export const driversService = {
       vehicle_year?: number;
       vehicle_type?: string;
       photo_url?: string;
+      address_line?: string;
+      address_lat?: number;
+      address_lng?: number;
+      address_place_id?: string;
     },
   ) {
     const [existing] = await db
@@ -506,31 +575,76 @@ export const driversService = {
         .where(eq(users.id, user.id));
     }
 
-    // After saving profile data, advance from 'step1' so the KYC gate in
-    // getMyStatus will route to 'kyc' instead of 'vehicle' prematurely.
-    if (existing && existing.status === 'step1') {
-      await db
-        .update(drivers)
-        .set({ status: 'pending', updated_at: new Date() })
-        .where(eq(drivers.id, driverId));
-    }
-
-    const hasVehicleData =
+    const hasVehicleData = !!(
       data.vehicle_brand ||
       data.vehicle_model ||
       data.vehicle_color ||
       data.vehicle_plate ||
-      data.vehicle_year;
+      data.vehicle_year
+    );
 
-    // KYC gate: no vehicle can be registered until the driver's identity is
-    // verified. This is what forces every driver through DIDIT — the client
-    // cannot skip it by calling this endpoint directly.
+    // KYC gate first: vehicle registration always requires identity verified.
     if (hasVehicleData && kycStatus !== 'approved') {
       throw new AppError(
         'Debes completar la verificacion de identidad (KYC) antes de cargar el vehiculo',
         400,
         'KYC_REQUIRED',
       );
+    }
+
+    let municipalityResult: MunicipalityResolveResult | null = null;
+    if (data.address_line !== undefined) {
+      const addressLine = data.address_line.trim();
+      if (addressLine.length < MIN_ADDRESS_LENGTH) {
+        throw new AppError(
+          'Ingresá un domicilio válido (calle y localidad).',
+          400,
+          'ADDRESS_REQUIRED',
+        );
+      }
+      municipalityResult = await this.resolveMunicipalityFromAddress({
+        address_line: addressLine,
+        address_lat: data.address_lat,
+        address_lng: data.address_lng,
+      });
+      await db
+        .update(drivers)
+        .set({
+          address_line: municipalityResult.address_line,
+          address_lat: municipalityResult.address_lat,
+          address_lng: municipalityResult.address_lng,
+          address_resolved_city: municipalityResult.address_resolved_city,
+          address_resolved_province: municipalityResult.address_resolved_province,
+          municipality_status: municipalityResult.municipality_status,
+          intended_district_id: municipalityResult.intended_district_id,
+          updated_at: new Date(),
+        })
+        .where(eq(drivers.id, driverId));
+    }
+
+    // After saving profile data, advance from 'step1' so the KYC gate in
+    // getMyStatus will route to 'kyc' instead of 'vehicle' prematurely.
+    // Require address when leaving step1 (profile completion path).
+    const wasStep1 = !existing || existing.status === 'step1';
+    const isProfileCompletion =
+      wasStep1 &&
+      !hasVehicleData &&
+      !!(data.first_name || data.last_name || data.phone || data.photo_url || data.address_line);
+    if (isProfileCompletion) {
+      if (!municipalityResult) {
+        const [addrCheck] = await db
+          .select({ address_line: drivers.address_line })
+          .from(drivers)
+          .where(eq(drivers.id, driverId))
+          .limit(1);
+        if (!addrCheck?.address_line) {
+          throw new AppError('Ingresá tu domicilio para continuar.', 400, 'ADDRESS_REQUIRED');
+        }
+      }
+      await db
+        .update(drivers)
+        .set({ status: 'pending', updated_at: new Date() })
+        .where(eq(drivers.id, driverId));
     }
 
     if (hasVehicleData) {
@@ -558,7 +672,18 @@ export const driversService = {
     }
 
     const result = await this.getMyStatus(user);
-    return { id: driverId, status: result.status, step: result.step, message: 'Profile updated' };
+    return {
+      id: driverId,
+      status: result.status,
+      step: result.step,
+      message: 'Profile updated',
+      municipality_status: result.municipality_status,
+      intended_district_id: result.intended_district_id,
+      intended_district_name: result.intended_district_name,
+      address_line: result.address_line,
+      address_resolved_city: result.address_resolved_city,
+      address_resolved_province: result.address_resolved_province,
+    };
   },
 
   async addDocument(
@@ -941,6 +1066,13 @@ export const driversService = {
         is_online: drivers.is_online,
         documents_pending_review: drivers.documents_pending_review,
         created_at: drivers.created_at,
+        address_line: drivers.address_line,
+        address_lat: drivers.address_lat,
+        address_lng: drivers.address_lng,
+        address_resolved_city: drivers.address_resolved_city,
+        address_resolved_province: drivers.address_resolved_province,
+        municipality_status: drivers.municipality_status,
+        intended_district_id: drivers.intended_district_id,
         brand: vehicles.brand,
         model: vehicles.model,
         year: vehicles.year,
@@ -983,6 +1115,13 @@ export const driversService = {
       completion_rate: row.completion_rate,
       is_online: row.is_online,
       documents_pending_review: row.documents_pending_review,
+      address_line: row.address_line,
+      address_lat: row.address_lat,
+      address_lng: row.address_lng,
+      address_resolved_city: row.address_resolved_city,
+      address_resolved_province: row.address_resolved_province,
+      municipality_status: row.municipality_status ?? 'unset',
+      intended_district_id: row.intended_district_id,
       vehicle: {
         brand: row.brand,
         model: row.model,
@@ -993,5 +1132,91 @@ export const driversService = {
       },
       created_at: row.created_at ? row.created_at.toISOString() : null,
     };
+  },
+
+  async buildMunicipalityStatusFields(driver: {
+    municipality_status: string | null;
+    address_line: string | null;
+    address_resolved_city: string | null;
+    address_resolved_province: string | null;
+    intended_district_id: string | null;
+  }) {
+    const municipality_status = (driver.municipality_status ?? 'unset') as
+      | 'unset'
+      | 'operational'
+      | 'waitlisted';
+
+    let intended_district_name: string | null = null;
+    if (driver.intended_district_id) {
+      const [d] = await db
+        .select({ name: districts.name })
+        .from(districts)
+        .where(eq(districts.id, driver.intended_district_id))
+        .limit(1);
+      intended_district_name = d?.name ?? null;
+    }
+
+    return {
+      municipality_status,
+      address_line: driver.address_line ?? null,
+      address_resolved_city: driver.address_resolved_city ?? null,
+      address_resolved_province: driver.address_resolved_province ?? null,
+      intended_district_id: driver.intended_district_id ?? null,
+      intended_district_name,
+      has_district: false as boolean,
+      show_municipality_waitlist_banner: municipality_status === 'waitlisted',
+    };
+  },
+
+  async resolveMunicipalityFromAddress(input: {
+    address_line: string;
+    address_lat?: number;
+    address_lng?: number;
+  }): Promise<MunicipalityResolveResult> {
+    const addressLine = input.address_line.trim();
+    let lat: number | null = input.address_lat ?? null;
+    let lng: number | null = input.address_lng ?? null;
+    let city: string | null = null;
+    let province: string | null = null;
+
+    const geo = await geocode(lat != null && lng != null ? { lat, lng } : { address: addressLine });
+
+    lat = geo.lat;
+    lng = geo.lng;
+    city = geo.city ?? null;
+    province = geo.province ?? null;
+
+    if (!city) {
+      const parsed = parseLocalityFromFormatted(geo.formatted_address || addressLine);
+      city = parsed.city;
+      province = province ?? parsed.province;
+    }
+
+    if (!city && !province) {
+      const fromLine = parseLocalityFromFormatted(addressLine);
+      city = fromLine.city;
+      province = fromLine.province;
+    }
+
+    if (lat == null || lng == null) {
+      throw new AppError(
+        'No pudimos ubicar ese domicilio. Probá con calle, altura y localidad.',
+        400,
+        'ADDRESS_UNRESOLVABLE',
+      );
+    }
+
+    const activeDistricts = await db
+      .select({
+        id: districts.id,
+        name: districts.name,
+        province: districts.province,
+        status: districts.status,
+      })
+      .from(districts)
+      .where(eq(districts.status, 'active'));
+
+    const match = matchDistrict(city, province, activeDistricts);
+    return buildMunicipalityResult(addressLine, { lat, lng, city, province }, match);
   },
 };

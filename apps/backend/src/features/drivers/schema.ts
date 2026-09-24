@@ -19,6 +19,10 @@ export const updateProfileBody = t.Object({
   vehicle_year: t.Optional(t.Number()),
   vehicle_type: t.Optional(t.String()),
   photo_url: t.Optional(t.Union([t.String(), t.Null()])),
+  address_line: t.Optional(t.String({ minLength: 3 })),
+  address_lat: t.Optional(t.Number()),
+  address_lng: t.Optional(t.Number()),
+  address_place_id: t.Optional(t.String()),
 });
 
 export const addDocumentBody = t.Object({

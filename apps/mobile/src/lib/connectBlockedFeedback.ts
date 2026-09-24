@@ -51,6 +51,12 @@ const BY_CODE: Record<string, ConnectBlockedFeedback> = {
     message: 'Seleccioná en qué municipio vas a trabajar para conectarte.',
     tone: 'warning',
   },
+  MUNICIPALITY_NOT_ENABLED: {
+    title: 'Municipio no habilitado',
+    message:
+      'Tu domicilio figura en una zona donde Lifty todavía no habilita viajes. Te avisamos cuando abramos tu zona.',
+    tone: 'warning',
+  },
 };
 
 export function feedbackForConnectBlock(
@@ -60,13 +66,15 @@ export function feedbackForConnectBlock(
     | 'stickers'
     | 'stickers_overdue'
     | 'stickers_revoked'
-    | 'no_location',
+    | 'no_location'
+    | 'municipality_waitlisted',
 ): ConnectBlockedFeedback {
   if (reason === 'not_approved') return BY_CODE.DRIVER_NOT_APPROVED;
   if (reason === 'docs_pending') return BY_CODE.DOCS_PENDING_REVIEW;
   if (reason === 'stickers_overdue') return BY_CODE.STICKERS_PICKUP_OVERDUE;
   if (reason === 'stickers_revoked') return BY_CODE.STICKERS_REVOKED;
   if (reason === 'stickers') return BY_CODE.STICKERS_REQUIRED;
+  if (reason === 'municipality_waitlisted') return BY_CODE.MUNICIPALITY_NOT_ENABLED;
   return BY_CODE.LOCATION_REQUIRED;
 }
 

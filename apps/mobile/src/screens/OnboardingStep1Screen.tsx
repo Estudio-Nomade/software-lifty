@@ -6,6 +6,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -18,6 +19,7 @@ import { Input } from '../components/Input';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { type PlaceSuggestion, usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
@@ -27,9 +29,11 @@ import { uploadPhotoToBackend } from '../utils/upload';
 interface ValidationErrors {
   firstName?: string;
   lastName?: string;
+  address?: string;
 }
 
 const MIN_PHONE_DIGITS = 10;
+const MIN_ADDRESS_CHARS = 5;
 
 function formatPhone(digits: string): string {
   if (digits.length === 0) return '';
@@ -51,6 +55,7 @@ const isFormValid = (
   firstName: string,
   lastName: string,
   phoneDigits: string,
+  addressLine: string,
   termsAccepted: boolean,
 ) => {
   return (
@@ -59,6 +64,7 @@ const isFormValid = (
     lastName.trim() !== '' &&
     !validateName(lastName) &&
     phoneDigits.length >= MIN_PHONE_DIGITS &&
+    addressLine.trim().length >= MIN_ADDRESS_CHARS &&
     termsAccepted
   );
 };
@@ -69,12 +75,17 @@ export const OnboardingStep1Screen: React.FC = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phoneDigits, setPhoneDigits] = useState('');
+  const [addressLine, setAddressLine] = useState('');
+  const [selectedPlace, setSelectedPlace] = useState<PlaceSuggestion | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitError, setSubmitError] = useState('');
   const profileLoaded = useRef(false);
+
+  const suggestions = usePlaceAutocomplete(showSuggestions ? addressLine : '');
 
   useEffect(() => {
     if (profileLoaded.current) return;
@@ -83,21 +94,33 @@ export const OnboardingStep1Screen: React.FC = () => {
     (async () => {
       try {
         const { data } = await apiClient.get('/drivers/me');
-        if (cancelled || !data?.full_name) return;
+        if (cancelled) return;
 
-        const nameParts = (data.full_name as string).split(' ');
-        const fn = nameParts[0] ?? '';
-        const ln = nameParts.slice(1).join(' ') ?? '';
+        if (data?.full_name) {
+          const nameParts = (data.full_name as string).split(' ');
+          const fn = nameParts[0] ?? '';
+          const ln = nameParts.slice(1).join(' ') ?? '';
+          setFirstName(fn);
+          setLastName(ln);
+        }
 
-        const phone: string = data.phone ?? '';
+        const phone: string = data?.phone ?? '';
         const digits = phone.startsWith('+54')
           ? phone.slice(3).replace(/\D/g, '')
           : phone.replace(/\D/g, '');
-
-        setFirstName(fn);
-        setLastName(ln);
         if (digits) setPhoneDigits(digits);
-        if (data.avatar_url) setPhotoUri(data.avatar_url as string);
+        if (data?.avatar_url) setPhotoUri(data.avatar_url as string);
+        if (data?.address_line) {
+          setAddressLine(data.address_line as string);
+          if (data.address_lat != null && data.address_lng != null) {
+            setSelectedPlace({
+              description: data.address_line as string,
+              place_id: '',
+              lat: Number(data.address_lat),
+              lng: Number(data.address_lng),
+            });
+          }
+        }
         profileLoaded.current = true;
       } catch {
         // Silently ignore — the form stays empty, user fills it manually
@@ -136,8 +159,15 @@ export const OnboardingStep1Screen: React.FC = () => {
     }
   };
 
+  const handleSelectPlace = (place: PlaceSuggestion) => {
+    setAddressLine(place.description);
+    setSelectedPlace(place);
+    setShowSuggestions(false);
+    setError('address', undefined);
+  };
+
   const handleContinue = async () => {
-    if (!isFormValid(firstName, lastName, phoneDigits, termsAccepted)) return;
+    if (!isFormValid(firstName, lastName, phoneDigits, addressLine, termsAccepted)) return;
     setLoading(true);
     setSubmitError('');
 
@@ -157,7 +187,14 @@ export const OnboardingStep1Screen: React.FC = () => {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         phone: `+54${phoneDigits}`,
+        address_line: addressLine.trim(),
       };
+
+      if (selectedPlace) {
+        payload.address_lat = selectedPlace.lat;
+        payload.address_lng = selectedPlace.lng;
+        if (selectedPlace.place_id) payload.address_place_id = selectedPlace.place_id;
+      }
 
       if (uploadedPhotoUrl) {
         payload.photo_url = uploadedPhotoUrl;
@@ -179,6 +216,8 @@ export const OnboardingStep1Screen: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const formOk = isFormValid(firstName, lastName, phoneDigits, addressLine, termsAccepted);
 
   return (
     <View style={styles.container}>
@@ -239,6 +278,47 @@ export const OnboardingStep1Screen: React.FC = () => {
             containerStyle={styles.input}
           />
 
+          <View style={styles.addressBlock}>
+            <Input
+              placeholder="Domicilio (calle y altura, ciudad…)"
+              value={addressLine}
+              onChangeText={(t) => {
+                setAddressLine(t);
+                setSelectedPlace(null);
+                setShowSuggestions(true);
+                setError('address', undefined);
+              }}
+              onBlur={() => {
+                if (
+                  addressLine.trim().length > 0 &&
+                  addressLine.trim().length < MIN_ADDRESS_CHARS
+                ) {
+                  setError('address', 'Ingresá un domicilio más completo');
+                }
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              error={errors.address}
+              containerStyle={styles.input}
+              maxLength={200}
+              autoCorrect={false}
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <View style={styles.suggestions}>
+                {suggestions.map((s) => (
+                  <Pressable
+                    key={`${s.place_id}-${s.description}`}
+                    style={styles.suggestionRow}
+                    onPress={() => handleSelectPlace(s)}
+                  >
+                    <Text style={styles.suggestionText} numberOfLines={2}>
+                      {s.description}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </View>
+
           <TouchableOpacity
             style={styles.checkboxRow}
             onPress={() => setTermsAccepted(!termsAccepted)}
@@ -253,7 +333,7 @@ export const OnboardingStep1Screen: React.FC = () => {
           <Button
             title="CONTINUAR"
             onPress={handleContinue}
-            disabled={!isFormValid(firstName, lastName, phoneDigits, termsAccepted)}
+            disabled={!formOk}
             loading={loading}
             variant="cta"
             style={styles.button}
@@ -314,6 +394,28 @@ const styles = StyleSheet.create({
   },
   input: {
     width: 343,
+  },
+  addressBlock: {
+    width: 343,
+    zIndex: 10,
+  },
+  suggestions: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.white,
+    overflow: 'hidden',
+  },
+  suggestionRow: {
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.lightGray,
+  },
+  suggestionText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.deepBlue,
   },
   countryCode: {
     color: theme.colors.deepBlue,

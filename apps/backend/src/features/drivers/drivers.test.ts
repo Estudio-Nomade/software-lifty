@@ -94,7 +94,10 @@ async function fullOnboarding(phone: string, password: string) {
   const { data: step1Res } = await request(
     'PUT',
     '/api/drivers/me',
-    { first_name: 'Juan Perez' },
+    {
+      first_name: 'Juan Perez',
+      address_line: 'San Martín 100, Villa Dolores, Córdoba',
+    },
     token,
   );
   const driverId = step1Res.id;
@@ -235,7 +238,15 @@ describe('Driver Profile', () => {
 
   test('PUT /me/online toggles status', async () => {
     const { token, userId } = await registerAndGetToken(phone, password);
-    await request('PUT', '/api/drivers/me', { first_name: 'Test' }, token);
+    await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Test',
+        address_line: 'San Martín 100, Villa Dolores, Córdoba',
+      },
+      token,
+    );
     const db = getDb();
     const [district] = await db
       .select({ id: districts.id })
@@ -574,7 +585,11 @@ describe('Vehicle step (no duplicate form)', () => {
     const { data: step1 } = await request(
       'PUT',
       '/api/drivers/me',
-      { first_name: 'Ana', last_name: 'Gomez' },
+      {
+        first_name: 'Ana',
+        last_name: 'Gomez',
+        address_line: 'San Martín 100, Villa Dolores, Córdoba',
+      },
       token,
     );
     await getDb().update(users).set({ kyc_status: 'approved' }).where(eq(users.id, userId));
@@ -615,7 +630,15 @@ describe('Vehicle step (no duplicate form)', () => {
 
   test('vehicle PUT before KYC returns KYC_REQUIRED', async () => {
     const { token } = await registerAndGetToken('+5492617777002', password);
-    await request('PUT', '/api/drivers/me', { first_name: 'Ana' }, token);
+    await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Ana',
+        address_line: 'San Martín 100, Villa Dolores, Córdoba',
+      },
+      token,
+    );
     const { status, data } = await request(
       'PUT',
       '/api/drivers/me',

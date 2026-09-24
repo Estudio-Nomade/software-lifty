@@ -75,6 +75,13 @@ export const driverStatusSchema = z.object({
       province: z.string(),
     })
     .optional(),
+  municipality_status: z.enum(['unset', 'operational', 'waitlisted']).optional(),
+  address_line: z.string().nullable().optional(),
+  address_resolved_city: z.string().nullable().optional(),
+  address_resolved_province: z.string().nullable().optional(),
+  intended_district_id: z.string().nullable().optional(),
+  intended_district_name: z.string().nullable().optional(),
+  show_municipality_waitlist_banner: z.boolean().optional(),
 });
 
 export const districtSchema = z.object({

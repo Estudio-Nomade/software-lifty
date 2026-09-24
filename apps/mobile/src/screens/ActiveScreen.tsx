@@ -185,8 +185,15 @@ export const ActiveScreen: React.FC = () => {
 
   const awaitingApproval =
     driverStatus?.status === 'under_review' || driverStatus?.step === 'review';
+  const municipalityWaitlisted =
+    driverStatus?.municipality_status === 'waitlisted' ||
+    driverStatus?.show_municipality_waitlist_banner === true;
   const connectBlocked =
-    documentsPendingReview || awaitingApproval || stickersPaused || stickersRevoked;
+    documentsPendingReview ||
+    awaitingApproval ||
+    stickersPaused ||
+    stickersRevoked ||
+    municipalityWaitlisted;
 
   const {
     data: earnings,
@@ -215,6 +222,11 @@ export const ActiveScreen: React.FC = () => {
 
     if (awaitingApproval) {
       showConnectFeedback(feedbackForConnectBlock('not_approved'));
+      return;
+    }
+
+    if (municipalityWaitlisted) {
+      showConnectFeedback(feedbackForConnectBlock('municipality_waitlisted'));
       return;
     }
 
@@ -277,6 +289,7 @@ export const ActiveScreen: React.FC = () => {
     stickersRevoked,
     hasLocation,
     needsPayoutMethod,
+    municipalityWaitlisted,
     queryClient,
     setOnline,
     setOnlineSince,
@@ -528,14 +541,26 @@ export const ActiveScreen: React.FC = () => {
             disabled={!hasLocation || connectBlocked || needsPayoutMethod || connecting}
             bottom={goBottom}
           />
-          {awaitingApproval && (
+          {municipalityWaitlisted && (
+            <View style={[styles.goHint, { bottom: goHintBottom }]}>
+              <Text style={styles.reviewBannerTitle}>Municipio no habilitado</Text>
+              <Text style={styles.reviewBannerText}>
+                {`Tu domicilio figura en ${
+                  [driverStatus?.address_resolved_city, driverStatus?.address_resolved_province]
+                    .filter(Boolean)
+                    .join(', ') || 'una zona sin cobertura'
+                }. Lifty todavía no habilita viajes ahí. Te avisamos cuando abramos tu zona.`}
+              </Text>
+            </View>
+          )}
+          {!municipalityWaitlisted && awaitingApproval && (
             <View style={[styles.goHint, { bottom: goHintBottom }]}>
               <Text style={styles.reviewBannerText}>
                 Cuenta en revisión. Podés mirar el mapa; te avisamos cuando puedas conectarte.
               </Text>
             </View>
           )}
-          {!awaitingApproval && documentsPendingReview && (
+          {!municipalityWaitlisted && !awaitingApproval && documentsPendingReview && (
             <View style={[styles.goHint, { bottom: goHintBottom }]}>
               <Text style={styles.reviewBannerText}>
                 Documentos pendientes de revisión. No podés conectarte hasta tener los papeles en
@@ -543,22 +568,30 @@ export const ActiveScreen: React.FC = () => {
               </Text>
             </View>
           )}
-          {!awaitingApproval && !documentsPendingReview && stickersPaused && (
-            <View style={[styles.goHint, { bottom: goHintBottom }]}>
-              <Text style={styles.reviewBannerText}>
-                Cuenta suspendida: pasaron 30 días sin retirar los stickers en tránsito. Retiralos
-                en tu municipio para reactivar la cuenta.
-              </Text>
-            </View>
-          )}
-          {!awaitingApproval && !documentsPendingReview && stickersRevoked && !stickersPaused && (
-            <View style={[styles.goHint, { bottom: goHintBottom }]}>
-              <Text style={styles.reviewBannerText}>
-                Tu identificación fue revocada. Contactá a soporte o tránsito de tu municipio.
-              </Text>
-            </View>
-          )}
-          {!awaitingApproval &&
+          {!municipalityWaitlisted &&
+            !awaitingApproval &&
+            !documentsPendingReview &&
+            stickersPaused && (
+              <View style={[styles.goHint, { bottom: goHintBottom }]}>
+                <Text style={styles.reviewBannerText}>
+                  Cuenta suspendida: pasaron 30 días sin retirar los stickers en tránsito. Retiralos
+                  en tu municipio para reactivar la cuenta.
+                </Text>
+              </View>
+            )}
+          {!municipalityWaitlisted &&
+            !awaitingApproval &&
+            !documentsPendingReview &&
+            stickersRevoked &&
+            !stickersPaused && (
+              <View style={[styles.goHint, { bottom: goHintBottom }]}>
+                <Text style={styles.reviewBannerText}>
+                  Tu identificación fue revocada. Contactá a soporte o tránsito de tu municipio.
+                </Text>
+              </View>
+            )}
+          {!municipalityWaitlisted &&
+            !awaitingApproval &&
             !documentsPendingReview &&
             stickersReminder &&
             !stickersPaused &&
@@ -736,6 +769,19 @@ const styles = StyleSheet.create({
     right: theme.spacing.md,
     zIndex: 7,
     alignItems: 'center',
+  },
+  reviewBannerTitle: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.deepBlue,
+    textAlign: 'center',
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    paddingTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm,
+    borderTopLeftRadius: theme.radius.sm,
+    borderTopRightRadius: theme.radius.sm,
+    overflow: 'hidden',
+    width: '100%',
   },
   reviewBannerText: {
     fontSize: theme.fontSize.xs,

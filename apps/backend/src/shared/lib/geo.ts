@@ -20,6 +20,21 @@ export interface GeocodeResult {
   lat: number;
   lng: number;
   formatted_address: string;
+  city?: string | null;
+  province?: string | null;
+}
+
+function localityFromPhotonProps(props: Record<string, string | number | undefined>): {
+  city: string | null;
+  province: string | null;
+} {
+  const cityRaw =
+    props.city || props.town || props.village || props.municipality || props.county || props.name;
+  const provinceRaw = props.state;
+  return {
+    city: cityRaw ? String(cityRaw) : null,
+    province: provinceRaw ? String(provinceRaw) : null,
+  };
 }
 
 export interface DirectionsResult {
@@ -196,10 +211,51 @@ export async function geocode(params: {
 }): Promise<GeocodeResult> {
   try {
     if (process.env.NODE_ENV === 'test') {
-      if (params.lat !== undefined && params.lng !== undefined) {
-        return { lat: params.lat, lng: params.lng, formatted_address: 'Buenos Aires, Argentina' };
+      const addr = params.address?.toLowerCase() ?? '';
+      if (addr.includes('villa dolores') || addr.includes('v. dolores')) {
+        return {
+          lat: -31.9456,
+          lng: -65.1895,
+          formatted_address: params.address ?? 'Villa Dolores, Córdoba, Argentina',
+          city: 'Villa Dolores',
+          province: 'Córdoba',
+        };
       }
-      return { lat: -34.6037, lng: -58.3816, formatted_address: 'Buenos Aires, Argentina' };
+      if (addr.includes('córdoba capital') || addr.includes('cordoba capital')) {
+        return {
+          lat: -31.4201,
+          lng: -64.1888,
+          formatted_address: params.address ?? 'Córdoba, Argentina',
+          city: 'Córdoba',
+          province: 'Córdoba',
+        };
+      }
+      if (params.lat !== undefined && params.lng !== undefined) {
+        // Test coords near Villa Dolores (approx)
+        if (params.lat > -32.1 && params.lat < -31.8 && params.lng > -65.4 && params.lng < -64.9) {
+          return {
+            lat: params.lat,
+            lng: params.lng,
+            formatted_address: 'Villa Dolores, Córdoba, Argentina',
+            city: 'Villa Dolores',
+            province: 'Córdoba',
+          };
+        }
+        return {
+          lat: params.lat,
+          lng: params.lng,
+          formatted_address: 'Buenos Aires, Argentina',
+          city: 'Buenos Aires',
+          province: 'Buenos Aires',
+        };
+      }
+      return {
+        lat: -34.6037,
+        lng: -58.3816,
+        formatted_address: 'Buenos Aires, Argentina',
+        city: 'Buenos Aires',
+        province: 'Buenos Aires',
+      };
     }
 
     let url: URL;
@@ -217,7 +273,13 @@ export async function geocode(params: {
       forwardUrl.searchParams.set('lang', 'default');
       url = forwardUrl;
     } else {
-      return { lat: -34.6037, lng: -58.3816, formatted_address: 'Buenos Aires, Argentina' };
+      return {
+        lat: -34.6037,
+        lng: -58.3816,
+        formatted_address: 'Buenos Aires, Argentina',
+        city: 'Buenos Aires',
+        province: 'Buenos Aires',
+      };
     }
 
     const data = await fetchPhoton(url);
@@ -225,10 +287,13 @@ export async function geocode(params: {
     if (!feature) throw new Error('No geocoding results');
 
     const [lng, lat] = feature.geometry.coordinates;
+    const locality = localityFromPhotonProps(feature.properties);
     return {
       lat: Math.round(lat * 1000000) / 1000000,
       lng: Math.round(lng * 1000000) / 1000000,
       formatted_address: formatPhotonAddress(feature.properties),
+      city: locality.city,
+      province: locality.province,
     };
   } catch (err) {
     logger.error('[geo] geocode failed:', (err as Error).message);
@@ -237,9 +302,17 @@ export async function geocode(params: {
         lat: params.lat,
         lng: params.lng,
         formatted_address: `Ubicación (${params.lat.toFixed(4)}, ${params.lng.toFixed(4)})`,
+        city: null,
+        province: null,
       };
     }
-    return { lat: -34.6037, lng: -58.3816, formatted_address: 'Buenos Aires, Argentina' };
+    return {
+      lat: -34.6037,
+      lng: -58.3816,
+      formatted_address: 'Buenos Aires, Argentina',
+      city: 'Buenos Aires',
+      province: 'Buenos Aires',
+    };
   }
 }
 

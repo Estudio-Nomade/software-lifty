@@ -95,7 +95,15 @@ async function registerWithUser(
 }
 
 async function driver(token: string): Promise<string> {
-  const { data } = await req('PUT', '/api/drivers/me', { first_name: 'Test Driver' }, token);
+  const { data } = await req(
+    'PUT',
+    '/api/drivers/me',
+    {
+      first_name: 'Test Driver',
+      address_line: 'San Martín 100, Villa Dolores, Córdoba',
+    },
+    token,
+  );
   return data.id;
 }
 
@@ -197,10 +205,19 @@ describe('Drivers', () => {
   });
   test('updateProfile creates driver → 200', async () => {
     const { token } = await registerWithUser('+54926100101');
-    const { status, data } = await req('PUT', '/api/drivers/me', { first_name: 'JP' }, token);
+    const { status, data } = await req(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'JP',
+        address_line: 'San Martín 100, Villa Dolores, Córdoba',
+      },
+      token,
+    );
     expect(status).toBe(200);
     expect(data.id).toBeString();
     expect(data.message).toBe('Profile updated');
+    expect(data.municipality_status).toBe('operational');
   });
   test('vehicle data without KYC → 400', async () => {
     const { token } = await registerWithUser('+54926100102');
