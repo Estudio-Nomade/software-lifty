@@ -6,6 +6,8 @@ export interface PushMessage {
   title: string;
   body: string;
   data?: Record<string, string>;
+  /** Android Expo channel; defaults to trip-requests for trip alerts. */
+  channelId?: string;
 }
 
 // Expo push tokens look like `ExponentPushToken[...]` (or the legacy
@@ -154,8 +156,8 @@ export async function sendExpoPushNotification(
     data: message.data ?? {},
     sound: 'default',
     priority: 'high',
-    // Matches the Android channel created in the driver app (notifications.ts).
-    channelId: 'trip-requests',
+    // Matches Android channels in the driver app (notifications.ts).
+    channelId: message.channelId ?? 'trip-requests',
   };
 
   try {
@@ -229,13 +231,19 @@ export async function sendPushToUser(userId: string, message: PushMessage): Prom
       .from(pushTokens)
       .where(eq(pushTokens.user_id, userId));
 
-    if (tokens.length === 0) {
-      logger.warn('[PUSH] No push tokens for user', { userId });
+    // Skip PWA/admin web push subscriptions — those use VAPID, not Expo/FCM.
+    const deviceTokens = tokens.filter((t) => t.platform !== 'web');
+
+    if (deviceTokens.length === 0) {
+      logger.warn('[PUSH] No push tokens for user', {
+        userId,
+        skippedWeb: tokens.length - deviceTokens.length,
+      });
       return false;
     }
 
     let anySuccess = false;
-    for (const t of tokens) {
+    for (const t of deviceTokens) {
       logger.info('[PUSH] Sending to token', {
         userId,
         platform: t.platform,

@@ -1,7 +1,12 @@
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { apiClient } from '../api/client';
+import type { DriverStatus } from '../api/types';
+import { driverStatusSchema } from '../api/types';
+import { useAuthStore } from '../store/authStore';
 import { buildTripCancelledParams } from './cancellation';
+import { resolvePostAuthRoute, routeForDriverStatus } from './postAuthRouting';
 
 interface PermStatus {
   status: string;
@@ -47,12 +52,66 @@ export async function registerForPush(): Promise<string | null> {
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
       });
+      await Notifications.setNotificationChannelAsync('account', {
+        name: 'Cuenta y documentos',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+      });
     }
 
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
     return token.data;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Refetch driver status, apply store, navigate for approve/reject push taps.
+ * Fire-and-forget friendly: navigate optimistically then correct from API.
+ */
+export async function reactToDriverReviewPush(
+  type: string,
+  navigate: (screen: string, params?: Record<string, string>) => void,
+  pushReason?: string,
+): Promise<void> {
+  const isApproved = type === 'driver:approved' || type === 'kyc:approved';
+  const isRejected = type === 'driver:rejected' || type === 'kyc:rejected';
+  if (!isApproved && !isRejected) return;
+
+  // Optimistic route so tap feels instant; API refresh corrects store.
+  if (isApproved) {
+    useAuthStore.getState().setDriverStatus('approved');
+    useAuthStore.getState().setOnboardingStep('approved');
+    navigate('Active');
+  } else {
+    useAuthStore.getState().setDriverStatus('rejected');
+    useAuthStore.getState().setOnboardingStep('documents');
+    navigate('OnboardingStep2', pushReason ? { reviewReason: pushReason } : undefined);
+  }
+
+  try {
+    const route = await resolvePostAuthRoute();
+    if (route.screen && route.screen !== (isApproved ? 'Active' : 'OnboardingStep2')) {
+      navigate(route.screen);
+    }
+  } catch {
+    try {
+      const { data: body } = await apiClient.get('/drivers/me/status');
+      const payload = body?.data ?? body;
+      const parsed = driverStatusSchema.safeParse(payload);
+      const driverData = parsed.success ? parsed.data : (payload as DriverStatus);
+      if (driverData.status) {
+        useAuthStore.getState().setDriverStatus(driverData.status);
+      }
+      if (driverData.step != null) {
+        useAuthStore.getState().setOnboardingStep(driverData.step);
+      }
+      const r = routeForDriverStatus(driverData);
+      if (r.screen) navigate(r.screen);
+    } catch {
+      // keep optimistic navigation
+    }
   }
 }
 
@@ -85,14 +144,16 @@ export function handleNotificationResponse(
     case 'tvf:warning':
       navigate('Profile');
       break;
+    case 'driver:approved':
     case 'kyc:approved':
-      navigate('Active');
+      void reactToDriverReviewPush(type, navigate);
       break;
     case 'identification:issued':
       navigate('Active');
       break;
+    case 'driver:rejected':
     case 'kyc:rejected':
-      navigate('WaitingApproval');
+      void reactToDriverReviewPush(type, navigate, data?.reason);
       break;
     case 'payment:deposited':
       navigate('Earnings');

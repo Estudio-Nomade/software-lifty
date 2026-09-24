@@ -56,6 +56,12 @@ export async function notifyAdminsNewDocuments(
   }
 }
 
+export {
+  DRIVER_APPROVED_PUSH,
+  driverRejectedPush,
+  shortReviewReason,
+} from './driver-review-push';
+
 export async function notifyDriverApproved(driverEmail: string, driverName: string): Promise<void> {
   try {
     const subject = 'Tus documentos fueron aprobados';
@@ -78,10 +84,11 @@ export async function notifyDriverRejected(
 ): Promise<void> {
   try {
     const subject = 'Tus documentos fueron rechazados';
+    const safeReason = reason ? sanitize(reason) : '';
     const html = `
-      <p>Hola <strong>${driverName}</strong>,</p>
+      <p>Hola <strong>${sanitize(driverName)}</strong>,</p>
       <p>Tus documentos fueron <strong>rechazados</strong>.</p>
-      ${reason ? `<p><strong>Motivo:</strong> ${reason}</p>` : ''}
+      ${safeReason ? `<p><strong>Motivo:</strong> ${safeReason}</p>` : ''}
       <p>Por favor volve a subir tus documentos en la app de Lifty.</p>
     `;
     await sendEmail(driverEmail, subject, html);

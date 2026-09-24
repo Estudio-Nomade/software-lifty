@@ -6,6 +6,7 @@ import { users } from '../../shared/db/schema/users';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
+import { DRIVER_APPROVED_PUSH } from './driver-review-push';
 
 export async function approveDriver(token: string): Promise<{ message: string }> {
   const [driver] = await db
@@ -71,9 +72,10 @@ export async function approveDriver(token: string): Promise<{ message: string }>
   });
 
   sendPushToUser(driver.user_id, {
-    title: 'Documentos aprobados',
-    body: 'Tus docs están OK. Tenés 30 días para retirar los stickers en tránsito; si se pasa ese plazo la cuenta se suspende.',
-    data: { type: 'kyc:approved' },
+    title: DRIVER_APPROVED_PUSH.title,
+    body: DRIVER_APPROVED_PUSH.body,
+    data: { ...DRIVER_APPROVED_PUSH.data },
+    channelId: DRIVER_APPROVED_PUSH.channelId,
   }).catch((err) => {
     logger.error('[ADMIN-APPROVE] Push failed', (err as Error).message);
   });

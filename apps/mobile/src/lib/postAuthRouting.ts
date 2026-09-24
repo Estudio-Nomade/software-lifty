@@ -46,11 +46,14 @@ export function routeForDriverStatus(driverData: DriverStatus): {
 } {
   const { status, step } = driverData;
 
+  // Document review reject → reupload docs (not a dead-end / support-only screen).
   if (status === 'rejected') {
     return {
-      screen: '',
+      screen: 'OnboardingStep2',
       status,
-      blockedMessage: 'Tu cuenta ha sido rechazada. Contacta a soporte.',
+      blockedMessage: driverData.admin_review_notes
+        ? `Documentos rechazados: ${driverData.admin_review_notes}`
+        : 'Tus documentos fueron rechazados. Volvé a subir lo que falte.',
     };
   }
   if (status === 'suspended') {
