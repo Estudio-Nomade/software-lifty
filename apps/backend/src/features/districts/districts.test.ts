@@ -40,8 +40,18 @@ beforeAll(async () => {
   const db = getDb();
   const existing: any = await db.execute('SELECT count(*) AS count FROM districts WHERE name = \'Mina Clavero\' AND terms_and_conditions IS NOT NULL');
   if (Number(existing.rows[0]?.count ?? 0) === 0) {
-    await db.execute(`UPDATE "districts" SET terms_and_conditions = 'Terms here', privacy_policy = 'Privacy here' WHERE name = 'Villa Dolores'`);
-    await db.execute(`UPDATE "districts" SET terms_and_conditions = 'Terms here', privacy_policy = 'Privacy here' WHERE name = 'Mina Clavero'`);
+    await db.execute(
+      `UPDATE "districts" SET terms_and_conditions = 'Terms here', privacy_policy = 'Privacy here' WHERE name = 'Villa Dolores'`,
+    );
+    await db.execute(
+      `UPDATE "districts" SET terms_and_conditions = 'Terms here', privacy_policy = 'Privacy here' WHERE name = 'Mina Clavero'`,
+    );
+    // Some local/test DBs only seed Villa Dolores; ensure Mina Clavero exists for list tests.
+    await db.execute(`
+      INSERT INTO "districts" (name, province, status, terms_and_conditions, privacy_policy)
+      SELECT 'Mina Clavero', 'Córdoba', 'active', 'Terms here', 'Privacy here'
+      WHERE NOT EXISTS (SELECT 1 FROM "districts" WHERE name = 'Mina Clavero')
+    `);
   }
   const noTerms: any = await db.execute('SELECT count(*) AS count FROM districts WHERE name = \'Sin Terminos\'');
   if (Number(noTerms.rows[0]?.count ?? 0) === 0) {

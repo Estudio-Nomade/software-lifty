@@ -50,7 +50,7 @@ async function registerAndGetToken(phone: string, _password: string): Promise<st
 }
 
 async function createDriverRow(token: string): Promise<string> {
-  await request('PUT', '/api/drivers/me', { first_name: 'Test Driver' }, token);
+  await request('PUT', '/api/drivers/me', { first_name: 'Test Driver', address_line: 'San Martín 100, Villa Dolores, Córdoba' }, token);
   const db = getDb();
   const [driver] = await db.select({ id: drivers.id }).from(drivers).limit(1);
   return driver!.id;
