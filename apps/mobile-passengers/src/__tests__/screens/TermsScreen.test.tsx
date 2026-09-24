@@ -26,6 +26,7 @@ describe('TermsScreen', () => {
     const { getByText } = await render(<TermsScreen />);
 
     expect(getByText('Volver')).toBeTruthy();
+    expect(getByText(/1\.\s+Qué es Lifty/)).toBeTruthy();
 
     await act(async () => {
       fireEvent.press(getByText('Volver'));
@@ -40,6 +41,8 @@ describe('TermsScreen', () => {
     mockUseLocalSearchParams.mockReturnValue({ from: 'register' });
 
     const { getByText } = await render(<TermsScreen />);
+
+    expect(getByText(/resumen del borrador de Términos/i)).toBeTruthy();
 
     await act(async () => {
       fireEvent.press(getByText('Aceptar'));

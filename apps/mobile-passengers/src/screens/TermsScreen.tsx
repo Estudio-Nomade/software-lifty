@@ -4,28 +4,13 @@ import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import {
+  GENERAL_TERMS_SUMMARY,
+  GENERAL_TERMS_UPDATED_LABEL,
+  GENERAL_TERMS_VERSION,
+} from '../legal/generalTermsSummary';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
-
-const TERMS_TEXT = [
-  'Lifty es una plataforma de transporte que conecta pasajeros con conductores verificados. Al usar la aplicación, aceptás los siguientes términos y condiciones.',
-  '1. Registro y cuenta',
-  'Para usar Lifty necesitás registrarte con un email válido. Sos responsable de mantener la confidencialidad de tu cuenta y de todas las actividades que ocurran bajo tu usuario.',
-  '2. Uso del servicio',
-  'Lifty te permite solicitar viajes puntuales dentro de las zonas de cobertura. Nos reservamos el derecho de suspender o cancelar tu cuenta si hacemos un uso indebido del servicio.',
-  '3. Pagos yTarifas',
-  'Las tarifas se calculan según la distancia, el tiempo y la demanda. Aceptás el cargo correspondiente al método de pago registrado al finalizar cada viaje.',
-  '4. Cancelaciones',
-  'Si cancelás un viaje después de los 5 minutos de espera, se aplica un cargo de cancelación. El monto exacto se informa antes de confirmar.',
-  '5. Conducta',
-  'Lifty promueve el respeto y la convivencia. Conductas agresivas, discriminatorias o de acoso pueden resultar en la suspensión permanente de la cuenta.',
-  '6. Seguridad',
-  'En caso de emergencia durante un viaje, podés usar el botón SOS dentro de la aplicación. Esta función contacta a nuestro equipo de soporte y a tus contactos de emergencia.',
-  '7. Privacidad',
-  'Tus datos personales se tratan según nuestra Política de Privacidad. Compartimos información con el conductor solo lo necesario para completar el viaje.',
-  '8. Cambios',
-  'Nos reservamos el derecho de modificar estos términos. Los cambios se notifican dentro de la aplicación antes de su entrada en vigencia.',
-];
 
 export function TermsScreen() {
   const { goBack, replace } = useAppNavigation();
@@ -62,17 +47,16 @@ export function TermsScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         <Card padding="lg">
-          {TERMS_TEXT.map((paragraph, i) => (
-            <Text
-              key={i}
-              style={[
-                styles.paragraph,
-                i === 0 && styles.paragraphIntro,
-                isHeading(paragraph) && styles.paragraphHeading,
-              ]}
-            >
-              {paragraph}
-            </Text>
+          <Text style={styles.version}>
+            {GENERAL_TERMS_UPDATED_LABEL} · v{GENERAL_TERMS_VERSION}
+          </Text>
+          {GENERAL_TERMS_SUMMARY.map((block) => (
+            <View key={block.heading ?? block.body.slice(0, 24)}>
+              {block.heading ? <Text style={styles.paragraphHeading}>{block.heading}</Text> : null}
+              <Text style={[styles.paragraph, !block.heading && styles.paragraphIntro]}>
+                {block.body}
+              </Text>
+            </View>
           ))}
         </Card>
       </ScrollView>
@@ -88,10 +72,6 @@ export function TermsScreen() {
       </View>
     </SafeAreaView>
   );
-}
-
-function isHeading(text: string): boolean {
-  return /^\d+\.\s/.test(text);
 }
 
 const styles = StyleSheet.create({
@@ -126,6 +106,12 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: theme.spacing.md,
   },
+  version: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.mediumGray,
+    fontFamily: theme.fontFamily.regular,
+    marginBottom: theme.spacing.md,
+  },
   paragraph: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.deepBlue,
@@ -140,7 +126,9 @@ const styles = StyleSheet.create({
   paragraphHeading: {
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.deepBlue,
     marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
   },
   footer: {
     padding: theme.spacing.md,

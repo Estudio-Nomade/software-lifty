@@ -111,3 +111,15 @@ Last resync: 2026-08-19 (post PR #263–#267). Previous resync 2026-08-13 kept b
 - source_spec: none
   summary: Cancellation policy leftover UI
   evidence: ConnectingDriver cancel has no preview; driver no-show still hardcoded $600; getPassengerDebt unused.
+
+- source_spec: _bmad-output/implementation-artifacts/spec-legal-terms-in-apps.md
+  summary: API GET /legal/terms versionado + apps consumen por red (scope B)
+  evidence: Split from legal-terms-in-apps MVP; user chose content-only scope A
+
+- source_spec: _bmad-output/implementation-artifacts/spec-legal-terms-in-apps.md
+  summary: Persistencia terms_accepted_at / terms_version en users y re-aceptación al cambiar versión (scope C)
+  evidence: Split from legal-terms-in-apps MVP; user chose content-only scope A
+
+- source_spec: _bmad-output/implementation-artifacts/spec-legal-terms-in-apps.md
+  summary: Política de Privacidad completa (documento hermano del borrador legal)
+  evidence: Explicitly out of scope; Términos only reference a separate Privacy Policy
