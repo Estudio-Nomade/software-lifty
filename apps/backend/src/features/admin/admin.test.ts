@@ -55,7 +55,7 @@ async function createReviewDriver(): Promise<{ token: string; driverId: string }
     .returning({ id: users.id });
   const token = await createTestToken(user.id);
 
-  const { data: step1 } = await request('PUT', '/api/drivers/me', { first_name: 'Test Driver' }, token);
+  const { data: step1 } = await request('PUT', '/api/drivers/me', { first_name: 'Test Driver', address_line: 'San Martín 100, Villa Dolores, Córdoba' }, token);
   const driverId = step1.id;
 
   await db.update(drivers).set({ kyc_status: 'approved' }).where(eq(drivers.id, driverId));
@@ -138,7 +138,7 @@ describe('Admin', () => {
     const { data: step1 } = await request(
       'PUT',
       '/api/drivers/me',
-      { first_name: 'Desync Driver' },
+      { first_name: 'Desync Driver', address_line: 'San Martín 100, Villa Dolores, Córdoba' },
       driverToken,
     );
     const driverId = step1.id as string;
@@ -200,7 +200,7 @@ describe('Admin', () => {
     const { data: step1 } = await request(
       'PUT',
       '/api/drivers/me',
-      { first_name: 'Early Approve' },
+      { first_name: 'Early Approve', address_line: 'San Martín 100, Villa Dolores, Córdoba' },
       driverToken,
     );
     const driverId = step1.id as string;

@@ -93,7 +93,7 @@ afterAll(async () => {
 describe('cancellationService', () => {
   test('expireSearchTimeouts cancels stale pending trips', async () => {
     const token = await registerDriver();
-    await request('PUT', '/api/drivers/me', { first_name: 'Test Driver' }, token);
+    await request('PUT', '/api/drivers/me', { first_name: 'Test Driver', address_line: 'San Martín 100, Villa Dolores, Córdoba' }, token);
     const db = getDb();
     const [passenger] = await db
       .insert(users)

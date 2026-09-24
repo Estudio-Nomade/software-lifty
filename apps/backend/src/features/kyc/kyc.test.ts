@@ -56,7 +56,7 @@ async function createDriver(token: string): Promise<string> {
   const { data } = await request(
     'PUT',
     '/api/drivers/me',
-    { first_name: 'Test Driver' },
+    { first_name: 'Test Driver', address_line: 'San Martín 100, Villa Dolores, Córdoba' },
     token,
   );
   return data.id;

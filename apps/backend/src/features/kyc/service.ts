@@ -170,7 +170,13 @@ export const kycService = {
         .from(drivers)
         .where(eq(drivers.user_id, userId))
         .limit(1);
-      if (drv && (drv.status === 'step1' || drv.status === 'kyc' || drv.status === 'kyc_pending')) {
+      if (
+        drv &&
+        (drv.status === 'step1' ||
+          drv.status === 'pending' ||
+          drv.status === 'kyc' ||
+          drv.status === 'kyc_pending')
+      ) {
         driverUpdateData.status = 'kyc_approved';
       }
     }
