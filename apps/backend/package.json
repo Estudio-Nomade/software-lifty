@@ -13,6 +13,7 @@
     "generate-secrets": "bun run scripts/generate-secrets.ts",
     "deploy": "bun run scripts/deploy.ts",
     "db:migrate": "bun run scripts/migrate.ts",
+    "db:migrate:web-push": "bun run scripts/apply-web-push-migration.ts",
     "db:seed": "bun run scripts/seed.ts",
     "backup": "bun run scripts/backup.ts"
   },
