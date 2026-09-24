@@ -55,7 +55,7 @@ const TERMINAL_DRIVER_STATUSES = new Set(['approved', 'rejected', 'suspended']);
  * (listPending only filters status=review).
  * @returns true if status transitioned into review this call
  */
-async function ensureDriverEnteredReview(driverId: string): Promise<boolean> {
+export async function ensureDriverEnteredReview(driverId: string): Promise<boolean> {
   const [driver] = await db
     .select({ id: drivers.id, status: drivers.status })
     .from(drivers)
