@@ -6,6 +6,11 @@ import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import {
+  GENERAL_TERMS_SUMMARY,
+  GENERAL_TERMS_UPDATED_LABEL,
+  GENERAL_TERMS_VERSION,
+} from '../legal/generalTermsSummary';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
 import { isTermsReadMode } from '../lib/termsReadMode';
 import { useAuthStore } from '../store/authStore';
@@ -60,38 +65,16 @@ export const TermsScreen: React.FC = () => {
       />
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>TERMINOS Y CONDICIONES</Text>
-        <Text style={styles.subtitle}>Ultima actualizacion: Junio 2024</Text>
-
-        <Text style={styles.heading}>1. Relacion Contractual</Text>
-        <Text style={styles.body}>
-          Al utilizar la aplicacion Lifty, aceptas estos terminos y condiciones. Lifty actua como
-          intermediario entre conductores y pasajeros. No somos una empresa de transporte.
+        <Text style={styles.subtitle}>
+          {GENERAL_TERMS_UPDATED_LABEL} · v{GENERAL_TERMS_VERSION}
         </Text>
 
-        <Text style={styles.heading}>2. Verificacion de Identidad</Text>
-        <Text style={styles.body}>
-          Todos los conductores deben completar el proceso de verificacion de identidad mediante
-          DIDIT. Debes proporcionar documentacion valida y mantener tus datos actualizados.
-        </Text>
-
-        <Text style={styles.heading}>3. Comision</Text>
-        <Text style={styles.body}>
-          Lifty aplica una comision variable sobre cada viaje completado, comenzando en 0% el primer
-          mes de lanzamiento y aumentando progresivamente hasta un maximo del 15%. La comision se
-          descuenta automaticamente al finalizar cada viaje.
-        </Text>
-
-        <Text style={styles.heading}>4. Cancelaciones</Text>
-        <Text style={styles.body}>
-          Si cancelas un viaje antes de los 5 minutos de espera, tu tasa de finalizacion se vera
-          afectada. Despues de los 5 minutos, recibiras una compensacion por el tiempo de espera.
-        </Text>
-
-        <Text style={styles.heading}>5. Privacidad</Text>
-        <Text style={styles.body}>
-          Tus datos personales son tratados de acuerdo a nuestra Politica de Privacidad. No
-          compartimos tu informacion con terceros sin tu consentimiento explicito.
-        </Text>
+        {GENERAL_TERMS_SUMMARY.map((block) => (
+          <View key={block.heading ?? block.body.slice(0, 24)} style={styles.block}>
+            {block.heading ? <Text style={styles.heading}>{block.heading}</Text> : null}
+            <Text style={block.heading ? styles.body : styles.notice}>{block.body}</Text>
+          </View>
+        ))}
 
         <View style={{ height: 48 }} />
       </ScrollView>
@@ -131,6 +114,9 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
     marginBottom: theme.spacing.lg,
   },
+  block: {
+    marginBottom: theme.spacing.sm,
+  },
   heading: {
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.bold,
@@ -142,6 +128,13 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.deepBlue,
     lineHeight: 22,
+  },
+  notice: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.deepBlue,
+    lineHeight: 22,
+    fontWeight: theme.fontWeight.medium,
+    marginBottom: theme.spacing.sm,
   },
   footer: {
     paddingHorizontal: theme.spacing.lg,
