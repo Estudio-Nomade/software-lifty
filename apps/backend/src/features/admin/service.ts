@@ -12,8 +12,11 @@ import {
 import { getCommissionConfig } from '../../shared/lib/commission';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
+import { logger } from '../../shared/lib/logger';
+import { sendPushToUser } from '../../shared/lib/push';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { ensureDriverEnteredReview } from '../drivers/service';
+import { DRIVER_APPROVED_PUSH, driverRejectedPush } from './driver-review-push';
 import { notifyDriverApproved, notifyDriverRejected } from './notifications';
 
 function escapeIlike(raw: string): string {
@@ -338,17 +341,46 @@ export const adminService = {
 
     {
       const [driverUser] = await db
-        .select({ email: users.email, full_name: users.full_name })
+        .select({
+          user_id: users.id,
+          email: users.email,
+          full_name: users.full_name,
+        })
         .from(users)
         .innerJoin(drivers, eq(drivers.user_id, users.id))
         .where(eq(drivers.id, driverId))
         .limit(1);
 
-      if (driverUser?.email) {
+      if (driverUser) {
+        const name = driverUser.full_name ?? 'Driver';
         if (action === 'approve') {
-          notifyDriverApproved(driverUser.email, driverUser.full_name ?? 'Driver');
+          if (driverUser.email) {
+            void notifyDriverApproved(driverUser.email, name);
+          } else {
+            logger.info('[DRIVER-NOTIFY] Skip approved email — no email', {
+              driverId: driverId.split('-')[0],
+            });
+          }
+          void sendPushToUser(driverUser.user_id, {
+            title: DRIVER_APPROVED_PUSH.title,
+            body: DRIVER_APPROVED_PUSH.body,
+            data: { ...DRIVER_APPROVED_PUSH.data },
+            channelId: DRIVER_APPROVED_PUSH.channelId,
+          }).catch((err) => {
+            logger.error('[DRIVER-NOTIFY] Approved push failed', (err as Error).message);
+          });
         } else {
-          notifyDriverRejected(driverUser.email, driverUser.full_name ?? 'Driver', notes);
+          if (driverUser.email) {
+            void notifyDriverRejected(driverUser.email, name, notes);
+          } else {
+            logger.info('[DRIVER-NOTIFY] Skip rejected email — no email', {
+              driverId: driverId.split('-')[0],
+            });
+          }
+          const rejected = driverRejectedPush(notes);
+          void sendPushToUser(driverUser.user_id, rejected).catch((err) => {
+            logger.error('[DRIVER-NOTIFY] Rejected push failed', (err as Error).message);
+          });
         }
       }
     }
