@@ -77,6 +77,17 @@ describe('routeForDriverStatus', () => {
     expect(r.screen).toBe('Active');
     expect(r.status).toBe('under_review');
   });
+
+  it('routes rejected to OnboardingStep2 reupload (not blocked empty screen)', () => {
+    const r = routeForDriverStatus({
+      status: 'rejected',
+      step: 'review',
+      admin_review_notes: 'Licencia ilegible',
+    });
+    expect(r.screen).toBe('OnboardingStep2');
+    expect(r.status).toBe('rejected');
+    expect(r.blockedMessage).toContain('Licencia ilegible');
+  });
 });
 
 describe('isTransientStatusFailure', () => {

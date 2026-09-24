@@ -293,6 +293,7 @@ describe('Admin', () => {
     expect(driver!.admin_reviewed_by).toBeString();
     expect(driver!.admin_reviewed_at).toBeDefined();
     expect(driver!.identification_status).toBe('pending_pickup');
+    // Fire-and-forget mail+push must not block or fail the admin response.
   });
 
   test('POST /drivers/:id/review reject', async () => {
