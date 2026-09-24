@@ -72,12 +72,20 @@ export function AuthRedirectWatcher() {
       return;
     if (isDriverStatusUnresolved(isAuthenticated, driverStatus, onboardingStep)) return;
 
-    const target = onboardingStep ? STEP_ROUTE[onboardingStep] : undefined;
     const fallback = routeForDriverStatus({
       status: driverStatus ?? 'pending',
       step: onboardingStep as DriverStatus['step'],
     });
+    // Rejected/suspended short-circuit in routeForDriverStatus — prefer that over STEP_ROUTE
+    // (backend rejected still returns step=review which would map to Active).
+    const target =
+      driverStatus === 'rejected' || driverStatus === 'suspended'
+        ? undefined
+        : onboardingStep
+          ? STEP_ROUTE[onboardingStep]
+          : undefined;
     const screen = target?.screen || fallback.screen || 'OnboardingStep1';
+    if (!screen) return;
 
     replace(screen);
   }, [

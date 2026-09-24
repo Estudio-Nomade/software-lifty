@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import { useLocalSearchParams } from 'expo-router';
 import type React from 'react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -77,7 +78,9 @@ const initialSideState = (): SideState => ({
 
 export const OnboardingStep2Screen: React.FC = () => {
   const navigation = useAppNavigation();
+  const { reviewReason: reviewReasonParam } = useLocalSearchParams<{ reviewReason?: string }>();
   const driverId = useAuthStore((s) => s.driverId);
+  const driverStatus = useAuthStore((s) => s.driverStatus);
   const [docs, setDocs] = useState<Record<DocType, SideState>>({
     drivers_license: initialSideState(),
     vehicle_registration: initialSideState(),
@@ -87,6 +90,32 @@ export const OnboardingStep2Screen: React.FC = () => {
   });
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState<string | null>(
+    typeof reviewReasonParam === 'string' && reviewReasonParam.trim()
+      ? reviewReasonParam.trim()
+      : null,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await getValidated('/drivers/me/status', driverStatusSchema);
+        if (cancelled) return;
+        if (status.admin_review_notes?.trim()) {
+          setRejectReason(status.admin_review_notes.trim());
+        }
+        if (status.status === 'rejected') {
+          useAuthStore.getState().setDriverStatus('rejected');
+        }
+      } catch {
+        // keep push param / null
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const allUploaded = Object.entries(docs).every(([docType, doc]) =>
     DOC_SIDES[docType as DocType].every((side) => doc[side].uploaded),
@@ -273,6 +302,15 @@ export const OnboardingStep2Screen: React.FC = () => {
         <Text style={styles.title}>Subi tus documentos</Text>
         <Text style={styles.subtitle}>Los necesitamos para habilitar tu cuenta</Text>
 
+        {rejectReason || driverStatus === 'rejected' ? (
+          <View style={styles.rejectBanner}>
+            <Text style={styles.rejectTitle}>No pudimos aprobar tus documentos</Text>
+            <Text style={styles.rejectBody}>
+              {rejectReason ?? 'Revisá el motivo en el mail y volvé a subir lo que falte.'}
+            </Text>
+          </View>
+        ) : null}
+
         {DOCS.map((doc) => (
           <View key={doc.type} style={styles.uploadBlock}>
             <View style={styles.uploadIcon}>
@@ -388,6 +426,24 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
     marginBottom: theme.spacing.md,
+  },
+  rejectBanner: {
+    width: 343,
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.colors.lightGray,
+    borderWidth: 1,
+    borderColor: theme.colors.dangerRed,
+    padding: theme.spacing.md,
+    gap: theme.spacing.xs,
+  },
+  rejectTitle: {
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.dangerRed,
+  },
+  rejectBody: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.deepBlue,
   },
   uploadBlock: {
     width: 343,
