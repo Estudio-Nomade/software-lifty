@@ -10,7 +10,7 @@ import {
   vehicles,
 } from '../../shared/db/schema';
 import { getCommissionConfig } from '../../shared/lib/commission';
-import { VALID_DOC_TYPES } from '../../shared/lib/documents';
+import { DOC_TYPES, VALID_DOC_TYPES } from '../../shared/lib/documents';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
 import { logger } from '../../shared/lib/logger';
@@ -32,12 +32,14 @@ function escapeIlike(raw: string): string {
   return raw.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
-const NOT_PENDING_QUEUE = new Set(['review', 'approved', 'rejected', 'suspended']);
+const NOT_PENDING_QUEUE = new Set(['review', 'approved', 'suspended']);
 
 export const adminService = {
   /**
-   * Heal stuck drivers (docs complete, status still pending/step1/…) so ops
-   * queue matches product: register+docs → Pendientes → approve → Conductores.
+   * Heal stuck drivers (docs complete, status still pending/step1/… or rejected
+   * after full re-upload) so ops queue matches product:
+   * register+docs → Pendientes → approve → Conductores.
+   * Also re-enters rejected+complete so Aprobar/Rechazar return on ficha.
    */
   async reconcilePendingQueue(): Promise<number> {
     const candidates = await db.select({ id: drivers.id, status: drivers.status }).from(drivers);
@@ -191,6 +193,10 @@ export const adminService = {
   },
 
   async getDriverDetail(driverId: string) {
+    // Heal stuck rejected+complete (or pending/step1+complete) so Aprobar/Rechazar
+    // appear without a separate requeue endpoint.
+    await ensureDriverEnteredReview(driverId);
+
     const [driver] = await db
       .select({
         id: drivers.id,
@@ -206,6 +212,7 @@ export const adminService = {
         admin_review_status: drivers.admin_review_status,
         admin_reviewed_at: drivers.admin_reviewed_at,
         admin_review_notes: drivers.admin_review_notes,
+        documents_pending_review: drivers.documents_pending_review,
         identification_status: drivers.identification_status,
         identification_issued_at: drivers.identification_issued_at,
         identification_external_ref: drivers.identification_external_ref,
@@ -252,6 +259,13 @@ export const adminService = {
       .where(eq(driverDocuments.driver_id, driver.id))
       .orderBy(driverDocuments.created_at);
 
+    const activeDocTypes = new Set(
+      documentRows
+        .filter((d) => d.status !== 'superseded' && d.status !== 'rejected')
+        .map((d) => d.doc_type),
+    );
+    const missing_doc_types = DOC_TYPES.filter((t) => !activeDocTypes.has(t));
+
     const identification = evaluateIdentificationDeadline({
       identification_status: driver.identification_status,
       approved_at: driver.approved_at,
@@ -271,6 +285,7 @@ export const adminService = {
       identification_days_until_pause: identification.days_until_pause,
       identification_pause_at: identification.pause_at,
       identification_days_since_approval: identification.days_since_approval,
+      missing_doc_types,
       vehicles: vehicleRows,
       documents: documentRows,
     };

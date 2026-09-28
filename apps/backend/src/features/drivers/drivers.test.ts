@@ -929,6 +929,7 @@ describe('Document step completeness', () => {
         status: drivers.status,
         admin_review_status: drivers.admin_review_status,
         admin_review_notes: drivers.admin_review_notes,
+        documents_pending_review: drivers.documents_pending_review,
       })
       .from(drivers)
       .where(eq(drivers.id, driverId))
@@ -936,10 +937,89 @@ describe('Document step completeness', () => {
     expect(driver!.status).toBe('review');
     expect(driver!.admin_review_status).toBe('pending');
     expect(driver!.admin_review_notes).toBeNull();
+    expect(driver!.documents_pending_review).toBe(true);
 
     const me = await request('GET', '/api/drivers/me/status', undefined, token);
     expect(me.data.status).toBe('under_review');
     expect(me.data.step).toBe('review');
+  });
+
+  test('rejected + full docs via reupload re-enters review with pending flag', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await getDb().insert(driverDocuments).values(
+      DOC_TYPES.map((doc_type) => ({
+        driver_id: driverId,
+        doc_type,
+        file_url: 'https://x.com/f.png',
+        status: 'pending_review',
+      })),
+    );
+    await getDb()
+      .update(drivers)
+      .set({
+        status: 'rejected',
+        admin_review_status: 'rejected',
+        admin_reviewed_at: new Date(),
+        admin_review_notes: 'Corregí licencia',
+        documents_pending_review: false,
+      })
+      .where(eq(drivers.id, driverId));
+
+    const { status } = await reupload(token, 'license_front');
+    expect(status).toBe(200);
+
+    const [driver] = await getDb()
+      .select({
+        status: drivers.status,
+        admin_review_status: drivers.admin_review_status,
+        documents_pending_review: drivers.documents_pending_review,
+        admin_reviewed_at: drivers.admin_reviewed_at,
+      })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(driver!.status).toBe('review');
+    expect(driver!.admin_review_status).toBe('pending');
+    expect(driver!.documents_pending_review).toBe(true);
+    expect(driver!.admin_reviewed_at).toBeNull();
+  });
+
+  test('reupload while already in review keeps review + pending flag', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await getDb().insert(driverDocuments).values(
+      DOC_TYPES.map((doc_type) => ({
+        driver_id: driverId,
+        doc_type,
+        file_url: 'https://x.com/f.png',
+        status: 'pending_review',
+      })),
+    );
+    await getDb()
+      .update(drivers)
+      .set({
+        status: 'review',
+        admin_review_status: 'pending',
+        admin_review_notes: 'Falta dorso nítido',
+        documents_pending_review: false,
+      })
+      .where(eq(drivers.id, driverId));
+
+    const { status, data } = await reupload(token, 'license_back');
+    expect(status).toBe(200);
+    expect(data.requires_review).toBe(true);
+
+    const [driver] = await getDb()
+      .select({
+        status: drivers.status,
+        admin_review_status: drivers.admin_review_status,
+        documents_pending_review: drivers.documents_pending_review,
+      })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(driver!.status).toBe('review');
+    expect(driver!.admin_review_status).toBe('pending');
+    expect(driver!.documents_pending_review).toBe(true);
   });
 });
 

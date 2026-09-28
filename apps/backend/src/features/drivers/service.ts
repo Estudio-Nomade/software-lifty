@@ -31,7 +31,7 @@ export function setStorageForTesting(sp: StorageProvider) {
 }
 import { geocode } from '../../shared/lib/geo';
 import type { AuthUser } from '../../shared/middleware/auth';
-import { notifyAdminNewDriver } from '../admin/notifications';
+import { notifyAdminNewDriver, notifyAdminsDriverDocsResubmitted } from '../admin/notifications';
 import { upsertLocation } from '../location/service';
 import {
   type MunicipalityResolveResult,
@@ -72,7 +72,12 @@ function missingRequiredDocTypes(uploaded: { doc_type: string }[]): string[] {
  */
 export async function ensureDriverEnteredReview(driverId: string): Promise<boolean> {
   const [driver] = await db
-    .select({ id: drivers.id, status: drivers.status })
+    .select({
+      id: drivers.id,
+      status: drivers.status,
+      admin_reviewed_at: drivers.admin_reviewed_at,
+      admin_review_notes: drivers.admin_review_notes,
+    })
     .from(drivers)
     .where(eq(drivers.id, driverId))
     .limit(1);
@@ -102,6 +107,17 @@ export async function ensureDriverEnteredReview(driverId: string): Promise<boole
   }
 
   const fromRejected = driver.status === 'rejected';
+  const isResubmit =
+    fromRejected || driver.admin_reviewed_at != null || !!driver.admin_review_notes?.trim();
+
+  const pendingDocs = await db
+    .select({ id: driverDocuments.id })
+    .from(driverDocuments)
+    .where(
+      and(eq(driverDocuments.driver_id, driverId), eq(driverDocuments.status, 'pending_review')),
+    )
+    .limit(1);
+
   await db
     .update(drivers)
     .set({
@@ -112,9 +128,12 @@ export async function ensureDriverEnteredReview(driverId: string): Promise<boole
             admin_review_notes: null,
             admin_reviewed_by: null,
             admin_reviewed_at: null,
-            documents_pending_review: false,
+            // Ops badge: there are (or will be) docs to re-check after hard reject.
+            documents_pending_review: true,
           }
-        : {}),
+        : pendingDocs.length > 0
+          ? { documents_pending_review: true }
+          : {}),
       updated_at: new Date(),
     })
     .where(eq(drivers.id, driverId));
@@ -122,9 +141,14 @@ export async function ensureDriverEnteredReview(driverId: string): Promise<boole
   logger.info('[DOCS] Driver entered review queue', {
     driverId: driverId.split('-')[0],
     previousStatus: driver.status,
+    isResubmit,
   });
 
-  void notifyAdminNewDriver(driverId);
+  if (isResubmit) {
+    void notifyAdminsDriverDocsResubmitted(driverId, { fromStatus: driver.status });
+  } else {
+    void notifyAdminNewDriver(driverId);
+  }
   return true;
 }
 
@@ -1021,8 +1045,10 @@ export const driversService = {
     if (isSensitive) {
       if (driver.status === 'rejected') {
         // Coming from hard reject: only re-enter review when the full required set is valid again.
+        // ensure notifies resubmit on transition.
         await ensureDriverEnteredReview(driver.id);
       } else {
+        const previousStatus = driver.status;
         await db
           .update(drivers)
           .set({
@@ -1037,9 +1063,14 @@ export const driversService = {
         logger.info('[DOCS] Sensitive doc re-uploaded, driver back in review', {
           driverId: driver.id.split('-')[0],
           docType,
+          previousStatus,
         });
 
-        void notifyAdminNewDriver(driver.id);
+        // Already in ops loop (review / approved / soft notes): resubmit copy, not "alta nueva".
+        void notifyAdminsDriverDocsResubmitted(driver.id, {
+          docTypes: [docType],
+          fromStatus: previousStatus,
+        });
       }
     } else if (driver.status === 'rejected') {
       await ensureDriverEnteredReview(driver.id);
