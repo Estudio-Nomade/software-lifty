@@ -192,6 +192,7 @@ export const documentSchema = z.object({
     'registration_back',
     'insurance_front',
     'insurance_back',
+    'platform_rc_insurance_front',
     'background_check_front',
     'background_check_back',
     'rndg_front',

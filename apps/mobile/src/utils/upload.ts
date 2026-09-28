@@ -4,6 +4,7 @@ export type DocBase =
   | 'drivers_license'
   | 'vehicle_registration'
   | 'vehicle_insurance'
+  | 'platform_rc_insurance'
   | 'background_check'
   | 'rndg';
 export type DocSide = 'front' | 'back';
@@ -12,6 +13,7 @@ export const DOC_SIDES: Record<DocBase, DocSide[]> = {
   drivers_license: ['front', 'back'],
   vehicle_registration: ['front', 'back'],
   vehicle_insurance: ['front'],
+  platform_rc_insurance: ['front'],
   background_check: ['front'],
   rndg: ['front'],
 };
@@ -20,6 +22,7 @@ const DOC_BASE_MAP: Record<DocBase, string> = {
   drivers_license: 'license',
   vehicle_registration: 'registration',
   vehicle_insurance: 'insurance',
+  platform_rc_insurance: 'platform_rc_insurance',
   background_check: 'background_check',
   rndg: 'rndg',
 };

@@ -4,12 +4,15 @@
 // is required (no `background_check_back`).
 // Vehicle insurance is typically a single PDF policy (or one photo); dorso is
 // not required (no `insurance_back` in required set).
+// Platform RC insurance (SSN / "Conductor digital") is a separate single-file
+// requirement from personal vehicle insurance (`insurance_front`).
 export const DOC_TYPES = [
   'license_front',
   'license_back',
   'registration_front',
   'registration_back',
   'insurance_front',
+  'platform_rc_insurance_front',
   'background_check_front',
   'rndg_front',
 ] as const;
