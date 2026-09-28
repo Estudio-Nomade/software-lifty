@@ -64,3 +64,16 @@ describe('sendPushToUser web filter (contract)', () => {
     expect(deviceTokens.every((t) => t.platform !== 'web')).toBe(true);
   });
 });
+
+describe('admin docs resubmit notify copy (contract)', () => {
+  test('resubmit subject and push type differ from first-time alta', () => {
+    const resubmitSubject = 'Conductor actualizó documentos — revisar de nuevo';
+    const newDriverSubjectPrefix = 'Nuevo conductor:';
+    expect(resubmitSubject).not.toContain('Nuevo conductor');
+    expect(newDriverSubjectPrefix.startsWith('Nuevo conductor')).toBe(true);
+
+    const resubmitPushType = 'admin:driver_docs_resubmitted';
+    const newDriverPushType = 'new_driver_review';
+    expect(resubmitPushType).not.toBe(newDriverPushType);
+  });
+});

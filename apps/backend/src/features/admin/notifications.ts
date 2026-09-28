@@ -213,6 +213,23 @@ async function gatherDriverData(driverId: string): Promise<{
   };
 }
 
+async function collectAdminRecipients(): Promise<Set<string>> {
+  const adminRows = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.role, 'admin'));
+
+  return new Set([
+    ...adminRows.map((r) => r.email).filter((e): e is string => !!e),
+    ...adminEmailsFromEnv(),
+  ]);
+}
+
+function adminDriverDeepLink(driverId: string): string {
+  const adminBase = process.env.ADMIN_APP_URL?.replace(/\/$/, '') || '';
+  return adminBase ? `${adminBase}/drivers/${driverId}` : `/drivers/${driverId}`;
+}
+
 export async function notifyAdminNewDriver(driverId: string): Promise<void> {
   try {
     const data = await gatherDriverData(driverId);
@@ -224,15 +241,7 @@ export async function notifyAdminNewDriver(driverId: string): Promise<void> {
     const token = generateApprovalToken();
     await db.update(drivers).set({ approval_token: token }).where(eq(drivers.id, driverId));
 
-    const adminRows = await db
-      .select({ email: users.email })
-      .from(users)
-      .where(eq(users.role, 'admin'));
-
-    const recipients = new Set([
-      ...adminRows.map((r) => r.email).filter((e): e is string => !!e),
-      ...adminEmailsFromEnv(),
-    ]);
+    const recipients = await collectAdminRecipients();
 
     if (recipients.size === 0) {
       logger.warn('[ADMIN-NOTIFY] No admin recipients configured — new-driver email skipped', {
@@ -291,8 +300,7 @@ ${docsHtml}
 
     try {
       const { sendWebPushToAdmins } = await import('../../shared/lib/web-push');
-      const adminBase = process.env.ADMIN_APP_URL?.replace(/\/$/, '') || '';
-      const deepLink = adminBase ? `${adminBase}/drivers/${driverId}` : `/drivers/${driverId}`;
+      const deepLink = adminDriverDeepLink(driverId);
       const pushSent = await sendWebPushToAdmins({
         title: 'Nuevo conductor en review',
         body: data.fullName ? `${data.fullName} listo para revisar` : 'Hay un conductor pendiente',
@@ -308,5 +316,96 @@ ${docsHtml}
     }
   } catch (err) {
     logger.error('[ADMIN-NOTIFY] Failed to send', (err as Error).message);
+  }
+}
+
+/**
+ * Ops alert when a driver already known to review re-submits docs
+ * (post soft notes, post hard reject re-entry, or sensitive reupload while review/approved).
+ * Distinct copy from first-time "Nuevo conductor".
+ */
+export async function notifyAdminsDriverDocsResubmitted(
+  driverId: string,
+  opts?: { docTypes?: string[]; fromStatus?: string },
+): Promise<void> {
+  try {
+    const data = await gatherDriverData(driverId);
+    if (!data) {
+      logger.warn('[ADMIN-NOTIFY] Skipped docs-resubmit email: driver data not found', {
+        driverId,
+      });
+      return;
+    }
+
+    const recipients = await collectAdminRecipients();
+    if (recipients.size === 0) {
+      logger.warn('[ADMIN-NOTIFY] No admin recipients — docs-resubmit email skipped', {
+        driverId,
+      });
+      return;
+    }
+
+    const deepLink = adminDriverDeepLink(driverId);
+    const changed =
+      opts?.docTypes?.length && opts.docTypes.length > 0
+        ? opts.docTypes.map((t) => sanitize(t)).join(', ')
+        : null;
+    const fromStatus = opts?.fromStatus ? sanitize(opts.fromStatus) : null;
+
+    const subject = 'Conductor actualizó documentos — revisar de nuevo';
+    const html = `<h2>Documentos actualizados</h2>
+<p>El conductor <strong>${sanitize(data.fullName)}</strong> volvió a subir documentación y necesita re-revisión.</p>
+<table style="border-collapse:collapse;width:100%;max-width:600px">
+<tr><td style="padding:8px;border:1px solid #ddd"><strong>Nombre</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(data.fullName)}</td></tr>
+<tr><td style="padding:8px;border:1px solid #ddd"><strong>Telefono</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(data.phone)}</td></tr>
+<tr><td style="padding:8px;border:1px solid #ddd"><strong>Email</strong></td><td style="padding:8px;border:1px solid #ddd">${data.email ? sanitize(data.email) : '—'}</td></tr>
+${changed ? `<tr><td style="padding:8px;border:1px solid #ddd"><strong>Docs tocados</strong></td><td style="padding:8px;border:1px solid #ddd">${changed}</td></tr>` : ''}
+${fromStatus ? `<tr><td style="padding:8px;border:1px solid #ddd"><strong>Estado previo</strong></td><td style="padding:8px;border:1px solid #ddd">${fromStatus}</td></tr>` : ''}
+</table>
+<br/>
+<a href="${deepLink}" style="display:inline-block;padding:12px 24px;background:#00C2B3;color:white;text-decoration:none;border-radius:6px;font-weight:bold">Abrir ficha en admin</a>
+<br/><br/>
+<p style="color:#888;font-size:12px">ID: ${driverId}</p>`;
+
+    logger.info('[ADMIN-NOTIFY] Sending docs-resubmit email', {
+      driverId,
+      recipients: recipients.size,
+      fromStatus: opts?.fromStatus,
+      docTypes: opts?.docTypes,
+    });
+
+    let sent = 0;
+    for (const email of recipients) {
+      const ok = await sendEmail(email, subject, html);
+      if (ok) sent += 1;
+      else
+        logger.error('[ADMIN-NOTIFY] Failed to send docs-resubmit email to recipient', { email });
+    }
+
+    logger.info('[ADMIN-NOTIFY] Docs-resubmit email result', {
+      driverId,
+      sent,
+      total: recipients.size,
+    });
+
+    try {
+      const { sendWebPushToAdmins } = await import('../../shared/lib/web-push');
+      const pushSent = await sendWebPushToAdmins({
+        title: 'Docs actualizados — revisar',
+        body: data.fullName
+          ? `${data.fullName} re-subió documentos`
+          : 'Un conductor actualizó documentos',
+        data: {
+          url: deepLink,
+          driverId,
+          type: 'admin:driver_docs_resubmitted',
+        },
+      });
+      logger.info('[ADMIN-NOTIFY] docs-resubmit web-push sent', { driverId, sent: pushSent });
+    } catch (pushErr) {
+      logger.error('[ADMIN-NOTIFY] docs-resubmit web-push failed', (pushErr as Error).message);
+    }
+  } catch (err) {
+    logger.error('[ADMIN-NOTIFY] Docs-resubmit failed', (err as Error).message);
   }
 }

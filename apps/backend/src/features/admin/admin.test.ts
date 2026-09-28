@@ -238,7 +238,49 @@ describe('Admin', () => {
     expect(data).toHaveProperty('district_name');
     expect(data).toHaveProperty('district_province');
     expect(data).toHaveProperty('registry_id');
+    expect(data).toHaveProperty('documents_pending_review');
+    expect(data).toHaveProperty('missing_doc_types');
+    expect(data.missing_doc_types).toEqual([]);
     expect(data.vehicles[0].vehicle_type).toBeDefined();
+  });
+
+  test('GET /drivers/:id heals rejected+complete into review queue', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+    const db = getDb();
+
+    await db
+      .update(drivers)
+      .set({
+        status: 'rejected',
+        admin_review_status: 'rejected',
+        admin_reviewed_at: new Date(),
+        admin_review_notes: 'Bug notes path',
+        documents_pending_review: false,
+      })
+      .where(eq(drivers.id, driverId));
+
+    const { status, data } = await request(
+      'GET',
+      `/api/admin/drivers/${driverId}`,
+      undefined,
+      adminToken,
+    );
+
+    expect(status).toBe(200);
+    expect(data.status).toBe('review');
+    expect(data.admin_review_status).toBe('pending');
+    expect(data.documents_pending_review).toBe(true);
+    expect(data.admin_reviewed_at).toBeNull();
+
+    const approve = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      { action: 'approve' },
+      adminToken,
+    );
+    expect(approve.status).toBe(200);
+    expect(approve.data.status).toBe('approved');
   });
 
   test('GET /drivers lists all registered drivers', async () => {
@@ -495,6 +537,36 @@ describe('Admin', () => {
     );
 
     expect(status).toBe(403);
+  });
+
+  test('request_changes keeps canReview; later reject still works', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+    const notes = 'Falta foto nítida de la cédula';
+
+    const soft = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      { action: 'request_changes', notes },
+      adminToken,
+    );
+    expect(soft.status).toBe(200);
+    expect(soft.data.status).toBe('review');
+
+    const detail = await request('GET', `/api/admin/drivers/${driverId}`, undefined, adminToken);
+    expect(detail.status).toBe(200);
+    expect(detail.data.status).toBe('review');
+    expect(detail.data.admin_review_status).toBe('pending');
+    expect(detail.data.admin_review_notes).toBe(notes);
+
+    const hard = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      { action: 'reject', notes: 'Documentación insuficiente' },
+      adminToken,
+    );
+    expect(hard.status).toBe(200);
+    expect(hard.data.status).toBe('rejected');
   });
 
   test('POST /drivers/:id/review already reviewed returns error', async () => {
