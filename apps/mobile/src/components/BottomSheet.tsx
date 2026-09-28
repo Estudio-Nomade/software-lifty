@@ -1,27 +1,50 @@
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, PanResponder, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { theme } from '../theme';
+import { bottomSheetTranslateRange } from './bottomSheetMath';
+import { Text } from './ui/Text';
 
 interface BottomSheetProps {
+  /** [collapsedHeight, expandedHeight] — content height ABOVE the tab bar. */
   snapPoints: [number, number];
+  /** Distance from screen bottom to sit on (tab bar + safe inset). Default 0. */
+  bottomOffset?: number;
+  /** One-line invite shown under the handle while collapsed. */
+  peekerLabel?: string;
   children: React.ReactNode;
   onSnapChange?: (index: number) => void;
 }
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-export const BottomSheet: React.FC<BottomSheetProps> = ({ snapPoints, children, onSnapChange }) => {
+export const BottomSheet: React.FC<BottomSheetProps> = ({
+  snapPoints,
+  bottomOffset = 0,
+  peekerLabel,
+  children,
+  onSnapChange,
+}) => {
   const [collapsedHeight, expandedHeight] = snapPoints;
-  const maxTranslateY = SCREEN_HEIGHT - collapsedHeight;
-  const minTranslateY = SCREEN_HEIGHT - expandedHeight;
+  const { collapsedTranslateY, expandedTranslateY } = useMemo(
+    () => bottomSheetTranslateRange(collapsedHeight, expandedHeight),
+    [collapsedHeight, expandedHeight],
+  );
 
-  const translateY = useRef(new Animated.Value(maxTranslateY)).current;
+  // Larger Y = more hidden (pushed down past the tab bar).
+  const collapsedY = collapsedTranslateY;
+  const expandedY = expandedTranslateY;
+
+  const translateY = useRef(new Animated.Value(collapsedY)).current;
+  const dragStartY = useRef(collapsedY);
   const [snapIndex, setSnapIndex] = useState(0);
+  const snapIndexRef = useRef(0);
+  const collapsedYRef = useRef(collapsedY);
+  const expandedYRef = useRef(expandedY);
+  collapsedYRef.current = collapsedY;
+  expandedYRef.current = expandedY;
 
   const snapTo = useCallback(
     (index: number) => {
-      const target = index === 0 ? maxTranslateY : minTranslateY;
+      const target = index === 0 ? collapsedYRef.current : expandedYRef.current;
       Animated.spring(translateY, {
         toValue: target,
         damping: 50,
@@ -30,88 +53,123 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ snapPoints, children, 
         useNativeDriver: true,
       }).start();
     },
-    [translateY, maxTranslateY, minTranslateY],
+    [translateY],
   );
 
   const notifySnap = useCallback(
     (index: number) => {
+      snapIndexRef.current = index;
       setSnapIndex(index);
       onSnapChange?.(index);
     },
     [onSnapChange],
   );
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gestureState) => {
-        const candidate = (translateY as unknown as { _value: number })._value + gestureState.dy;
-        const clamped = Math.max(minTranslateY, Math.min(maxTranslateY, candidate));
-        translateY.setValue(clamped);
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        const currentY = (translateY as unknown as { _value: number })._value;
-        const threshold = (maxTranslateY + minTranslateY) / 2;
-
-        if (gestureState.vy < -0.5) {
-          snapTo(1);
-          notifySnap(1);
-        } else if (gestureState.vy > 0.5) {
-          snapTo(0);
-          notifySnap(0);
-        } else if (currentY < threshold) {
-          snapTo(1);
-          notifySnap(1);
-        } else {
-          snapTo(0);
-          notifySnap(0);
-        }
-      },
-    }),
-  ).current;
-
+  // Keep position in sync when snap heights / tab inset change.
   useEffect(() => {
-    const listenerId = translateY.addListener(({ value }) => {
-      const next = value <= threshold ? 1 : 0;
-      if (next !== snapIndex) {
-        setSnapIndex(next);
-      }
-    });
-    const threshold = (maxTranslateY + minTranslateY) / 2;
-    return () => {
-      translateY.removeListener(listenerId);
-    };
-  }, [translateY, maxTranslateY, minTranslateY, snapIndex]);
+    const target = snapIndexRef.current === 0 ? collapsedY : expandedY;
+    translateY.setValue(target);
+  }, [translateY, collapsedY, expandedY]);
 
-  const overlayOpacity = translateY.interpolate({
-    inputRange: [minTranslateY, maxTranslateY],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
+  // Drag on handle + peeker strip so ScrollView body can scroll freely when expanded.
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, g) =>
+          Math.abs(g.dy) > 4 && Math.abs(g.dy) > Math.abs(g.dx),
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: () => {
+          translateY.stopAnimation((value) => {
+            dragStartY.current = value;
+          });
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const minY = expandedYRef.current;
+          const maxY = collapsedYRef.current;
+          const next = dragStartY.current + gestureState.dy;
+          translateY.setValue(Math.max(minY, Math.min(maxY, next)));
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const minY = expandedYRef.current;
+          const maxY = collapsedYRef.current;
+          const currentY = Math.max(minY, Math.min(maxY, dragStartY.current + gestureState.dy));
+          const mid = (maxY + minY) / 2;
+          let nextIndex: 0 | 1;
+          if (gestureState.vy < -0.35) {
+            nextIndex = 1;
+          } else if (gestureState.vy > 0.35) {
+            nextIndex = 0;
+          } else {
+            nextIndex = currentY < mid ? 1 : 0;
+          }
+          snapTo(nextIndex);
+          notifySnap(nextIndex);
+        },
+      }),
+    [translateY, snapTo, notifySnap],
+  );
+
+  const overlayOpacity = useMemo(
+    () =>
+      translateY.interpolate({
+        inputRange: collapsedY > expandedY ? [expandedY, collapsedY] : [0, 1],
+        outputRange: [1, 0],
+        extrapolate: 'clamp',
+      }),
+    [translateY, collapsedY, expandedY],
+  );
 
   const handleOverlayPress = useCallback(() => {
     snapTo(0);
     notifySnap(0);
   }, [snapTo, notifySnap]);
 
+  const collapsed = snapIndex === 0;
+  const label = peekerLabel?.trim() || 'Deslizá para ver más';
+
   return (
     <>
       <Animated.View
         style={[
           styles.overlay,
-          { opacity: overlayOpacity },
+          { opacity: overlayOpacity, bottom: bottomOffset },
           { pointerEvents: snapIndex === 1 ? 'auto' : 'none' },
         ]}
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={handleOverlayPress} />
       </Animated.View>
       <Animated.View
-        style={[styles.sheet, { transform: [{ translateY }], height: expandedHeight }]}
+        style={[
+          styles.sheet,
+          {
+            bottom: bottomOffset,
+            height: expandedHeight,
+            transform: [{ translateY }],
+          },
+        ]}
       >
-        <View style={styles.handleContainer} {...panResponder.panHandlers}>
+        <View
+          style={styles.grabber}
+          {...panResponder.panHandlers}
+          accessibilityRole="adjustable"
+          accessibilityLabel={
+            collapsed ? `${label}. Deslizá hacia arriba` : 'Deslizá hacia abajo para cerrar'
+          }
+        >
           <View style={styles.handle} />
+          {collapsed && (
+            <Text style={styles.peekerText} numberOfLines={1}>
+              {label}
+            </Text>
+          )}
         </View>
-        {children}
+        <View
+          style={[styles.body, collapsed && styles.bodyCollapsed]}
+          pointerEvents={collapsed ? 'none' : 'auto'}
+        >
+          {children}
+        </View>
       </Animated.View>
     </>
   );
@@ -120,11 +178,14 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ snapPoints, children, 
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    zIndex: 20,
   },
   sheet: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: theme.colors.surface,
@@ -132,18 +193,39 @@ const styles = StyleSheet.create({
     borderTopRightRadius: theme.radius.lg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 12,
+    zIndex: 30,
+    overflow: 'hidden',
   },
-  handleContainer: {
+  grabber: {
     alignItems: 'center',
-    paddingVertical: theme.spacing.sm,
+    justifyContent: 'center',
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    gap: 6,
+    minHeight: 48,
   },
   handle: {
-    width: 36,
+    width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: theme.colors.surfaceMuted,
+  },
+  peekerText: {
+    width: '100%',
+    textAlign: 'center',
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.mediumGray,
+  },
+  body: {
+    flex: 1,
+    minHeight: 0,
+  },
+  bodyCollapsed: {
+    opacity: 0,
   },
 });
