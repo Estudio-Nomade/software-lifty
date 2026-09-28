@@ -9,20 +9,29 @@ interface GoButtonProps {
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
-  /** Distance from screen bottom to the GO circle (above sheet/tab bar). */
-  bottom: number;
+  /**
+   * Distance from screen bottom to the GO circle (above sheet/tab bar).
+   * Omit when `embedded` — parent stack owns positioning.
+   */
+  bottom?: number;
+  /** Flow inside a parent column stack instead of absolute screen coords. */
+  embedded?: boolean;
 }
 
 export const GoButton: React.FC<GoButtonProps> = ({
   onPress,
   loading = false,
   disabled = false,
-  bottom,
+  bottom = 0,
+  embedded = false,
 }) => {
   const isDisabled = disabled || loading;
 
   return (
-    <View style={[styles.wrap, { bottom }]} pointerEvents="box-none">
+    <View
+      style={embedded ? styles.wrapEmbedded : [styles.wrap, { bottom }]}
+      pointerEvents="box-none"
+    >
       <TouchableOpacity
         style={[styles.button, isDisabled && styles.disabled]}
         onPress={onPress}
@@ -46,6 +55,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
+    alignItems: 'center',
+    zIndex: 6,
+  },
+  wrapEmbedded: {
     alignItems: 'center',
     zIndex: 6,
   },

@@ -20,7 +20,7 @@ import type { DriverStatus, EarningsDaily } from '../api/types';
 import { Avatar } from '../components/Avatar';
 import { BottomSheet } from '../components/BottomSheet';
 import { DistrictPickerSheet } from '../components/DistrictPickerSheet';
-import { GO_SIZE, GoButton } from '../components/GoButton';
+import { GoButton } from '../components/GoButton';
 import { MapView } from '../components/MapView';
 import { PayoutMethodGateModal } from '../components/PayoutMethodGateModal';
 import { Toggle } from '../components/Toggle';
@@ -54,8 +54,8 @@ const ONLINE_COLLAPSED = 180;
 const ONLINE_EXPANDED = SCREEN_HEIGHT * 0.45;
 const OFFLINE_PILL = 96;
 const OFFLINE_EXPANDED = SCREEN_HEIGHT * 0.45;
-/** Gap between GO circle bottom edge and collapsed offline sheet top. */
-const GO_SHEET_GAP = theme.spacing.lg;
+/** Gap between GO+hint stack bottom and collapsed offline sheet top. */
+const GO_STACK_SHEET_GAP = theme.spacing.sm;
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -363,8 +363,7 @@ export const ActiveScreen: React.FC = () => {
   const onlineCollapsed = ONLINE_COLLAPSED + tabPad;
   const onlineExpanded = ONLINE_EXPANDED + tabPad;
   const sheetFloor = isOnline ? onlineCollapsed : offlineCollapsed;
-  const goBottom = sheetFloor + GO_SHEET_GAP;
-  const goHintBottom = goBottom + GO_SIZE + theme.spacing.sm;
+  const goStackBottom = sheetFloor + GO_STACK_SHEET_GAP;
   const recenterBottom = sheetFloor + theme.spacing.md;
 
   const earningsAmountLabel = earnings ? formatCurrency(earnings.total) : '$0';
@@ -534,15 +533,15 @@ export const ActiveScreen: React.FC = () => {
       </View>
 
       {!isOnline && (
-        <>
+        <View style={[styles.goStack, { bottom: goStackBottom }]} pointerEvents="box-none">
           <GoButton
             onPress={connect}
             loading={connecting}
             disabled={!hasLocation || connectBlocked || needsPayoutMethod || connecting}
-            bottom={goBottom}
+            embedded
           />
           {municipalityWaitlisted && (
-            <View style={[styles.goHint, { bottom: goHintBottom }]}>
+            <View style={styles.goHint} pointerEvents="none">
               <Text style={styles.reviewBannerTitle}>Municipio no habilitado</Text>
               <Text style={styles.reviewBannerText}>
                 {`Tu domicilio figura en ${
@@ -554,14 +553,14 @@ export const ActiveScreen: React.FC = () => {
             </View>
           )}
           {!municipalityWaitlisted && awaitingApproval && (
-            <View style={[styles.goHint, { bottom: goHintBottom }]}>
+            <View style={styles.goHint} pointerEvents="none">
               <Text style={styles.reviewBannerText}>
                 Cuenta en revisión. Podés mirar el mapa; te avisamos cuando puedas conectarte.
               </Text>
             </View>
           )}
           {!municipalityWaitlisted && !awaitingApproval && documentsPendingReview && (
-            <View style={[styles.goHint, { bottom: goHintBottom }]}>
+            <View style={styles.goHint} pointerEvents="none">
               <Text style={styles.reviewBannerText}>
                 Documentos pendientes de revisión. No podés conectarte hasta tener los papeles en
                 regla.
@@ -572,7 +571,7 @@ export const ActiveScreen: React.FC = () => {
             !awaitingApproval &&
             !documentsPendingReview &&
             stickersPaused && (
-              <View style={[styles.goHint, { bottom: goHintBottom }]}>
+              <View style={styles.goHint} pointerEvents="none">
                 <Text style={styles.reviewBannerText}>
                   Cuenta suspendida: pasaron 30 días sin retirar los stickers en tránsito. Retiralos
                   en tu municipio para reactivar la cuenta.
@@ -584,7 +583,7 @@ export const ActiveScreen: React.FC = () => {
             !documentsPendingReview &&
             stickersRevoked &&
             !stickersPaused && (
-              <View style={[styles.goHint, { bottom: goHintBottom }]}>
+              <View style={styles.goHint} pointerEvents="none">
                 <Text style={styles.reviewBannerText}>
                   Tu identificación fue revocada. Contactá a soporte o tránsito de tu municipio.
                 </Text>
@@ -596,7 +595,7 @@ export const ActiveScreen: React.FC = () => {
             stickersReminder &&
             !stickersPaused &&
             !stickersRevoked && (
-              <View style={[styles.goHint, { bottom: goHintBottom }]}>
+              <View style={styles.goHint} pointerEvents="none">
                 <Text style={styles.reviewBannerText}>
                   {identificationPhase === 'reminder'
                     ? `Recordatorio: ya pasaron ${driverStatus?.identification_days_since_approval ?? 20}+ días. Retirá los stickers en tránsito; a los 30 días se suspende la cuenta${
@@ -612,12 +611,12 @@ export const ActiveScreen: React.FC = () => {
                 </Text>
               </View>
             )}
-          {toggleError && !isOnline && (
-            <View style={[styles.goHint, { bottom: goHintBottom }]}>
+          {toggleError && (
+            <View style={styles.goHint} pointerEvents="none">
               <Text style={styles.errorText}>{toggleError}</Text>
             </View>
           )}
-        </>
+        </View>
       )}
 
       {isOnline ? (
@@ -763,12 +762,19 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     overflow: 'hidden',
   },
-  goHint: {
+  goStack: {
     position: 'absolute',
-    left: theme.spacing.md,
-    right: theme.spacing.md,
-    zIndex: 7,
+    left: 0,
+    right: 0,
     alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    zIndex: 6,
+  },
+  goHint: {
+    width: '100%',
+    alignItems: 'center',
+    zIndex: 7,
   },
   reviewBannerTitle: {
     fontSize: theme.fontSize.sm,
