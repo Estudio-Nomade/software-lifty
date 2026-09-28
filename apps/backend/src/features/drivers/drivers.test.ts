@@ -865,6 +865,82 @@ describe('Document step completeness', () => {
     expect(driver!.status).toBe('review');
     expect(driver!.admin_review_status).toBe('pending');
   });
+
+  test('rejected + incomplete docs → status rejected step documents with missing types', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    const incomplete = DOC_TYPES.filter((t) => t !== 'platform_rc_insurance_front');
+    await getDb().insert(driverDocuments).values(
+      incomplete.map((doc_type) => ({
+        driver_id: driverId,
+        doc_type,
+        file_url: 'https://x.com/f.png',
+        status: 'pending_review',
+      })),
+    );
+    await getDb()
+      .update(drivers)
+      .set({
+        status: 'rejected',
+        admin_review_status: 'rejected',
+        admin_review_notes: 'Falta el RC',
+      })
+      .where(eq(drivers.id, driverId));
+
+    const res = await request('GET', '/api/drivers/me/status', undefined, token);
+    expect(res.status).toBe(200);
+    expect(res.data.status).toBe('rejected');
+    expect(res.data.step).toBe('documents');
+    expect(res.data.admin_review_notes).toBe('Falta el RC');
+    expect(res.data.missing_doc_types).toContain('platform_rc_insurance_front');
+  });
+
+  test('rejected + upload missing doc re-enters review', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    const incomplete = DOC_TYPES.filter((t) => t !== 'platform_rc_insurance_front');
+    await getDb().insert(driverDocuments).values(
+      incomplete.map((doc_type) => ({
+        driver_id: driverId,
+        doc_type,
+        file_url: 'https://x.com/f.png',
+        status: 'pending_review',
+      })),
+    );
+    await getDb()
+      .update(drivers)
+      .set({
+        status: 'rejected',
+        admin_review_status: 'rejected',
+        admin_review_notes: 'Falta el RC',
+      })
+      .where(eq(drivers.id, driverId));
+
+    const upload = await request(
+      'POST',
+      '/api/drivers/me/documents',
+      { doc_type: 'platform_rc_insurance_front', file_url: 'https://x.com/rc.pdf' },
+      token,
+    );
+    expect(upload.status).toBe(200);
+    expect(upload.data.step).toBe('review');
+    expect(upload.data.status).toBe('under_review');
+
+    const [driver] = await getDb()
+      .select({
+        status: drivers.status,
+        admin_review_status: drivers.admin_review_status,
+        admin_review_notes: drivers.admin_review_notes,
+      })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(driver!.status).toBe('review');
+    expect(driver!.admin_review_status).toBe('pending');
+    expect(driver!.admin_review_notes).toBeNull();
+
+    const me = await request('GET', '/api/drivers/me/status', undefined, token);
+    expect(me.data.status).toBe('under_review');
+    expect(me.data.step).toBe('review');
+  });
 });
 
 describe('Avatar photo upload', () => {

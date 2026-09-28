@@ -84,7 +84,14 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
     ({ user, params, body, set }) => {
       if (!isAdmin(user, set)) return { error: 'Forbidden' };
       return safeCall(
-        () => adminService.reviewDriver(user, params.driver_id, body.action, body.notes),
+        () =>
+          adminService.reviewDriver(
+            user,
+            params.driver_id,
+            body.action,
+            body.notes,
+            body.reject_doc_types,
+          ),
         set,
       );
     },

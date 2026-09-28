@@ -67,6 +67,8 @@ export const driverStatusSchema = z.object({
   identification_days_since_approval: z.number().nullable().optional(),
   can_go_online: z.boolean().optional(),
   admin_review_notes: z.string().nullable().optional(),
+  missing_doc_types: z.array(z.string()).optional(),
+  rejected_doc_types: z.array(z.string()).optional(),
   has_district: z.boolean().optional(),
   district: z
     .object({

@@ -318,6 +318,69 @@ describe('Admin', () => {
     expect(driver!.admin_review_notes).toBe('Invalid license');
   });
 
+  test('POST /drivers/:id/review reject without reject_doc_types leaves docs pending_review', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+
+    const { status } = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      { action: 'reject', notes: 'Falta el seguro de responsabilidad civil' },
+      adminToken,
+    );
+    expect(status).toBe(200);
+
+    const db = getDb();
+    const docs = await db
+      .select({ doc_type: driverDocuments.doc_type, status: driverDocuments.status })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId));
+    expect(docs.length).toBe(DOC_TYPES.length);
+    expect(docs.every((d) => d.status === 'pending_review')).toBe(true);
+    expect(docs.find((d) => d.doc_type === 'license_front')?.status).toBe('pending_review');
+  });
+
+  test('POST /drivers/:id/review reject with reject_doc_types only rejects listed types', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+
+    const { status, data } = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      {
+        action: 'reject',
+        notes: 'Falta RC',
+        reject_doc_types: ['platform_rc_insurance_front'],
+      },
+      adminToken,
+    );
+    expect(status).toBe(200);
+    expect(data.status).toBe('rejected');
+
+    const db = getDb();
+    const docs = await db
+      .select({ doc_type: driverDocuments.doc_type, status: driverDocuments.status })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId));
+    expect(docs.find((d) => d.doc_type === 'platform_rc_insurance_front')?.status).toBe('rejected');
+    expect(docs.find((d) => d.doc_type === 'license_front')?.status).toBe('pending_review');
+    expect(docs.filter((d) => d.status === 'rejected')).toHaveLength(1);
+  });
+
+  test('POST /drivers/:id/review reject invalid reject_doc_types returns 400', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+
+    const { status, data } = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      { action: 'reject', notes: 'x', reject_doc_types: ['not_a_real_type'] },
+      adminToken,
+    );
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('INVALID_REJECT_DOC_TYPES');
+  });
+
   test('POST /drivers/:id/review request_changes without notes returns NOTES_REQUIRED', async () => {
     const adminToken = await createAdminToken();
     const { driverId } = await createReviewDriver();
