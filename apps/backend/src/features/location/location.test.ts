@@ -93,18 +93,34 @@ function wsExpectClose(port: number, token: string): Promise<{ code: number; rea
   });
 }
 
-async function wsSendAndWait(message: object, ws: WebSocket, driverId: string): Promise<void> {
+async function wsSendAndWait(
+  message: { lat?: number; lng?: number; heading?: number },
+  ws: WebSocket,
+  driverId: string,
+): Promise<void> {
   return new Promise((resolve) => {
     ws.send(JSON.stringify(message));
     const poll = async () => {
       for (let i = 0; i < 80; i++) {
         await new Promise((r) => setTimeout(r, 100));
         const [loc] = await getDb()
-          .select({ id: driverLocations.driver_id })
+          .select({
+            id: driverLocations.driver_id,
+            lat: driverLocations.lat,
+            lng: driverLocations.lng,
+          })
           .from(driverLocations)
           .where(eq(driverLocations.driver_id, driverId))
           .limit(1);
-        if (loc) return resolve();
+        if (!loc) continue;
+        // Wait for the upserted coords when provided (row may already exist from a prior send).
+        if (typeof message.lat === 'number' && Math.abs(Number(loc.lat) - message.lat) > 0.05) {
+          continue;
+        }
+        if (typeof message.lng === 'number' && Math.abs(Number(loc.lng) - message.lng) > 0.05) {
+          continue;
+        }
+        return resolve();
       }
       resolve();
     };
