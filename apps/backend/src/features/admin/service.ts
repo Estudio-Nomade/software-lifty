@@ -16,8 +16,16 @@ import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { ensureDriverEnteredReview } from '../drivers/service';
-import { DRIVER_APPROVED_PUSH, driverRejectedPush } from './driver-review-push';
-import { notifyDriverApproved, notifyDriverRejected } from './notifications';
+import {
+  DRIVER_APPROVED_PUSH,
+  driverRejectedPush,
+  driverReviewNotesPush,
+} from './driver-review-push';
+import {
+  notifyDriverApproved,
+  notifyDriverRejected,
+  notifyDriverReviewNotes,
+} from './notifications';
 
 function escapeIlike(raw: string): string {
   return raw.replace(/[\\%_]/g, (ch) => `\\${ch}`);
@@ -318,10 +326,54 @@ export const adminService = {
       );
     }
 
-    const isApprove = action === 'approve';
-    // request_changes = reject + notes required (same rail #343 mail/push).
-    const newStatus = isApprove ? 'approved' : 'rejected';
     const now = new Date();
+
+    // Soft message: stay in review queue, keep docs pending, notify driver to re-upload.
+    if (action === 'request_changes') {
+      await db
+        .update(drivers)
+        .set({
+          admin_review_notes: trimmedNotes!,
+          updated_at: now,
+        })
+        .where(eq(drivers.id, driverId));
+
+      const [driverUser] = await db
+        .select({
+          user_id: users.id,
+          email: users.email,
+          full_name: users.full_name,
+        })
+        .from(users)
+        .innerJoin(drivers, eq(drivers.user_id, users.id))
+        .where(eq(drivers.id, driverId))
+        .limit(1);
+
+      if (driverUser) {
+        const name = driverUser.full_name ?? 'Driver';
+        if (driverUser.email) {
+          void notifyDriverReviewNotes(driverUser.email, name, trimmedNotes!);
+        } else {
+          logger.info('[DRIVER-NOTIFY] Skip review-notes email — no email', {
+            driverId: driverId.split('-')[0],
+          });
+        }
+        const notesPush = driverReviewNotesPush(trimmedNotes);
+        void sendPushToUser(driverUser.user_id, notesPush).catch((err) => {
+          logger.error('[DRIVER-NOTIFY] Review-notes push failed', (err as Error).message);
+        });
+      }
+
+      return {
+        driver_id: driver.id,
+        action,
+        status: 'review',
+        message: 'Review notes sent to driver',
+      };
+    }
+
+    const isApprove = action === 'approve';
+    const newStatus = isApprove ? 'approved' : 'rejected';
     const identificationPatch =
       isApprove && driver.identification_status !== 'issued'
         ? { identification_status: 'pending_pickup' as const }
@@ -396,18 +448,11 @@ export const adminService = {
       }
     }
 
-    const message =
-      action === 'approve'
-        ? 'Driver approved'
-        : action === 'request_changes'
-          ? 'Driver requested document changes'
-          : 'Driver rejected';
-
     return {
       driver_id: driver.id,
       action,
       status: newStatus,
-      message,
+      message: isApprove ? 'Driver approved' : 'Driver rejected',
     };
   },
 
