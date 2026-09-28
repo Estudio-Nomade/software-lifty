@@ -77,13 +77,19 @@ export async function reactToDriverReviewPush(
 ): Promise<void> {
   const isApproved = type === 'driver:approved' || type === 'kyc:approved';
   const isRejected = type === 'driver:rejected' || type === 'kyc:rejected';
-  if (!isApproved && !isRejected) return;
+  const isReviewNotes = type === 'driver:review_notes';
+  if (!isApproved && !isRejected && !isReviewNotes) return;
 
   // Optimistic route so tap feels instant; API refresh corrects store.
   if (isApproved) {
     useAuthStore.getState().setDriverStatus('approved');
     useAuthStore.getState().setOnboardingStep('approved');
     navigate('Active');
+  } else if (isReviewNotes) {
+    // Soft correction: stay under_review, open docs with the reason.
+    useAuthStore.getState().setDriverStatus('under_review');
+    useAuthStore.getState().setOnboardingStep('documents');
+    navigate('OnboardingStep2', pushReason ? { reviewReason: pushReason } : undefined);
   } else {
     useAuthStore.getState().setDriverStatus('rejected');
     useAuthStore.getState().setOnboardingStep('documents');
@@ -92,8 +98,14 @@ export async function reactToDriverReviewPush(
 
   try {
     const route = await resolvePostAuthRoute();
-    if (route.screen && route.screen !== (isApproved ? 'Active' : 'OnboardingStep2')) {
-      navigate(route.screen);
+    const fallback = isApproved ? 'Active' : 'OnboardingStep2';
+    if (route.screen && route.screen !== fallback) {
+      // Soft notes: prefer staying on docs with reason even if status maps to Active.
+      if (isReviewNotes && route.screen === 'Active') {
+        navigate('OnboardingStep2', pushReason ? { reviewReason: pushReason } : undefined);
+      } else {
+        navigate(route.screen);
+      }
     }
   } catch {
     try {
@@ -106,6 +118,15 @@ export async function reactToDriverReviewPush(
       }
       if (driverData.step != null) {
         useAuthStore.getState().setOnboardingStep(driverData.step);
+      }
+      if (isReviewNotes) {
+        navigate(
+          'OnboardingStep2',
+          pushReason || driverData.admin_review_notes
+            ? { reviewReason: pushReason || driverData.admin_review_notes || '' }
+            : undefined,
+        );
+        return;
       }
       const r = routeForDriverStatus(driverData);
       if (r.screen) navigate(r.screen);
@@ -153,6 +174,7 @@ export function handleNotificationResponse(
       break;
     case 'driver:rejected':
     case 'kyc:rejected':
+    case 'driver:review_notes':
       void reactToDriverReviewPush(type, navigate, data?.reason);
       break;
     case 'payment:deposited':

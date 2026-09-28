@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   DRIVER_APPROVED_PUSH,
   driverRejectedPush,
+  driverReviewNotesPush,
   shortReviewReason,
 } from './driver-review-push';
 
@@ -38,6 +39,15 @@ describe('driver review notify copy', () => {
     expect(push.body).toBe('Licencia vencida');
     expect(push.data.type).toBe('driver:rejected');
     expect(push.data.reason).toBe('Licencia vencida');
+    expect(push.channelId).toBe('account');
+  });
+
+  test('driverReviewNotesPush is soft correction (not rejected type)', () => {
+    const push = driverReviewNotesPush('Falta dorso de la licencia');
+    expect(push.title).toBe('Necesitamos que corrijas documentación');
+    expect(push.body).toBe('Falta dorso de la licencia');
+    expect(push.data.type).toBe('driver:review_notes');
+    expect(push.data.reason).toBe('Falta dorso de la licencia');
     expect(push.channelId).toBe('account');
   });
 });

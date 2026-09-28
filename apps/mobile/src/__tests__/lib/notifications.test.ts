@@ -53,4 +53,16 @@ describe('handleNotificationResponse driver review', () => {
     expect(navigate).toHaveBeenCalledWith('OnboardingStep2', undefined);
     expect(navigate).not.toHaveBeenCalledWith('WaitingApproval');
   });
+
+  it('routes driver:review_notes to OnboardingStep2 with reason (soft, not reject)', () => {
+    const navigate = jest.fn();
+    handleNotificationResponse(
+      makeResponse('driver:review_notes', { reason: 'Falta dorso de la licencia' }),
+      navigate,
+    );
+    expect(navigate).toHaveBeenCalledWith('OnboardingStep2', {
+      reviewReason: 'Falta dorso de la licencia',
+    });
+    expect(navigate).not.toHaveBeenCalledWith('WaitingApproval');
+  });
 });

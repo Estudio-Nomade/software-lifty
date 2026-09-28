@@ -337,11 +337,14 @@ export const driversService = {
       .limit(1);
 
     // Everything submitted — awaiting admin review.
+    // Expose soft correction notes (request_changes) so the driver can re-upload
+    // without a terminal reject.
     return {
       status: 'under_review',
       step: 'review',
       kyc_status: 'approved',
       documents_pending_review: fresh?.documents_pending_review ?? documentsPendingReview,
+      admin_review_notes: driver.admin_review_notes ?? null,
       ...municipalityFields,
     };
   },
