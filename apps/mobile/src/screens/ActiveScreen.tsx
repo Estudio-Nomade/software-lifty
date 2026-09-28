@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
+  ScrollView,
   StatusBar,
   StyleSheet,
   TouchableOpacity,
@@ -24,6 +25,7 @@ import { GoButton } from '../components/GoButton';
 import { MapView } from '../components/MapView';
 import { PayoutMethodGateModal } from '../components/PayoutMethodGateModal';
 import { Toggle } from '../components/Toggle';
+import { bottomSheetExpandedHeight } from '../components/bottomSheetMath';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { Snackbar } from '../components/feedback/Snackbar';
 import type { SnackbarTone } from '../components/feedback/Snackbar';
@@ -50,10 +52,8 @@ import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const ONLINE_COLLAPSED = 220;
-const ONLINE_EXPANDED = SCREEN_HEIGHT * 0.45;
-const OFFLINE_PILL = 96;
-const OFFLINE_EXPANDED = SCREEN_HEIGHT * 0.45;
+/** Collapsed: handle + one peeker line above tabs (invite to pull up). */
+const SHEET_COLLAPSED = 56;
 /** Gap between GO+hint stack bottom and collapsed offline sheet top. */
 const GO_STACK_SHEET_GAP = theme.spacing.sm;
 
@@ -381,43 +381,39 @@ export const ActiveScreen: React.FC = () => {
       ? havDistance(mapCenter, { lat: locationLat!, lng: locationLng! }) > 10
       : false;
 
+  // Tab bar is its own absolute layer (zIndex 1000). Sheet sits ON TOP of it via bottomOffset.
   const tabPad = theme.dimensions.tabBarHeight + insets.bottom;
-  const offlineCollapsed = OFFLINE_PILL + tabPad;
-  const offlineExpanded = OFFLINE_EXPANDED + tabPad;
-  const onlineCollapsed = ONLINE_COLLAPSED + tabPad;
-  const onlineExpanded = ONLINE_EXPANDED + tabPad;
-  const sheetFloor = isOnline ? onlineCollapsed : offlineCollapsed;
+  // ~55% of map area; ScrollView covers overflow (Ver ganancias, etc.).
+  const expandedHeight = Math.max(
+    SHEET_COLLAPSED + 160,
+    bottomSheetExpandedHeight(SCREEN_HEIGHT, tabPad, 0.55),
+  );
+  const collapsedHeight = SHEET_COLLAPSED;
+  // Floor of the visible collapsed strip (above tabs) — GO / recenter / snackbar.
+  const sheetFloor = collapsedHeight + tabPad;
   const goStackBottom = sheetFloor + GO_STACK_SHEET_GAP;
   const recenterBottom = sheetFloor + theme.spacing.md;
 
   const earningsAmountLabel = earnings ? formatCurrency(earnings.total) : '$0';
 
+  const onlinePeekerLabel = stickersReminder
+    ? stickersReminderCopy({
+        phase: identificationPhase,
+        daysUntilPause: driverStatus?.identification_days_until_pause,
+        daysSinceApproval: driverStatus?.identification_days_since_approval,
+        compact: true,
+      })
+    : 'Resumen de hoy';
+
+  const offlinePeekerLabel = earningsLoading
+    ? 'Ganaste hoy'
+    : earningsIsError
+      ? 'Ganaste hoy · reintentar'
+      : `Ganaste hoy ${earningsAmountLabel}`;
+
   const renderOfflineSheetBody = () => {
     if (!sheetExpanded) {
-      if (earningsLoading) {
-        return (
-          <View style={styles.pillRow}>
-            <Text style={styles.pillLabel}>Ganaste hoy</Text>
-            <SkeletonCard style={styles.pillSkeleton} />
-          </View>
-        );
-      }
-      if (earningsIsError) {
-        return (
-          <View style={styles.pillRow}>
-            <Text style={styles.pillLabel}>Ganaste hoy</Text>
-            <TouchableOpacity onPress={() => refetchEarnings()} activeOpacity={0.7}>
-              <Text style={styles.pillRetry}>Reintentar</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      }
-      return (
-        <View style={styles.pillRow}>
-          <Text style={styles.pillLabel}>Ganaste hoy</Text>
-          <Text style={styles.pillAmount}>{earningsAmountLabel}</Text>
-        </View>
-      );
+      return null;
     }
 
     if (earningsLoading) {
@@ -638,8 +634,20 @@ export const ActiveScreen: React.FC = () => {
       )}
 
       {isOnline ? (
-        <BottomSheet snapPoints={[onlineCollapsed, onlineExpanded]} onSnapChange={handleSnapChange}>
-          <View style={[styles.sheetContent, { paddingBottom: tabPad }]}>
+        <BottomSheet
+          snapPoints={[collapsedHeight, expandedHeight]}
+          bottomOffset={tabPad}
+          peekerLabel={onlinePeekerLabel}
+          onSnapChange={handleSnapChange}
+        >
+          <ScrollView
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.sheetScrollContent}
+            scrollEnabled={sheetExpanded}
+            bounces={sheetExpanded}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.toggleRow}>
               <Text style={styles.statusOnline}>Estas conectado</Text>
               <Toggle value={true} onToggle={handleToggle} />
@@ -647,8 +655,6 @@ export const ActiveScreen: React.FC = () => {
             <Text style={styles.statusOnlineTime}>{formatOnlineTime(onlineTime)}</Text>
             {toggleError && <Text style={styles.errorText}>{toggleError}</Text>}
 
-            {/* Justo bajo el estado = zona visible del sheet colapsado (arriba del tab bar).
-                No al final: marginTop:auto lo mandaba al fondo del sheet expandido y no se veía. */}
             {stickersReminder && !stickersPaused && !stickersRevoked && (
               <View
                 style={styles.onlineStickersChip}
@@ -700,16 +706,24 @@ export const ActiveScreen: React.FC = () => {
                 <Text style={styles.earningsButtonText}>Ver ganancias</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </ScrollView>
         </BottomSheet>
       ) : (
         <BottomSheet
-          snapPoints={[offlineCollapsed, offlineExpanded]}
+          snapPoints={[collapsedHeight, expandedHeight]}
+          bottomOffset={tabPad}
+          peekerLabel={offlinePeekerLabel}
           onSnapChange={handleSnapChange}
         >
-          <View style={[styles.sheetContent, { paddingBottom: tabPad }]}>
+          <ScrollView
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.sheetScrollContent}
+            scrollEnabled={sheetExpanded}
+            bounces={sheetExpanded}
+            showsVerticalScrollIndicator={false}
+          >
             {renderOfflineSheetBody()}
-          </View>
+          </ScrollView>
         </BottomSheet>
       )}
 
@@ -857,37 +871,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.surfaceMuted,
   },
-  sheetContent: {
+  sheetScroll: {
     flex: 1,
+    width: '100%',
+  },
+  sheetScrollContent: {
+    flexGrow: 1,
+    width: '100%',
     paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.lg,
     alignItems: 'center',
     gap: theme.spacing.xs,
-  },
-  pillRow: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.xs,
-  },
-  pillLabel: {
-    fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
-    color: theme.colors.mediumGray,
-  },
-  pillAmount: {
-    fontSize: theme.fontSize.xl,
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.deepBlue,
-  },
-  pillSkeleton: {
-    width: 96,
-    height: 28,
-  },
-  pillRetry: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
-    color: theme.colors.turquoise,
   },
   expandedBlock: {
     width: '100%',
