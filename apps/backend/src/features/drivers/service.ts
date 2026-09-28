@@ -55,11 +55,17 @@ function hasAllRequiredDocs(uploaded: { doc_type: string }[]): boolean {
   return DOC_TYPES.every((t) => types.has(t));
 }
 
-const TERMINAL_DRIVER_STATUSES = new Set(['approved', 'rejected', 'suspended']);
+const HARD_TERMINAL_DRIVER_STATUSES = new Set(['approved', 'suspended']);
+
+function missingRequiredDocTypes(uploaded: { doc_type: string }[]): string[] {
+  const types = new Set(uploaded.map((d) => d.doc_type));
+  return DOC_TYPES.filter((t) => !types.has(t));
+}
 
 /**
- * Idempotent: if all required docs are present and the driver is not terminal,
+ * Idempotent: if all required docs are present (non-superseded, non-rejected),
  * set status=review + admin_review_status=pending and notify admins once on transition.
+ * Also re-enters review from rejected after the driver fixes missing/bad docs.
  * Closes desync where getMyStatus returns step=review without drivers.status='review'
  * (listPending only filters status=review).
  * @returns true if status transitioned into review this call
@@ -72,7 +78,7 @@ export async function ensureDriverEnteredReview(driverId: string): Promise<boole
     .limit(1);
 
   if (!driver) return false;
-  if (TERMINAL_DRIVER_STATUSES.has(driver.status)) return false;
+  if (HARD_TERMINAL_DRIVER_STATUSES.has(driver.status)) return false;
   if (driver.status === 'review') return false;
 
   const docsList = await db
@@ -90,14 +96,27 @@ export async function ensureDriverEnteredReview(driverId: string): Promise<boole
     logger.info('[DOCS] Docs incomplete — not entering review / notifying admin', {
       driverId,
       uploaded: docsList.map((d) => d.doc_type).sort(),
-      missing: DOC_TYPES.filter((t) => !docsList.some((d) => d.doc_type === t)),
+      missing: missingRequiredDocTypes(docsList),
     });
     return false;
   }
 
+  const fromRejected = driver.status === 'rejected';
   await db
     .update(drivers)
-    .set({ status: 'review', admin_review_status: 'pending', updated_at: new Date() })
+    .set({
+      status: 'review',
+      admin_review_status: 'pending',
+      ...(fromRejected
+        ? {
+            admin_review_notes: null,
+            admin_reviewed_by: null,
+            admin_reviewed_at: null,
+            documents_pending_review: false,
+          }
+        : {}),
+      updated_at: new Date(),
+    })
     .where(eq(drivers.id, driverId));
 
   logger.info('[DOCS] Driver entered review queue', {
@@ -245,16 +264,6 @@ export const driversService = {
         has_district: !!district,
       };
     }
-    if (driver.status === 'rejected' || driver.admin_review_status === 'rejected') {
-      return {
-        status: 'rejected',
-        step: 'review',
-        kyc_status: driver.kyc_status,
-        admin_review_notes: driver.admin_review_notes,
-        ...municipalityFields,
-      };
-    }
-
     if (driver.status === 'kyc_pending') {
       return {
         status: 'pending',
@@ -271,7 +280,13 @@ export const driversService = {
     // KYC gate: identity must be verified before anything else.
     // But NOT if the driver is still in step1 (profile) — let them
     // complete their profile data before demanding KYC.
-    if (driver.kyc_status !== 'approved' && driver.status !== 'step1') {
+    // Rejected drivers already passed KYC — skip to docs repair path below.
+    if (
+      driver.kyc_status !== 'approved' &&
+      driver.status !== 'step1' &&
+      driver.status !== 'rejected' &&
+      driver.admin_review_status !== 'rejected'
+    ) {
       // DIDIT is still processing → keep the user on the waiting screen.
       if (driver.kyc_status === 'in_progress' || driver.kyc_status === 'under_review') {
         return {
@@ -290,7 +305,7 @@ export const driversService = {
       };
     }
 
-    // KYC approved — vehicle required next.
+    // KYC approved (or rejected-after-review repair) — vehicle required next.
     const [vehicle] = await db
       .select({ id: vehicles.id })
       .from(vehicles)
@@ -306,23 +321,71 @@ export const driversService = {
       };
     }
 
-    // Vehicle done — documents required next.
-    const docsList = await db
-      .select({ doc_type: driverDocuments.doc_type })
+    // Vehicle done — load valid + rejected docs for repair UX.
+    const allCurrentDocs = await db
+      .select({
+        doc_type: driverDocuments.doc_type,
+        status: driverDocuments.status,
+      })
       .from(driverDocuments)
       .where(
-        and(
-          eq(driverDocuments.driver_id, driver.id),
-          ne(driverDocuments.status, 'superseded'),
-          ne(driverDocuments.status, 'rejected'),
-        ),
+        and(eq(driverDocuments.driver_id, driver.id), ne(driverDocuments.status, 'superseded')),
       );
 
-    if (!hasAllRequiredDocs(docsList)) {
+    const validDocs = allCurrentDocs.filter((d) => d.status !== 'rejected');
+    const rejectedDocTypes = allCurrentDocs
+      .filter((d) => d.status === 'rejected')
+      .map((d) => d.doc_type);
+    const missingDocTypes = missingRequiredDocTypes(validDocs);
+    const docsComplete = hasAllRequiredDocs(validDocs);
+
+    // Rejected driver: re-enter review when docs complete; else documents step.
+    if (driver.status === 'rejected' || driver.admin_review_status === 'rejected') {
+      if (docsComplete) {
+        await ensureDriverEnteredReview(driver.id);
+        const [fresh] = await db
+          .select({
+            status: drivers.status,
+            documents_pending_review: drivers.documents_pending_review,
+            admin_review_notes: drivers.admin_review_notes,
+          })
+          .from(drivers)
+          .where(eq(drivers.id, driver.id))
+          .limit(1);
+
+        if (fresh?.status === 'review') {
+          return {
+            status: 'under_review',
+            step: 'review',
+            kyc_status: driver.kyc_status,
+            documents_pending_review: fresh.documents_pending_review ?? documentsPendingReview,
+            admin_review_notes: fresh.admin_review_notes ?? null,
+            missing_doc_types: [],
+            rejected_doc_types: [],
+            ...municipalityFields,
+          };
+        }
+      }
+
+      return {
+        status: 'rejected',
+        step: 'documents',
+        kyc_status: driver.kyc_status,
+        admin_review_notes: driver.admin_review_notes,
+        missing_doc_types: missingDocTypes,
+        rejected_doc_types: rejectedDocTypes,
+        ...municipalityFields,
+      };
+    }
+
+    if (!docsComplete) {
       return {
         status: 'pending',
         step: 'documents',
         kyc_status: 'approved',
+        missing_doc_types: missingDocTypes,
+        rejected_doc_types: rejectedDocTypes,
+        admin_review_notes: driver.admin_review_notes ?? null,
         ...municipalityFields,
       };
     }
@@ -956,23 +1019,30 @@ export const driversService = {
     const isSensitive = SENSITIVE_DOC_TYPES.has(docType);
 
     if (isSensitive) {
-      await db
-        .update(drivers)
-        .set({
-          status: 'review',
-          admin_review_status: 'pending',
-          documents_pending_review: true,
-          is_online: false,
-          updated_at: new Date(),
-        })
-        .where(eq(drivers.id, driver.id));
+      if (driver.status === 'rejected') {
+        // Coming from hard reject: only re-enter review when the full required set is valid again.
+        await ensureDriverEnteredReview(driver.id);
+      } else {
+        await db
+          .update(drivers)
+          .set({
+            status: 'review',
+            admin_review_status: 'pending',
+            documents_pending_review: true,
+            is_online: false,
+            updated_at: new Date(),
+          })
+          .where(eq(drivers.id, driver.id));
 
-      logger.info('[DOCS] Sensitive doc re-uploaded, driver back in review', {
-        driverId: driver.id.split('-')[0],
-        docType,
-      });
+        logger.info('[DOCS] Sensitive doc re-uploaded, driver back in review', {
+          driverId: driver.id.split('-')[0],
+          docType,
+        });
 
-      void notifyAdminNewDriver(driver.id);
+        void notifyAdminNewDriver(driver.id);
+      }
+    } else if (driver.status === 'rejected') {
+      await ensureDriverEnteredReview(driver.id);
     }
 
     return {

@@ -12,12 +12,20 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { z } from 'zod';
 import { getValidated } from '../api/client';
-import { ApiError, driverStatusSchema } from '../api/types';
+import { ApiError, documentSchema, driverStatusSchema } from '../api/types';
 import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import {
+  type HydratedDocsState,
+  type HydratedSideState,
+  allDocsSatisfied,
+  emptyHydratedDocs,
+  hydrateDocsFromApi,
+} from '../lib/onboardingDocsHydrate';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
 import { resolveReviewGate } from '../lib/reviewGate';
 import { useAuthStore } from '../store/authStore';
@@ -36,7 +44,7 @@ const DOCS: { type: DocType; label: string }[] = [
   { type: 'vehicle_insurance', label: 'Seguro del vehiculo' },
   {
     type: 'platform_rc_insurance',
-    label: 'Seguro RC para plataformas (Conductor digital)',
+    label: 'Seguro de Responsabilidad Civil',
   },
   { type: 'background_check', label: 'Certificado de antecedentes penales' },
   { type: 'rndg', label: 'Registro Nacional de Datos Geneticos (RNDG)' },
@@ -55,44 +63,26 @@ function sideLabelFor(docType: DocType, side: DocSide): string {
   return SIDE_LABELS[side];
 }
 
-interface DocState {
-  fileUri: string | null;
-  fileName: string | null;
-  fileUrl: string | null;
-  uploading: boolean;
-  uploaded: boolean;
-  error: string | null;
+function badgeFor(state: HydratedSideState): { label: string; color: string } | null {
+  if (state.needsReplace && !state.replacedInSession) {
+    return { label: 'Rehacer', color: theme.colors.dangerRed };
+  }
+  if (state.serverStatus === 'approved' && !state.replacedInSession) {
+    return { label: 'OK', color: theme.colors.turquoise };
+  }
+  if (state.serverStatus === 'pending_review' && !state.replacedInSession) {
+    return { label: 'En revisión', color: theme.colors.turquoise };
+  }
+  return null;
 }
-
-const initialDocState: DocState = {
-  fileUri: null,
-  fileName: null,
-  fileUrl: null,
-  uploading: false,
-  uploaded: false,
-  error: null,
-};
-
-type SideState = Record<DocSide, DocState>;
-
-const initialSideState = (): SideState => ({
-  front: { ...initialDocState },
-  back: { ...initialDocState },
-});
 
 export const OnboardingStep2Screen: React.FC = () => {
   const navigation = useAppNavigation();
   const { reviewReason: reviewReasonParam } = useLocalSearchParams<{ reviewReason?: string }>();
   const driverId = useAuthStore((s) => s.driverId);
   const driverStatus = useAuthStore((s) => s.driverStatus);
-  const [docs, setDocs] = useState<Record<DocType, SideState>>({
-    drivers_license: initialSideState(),
-    vehicle_registration: initialSideState(),
-    vehicle_insurance: initialSideState(),
-    platform_rc_insurance: initialSideState(),
-    background_check: initialSideState(),
-    rndg: initialSideState(),
-  });
+  const [docs, setDocs] = useState<HydratedDocsState>(emptyHydratedDocs);
+  const [hydrating, setHydrating] = useState(true);
   const [verifying, setVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState<string | null>(
@@ -100,12 +90,16 @@ export const OnboardingStep2Screen: React.FC = () => {
       ? reviewReasonParam.trim()
       : null,
   );
+  const [partialFix, setPartialFix] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const status = await getValidated('/drivers/me/status', driverStatusSchema);
+        const [status, documents] = await Promise.all([
+          getValidated('/drivers/me/status', driverStatusSchema),
+          getValidated('/drivers/me/documents', z.array(documentSchema)),
+        ]);
         if (cancelled) return;
         if (status.admin_review_notes?.trim()) {
           setRejectReason(status.admin_review_notes.trim());
@@ -113,8 +107,25 @@ export const OnboardingStep2Screen: React.FC = () => {
         if (status.status === 'rejected') {
           useAuthStore.getState().setDriverStatus('rejected');
         }
+        const hydrated = hydrateDocsFromApi(documents);
+        setDocs(hydrated);
+        const hasOk = (Object.keys(DOC_SIDES) as DocBase[]).some((dt) =>
+          DOC_SIDES[dt].some((side) => {
+            const s = hydrated[dt][side];
+            return s.serverStatus === 'approved' || s.serverStatus === 'pending_review';
+          }),
+        );
+        const hasGap = (Object.keys(DOC_SIDES) as DocBase[]).some((dt) =>
+          DOC_SIDES[dt].some((side) => {
+            const s = hydrated[dt][side];
+            return s.needsReplace || (!s.uploaded && s.serverStatus !== 'approved');
+          }),
+        );
+        setPartialFix(hasOk && hasGap);
       } catch {
-        // keep push param / null
+        // keep empty local state / push param
+      } finally {
+        if (!cancelled) setHydrating(false);
       }
     })();
     return () => {
@@ -122,9 +133,7 @@ export const OnboardingStep2Screen: React.FC = () => {
     };
   }, []);
 
-  const allUploaded = Object.entries(docs).every(([docType, doc]) =>
-    DOC_SIDES[docType as DocType].every((side) => doc[side].uploaded),
-  );
+  const allUploaded = allDocsSatisfied(docs);
 
   const setSideError = useCallback((docType: DocType, side: DocSide, error: string) => {
     setDocs((prev) => ({
@@ -242,8 +251,14 @@ export const OnboardingStep2Screen: React.FC = () => {
             [side]: {
               ...prev[docType][side],
               fileUrl: result.file_url,
+              fileName: name,
+              fileUri: uri,
               uploading: false,
               uploaded: true,
+              needsReplace: false,
+              replacedInSession: true,
+              serverStatus: 'pending_review',
+              isPdf,
               error: null,
             },
           },
@@ -263,6 +278,7 @@ export const OnboardingStep2Screen: React.FC = () => {
               ...prev[docType][side],
               uploading: false,
               uploaded: false,
+              replacedInSession: false,
               error: message,
             },
           },
@@ -273,10 +289,25 @@ export const OnboardingStep2Screen: React.FC = () => {
   );
 
   const handleRetry = useCallback((docType: DocType, side: DocSide) => {
-    setDocs((prev) => ({
-      ...prev,
-      [docType]: { ...prev[docType], [side]: { ...initialDocState } },
-    }));
+    setDocs((prev) => {
+      const prevSide = prev[docType][side];
+      return {
+        ...prev,
+        [docType]: {
+          ...prev[docType],
+          [side]: {
+            ...prevSide,
+            fileUri: null,
+            fileName: prevSide.needsReplace ? 'Rehacer' : null,
+            fileUrl: prevSide.needsReplace ? prevSide.fileUrl : null,
+            uploaded: false,
+            replacedInSession: false,
+            error: null,
+            uploading: false,
+          },
+        },
+      };
+    });
   }, []);
 
   const handleVerify = useCallback(async () => {
@@ -284,6 +315,9 @@ export const OnboardingStep2Screen: React.FC = () => {
     setVerifyError(null);
     try {
       const status = await getValidated('/drivers/me/status', driverStatusSchema);
+      if (status.status === 'under_review' || status.step === 'review') {
+        useAuthStore.getState().setDriverStatus('under_review');
+      }
       const gate = resolveReviewGate(status.step);
       if (!gate.ok) {
         setVerifyError(gate.message);
@@ -307,101 +341,130 @@ export const OnboardingStep2Screen: React.FC = () => {
         <Text style={styles.title}>Subi tus documentos</Text>
         <Text style={styles.subtitle}>Los necesitamos para habilitar tu cuenta</Text>
 
-        {rejectReason || driverStatus === 'rejected' ? (
+        {rejectReason || driverStatus === 'rejected' || partialFix ? (
           <View style={styles.rejectBanner}>
-            <Text style={styles.rejectTitle}>No pudimos aprobar tus documentos</Text>
+            <Text style={styles.rejectTitle}>
+              {partialFix ? 'Solo tenés que subir lo marcado' : 'No pudimos aprobar tus documentos'}
+            </Text>
             <Text style={styles.rejectBody}>
-              {rejectReason ?? 'Revisá el motivo en el mail y volvé a subir lo que falte.'}
+              {rejectReason ??
+                (partialFix
+                  ? 'El resto ya está cargado. Completá lo que falta o está en rojo.'
+                  : 'Revisá el motivo en el mail y volvé a subir lo que falte.')}
             </Text>
           </View>
         ) : null}
 
-        {DOCS.map((doc) => (
-          <View key={doc.type} style={styles.uploadBlock}>
-            <View style={styles.uploadIcon}>
-              <Ionicons
-                name="document-text-outline"
-                size={24}
-                color={theme.colors.mediumGray}
-                accessibilityLabel="Subir documento"
-              />
-            </View>
-            <Text style={styles.uploadTitle}>{doc.label}</Text>
-            {doc.type === 'vehicle_insurance' ? (
-              <Text style={styles.hintText}>
-                Alcanza un archivo o foto del seguro (PDF o imagen). No hace falta dorso.
-              </Text>
-            ) : null}
-            {doc.type === 'platform_rc_insurance' ? (
-              <Text style={styles.hintText}>
-                Cobertura de responsabilidad civil mientras trabajás con apps. Es distinto al seguro
-                del auto.
-              </Text>
-            ) : null}
+        {hydrating ? (
+          <ActivityIndicator size="large" color={theme.colors.turquoise} />
+        ) : (
+          DOCS.map((doc) => (
+            <View key={doc.type} style={styles.uploadBlock}>
+              <View style={styles.uploadIcon}>
+                <Ionicons
+                  name="document-text-outline"
+                  size={24}
+                  color={theme.colors.mediumGray}
+                  accessibilityLabel="Subir documento"
+                />
+              </View>
+              <Text style={styles.uploadTitle}>{doc.label}</Text>
+              {doc.type === 'vehicle_insurance' ? (
+                <Text style={styles.hintText}>
+                  Alcanza un archivo o foto del seguro (PDF o imagen). No hace falta dorso.
+                </Text>
+              ) : null}
+              {doc.type === 'platform_rc_insurance' ? (
+                <Text style={styles.hintText}>
+                  Cobertura de responsabilidad civil mientras trabajás con apps. Es distinto al
+                  seguro del auto.
+                </Text>
+              ) : null}
 
-            {DOC_SIDES[doc.type].map((side) => {
-              const state = docs[doc.type][side];
-              const label = sideLabelFor(doc.type, side);
-              const showSideLabel = DOC_SIDES[doc.type].length > 1 || allowsPdf(doc.type);
-              return (
-                <View key={side} style={styles.sideBlock}>
-                  {showSideLabel ? <Text style={styles.sideLabel}>{label}</Text> : null}
+              {DOC_SIDES[doc.type].map((side) => {
+                const state = docs[doc.type][side];
+                const label = sideLabelFor(doc.type, side);
+                const showSideLabel = DOC_SIDES[doc.type].length > 1 || allowsPdf(doc.type);
+                const badge = badgeFor(state);
+                const showAsOk = sideSatisfiedUi(state);
+                return (
+                  <View key={side} style={styles.sideBlock}>
+                    {showSideLabel ? <Text style={styles.sideLabel}>{label}</Text> : null}
 
-                  {state.uploaded ? (
-                    <View style={styles.uploadedRow}>
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={18}
-                        color={theme.colors.turquoise}
-                        accessibilityLabel="Documento subido"
-                      />
-                      <Text style={styles.fileName} numberOfLines={1}>
-                        {state.fileName}
-                      </Text>
-                    </View>
-                  ) : state.uploading ? (
-                    <ActivityIndicator size="small" color={theme.colors.turquoise} />
-                  ) : (
-                    <View style={styles.uploadOptions}>
-                      <TouchableOpacity
-                        style={styles.uploadOption}
-                        onPress={() => handlePick(doc.type, side, 'camera')}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.optionText}>Sacar foto</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.uploadOption}
-                        onPress={() => handlePick(doc.type, side, 'gallery')}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.optionText}>Subir de galeria</Text>
-                      </TouchableOpacity>
-                      {allowsPdf(doc.type) ? (
+                    {state.uploading ? (
+                      <ActivityIndicator size="small" color={theme.colors.turquoise} />
+                    ) : showAsOk ? (
+                      <View style={styles.uploadedRow}>
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={18}
+                          color={
+                            state.needsReplace && !state.replacedInSession
+                              ? theme.colors.dangerRed
+                              : theme.colors.turquoise
+                          }
+                          accessibilityLabel="Documento subido"
+                        />
+                        <Text
+                          style={[
+                            styles.fileName,
+                            state.needsReplace && !state.replacedInSession
+                              ? styles.fileNameReject
+                              : null,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {state.fileName ?? 'Documento cargado'}
+                        </Text>
+                        {badge ? (
+                          <Text style={[styles.badge, { color: badge.color }]}>{badge.label}</Text>
+                        ) : null}
+                      </View>
+                    ) : (
+                      <View style={styles.uploadOptions}>
+                        {state.needsReplace && state.fileName ? (
+                          <Text style={styles.rehacerHint}>Rehacer — subí una versión nueva</Text>
+                        ) : null}
                         <TouchableOpacity
                           style={styles.uploadOption}
-                          onPress={() => handlePick(doc.type, side, 'pdf')}
+                          onPress={() => handlePick(doc.type, side, 'camera')}
                           activeOpacity={0.7}
                         >
-                          <Text style={styles.optionText}>Archivo PDF</Text>
+                          <Text style={styles.optionText}>Sacar foto</Text>
                         </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  )}
+                        <TouchableOpacity
+                          style={styles.uploadOption}
+                          onPress={() => handlePick(doc.type, side, 'gallery')}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.optionText}>Subir de galeria</Text>
+                        </TouchableOpacity>
+                        {allowsPdf(doc.type) ? (
+                          <TouchableOpacity
+                            style={styles.uploadOption}
+                            onPress={() => handlePick(doc.type, side, 'pdf')}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.optionText}>Archivo PDF</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    )}
 
-                  {state.error && (
-                    <View style={styles.errorRow}>
-                      <Text style={styles.errorText}>{state.error}</Text>
-                      <TouchableOpacity onPress={() => handleRetry(doc.type, side)}>
-                        <Text style={styles.retryText}>Reintentar</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        ))}
+                    {state.error ? (
+                      <View style={styles.errorRow}>
+                        <Text style={styles.errorText}>{state.error}</Text>
+                        <TouchableOpacity onPress={() => handleRetry(doc.type, side)}>
+                          <Text style={styles.retryText}>Reintentar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          ))
+        )}
 
         {verifyError ? <Text style={styles.verifyError}>{verifyError}</Text> : null}
 
@@ -409,12 +472,20 @@ export const OnboardingStep2Screen: React.FC = () => {
           title={verifying ? 'VERIFICANDO…' : 'ENVIAR DOCUMENTOS'}
           onPress={handleVerify}
           style={styles.button}
-          disabled={!allUploaded || verifying}
+          disabled={!allUploaded || verifying || hydrating}
         />
       </ScrollView>
     </View>
   );
 };
+
+/** UI: show check row for OK sides; rejected without replace still shows pickers. */
+function sideSatisfiedUi(state: HydratedSideState): boolean {
+  if (state.uploading) return false;
+  if (state.needsReplace && !state.replacedInSession) return false;
+  if (state.serverStatus === 'approved' || state.serverStatus === 'pending_review') return true;
+  return state.uploaded || state.replacedInSession;
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -523,6 +594,18 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.turquoise,
     flexShrink: 1,
+  },
+  fileNameReject: {
+    color: theme.colors.dangerRed,
+  },
+  badge: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+  },
+  rehacerHint: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.dangerRed,
+    alignSelf: 'flex-start',
   },
   errorRow: {
     alignItems: 'center',

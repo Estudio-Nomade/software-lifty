@@ -88,6 +88,12 @@ describe('routeForDriverStatus', () => {
     expect(r.status).toBe('rejected');
     expect(r.blockedMessage).toContain('Licencia ilegible');
   });
+
+  it('rejected without notes uses partial-fix copy', () => {
+    const r = routeForDriverStatus({ status: 'rejected', step: 'documents' });
+    expect(r.screen).toBe('OnboardingStep2');
+    expect(r.blockedMessage).toContain('Solo volvé a subir lo indicado');
+  });
 });
 
 describe('isTransientStatusFailure', () => {

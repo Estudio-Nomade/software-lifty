@@ -3,6 +3,7 @@ import { t } from 'elysia';
 export const reviewBody = t.Object({
   action: t.String({ enum: ['approve', 'reject', 'request_changes'] }),
   notes: t.Optional(t.String({ maxLength: 500 })),
+  reject_doc_types: t.Optional(t.Array(t.String())),
 });
 
 export const driverIdParams = t.Object({

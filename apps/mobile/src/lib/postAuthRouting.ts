@@ -53,7 +53,7 @@ export function routeForDriverStatus(driverData: DriverStatus): {
       status,
       blockedMessage: driverData.admin_review_notes
         ? `Documentos rechazados: ${driverData.admin_review_notes}`
-        : 'Tus documentos fueron rechazados. Volvé a subir lo que falte.',
+        : 'Tus documentos necesitan correcciones. Solo volvé a subir lo indicado.',
     };
   }
   if (status === 'suspended') {

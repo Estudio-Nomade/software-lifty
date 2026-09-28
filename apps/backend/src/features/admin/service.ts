@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import {
   commissionPhases,
@@ -10,6 +10,7 @@ import {
   vehicles,
 } from '../../shared/db/schema';
 import { getCommissionConfig } from '../../shared/lib/commission';
+import { VALID_DOC_TYPES } from '../../shared/lib/documents';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
 import { logger } from '../../shared/lib/logger';
@@ -280,6 +281,7 @@ export const adminService = {
     driverId: string,
     action: 'approve' | 'reject' | 'request_changes',
     notes?: string,
+    rejectDocTypes?: string[],
   ) {
     const trimmedNotes = notes?.trim() || undefined;
     if (action === 'request_changes' && (!trimmedNotes || trimmedNotes.length < 5)) {
@@ -288,6 +290,23 @@ export const adminService = {
         400,
         'NOTES_REQUIRED',
       );
+    }
+
+    const uniqueRejectTypes =
+      action === 'reject' && rejectDocTypes?.length
+        ? [...new Set(rejectDocTypes.map((t) => t.trim()).filter(Boolean))]
+        : [];
+    if (uniqueRejectTypes.length > 0) {
+      const invalid = uniqueRejectTypes.filter(
+        (t) => !(VALID_DOC_TYPES as readonly string[]).includes(t),
+      );
+      if (invalid.length > 0) {
+        throw new AppError(
+          `Invalid reject_doc_types: ${invalid.join(', ')}`,
+          400,
+          'INVALID_REJECT_DOC_TYPES',
+        );
+      }
     }
 
     const [driver] = await db
@@ -394,13 +413,30 @@ export const adminService = {
       })
       .where(eq(drivers.id, driverId));
 
-    // Resolve the pending documents in line with the admin's decision.
-    await db
-      .update(driverDocuments)
-      .set(isApprove ? { status: 'approved', verified_at: now } : { status: 'rejected' })
-      .where(
-        and(eq(driverDocuments.driver_id, driverId), eq(driverDocuments.status, 'pending_review')),
-      );
+    // Approve: all pending_review → approved.
+    // Reject: never mass-reject; only listed reject_doc_types (if any) → rejected.
+    if (isApprove) {
+      await db
+        .update(driverDocuments)
+        .set({ status: 'approved', verified_at: now })
+        .where(
+          and(
+            eq(driverDocuments.driver_id, driverId),
+            eq(driverDocuments.status, 'pending_review'),
+          ),
+        );
+    } else if (uniqueRejectTypes.length > 0) {
+      await db
+        .update(driverDocuments)
+        .set({ status: 'rejected' })
+        .where(
+          and(
+            eq(driverDocuments.driver_id, driverId),
+            inArray(driverDocuments.doc_type, uniqueRejectTypes),
+            ne(driverDocuments.status, 'superseded'),
+          ),
+        );
+    }
 
     {
       const [driverUser] = await db
