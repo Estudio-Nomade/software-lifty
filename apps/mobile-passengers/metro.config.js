@@ -2,7 +2,11 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-config.server.unstable_serverRoot = __dirname;
+// Do NOT set server.unstable_serverRoot = __dirname.
+// Expo monorepo default keeps serverRoot at the workspace root so the launch
+// entry rewrites to apps/<app>/node_modules/expo-router/entry. Forcing the
+// app dir double-resolves that path and red-screens:
+// "Unable to resolve module ./apps/.../node_modules/expo-router/entry".
 
 // Resolve the CJS build of packages that ship an ESM build using `import.meta`
 // (e.g. zustand). The web bundle is served as a classic (non-module) script, so
