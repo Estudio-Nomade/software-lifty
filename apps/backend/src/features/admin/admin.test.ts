@@ -318,6 +318,100 @@ describe('Admin', () => {
     expect(driver!.admin_review_notes).toBe('Invalid license');
   });
 
+  test('POST /drivers/:id/review request_changes without notes returns NOTES_REQUIRED', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+
+    const { status, data } = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      { action: 'request_changes' },
+      adminToken,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('NOTES_REQUIRED');
+  });
+
+  test('POST /drivers/:id/review request_changes with short notes returns NOTES_REQUIRED', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+
+    const { status, data } = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      { action: 'request_changes', notes: '  hi  ' },
+      adminToken,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('NOTES_REQUIRED');
+  });
+
+  test('POST /drivers/:id/review request_changes rejects and stores notes', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+    const notes = 'Falta dorso de la licencia';
+
+    const { status, data } = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      { action: 'request_changes', notes },
+      adminToken,
+    );
+
+    expect(status).toBe(200);
+    expect(data.action).toBe('request_changes');
+    expect(data.status).toBe('rejected');
+
+    const db = getDb();
+    const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId)).limit(1);
+    expect(driver!.status).toBe('rejected');
+    expect(driver!.admin_review_status).toBe('rejected');
+    expect(driver!.admin_review_notes).toBe(notes);
+  });
+
+  test('POST /drivers/:id/review request_changes not in queue returns 409', async () => {
+    const adminToken = await createAdminToken();
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({ phone: '+5492618888111', full_name: 'Pending Only', role: 'driver', kyc_status: 'approved' })
+      .returning({ id: users.id });
+    const [driver] = await db
+      .insert(drivers)
+      .values({
+        user_id: user.id,
+        status: 'pending',
+        kyc_status: 'approved',
+        admin_review_status: 'pending',
+      })
+      .returning({ id: drivers.id });
+
+    const { status, data } = await request(
+      'POST',
+      `/api/admin/drivers/${driver.id}/review`,
+      { action: 'request_changes', notes: 'Falta dorso de la licencia' },
+      adminToken,
+    );
+
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('NOT_IN_REVIEW_QUEUE');
+  });
+
+  test('POST /drivers/:id/review request_changes non-admin returns 403', async () => {
+    const { token, driverId } = await createReviewDriver();
+
+    const { status } = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      { action: 'request_changes', notes: 'Falta dorso de la licencia' },
+      token,
+    );
+
+    expect(status).toBe(403);
+  });
+
   test('POST /drivers/:id/review already reviewed returns error', async () => {
     const adminToken = await createAdminToken();
     const { driverId } = await createReviewDriver();
