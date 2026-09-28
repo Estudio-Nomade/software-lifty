@@ -97,6 +97,25 @@ export async function notifyDriverRejected(
   }
 }
 
+export async function notifyDriverReviewNotes(
+  driverEmail: string,
+  driverName: string,
+  reason: string,
+): Promise<void> {
+  try {
+    const subject = 'Necesitamos que corrijas documentación';
+    const html = `
+      <p>Hola <strong>${sanitize(driverName)}</strong>,</p>
+      <p>El equipo de Lifty te pidió corregir o completar documentación <strong>antes de decidir la aprobación</strong>.</p>
+      <p><strong>Qué corregir:</strong> ${sanitize(reason)}</p>
+      <p>Entrá a la app y volvé a subir lo que falte. Tu cuenta sigue en revisión.</p>
+    `;
+    await sendEmail(driverEmail, subject, html);
+  } catch (err) {
+    logger.error('[DRIVER-NOTIFY] Failed to send review-notes email', (err as Error).message);
+  }
+}
+
 function generateApprovalToken(): string {
   return crypto.randomUUID();
 }

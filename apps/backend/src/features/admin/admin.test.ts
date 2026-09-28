@@ -348,9 +348,9 @@ describe('Admin', () => {
     expect(data.error.code).toBe('NOTES_REQUIRED');
   });
 
-  test('POST /drivers/:id/review request_changes rejects and stores notes', async () => {
+  test('POST /drivers/:id/review request_changes stores notes without reject/approve', async () => {
     const adminToken = await createAdminToken();
-    const { driverId } = await createReviewDriver();
+    const { driverId, token } = await createReviewDriver();
     const notes = 'Falta dorso de la licencia';
 
     const { status, data } = await request(
@@ -362,13 +362,35 @@ describe('Admin', () => {
 
     expect(status).toBe(200);
     expect(data.action).toBe('request_changes');
-    expect(data.status).toBe('rejected');
+    expect(data.status).toBe('review');
 
     const db = getDb();
     const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId)).limit(1);
-    expect(driver!.status).toBe('rejected');
-    expect(driver!.admin_review_status).toBe('rejected');
+    expect(driver!.status).toBe('review');
+    expect(driver!.admin_review_status).toBe('pending');
     expect(driver!.admin_review_notes).toBe(notes);
+    expect(driver!.admin_reviewed_at).toBeNull();
+
+    const docs = await db
+      .select({ status: driverDocuments.status })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId));
+    expect(docs.every((d) => d.status !== 'rejected' && d.status !== 'approved')).toBe(true);
+
+    // Still in queue for a later approve/reject; notes visible on driver status.
+    const me = await request('GET', '/api/drivers/me/status', undefined, token);
+    expect(me.status).toBe(200);
+    expect(me.data.status).toBe('under_review');
+    expect(me.data.admin_review_notes).toBe(notes);
+
+    const approve = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      { action: 'approve' },
+      adminToken,
+    );
+    expect(approve.status).toBe(200);
+    expect(approve.data.status).toBe('approved');
   });
 
   test('POST /drivers/:id/review request_changes not in queue returns 409', async () => {
