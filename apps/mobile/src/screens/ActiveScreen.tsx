@@ -50,12 +50,36 @@ import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const ONLINE_COLLAPSED = 180;
+const ONLINE_COLLAPSED = 220;
 const ONLINE_EXPANDED = SCREEN_HEIGHT * 0.45;
 const OFFLINE_PILL = 96;
 const OFFLINE_EXPANDED = SCREEN_HEIGHT * 0.45;
 /** Gap between GO+hint stack bottom and collapsed offline sheet top. */
 const GO_STACK_SHEET_GAP = theme.spacing.sm;
+
+/** Soft stickers/tránsito copy — full offline under GO; short chip while online. */
+const stickersReminderCopy = (opts: {
+  phase: DriverStatus['identification_phase'];
+  daysUntilPause: number | null | undefined;
+  daysSinceApproval: number | null | undefined;
+  compact?: boolean;
+}): string => {
+  const daysLeft = opts.daysUntilPause != null ? ` (quedan ${opts.daysUntilPause} días)` : '';
+  if (opts.compact) {
+    if (opts.phase === 'reminder') {
+      return opts.daysUntilPause != null
+        ? `Stickers: retirá en tránsito · quedan ${opts.daysUntilPause} días`
+        : 'Stickers: retirá en tránsito antes de los 30 días';
+    }
+    return opts.daysUntilPause != null
+      ? `Retirá stickers en tránsito · ${opts.daysUntilPause} días`
+      : 'Retirá stickers / identificación en tránsito';
+  }
+  if (opts.phase === 'reminder') {
+    return `Recordatorio: ya pasaron ${opts.daysSinceApproval ?? 20}+ días. Retirá los stickers en tránsito; a los 30 días se suspende la cuenta${daysLeft}.`;
+  }
+  return `Recordá retirar los stickers / identificación en tránsito. Tenés 30 días desde la aprobación; después se suspende la cuenta${daysLeft}.`;
+};
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -597,17 +621,11 @@ export const ActiveScreen: React.FC = () => {
             !stickersRevoked && (
               <View style={styles.goHint} pointerEvents="none">
                 <Text style={styles.reviewBannerText}>
-                  {identificationPhase === 'reminder'
-                    ? `Recordatorio: ya pasaron ${driverStatus?.identification_days_since_approval ?? 20}+ días. Retirá los stickers en tránsito; a los 30 días se suspende la cuenta${
-                        driverStatus?.identification_days_until_pause != null
-                          ? ` (quedan ${driverStatus.identification_days_until_pause} días)`
-                          : ''
-                      }.`
-                    : `Recordá retirar los stickers / identificación en tránsito. Tenés 30 días desde la aprobación; después se suspende la cuenta${
-                        driverStatus?.identification_days_until_pause != null
-                          ? ` (quedan ${driverStatus.identification_days_until_pause} días)`
-                          : ''
-                      }.`}
+                  {stickersReminderCopy({
+                    phase: identificationPhase,
+                    daysUntilPause: driverStatus?.identification_days_until_pause,
+                    daysSinceApproval: driverStatus?.identification_days_since_approval,
+                  })}
                 </Text>
               </View>
             )}
@@ -628,6 +646,26 @@ export const ActiveScreen: React.FC = () => {
             </View>
             <Text style={styles.statusOnlineTime}>{formatOnlineTime(onlineTime)}</Text>
             {toggleError && <Text style={styles.errorText}>{toggleError}</Text>}
+
+            {/* Justo bajo el estado = zona visible del sheet colapsado (arriba del tab bar).
+                No al final: marginTop:auto lo mandaba al fondo del sheet expandido y no se veía. */}
+            {stickersReminder && !stickersPaused && !stickersRevoked && (
+              <View
+                style={styles.onlineStickersChip}
+                accessibilityRole="text"
+                accessibilityLabel="Recordatorio stickers en tránsito"
+              >
+                <Ionicons name="pricetag-outline" size={14} color={theme.colors.deepBlue} />
+                <Text style={styles.onlineStickersChipText} numberOfLines={2}>
+                  {stickersReminderCopy({
+                    phase: identificationPhase,
+                    daysUntilPause: driverStatus?.identification_days_until_pause,
+                    daysSinceApproval: driverStatus?.identification_days_since_approval,
+                    compact: true,
+                  })}
+                </Text>
+              </View>
+            )}
 
             <View style={styles.metricsContainer}>
               <Text style={styles.metricsTitle}>Resumen de hoy</Text>
@@ -775,6 +813,25 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     zIndex: 7,
+  },
+  onlineStickersChip: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    backgroundColor: theme.colors.lightGray,
+    borderRadius: theme.radius.full,
+    paddingVertical: 8,
+    paddingHorizontal: theme.spacing.sm + 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.surfaceMuted,
+    marginTop: theme.spacing.xs,
+  },
+  onlineStickersChipText: {
+    flex: 1,
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.deepBlue,
   },
   reviewBannerTitle: {
     fontSize: theme.fontSize.sm,
