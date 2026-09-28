@@ -270,9 +270,18 @@ export const adminService = {
   async reviewDriver(
     adminUser: AuthUser,
     driverId: string,
-    action: 'approve' | 'reject',
+    action: 'approve' | 'reject' | 'request_changes',
     notes?: string,
   ) {
+    const trimmedNotes = notes?.trim() || undefined;
+    if (action === 'request_changes' && (!trimmedNotes || trimmedNotes.length < 5)) {
+      throw new AppError(
+        'Indicá qué docs faltan o qué corregir (mín. 5 caracteres)',
+        400,
+        'NOTES_REQUIRED',
+      );
+    }
+
     const [driver] = await db
       .select({
         id: drivers.id,
@@ -309,10 +318,12 @@ export const adminService = {
       );
     }
 
-    const newStatus = action === 'approve' ? 'approved' : 'rejected';
+    const isApprove = action === 'approve';
+    // request_changes = reject + notes required (same rail #343 mail/push).
+    const newStatus = isApprove ? 'approved' : 'rejected';
     const now = new Date();
     const identificationPatch =
-      action === 'approve' && driver.identification_status !== 'issued'
+      isApprove && driver.identification_status !== 'issued'
         ? { identification_status: 'pending_pickup' as const }
         : {};
 
@@ -323,9 +334,9 @@ export const adminService = {
         admin_review_status: newStatus,
         admin_reviewed_by: adminUser.id,
         admin_reviewed_at: now,
-        admin_review_notes: notes ?? null,
+        admin_review_notes: trimmedNotes ?? null,
         documents_pending_review: false,
-        ...(action === 'approve' ? { approved_at: now } : {}),
+        ...(isApprove ? { approved_at: now } : {}),
         ...identificationPatch,
         updated_at: now,
       })
@@ -334,7 +345,7 @@ export const adminService = {
     // Resolve the pending documents in line with the admin's decision.
     await db
       .update(driverDocuments)
-      .set(action === 'approve' ? { status: 'approved', verified_at: now } : { status: 'rejected' })
+      .set(isApprove ? { status: 'approved', verified_at: now } : { status: 'rejected' })
       .where(
         and(eq(driverDocuments.driver_id, driverId), eq(driverDocuments.status, 'pending_review')),
       );
@@ -353,7 +364,7 @@ export const adminService = {
 
       if (driverUser) {
         const name = driverUser.full_name ?? 'Driver';
-        if (action === 'approve') {
+        if (isApprove) {
           if (driverUser.email) {
             void notifyDriverApproved(driverUser.email, name);
           } else {
@@ -371,13 +382,13 @@ export const adminService = {
           });
         } else {
           if (driverUser.email) {
-            void notifyDriverRejected(driverUser.email, name, notes);
+            void notifyDriverRejected(driverUser.email, name, trimmedNotes);
           } else {
             logger.info('[DRIVER-NOTIFY] Skip rejected email — no email', {
               driverId: driverId.split('-')[0],
             });
           }
-          const rejected = driverRejectedPush(notes);
+          const rejected = driverRejectedPush(trimmedNotes);
           void sendPushToUser(driverUser.user_id, rejected).catch((err) => {
             logger.error('[DRIVER-NOTIFY] Rejected push failed', (err as Error).message);
           });
@@ -385,11 +396,18 @@ export const adminService = {
       }
     }
 
+    const message =
+      action === 'approve'
+        ? 'Driver approved'
+        : action === 'request_changes'
+          ? 'Driver requested document changes'
+          : 'Driver rejected';
+
     return {
       driver_id: driver.id,
       action,
       status: newStatus,
-      message: `Driver ${action === 'approve' ? 'approved' : 'rejected'}`,
+      message,
     };
   },
 
