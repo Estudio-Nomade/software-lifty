@@ -86,6 +86,7 @@ const DOC_TYPE_TO_UPLOAD: Record<string, string> = {
   registration_back: 'vehicle_registration',
   insurance_front: 'vehicle_insurance',
   insurance_back: 'vehicle_insurance',
+  platform_rc_insurance_front: 'platform_rc_insurance',
   background_check_front: 'background_check',
   background_check_back: 'background_check',
   rndg_front: 'rndg',
@@ -96,6 +97,10 @@ const MANAGEABLE_DOCS: { docType: string; label: string }[] = [
   { docType: 'drivers_license', label: 'Licencia de conducir' },
   { docType: 'vehicle_registration', label: 'Cedula del vehiculo' },
   { docType: 'vehicle_insurance', label: 'Seguro del vehiculo' },
+  {
+    docType: 'platform_rc_insurance',
+    label: 'Seguro RC para plataformas (Conductor digital)',
+  },
   { docType: 'background_check', label: 'Certificado de antecedentes penales' },
   { docType: 'rndg', label: 'Registro Nacional de Datos Geneticos (RNDG)' },
 ];

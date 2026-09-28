@@ -660,7 +660,8 @@ describe('Document step completeness', () => {
   const phone = '+5492619999999';
   const password = 'testPass123';
 
-  // Canonical required set: no background_check_back, no insurance_back.
+  // Canonical required set: no background_check_back, no insurance_back;
+  // platform_rc_insurance_front is required (distinct from insurance_front).
   test('DOC_TYPES matches mobile-aligned canonical set', () => {
     expect([...DOC_TYPES].sort()).toEqual(
       [
@@ -668,6 +669,7 @@ describe('Document step completeness', () => {
         'insurance_front',
         'license_back',
         'license_front',
+        'platform_rc_insurance_front',
         'registration_back',
         'registration_front',
         'rndg_front',
@@ -675,6 +677,7 @@ describe('Document step completeness', () => {
     );
     expect(DOC_TYPES).not.toContain('background_check_back');
     expect(DOC_TYPES).not.toContain('insurance_back');
+    expect(DOC_TYPES).toContain('platform_rc_insurance_front');
   });
 
   test('all required docs without insurance_back moves driver to review', async () => {

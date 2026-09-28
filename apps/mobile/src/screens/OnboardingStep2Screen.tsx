@@ -34,6 +34,10 @@ const DOCS: { type: DocType; label: string }[] = [
   { type: 'drivers_license', label: 'Licencia de conducir' },
   { type: 'vehicle_registration', label: 'Cedula del vehiculo' },
   { type: 'vehicle_insurance', label: 'Seguro del vehiculo' },
+  {
+    type: 'platform_rc_insurance',
+    label: 'Seguro RC para plataformas (Conductor digital)',
+  },
   { type: 'background_check', label: 'Certificado de antecedentes penales' },
   { type: 'rndg', label: 'Registro Nacional de Datos Geneticos (RNDG)' },
 ];
@@ -41,11 +45,11 @@ const DOCS: { type: DocType; label: string }[] = [
 const SIDE_LABELS: Record<DocSide, string> = { front: 'Frente', back: 'Dorso' };
 
 function allowsPdf(docType: DocType): boolean {
-  return docType === 'vehicle_insurance';
+  return docType === 'vehicle_insurance' || docType === 'platform_rc_insurance';
 }
 
 function sideLabelFor(docType: DocType, side: DocSide): string {
-  if (docType === 'vehicle_insurance' && DOC_SIDES[docType].length === 1) {
+  if (allowsPdf(docType) && DOC_SIDES[docType].length === 1) {
     return 'Archivo o foto';
   }
   return SIDE_LABELS[side];
@@ -85,6 +89,7 @@ export const OnboardingStep2Screen: React.FC = () => {
     drivers_license: initialSideState(),
     vehicle_registration: initialSideState(),
     vehicle_insurance: initialSideState(),
+    platform_rc_insurance: initialSideState(),
     background_check: initialSideState(),
     rndg: initialSideState(),
   });
@@ -327,12 +332,17 @@ export const OnboardingStep2Screen: React.FC = () => {
                 Alcanza un archivo o foto del seguro (PDF o imagen). No hace falta dorso.
               </Text>
             ) : null}
+            {doc.type === 'platform_rc_insurance' ? (
+              <Text style={styles.hintText}>
+                Cobertura de responsabilidad civil mientras trabajás con apps. Es distinto al seguro
+                del auto.
+              </Text>
+            ) : null}
 
             {DOC_SIDES[doc.type].map((side) => {
               const state = docs[doc.type][side];
               const label = sideLabelFor(doc.type, side);
-              const showSideLabel =
-                DOC_SIDES[doc.type].length > 1 || doc.type === 'vehicle_insurance';
+              const showSideLabel = DOC_SIDES[doc.type].length > 1 || allowsPdf(doc.type);
               return (
                 <View key={side} style={styles.sideBlock}>
                   {showSideLabel ? <Text style={styles.sideLabel}>{label}</Text> : null}

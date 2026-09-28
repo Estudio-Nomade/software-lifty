@@ -33,7 +33,7 @@ type SelectedFile = {
 };
 
 function allowsPdf(docType: DocType | undefined): boolean {
-  return docType === 'vehicle_insurance';
+  return docType === 'vehicle_insurance' || docType === 'platform_rc_insurance';
 }
 
 function sideLabelFor(
@@ -41,7 +41,7 @@ function sideLabelFor(
   side: DocSide,
   requiredSides: DocSide[],
 ): string {
-  if (docType === 'vehicle_insurance' && requiredSides.length === 1) {
+  if (allowsPdf(docType) && requiredSides.length === 1) {
     return 'Archivo o foto';
   }
   return SIDE_LABELS[side];
@@ -218,16 +218,18 @@ export const UploadDocumentScreen: React.FC = () => {
         <Text style={styles.subtitle}>
           {isReupload
             ? 'Al reemplazar este documento, quedara pendiente de revision.'
-            : docType === 'vehicle_insurance'
-              ? 'Subi un archivo o foto del seguro (PDF o imagen). No hace falta dorso.'
-              : 'Subi el documento requerido'}
+            : docType === 'platform_rc_insurance'
+              ? 'Cobertura de responsabilidad civil mientras trabajás con apps. Es distinto al seguro del auto. PDF o imagen, sin dorso.'
+              : docType === 'vehicle_insurance'
+                ? 'Subi un archivo o foto del seguro (PDF o imagen). No hace falta dorso.'
+                : 'Subi el documento requerido'}
         </Text>
 
         {requiredSides.map((side) => {
           const file = selectedFiles[side];
           const isImage = file?.mimeType?.startsWith('image/');
           const label = sideLabelFor(docType, side, requiredSides);
-          const showSideTitle = requiredSides.length > 1 || docType === 'vehicle_insurance';
+          const showSideTitle = requiredSides.length > 1 || allowsPdf(docType);
           return (
             <View key={side} style={styles.sideSection}>
               {showSideTitle ? <Text style={styles.sideTitle}>{label}</Text> : null}
