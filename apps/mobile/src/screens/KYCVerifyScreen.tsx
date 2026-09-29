@@ -82,7 +82,7 @@ export const KYCVerifyScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   content: {
     flex: 1,

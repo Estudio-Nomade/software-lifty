@@ -290,7 +290,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   flex: {
     flex: 1,
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.mediumGray,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
   },
   vehicleTypeSelected: {
     backgroundColor: theme.colors.turquoise,

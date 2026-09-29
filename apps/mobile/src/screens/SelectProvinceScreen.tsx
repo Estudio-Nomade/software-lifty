@@ -71,7 +71,7 @@ export const SelectProvinceScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.white },
+  container: { flex: 1, backgroundColor: theme.colors.background },
   content: { flex: 1, padding: theme.spacing.lg },
   subtitle: {
     fontSize: theme.fontSize.md,
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
   },
   list: { gap: theme.spacing.sm },
   item: {
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     padding: theme.spacing.md,
     borderRadius: theme.radius.md,
   },

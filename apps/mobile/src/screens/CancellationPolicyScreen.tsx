@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: theme.spacing.sm,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     borderRadius: theme.radius.sm,
     padding: theme.spacing.sm,
   },
@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
   stepLine: {
     flex: 1,
     width: 2,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   stepBody: {
     flex: 1,

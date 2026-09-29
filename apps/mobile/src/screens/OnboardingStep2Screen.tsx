@@ -490,7 +490,7 @@ function sideSatisfiedUi(state: HydratedSideState): boolean {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   content: {
     alignItems: 'center',
@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
   rejectBanner: {
     width: 343,
     borderRadius: theme.radius.lg,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     borderWidth: 1,
     borderColor: theme.colors.dangerRed,
     padding: theme.spacing.md,
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },

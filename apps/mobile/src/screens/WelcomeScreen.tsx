@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useState } from 'react';
 import { Image, StatusBar, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import type { DriverStatus } from '../api/types';
 import { driverStatusSchema } from '../api/types';
@@ -14,8 +15,12 @@ import { routeForDriverStatus } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
+/** Teal L monogram (portrait mark). Wordmark + tagline are text below. */
+const MARK_L = require('../../assets/lifty-mark-l.png');
+
 export const WelcomeScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const { loading, signOut } = useAuth();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const sessionRestored = useAuthStore((s) => s.sessionRestored);
@@ -85,7 +90,7 @@ export const WelcomeScreen: React.FC = () => {
   if (mode === 'loading') {
     return (
       <View style={styles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+        <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
         <LoadingOverlay visible />
       </View>
     );
@@ -97,57 +102,66 @@ export const WelcomeScreen: React.FC = () => {
 
   if (mode === 'recovery') {
     return (
-      <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-        <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
-        <Text style={styles.wordmark}>Lifty</Text>
-        <Text style={styles.recoveryTitle}>No pudimos cargar tu cuenta</Text>
-        <Text style={styles.recoveryBody}>
-          Hay sesión, pero el servidor no respondió. Reintentá o cerrá sesión para volver al inicio.
-        </Text>
-        {recoveryError !== null && <Text style={styles.recoveryError}>{recoveryError}</Text>}
-        <Button
-          title="REINTENTAR"
-          onPress={handleRetryStatus}
-          loading={retrying}
-          disabled={retrying || signingOut}
-          style={styles.button}
-          textStyle={styles.buttonText}
-        />
-        <Button
-          title="CERRAR SESION"
-          onPress={handleSignOut}
-          loading={signingOut}
-          disabled={retrying || signingOut}
-          variant="outline"
-          outlineColor={theme.colors.white}
-          style={styles.button}
-          textStyle={styles.buttonText}
-        />
+      <View
+        style={[
+          styles.container,
+          { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 },
+        ]}
+      >
+        <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+        <View style={styles.hero}>
+          <Image source={MARK_L} style={styles.mark} resizeMode="contain" />
+          <Text style={styles.recoveryTitle}>No pudimos cargar tu cuenta</Text>
+          <Text style={styles.recoveryBody}>
+            Hay sesión, pero el servidor no respondió. Reintentá o cerrá sesión para volver al
+            inicio.
+          </Text>
+          {recoveryError !== null && <Text style={styles.recoveryError}>{recoveryError}</Text>}
+        </View>
+        <View style={styles.actions}>
+          <Button
+            title="Reintentar"
+            onPress={handleRetryStatus}
+            loading={retrying}
+            disabled={retrying || signingOut}
+          />
+          <Button
+            title="Cerrar sesión"
+            onPress={handleSignOut}
+            loading={signingOut}
+            disabled={retrying || signingOut}
+            variant="secondary"
+          />
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-      <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
-      <Text style={styles.wordmark}>Lifty</Text>
-      <Text style={styles.tagline}>Conduci, gana en serio</Text>
-      <Button
-        title="CREAR CUENTA"
-        onPress={() => navigation.navigate('Register')}
-        style={styles.button}
-        textStyle={styles.buttonText}
-      />
-      <Button
-        title="INICIAR SESION"
-        onPress={() => navigation.navigate('LoginCredentials')}
-        style={styles.button}
-        textStyle={styles.buttonText}
-      />
-      <View style={styles.spacerSmall} />
-      <Text style={styles.terms}>Al continuar aceptas los Terminos y Condiciones</Text>
+    <View
+      style={[styles.container, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 20 }]}
+    >
+      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <View style={styles.main}>
+        <View style={styles.brand}>
+          <Image source={MARK_L} style={styles.mark} resizeMode="contain" />
+          <Text style={styles.wordmark}>Lifty</Text>
+          <Text style={styles.tagline}>Movilidad que te eleva</Text>
+        </View>
+        <View style={styles.actions}>
+          <Button
+            title="Crear cuenta"
+            onPress={() => navigation.navigate('Register')}
+            variant="cta"
+          />
+          <Button
+            title="Iniciar sesión"
+            onPress={() => navigation.navigate('LoginCredentials')}
+            variant="secondary"
+          />
+          <Text style={styles.terms}>Al continuar aceptás los Términos y Condiciones</Text>
+        </View>
+      </View>
     </View>
   );
 };
@@ -155,62 +169,83 @@ export const WelcomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: theme.colors.deepBlue,
+    backgroundColor: theme.colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   container: {
     flex: 1,
-    backgroundColor: theme.colors.deepBlue,
+    backgroundColor: theme.colors.background,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  /** L monogram + wordmark mid; CTAs a bit lower. */
+  main: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: theme.spacing['2xl'],
+    paddingTop: theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
+  },
+  brand: {
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  hero: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: theme.spacing.lg,
-    gap: theme.spacing.lg,
+    gap: theme.spacing.sm,
   },
-  logo: {
-    width: 120,
-    height: 142,
+  /** Portrait teal L (~139×171). */
+  mark: {
+    width: 148,
+    height: 182,
+    marginBottom: theme.spacing.xs,
   },
   wordmark: {
     fontSize: theme.fontSize['3xl'],
     fontWeight: theme.fontWeight.bold,
-    color: theme.colors.white,
+    color: theme.colors.deepBlue,
+    letterSpacing: -0.8,
   },
   tagline: {
     fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.mediumGray,
+    textAlign: 'center',
+    maxWidth: 280,
   },
   recoveryTitle: {
     fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.bold,
-    color: theme.colors.white,
+    color: theme.colors.deepBlue,
     textAlign: 'center',
+    marginTop: theme.spacing.md,
   },
   recoveryBody: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
     textAlign: 'center',
-    maxWidth: 327,
+    maxWidth: 320,
+    lineHeight: 20,
   },
   recoveryError: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
     textAlign: 'center',
-    maxWidth: 327,
+    maxWidth: 320,
   },
-  button: {
-    width: 327,
-    height: 52,
-  },
-  buttonText: {
-    fontSize: 18,
-  },
-  spacerSmall: {
-    height: 8,
+  actions: {
+    width: '100%',
+    gap: theme.spacing.sm,
+    alignItems: 'stretch',
+    marginTop: theme.spacing.lg,
   },
   terms: {
     fontSize: theme.fontSize.xs,
     color: theme.colors.mediumGray,
     textAlign: 'center',
+    marginTop: theme.spacing.sm,
+    lineHeight: 16,
   },
 });

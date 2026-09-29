@@ -241,21 +241,18 @@ export const LoginCredentialsScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
         <View style={styles.otpContent}>
-          <Text style={styles.title}>Ingresa el codigo</Text>
-          <Text style={styles.subtitle}>Te enviamos un codigo a {username.trim()}</Text>
-          <View style={{ height: 24 }} />
+          <Text style={styles.title}>Ingresá el código</Text>
+          <Text style={styles.subtitle}>Te enviamos un código a {username.trim()}</Text>
           <OTPInput length={6} value={otp} onChange={setOtp} />
-          <View style={{ height: 16 }} />
           <TouchableOpacity onPress={handleResend} disabled={cooldown > 0 || sending}>
             <Text style={[styles.resend, (cooldown > 0 || sending) && styles.resendDisabled]}>
-              {cooldown > 0 ? `Reenviar en ${cooldown}s` : 'No te llego? Reenviar'}
+              {cooldown > 0 ? `Reenviar en ${cooldown}s` : '¿No te llegó? Reenviar'}
             </Text>
           </TouchableOpacity>
           {info !== null && <Text style={styles.infoText}>{info}</Text>}
           {error !== null && <Text style={styles.errorText}>{error}</Text>}
-          <View style={{ height: 8 }} />
           <Button
-            title="VERIFICAR CODIGO"
+            title="Verificar código"
             onPress={handleVerifyOtp}
             loading={verifying}
             disabled={otp.length !== 6 || verifying}
@@ -279,70 +276,62 @@ export const LoginCredentialsScreen: React.FC = () => {
       </View>
 
       <View style={styles.content}>
-        <View style={styles.spacerTop} />
-        <Text style={styles.title}>Iniciar sesion</Text>
-        <View style={styles.gapMd} />
-        <Text style={styles.subtitle}>Ingresa tu email y contrasena</Text>
-        <View style={styles.spacer} />
+        <View style={styles.form}>
+          <Text style={styles.title}>Iniciar sesión</Text>
+          <Text style={styles.subtitle}>Ingresá tu email y contraseña</Text>
 
-        <Input
-          placeholder="Email"
-          value={username}
-          onChangeText={setUsername}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          containerStyle={styles.inputField}
-        />
-        <View style={styles.gapMd} />
-        <Input
-          placeholder="Contrasena"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={!showPassword}
-          autoCapitalize="none"
-          autoCorrect={false}
-          textContentType="password"
-          containerStyle={styles.inputField}
-          rightElement={
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
-              <Ionicons
-                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                size={20}
-                color={theme.colors.mediumGray}
-              />
-            </TouchableOpacity>
-          }
-        />
-        <View style={styles.spacer} />
+          <Input
+            placeholder="Email"
+            value={username}
+            onChangeText={setUsername}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            containerStyle={styles.inputField}
+          />
+          <Input
+            placeholder="Contraseña"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="password"
+            containerStyle={styles.inputField}
+            rightElement={
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={theme.colors.mediumGray}
+                />
+              </TouchableOpacity>
+            }
+          />
 
-        <Button
-          title="INICIAR SESION"
-          onPress={handleLogin}
-          loading={login.isPending}
-          disabled={isDisabled}
-          style={styles.button}
-        />
-        <View style={styles.gapMd} />
-        <Button
-          title={googleLoading ? '' : 'CONTINUAR CON GOOGLE'}
-          onPress={handleGoogle}
-          loading={googleLoading}
-          style={[styles.button, styles.googleButton]}
-          textStyle={styles.googleButtonText}
-        />
-        {error !== null && <Text style={styles.errorText}>{error}</Text>}
-        <View style={styles.gapMd} />
-        <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-          <Text style={styles.forgotPassword}>Olvidaste tu contrasena?</Text>
-        </TouchableOpacity>
-        <View style={styles.gapMd} />
-        <TouchableOpacity onPress={handleSendOtp}>
-          <Text style={styles.otpLink}>
-            {sending ? 'Enviando codigo...' : 'Iniciar sesion sin contrasena'}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={styles.filler} />
+          <Button
+            title="Iniciar sesión"
+            onPress={handleLogin}
+            loading={login.isPending}
+            disabled={isDisabled}
+            style={styles.button}
+          />
+          <Button
+            title={googleLoading ? '' : 'Continuar con Google'}
+            onPress={handleGoogle}
+            loading={googleLoading}
+            style={[styles.button, styles.googleButton]}
+            textStyle={styles.googleButtonText}
+          />
+          {error !== null && <Text style={styles.errorText}>{error}</Text>}
+          <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+            <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleSendOtp}>
+            <Text style={styles.otpLink}>
+              {sending ? 'Enviando código...' : 'Iniciar sesión sin contraseña'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -351,7 +340,7 @@ export const LoginCredentialsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   header: {
     height: theme.dimensions.navbarHeight,
@@ -371,37 +360,34 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.md,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.xl,
   },
-  spacerTop: {
-    height: 16,
-  },
-  gapMd: {
-    height: theme.spacing.md,
-  },
-  spacer: {
-    height: 8,
+  form: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    gap: theme.spacing.md,
   },
   title: {
     fontSize: theme.fontSize['2xl'],
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
-    width: 327,
+    letterSpacing: -0.4,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
-    width: 327,
+    textAlign: 'center',
+    marginBottom: theme.spacing.sm,
   },
   inputField: {
-    width: 327,
-  },
-  eyeIcon: {
-    fontSize: theme.fontSize.md,
+    width: '100%',
   },
   button: {
-    width: 327,
+    width: '100%',
   },
   googleButton: {
     backgroundColor: theme.colors.deepBlue,
@@ -413,25 +399,27 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
-    width: 327,
+    width: '100%',
     textAlign: 'center',
-    marginTop: theme.spacing.sm,
   },
   forgotPassword: {
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
-    color: theme.colors.turquoise,
+    color: theme.colors.primary,
+    textAlign: 'center',
   },
   otpContent: {
     flex: 1,
+    justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.xl,
     alignItems: 'center',
+    gap: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
   },
   resend: {
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
-    color: theme.colors.turquoise,
+    color: theme.colors.primary,
     textAlign: 'center',
   },
   resendDisabled: {
@@ -439,18 +427,14 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: theme.fontSize.sm,
-    color: theme.colors.turquoise,
+    color: theme.colors.primary,
     textAlign: 'center',
-    marginTop: theme.spacing.sm,
-    width: 327,
+    width: '100%',
   },
   otpLink: {
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
-    color: theme.colors.turquoise,
+    color: theme.colors.primary,
     textAlign: 'center',
-  },
-  filler: {
-    flex: 1,
   },
 });

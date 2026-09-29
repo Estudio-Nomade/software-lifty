@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
     right: theme.spacing.md,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.lg,
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,

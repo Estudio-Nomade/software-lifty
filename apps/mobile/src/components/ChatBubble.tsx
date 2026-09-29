@@ -31,7 +31,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   passengerBubble: {
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     alignSelf: 'flex-start',
   },
   text: {

@@ -303,14 +303,14 @@ export const TripInProgressScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   mapArea: {
     flex: 1,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   bottomCard: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderTopLeftRadius: theme.radius.lg,
     borderTopRightRadius: theme.radius.lg,
     padding: theme.spacing.md,
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
   progressBar: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     width: '100%',
     marginTop: theme.spacing.sm,
   },
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
     width: theme.spacing['2xl'],
     height: theme.spacing['2xl'],
     borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.lightGray,
     alignItems: 'center',

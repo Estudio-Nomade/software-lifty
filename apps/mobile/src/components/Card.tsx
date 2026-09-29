@@ -14,14 +14,13 @@ export const Card: React.FC<CardProps> = ({ children, style, padding }) => {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.radius.xl,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
     padding: theme.spacing.md,
-    width: 343,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 5,
-    elevation: 1,
+    width: '100%',
+    alignSelf: 'stretch',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(13, 43, 69, 0.06)',
+    ...theme.shadows.card,
   },
 });
