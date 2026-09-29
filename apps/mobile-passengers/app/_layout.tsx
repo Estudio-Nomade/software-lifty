@@ -10,6 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { AppInitializer } from '../src/components/AppInitializer';
+import { BrandSplash } from '../src/components/BrandSplash';
 import { ConnectivityBanner } from '../src/components/feedback/ConnectivityBanner';
 import { ErrorBoundary } from '../src/components/feedback/ErrorBoundary';
 import { AuthProvider } from '../src/context/AuthContext';
@@ -33,7 +34,7 @@ export default function RootLayout() {
   }, [fontsLoaded, fontError]);
 
   if (!fontsLoaded && !fontError) {
-    return null;
+    return <BrandSplash />;
   }
 
   return (

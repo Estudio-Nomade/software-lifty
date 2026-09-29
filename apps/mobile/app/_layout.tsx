@@ -11,6 +11,7 @@ import { useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppInitializer } from '../src/components/AppInitializer';
+import { BrandSplash } from '../src/components/BrandSplash';
 import { LocationSync } from '../src/components/LocationSync';
 import { TabBar, type TabKey } from '../src/components/TabBar';
 import { ConnectivityBanner } from '../src/components/feedback/ConnectivityBanner';
@@ -76,7 +77,7 @@ export default function RootLayout() {
   }, [fontsLoaded, fontError]);
 
   if (!fontsLoaded && !fontError) {
-    return null;
+    return <BrandSplash />;
   }
 
   return (
