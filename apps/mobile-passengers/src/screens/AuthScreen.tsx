@@ -1,12 +1,12 @@
 import { theme } from '@/theme';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
-const logoImg = require('../../assets/logo.png');
+const MARK_L = require('../../assets/lifty-mark-l.png');
 
 export function AuthScreen() {
   return (
     <View style={styles.container}>
-      <Image source={logoImg} style={styles.logo} />
+      <Image source={MARK_L} style={styles.logo} resizeMode="contain" />
       <Text style={styles.title}>Iniciar sesión</Text>
     </View>
   );
@@ -17,17 +17,16 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
     padding: theme.spacing.lg,
-    gap: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
   logo: {
     width: 96,
-    height: 96,
-    borderRadius: 16,
-    resizeMode: 'contain',
+    height: 118,
   },
   title: {
     ...theme.fontStyles.heading,
+    fontFamily: theme.fontFamily.bold,
   },
 });

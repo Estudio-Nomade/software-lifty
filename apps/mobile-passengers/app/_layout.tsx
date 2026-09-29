@@ -46,7 +46,7 @@ export default function RootLayout() {
               screenOptions={{
                 headerShown: false,
                 animation: 'slide_from_right',
-                contentStyle: { backgroundColor: theme.colors.white },
+                contentStyle: { backgroundColor: theme.colors.background },
               }}
             />
             <AppInitializer />

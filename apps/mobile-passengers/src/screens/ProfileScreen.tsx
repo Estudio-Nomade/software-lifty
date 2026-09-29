@@ -190,8 +190,8 @@ export function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={goBack}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.white} />
+        <TouchableOpacity onPress={goBack} hitSlop={8}>
+          <Ionicons name="arrow-back" size={24} color={theme.colors.deepBlue} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Perfil</Text>
         <View style={{ width: 24 }} />
@@ -275,16 +275,18 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
   header: {
     height: theme.dimensions.navbarHeight,
-    backgroundColor: theme.colors.deepBlue,
+    backgroundColor: theme.colors.background,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: theme.spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 43, 69, 0.06)',
   },
   headerTitle: {
     fontSize: theme.fontSize.lg,
     fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
+    color: theme.colors.deepBlue,
   },
   content: {
     padding: theme.spacing.md,
@@ -293,10 +295,13 @@ const styles = StyleSheet.create({
   },
   profileSection: {
     alignItems: 'center',
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.xl,
     gap: theme.spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(13, 43, 69, 0.06)',
+    ...theme.shadows.card,
   },
   name: {
     fontSize: theme.fontSize.xl,
@@ -309,9 +314,12 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
   },
   menuGroup: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.lg,
     overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(13, 43, 69, 0.06)',
+    ...theme.shadows.card,
   },
   menuItem: {
     flexDirection: 'row',
@@ -346,10 +354,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: theme.spacing.md,
     gap: theme.spacing.sm,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth * 2,
     borderColor: theme.colors.dangerRed,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.white,
+    borderRadius: theme.radius.buttonRadius,
+    backgroundColor: theme.colors.surface,
   },
   logoutText: {
     fontSize: theme.fontSize.md,
@@ -362,9 +370,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: theme.colors.white,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.radius.xl,
+    borderTopRightRadius: theme.radius.xl,
     padding: theme.spacing.lg,
     maxHeight: '90%',
   },

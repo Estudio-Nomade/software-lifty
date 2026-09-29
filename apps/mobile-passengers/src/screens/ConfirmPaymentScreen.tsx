@@ -117,7 +117,7 @@ export function ConfirmPaymentScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} accessibilityLabel="Volver">
-          <Ionicons name="arrow-back" size={24} color={theme.colors.white} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.deepBlue} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Método de pago</Text>
         <View style={{ width: 24 }} />
@@ -186,7 +186,7 @@ export function ConfirmPaymentScreen() {
             disabled={!canConfirm || loading}
             style={styles.confirmBtn}
           >
-            {!Number.isNaN(fare) ? `CONFIRMAR ${formatCurrency(fare)}` : 'CONFIRMAR'}
+            {!Number.isNaN(fare) ? `Confirmar ${formatCurrency(fare)}` : 'Confirmar'}
           </Button>
         </View>
       </View>
@@ -195,10 +195,12 @@ export function ConfirmPaymentScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.white },
+  safe: { flex: 1, backgroundColor: theme.colors.background },
   header: {
     height: theme.dimensions.navbarHeight,
-    backgroundColor: theme.colors.deepBlue,
+    backgroundColor: theme.colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 43, 69, 0.06)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -207,7 +209,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: theme.fontSize.lg,
     fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
+    color: theme.colors.deepBlue,
   },
   content: {
     flex: 1,

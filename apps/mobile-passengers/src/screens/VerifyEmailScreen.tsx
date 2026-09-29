@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
-  ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { registerPassenger } from '../api/passenger';
 import { Button } from '../components/Button';
 import { OTPInput } from '../components/OTPInput';
@@ -23,6 +23,7 @@ import { theme } from '../theme';
 
 export function VerifyEmailScreen() {
   const { goBack, replace } = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ email?: string }>();
   const email = params.email ?? '';
   const draftFullName = useRegistrationDraftStore((s) => s.fullName);
@@ -45,7 +46,6 @@ export function VerifyEmailScreen() {
     setInfo(null);
     setLoading(true);
     try {
-      // Signup confirmation OTP first; email OTP fallback (parity with driver useAuth).
       await verifySignupEmailOtp(supabase, email, code);
 
       const metaName =
@@ -69,7 +69,6 @@ export function VerifyEmailScreen() {
     setError(null);
     setInfo(null);
     try {
-      // Must resend signup confirmation — not signInWithOtp (magic/login).
       await resendSignupEmailOtp(supabase, email);
       setInfo('Te enviamos un nuevo código. Revisá inbox y spam.');
       setResendCooldown(60);
@@ -79,86 +78,87 @@ export function VerifyEmailScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <TouchableOpacity onPress={goBack}>
-              <Text style={styles.back}>←</Text>
-            </TouchableOpacity>
-          </View>
+    <KeyboardAvoidingView
+      style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={goBack} hitSlop={8}>
+          <Text style={styles.back}>← Volver</Text>
+        </TouchableOpacity>
+      </View>
 
-          <View style={styles.body}>
-            <Ionicons name="mail-outline" size={48} color={theme.colors.primary} />
-            <Text style={styles.title}>¡Casi listo!</Text>
-            <Text style={styles.subtitle}>
-              Te enviamos un código de 6 dígitos. Si no lo ves, revisá spam.
-            </Text>
-            <Text style={styles.email}>{email}</Text>
+      <View style={styles.body}>
+        <View style={styles.form}>
+          <Ionicons name="mail-outline" size={48} color={theme.colors.primary} />
+          <Text style={styles.title}>Casi listo</Text>
+          <Text style={styles.subtitle}>
+            Te enviamos un código de 6 dígitos. Si no lo ves, revisá spam.
+          </Text>
+          <Text style={styles.email}>{email}</Text>
 
-            <OTPInput value={code} onChange={setCode} autoFocus />
+          <OTPInput value={code} onChange={setCode} autoFocus />
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            {info ? <Text style={styles.info}>{info}</Text> : null}
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {info ? <Text style={styles.info}>{info}</Text> : null}
 
-            <Button
-              variant="primary"
-              onPress={handleVerify}
-              loading={loading}
-              disabled={code.length !== 6}
-            >
-              VERIFICAR
-            </Button>
+          <Button
+            variant="primary"
+            onPress={handleVerify}
+            loading={loading}
+            disabled={code.length !== 6}
+          >
+            Verificar
+          </Button>
 
-            <Text style={styles.resend} onPress={handleResend}>
-              {resendCooldown > 0
-                ? `No recibiste el código? Reenviar (${resendCooldown}s)`
-                : 'No recibiste el código? Reenviar'}
-            </Text>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          <Text style={styles.resend} onPress={handleResend}>
+            {resendCooldown > 0
+              ? `¿No recibiste el código? Reenviar (${resendCooldown}s)`
+              : '¿No recibiste el código? Reenviar'}
+          </Text>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.deepBlue,
-  },
-  flex: {
-    flex: 1,
-  },
-  scroll: {
-    flexGrow: 1,
+    backgroundColor: theme.colors.background,
   },
   header: {
+    height: theme.dimensions.navbarHeight,
     paddingHorizontal: theme.spacing.md,
-    height: 56,
     justifyContent: 'center',
   },
   back: {
-    fontSize: 24,
-    color: theme.colors.primary,
-    fontWeight: '700',
-    padding: theme.spacing.sm,
+    fontSize: theme.fontSize.md,
+    color: theme.colors.deepBlue,
+    fontFamily: theme.fontFamily.medium,
+    paddingVertical: theme.spacing.sm,
+    alignSelf: 'flex-start',
   },
   body: {
     flex: 1,
-    padding: theme.spacing.lg,
-    gap: theme.spacing.lg,
     justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.xl,
+  },
+  form: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
     alignItems: 'center',
+    gap: theme.spacing.md,
   },
   title: {
     fontSize: theme.fontSize['2xl'],
     fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
+    color: theme.colors.deepBlue,
     textAlign: 'center',
+    letterSpacing: -0.4,
   },
   subtitle: {
     fontSize: theme.fontSize.md,
@@ -188,6 +188,6 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
     textAlign: 'center',
-    fontFamily: theme.fontFamily.regular,
+    fontFamily: theme.fontFamily.medium,
   },
 });

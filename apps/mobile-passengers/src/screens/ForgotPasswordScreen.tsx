@@ -2,13 +2,13 @@ import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
-  ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -18,6 +18,7 @@ import { theme } from '../theme';
 
 export function ForgotPasswordScreen() {
   const { goBack } = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -46,62 +47,53 @@ export function ForgotPasswordScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <TouchableOpacity onPress={goBack} style={styles.backButton}>
-              <Text style={styles.backText}>← Volver</Text>
-            </TouchableOpacity>
-          </View>
+    <KeyboardAvoidingView
+      style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={goBack} style={styles.backButton} hitSlop={8}>
+          <Text style={styles.backText}>← Volver</Text>
+        </TouchableOpacity>
+      </View>
 
-          <View style={styles.content}>
-            <Text style={styles.title}>Recuperar contraseña</Text>
-            <Text style={styles.subtitle}>
-              Ingresá tu email y te enviaremos un enlace para restablecerla.
-            </Text>
-            <View style={styles.spacer} />
+      <View style={styles.content}>
+        <View style={styles.form}>
+          <Text style={styles.title}>Recuperar contraseña</Text>
+          <Text style={styles.subtitle}>
+            Ingresá tu email y te enviaremos un enlace para restablecerla.
+          </Text>
 
-            <Input
-              placeholder="Email"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-            />
-            <View style={styles.spacer} />
+          <Input
+            placeholder="Email"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+          />
 
-            <Button
-              variant="primary"
-              onPress={handleSend}
-              loading={loading}
-              disabled={!email.trim() || loading}
-              style={styles.button}
-            >
-              ENVIAR ENLACE
-            </Button>
+          <Button
+            variant="primary"
+            onPress={handleSend}
+            loading={loading}
+            disabled={!email.trim() || loading}
+            style={styles.button}
+          >
+            Enviar enlace
+          </Button>
 
-            {info ? <Text style={styles.info}>{info}</Text> : null}
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+          {info ? <Text style={styles.info}>{info}</Text> : null}
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+        </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
+  container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
-  },
-  flex: {
-    flex: 1,
-  },
-  scroll: {
-    flexGrow: 1,
+    backgroundColor: theme.colors.background,
   },
   header: {
     height: theme.dimensions.navbarHeight,
@@ -120,43 +112,43 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.md,
-    alignItems: 'center',
+    paddingBottom: theme.spacing.xl,
+  },
+  form: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    gap: theme.spacing.md,
   },
   title: {
     fontSize: theme.fontSize['2xl'],
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.deepBlue,
-    width: 327,
+    textAlign: 'center',
+    letterSpacing: -0.4,
   },
   subtitle: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
     fontFamily: theme.fontFamily.regular,
-    width: 327,
-    marginTop: theme.spacing.sm,
-  },
-  spacer: {
-    height: theme.spacing.md,
+    textAlign: 'center',
+    marginBottom: theme.spacing.sm,
   },
   button: {
-    width: 327,
+    width: '100%',
   },
   info: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.primary,
     fontFamily: theme.fontFamily.regular,
     textAlign: 'center',
-    width: 327,
-    marginTop: theme.spacing.sm,
   },
   error: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
     fontFamily: theme.fontFamily.regular,
     textAlign: 'center',
-    width: 327,
-    marginTop: theme.spacing.sm,
   },
 });

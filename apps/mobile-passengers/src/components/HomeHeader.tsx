@@ -5,6 +5,8 @@ import { useAuthStore } from '../store/authStore';
 import { useNotificationsStore } from '../store/notificationsStore';
 import { theme } from '../theme';
 
+const MARK_L = require('../../assets/lifty-mark-l.png');
+
 export function HomeHeader() {
   const { navigate } = useAppNavigation();
   const fullName = useAuthStore((s) => s.fullName);
@@ -14,7 +16,7 @@ export function HomeHeader() {
 
   return (
     <View style={styles.container}>
-      <View>
+      <View style={styles.textBlock}>
         <Text style={styles.greeting}>¡Hola, {displayName}!</Text>
         <Text style={styles.subtitle}>¿A dónde vamos hoy?</Text>
       </View>
@@ -25,7 +27,7 @@ export function HomeHeader() {
         hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
         onPress={() => navigate('Notifications')}
       >
-        <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
+        <Image source={MARK_L} style={styles.logo} resizeMode="contain" />
         <View style={[styles.notifBadge, unreadCount > 0 && styles.notifBadgeUnread]}>
           <Ionicons
             name="notifications"
@@ -43,16 +45,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: theme.colors.deepBlue,
+    backgroundColor: theme.colors.background,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.md,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 43, 69, 0.06)',
+  },
+  textBlock: {
+    flex: 1,
+    paddingRight: theme.spacing.sm,
   },
   greeting: {
     fontSize: theme.fontSize.lg,
     fontFamily: theme.fontFamily.semibold,
-    color: theme.colors.white,
+    color: theme.colors.deepBlue,
   },
   subtitle: {
     fontSize: theme.fontSize.sm,
@@ -67,8 +73,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logo: {
-    width: 44,
-    height: 32,
+    width: 36,
+    height: 44,
   },
   notifBadge: {
     position: 'absolute',
@@ -77,14 +83,14 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: theme.colors.deepBlue,
+    borderColor: theme.colors.background,
   },
   notifBadgeUnread: {
     backgroundColor: theme.colors.amber,
-    borderColor: theme.colors.deepBlue,
+    borderColor: theme.colors.background,
   },
 });

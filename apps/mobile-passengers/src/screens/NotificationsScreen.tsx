@@ -31,7 +31,7 @@ export function NotificationsScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.white} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.deepBlue} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Notificaciones</Text>
         <View style={styles.backBtn} />
@@ -60,7 +60,9 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
   header: {
     height: theme.dimensions.navbarHeight,
-    backgroundColor: theme.colors.deepBlue,
+    backgroundColor: theme.colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 43, 69, 0.06)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -75,7 +77,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: theme.fontSize.lg,
     fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
+    color: theme.colors.deepBlue,
   },
   content: {
     flexGrow: 1,
@@ -92,7 +94,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: theme.spacing.sm,
@@ -116,9 +118,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: theme.spacing.md,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(13, 43, 69, 0.06)',
+    ...theme.shadows.card,
   },
   notifIconCircle: {
     width: 40,

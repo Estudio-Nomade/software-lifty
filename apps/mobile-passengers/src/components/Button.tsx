@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { theme } from '../theme';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'cta';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'cta' | 'outline';
 
 interface ButtonProps {
   variant?: ButtonVariant;
@@ -18,6 +18,7 @@ interface ButtonProps {
   loading?: boolean;
   children: ReactNode;
   style?: ViewStyle;
+  textStyle?: TextStyle;
 }
 
 export function Button({
@@ -27,6 +28,7 @@ export function Button({
   loading,
   children,
   style,
+  textStyle,
 }: ButtonProps) {
   const variantStyles = stylesByVariant[variant];
   const isDisabled = disabled || loading;
@@ -39,14 +41,14 @@ export function Button({
         styles.base,
         variantStyles.container,
         isDisabled && styles.disabled,
-        pressed && styles.pressed,
+        pressed && !isDisabled && styles.pressed,
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variantStyles.label.color as string} />
+        <ActivityIndicator color={(variantStyles.label.color as string) ?? theme.colors.white} />
       ) : (
-        <Text style={[styles.label, variantStyles.label]} numberOfLines={1}>
+        <Text style={[styles.label, variantStyles.label, textStyle]} numberOfLines={1}>
           {children}
         </Text>
       )}
@@ -56,9 +58,12 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'stretch',
     height: theme.dimensions.buttonHeight,
     paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.buttonRadius,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -66,39 +71,54 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: theme.fontSize.md,
-    fontWeight: '600',
+    fontWeight: theme.fontWeight.semibold,
     fontFamily: theme.fontFamily.semibold,
+    letterSpacing: 0.1,
   },
   disabled: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
   pressed: {
-    opacity: 0.8,
+    opacity: 0.85,
   },
 });
 
 const stylesByVariant: Record<ButtonVariant, { container: ViewStyle; label: TextStyle }> = {
   primary: {
-    container: { backgroundColor: theme.colors.primary },
+    container: {
+      backgroundColor: theme.colors.primary,
+      ...theme.shadows.button,
+    },
     label: { color: theme.colors.white },
   },
   secondary: {
     container: {
-      backgroundColor: theme.colors.white,
-      borderWidth: 1.5,
-      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.surfaceMuted,
     },
-    label: { color: theme.colors.primary },
+    label: { color: theme.colors.deepBlue },
   },
   danger: {
-    container: { backgroundColor: theme.colors.dangerRed },
-    label: { color: theme.colors.white },
+    container: {
+      backgroundColor: 'transparent',
+      borderWidth: StyleSheet.hairlineWidth * 2,
+      borderColor: theme.colors.dangerRed,
+    },
+    label: { color: theme.colors.dangerRed },
   },
   cta: {
     container: {
       backgroundColor: theme.colors.primary,
       height: theme.dimensions.buttonCTAHeight,
+      ...theme.shadows.button,
     },
     label: { color: theme.colors.white },
+  },
+  outline: {
+    container: {
+      backgroundColor: 'transparent',
+      borderWidth: StyleSheet.hairlineWidth * 2,
+      borderColor: theme.colors.primary,
+    },
+    label: { color: theme.colors.primary },
   },
 };

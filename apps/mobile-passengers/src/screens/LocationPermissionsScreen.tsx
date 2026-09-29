@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useState } from 'react';
 import { Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { requestFreshPosition } from '../hooks/useLocation';
@@ -10,6 +11,7 @@ import { theme } from '../theme';
 
 export function LocationPermissionsScreen() {
   const { replace } = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const setPermissionGranted = useLocationStore((s) => s.setPermissionGranted);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +21,6 @@ export function LocationPermissionsScreen() {
     setError(null);
     try {
       if (Platform.OS === 'web') {
-        // Browser prompt is tied to getCurrentPosition / watch — seed immediately.
         const fix = await requestFreshPosition();
         setPermissionGranted(Boolean(fix));
         if (!fix) {
@@ -28,7 +29,6 @@ export function LocationPermissionsScreen() {
               'No se pudo obtener la ubicación. Podés reintentar desde el mapa.',
           );
           setLoading(false);
-          // Still enter Home so locate/retry works.
           replace('Home');
           return;
         }
@@ -40,7 +40,6 @@ export function LocationPermissionsScreen() {
       const granted = status === 'granted';
       setPermissionGranted(granted);
       if (granted) {
-        // Seed store before Home mounts so the map is not stuck on null.
         await requestFreshPosition();
       }
       replace('Home');
@@ -56,14 +55,16 @@ export function LocationPermissionsScreen() {
   };
 
   return (
-    <View style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-      <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-        <Ionicons name="arrow-forward" size={24} color={theme.colors.primary} />
+    <View style={[styles.safe, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <TouchableOpacity onPress={handleSkip} style={styles.skipButton} hitSlop={8}>
+        <Ionicons name="arrow-forward" size={22} color={theme.colors.deepBlue} />
       </TouchableOpacity>
 
       <View style={styles.content}>
-        <Ionicons name="location" size={64} color={theme.colors.primary} />
+        <View style={styles.iconWell}>
+          <Ionicons name="location" size={40} color={theme.colors.primary} />
+        </View>
         <Text style={styles.title}>¿Dónde te encontramos?</Text>
         <Text style={styles.subtitle}>
           Necesitamos tu ubicación para mostrarte el mapa, calcular rutas y conectarte con
@@ -78,8 +79,8 @@ export function LocationPermissionsScreen() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Button variant="primary" onPress={handleEnable} loading={loading} style={styles.button}>
-          PERMITIR UBICACIÓN
+        <Button variant="cta" onPress={handleEnable} loading={loading} style={styles.button}>
+          Permitir ubicación
         </Button>
 
         <TouchableOpacity onPress={handleSkip} disabled={loading}>
@@ -93,27 +94,37 @@ export function LocationPermissionsScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: theme.colors.deepBlue,
+    backgroundColor: theme.colors.background,
+    paddingHorizontal: theme.spacing.lg,
   },
   skipButton: {
-    position: 'absolute',
-    top: theme.dimensions.statusBarHeight + theme.spacing.md,
-    right: theme.spacing.lg,
-    zIndex: 1,
+    alignSelf: 'flex-end',
     padding: theme.spacing.sm,
   },
   content: {
     flex: 1,
-    paddingHorizontal: theme.spacing.lg,
     justifyContent: 'center',
     alignItems: 'center',
     gap: theme.spacing.md,
+    maxWidth: 420,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  iconWell: {
+    width: 88,
+    height: 88,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: theme.spacing.sm,
   },
   title: {
     fontSize: theme.fontSize['3xl'],
     fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
+    color: theme.colors.deepBlue,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: theme.fontSize.md,
@@ -124,15 +135,18 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.10)',
-    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
     padding: theme.spacing.md,
     gap: theme.spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(13, 43, 69, 0.06)',
+    ...theme.shadows.card,
   },
   infoItem: {
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
-    color: theme.colors.white,
+    color: theme.colors.deepBlue,
   },
   error: {
     fontSize: theme.fontSize.sm,
@@ -145,7 +159,7 @@ const styles = StyleSheet.create({
   },
   later: {
     fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.bold,
+    fontFamily: theme.fontFamily.semibold,
     color: theme.colors.primary,
     textAlign: 'center',
     marginTop: theme.spacing.sm,

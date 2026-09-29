@@ -49,8 +49,8 @@ export function SupportScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={goBack}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.white} />
+        <TouchableOpacity onPress={goBack} hitSlop={8}>
+          <Ionicons name="arrow-back" size={24} color={theme.colors.deepBlue} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Soporte</Text>
         <View style={{ width: 24 }} />
@@ -106,7 +106,9 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
   header: {
     height: theme.dimensions.navbarHeight,
-    backgroundColor: theme.colors.deepBlue,
+    backgroundColor: theme.colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 43, 69, 0.06)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -115,7 +117,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: theme.fontSize.lg,
     fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
+    color: theme.colors.deepBlue,
   },
   content: {
     padding: theme.spacing.md,
@@ -126,13 +128,15 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.semibold,
     color: theme.colors.mediumGray,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0.2,
   },
   actions: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.lg,
     overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(13, 43, 69, 0.06)',
+    ...theme.shadows.card,
   },
   action: {
     flexDirection: 'row',

@@ -39,20 +39,21 @@ export function OTPInput({ length = 6, value, onChange, autoFocus }: OTPInputPro
   return (
     <View style={styles.container}>
       {slots.map((slot, i) => (
-        <TextInput
-          key={i}
-          ref={(ref) => {
-            refs.current[i] = ref;
-          }}
-          style={[styles.cell, slot.length > 0 && styles.cellFilled]}
-          value={slot}
-          onChangeText={(d) => setDigit(i, d)}
-          onKeyPress={(e) => handleKeyPress(i, e)}
-          keyboardType="number-pad"
-          maxLength={1}
-          autoFocus={autoFocus && i === 0}
-          selectTextOnFocus
-        />
+        <View key={i} style={[styles.box, slot.length > 0 && styles.boxFilled]}>
+          <TextInput
+            ref={(ref) => {
+              refs.current[i] = ref;
+            }}
+            style={styles.cell}
+            value={slot}
+            onChangeText={(d) => setDigit(i, d)}
+            onKeyPress={(e) => handleKeyPress(i, e)}
+            keyboardType="number-pad"
+            maxLength={1}
+            autoFocus={autoFocus && i === 0}
+            selectTextOnFocus
+          />
+        </View>
       ))}
     </View>
   );
@@ -65,21 +66,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
   },
-  cell: {
+  box: {
     flex: 1,
-    maxWidth: 48,
+    maxWidth: 52,
     height: 56,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.white,
-    borderWidth: 1.5,
-    borderColor: theme.colors.mediumGray,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth * 2,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boxFilled: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.surface,
+  },
+  cell: {
+    width: '100%',
     fontFamily: theme.fontFamily.bold,
-    fontSize: 24,
+    fontSize: theme.fontSize.xl,
     color: theme.colors.deepBlue,
     textAlign: 'center',
     padding: 0,
-  },
-  cellFilled: {
-    borderColor: theme.colors.primary,
   },
 });
