@@ -36,13 +36,13 @@ describe('evaluateCancel', () => {
     expect(d.code).toBe('CANCEL_NOT_ALLOWED');
   });
 
-  test('system pending at 300s → auto_timeout fee 0', () => {
+  test('system pending at 120s → auto_timeout fee 0', () => {
     const d = evaluateCancel(
       input({
         actor: 'system',
         reason: 'auto_timeout',
         status: 'offered',
-        now: new Date(t0.getTime() + 300_000),
+        now: new Date(t0.getTime() + 120_000),
       }),
     );
     expect(d.canCancel).toBe(true);

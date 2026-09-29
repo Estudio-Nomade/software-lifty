@@ -3,7 +3,7 @@ import type { CancellationConfig } from './types';
 export const DEFAULT_CANCELLATION_CONFIG: CancellationConfig = {
   graceS: 120,
   waitS: 300,
-  searchTimeoutS: 300,
+  searchTimeoutS: 120,
   feeArs: 600,
   arrivalRadiusM: 50,
   gpsAccuracyMaxM: 50,

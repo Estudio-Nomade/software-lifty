@@ -35,7 +35,8 @@ describe('ConnectingDriverScreen', () => {
 
   test('shows searching state initially', async () => {
     const { getByText } = await render(<ConnectingDriverScreen />);
-    expect(getByText('Conectando con el conductor...')).toBeTruthy();
+    expect(getByText('Buscando conductor…')).toBeTruthy();
+    expect(getByText('2:00')).toBeTruthy();
   });
 
   test('shows no-driver message after timeout', async () => {
@@ -43,7 +44,8 @@ describe('ConnectingDriverScreen', () => {
     await act(async () => {
       jest.advanceTimersByTime(SEARCH_TIMEOUT_MS);
     });
-    expect(getByText('No hay conductores disponibles cerca')).toBeTruthy();
+    expect(getByText('No encontramos conductor cerca')).toBeTruthy();
+    expect(getByText('Podés volver a buscar o cancelar.')).toBeTruthy();
   });
 
   test('cancel calls cancelRide and replaces to home', async () => {
@@ -70,7 +72,7 @@ describe('ConnectingDriverScreen', () => {
     });
 
     expect(mockReplace).not.toHaveBeenCalledWith('TripInProgress');
-    expect(getByText('Conectando con el conductor...')).toBeTruthy();
+    expect(getByText('Buscando conductor…')).toBeTruthy();
   });
 
   test('navigates to trip-in-progress when driver accepts', async () => {
@@ -99,13 +101,13 @@ describe('ConnectingDriverScreen', () => {
     await act(async () => {
       jest.advanceTimersByTime(SEARCH_TIMEOUT_MS);
     });
-    expect(getByText('No hay conductores disponibles cerca')).toBeTruthy();
+    expect(getByText('No encontramos conductor cerca')).toBeTruthy();
 
     await act(async () => {
-      fireEvent.press(getByText('Buscar conductor de nuevo'));
+      fireEvent.press(getByText('Volver a buscar'));
     });
 
     expect(retryRide).toHaveBeenCalledWith('trip-123');
-    expect(queryByText('Conectando con el conductor...')).toBeTruthy();
+    expect(queryByText('Buscando conductor…')).toBeTruthy();
   });
 });
