@@ -79,10 +79,10 @@ beforeEach(async () => {
   await db.delete(commissionPhases);
   await db.delete(platformConfig);
   await db.insert(commissionPhases).values([
-    { name: 'Lanzamiento', month_start: 1, month_end: 1, base_rate: 0.00 },
-    { name: 'Medición', month_start: 2, month_end: 2, base_rate: 0.05 },
-    { name: 'Estabilización', month_start: 3, month_end: 6, base_rate: 0.10 },
-    { name: 'Crecimiento', month_start: 7, month_end: null, base_rate: 0.10, monthly_increment: 0.007, cap_rate: 0.15 },
+    { name: 'Lanzamiento', day_start: 1, day_end: 7, base_rate: 0.00 },
+    { name: 'Medición', day_start: 8, day_end: 14, base_rate: 0.05 },
+    { name: 'Estabilización', day_start: 15, day_end: 120, base_rate: 0.10 },
+    { name: 'Crecimiento', day_start: 121, day_end: null, base_rate: 0.10, daily_increment: null, cap_rate: 0.15 },
   ]);
   await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
 });
@@ -627,10 +627,32 @@ describe('Admin', () => {
   test('PUT /admin/commission/phases/:id updates a phase', async () => {
     const adminToken = await createAdminToken();
     const listRes = await request('GET', '/api/admin/commission/phases', undefined, adminToken);
+    expect(listRes.data[0].day_start).toBe(1);
+    expect(listRes.data[0].day_end).toBe(7);
     const phaseId = listRes.data[0].id;
-    const res = await request('PUT', `/api/admin/commission/phases/${phaseId}`, { base_rate: 0.02 }, adminToken);
+    const res = await request(
+      'PUT',
+      `/api/admin/commission/phases/${phaseId}`,
+      { base_rate: 0.02, day_start: 1, day_end: 7 },
+      adminToken,
+    );
     expect(res.status).toBe(200);
     expect(res.data.base_rate).toBe(0.02);
+    expect(res.data.day_start).toBe(1);
+    expect(res.data.day_end).toBe(7);
+  });
+
+  test('PUT /admin/commission/phases/:id rejects overlapping ranges', async () => {
+    const adminToken = await createAdminToken();
+    const listRes = await request('GET', '/api/admin/commission/phases', undefined, adminToken);
+    const phaseId = listRes.data[0].id;
+    const res = await request(
+      'PUT',
+      `/api/admin/commission/phases/${phaseId}`,
+      { day_start: 1, day_end: 10 },
+      adminToken,
+    );
+    expect(res.status).toBe(400);
   });
 
   test('PUT /admin/commission/start-date sets date', async () => {
@@ -658,11 +680,11 @@ describe('Admin', () => {
 
   test('GET /admin/commission/current works when now is before start_date', async () => {
     const adminToken = await createAdminToken();
-    // Future launch relative to "today" in CI/local — clamp to month 1
+    // Future launch relative to "today" in CI/local — clamp to day 1
     await request('PUT', '/api/admin/commission/start-date', { value: '2099-01-01' }, adminToken);
     const res = await request('GET', '/api/admin/commission/current', undefined, adminToken);
     expect(res.status).toBe(200);
-    expect(res.data.currentMonth).toBe(1);
+    expect(res.data.currentDay).toBe(1);
     expect(res.data.phase).toBeString();
   });
 });

@@ -11,6 +11,7 @@
  * evita que el linter marque la condición como constante y mantiene el flag
  * fácil de cambiar.
  */
+/** TODO(ops): set false when launch 0% phase ends — UI-only debt hide; trip rate is backend SoT. */
 export const isPhaseOne: boolean = true;
 
 /**

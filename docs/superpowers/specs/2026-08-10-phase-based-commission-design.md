@@ -1,11 +1,16 @@
 # Phase-Based Driver Commission
 
-**Date**: 2026-08-10
-**Status**: Design approved — backend implementation pending
+**Date**: 2026-08-10  
+**Updated**: 2026-09-29 — unit of time is **days** from `commission_start_date` (not calendar months).  
+**Status**: Implemented (backend + admin UI)
+
+> **2026-09-29:** Phases use `day_start` / `day_end` / optional `daily_increment`.  
+> Launch seed: Lanzamiento días 1–7 @ 0%, Medición 8–14 @ 5%, Estabilización 15–120 @ 10%, Crecimiento 121+ @ 10% (cap 15%).  
+> Ops edits ranges and rates from lifty-admin → Comisiones. Mobile still has residual `isPhaseOne = true` (UI debt hide only; rate comes from backend).
 
 ## Overview
 
-Replace the hardcoded 20% commission rate and the first-10-drivers exemption system with a **global phase/month-based commission model**. An admin-configured start date determines the current month, and each phase defines the commission rate for its month range. The admin can adjust all phase parameters from a backend API (dashboard UI deferred to a future iteration).
+Replace the hardcoded 20% commission rate and the first-10-drivers exemption system with a **global phase-based commission model**. An admin-configured start date determines the current **day** (day 1 = start date UTC), and each phase defines the commission rate for its day range. The admin can adjust all phase parameters from lifty-admin → Comisiones.
 
 ## Commission Model
 

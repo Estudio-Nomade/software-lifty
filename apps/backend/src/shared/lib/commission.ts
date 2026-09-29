@@ -4,9 +4,12 @@ import { commissionPhases, platformConfig } from '../db/schema';
 
 export interface CommissionConfig {
   phase: string;
-  currentMonth: number;
+  currentDay: number;
   rate: number;
 }
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const DEV_DEFAULT_START = '2026-10-01';
 
 export async function getConfig(db: NodePgDatabase, key: string): Promise<string> {
   const [row] = await db
@@ -40,61 +43,64 @@ export async function getDebtCapArs(db: NodePgDatabase): Promise<number> {
   return Number.isNaN(parsed) ? DEFAULT_DEBT_CAP_ARS : parsed;
 }
 
+/** Day 1 = UTC calendar date of start (inclusive). Before start → day 1. */
+export function differenceInCalendarDaysUtc(now: Date, start: Date): number {
+  const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const startUtc = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  return Math.floor((nowUtc - startUtc) / MS_PER_DAY);
+}
+
+export function currentCommissionDay(now: Date, startDate: Date): number {
+  return Math.max(1, differenceInCalendarDaysUtc(now, startDate) + 1);
+}
+
+function rateForPhase(
+  phase: {
+    name: string;
+    day_start: number;
+    base_rate: number;
+    daily_increment: number | null;
+    cap_rate: number | null;
+  },
+  currentDay: number,
+): number {
+  let rate = phase.base_rate;
+  if (phase.daily_increment != null) {
+    const extraDays = currentDay - phase.day_start;
+    rate = phase.base_rate + extraDays * phase.daily_increment;
+    if (phase.cap_rate != null) {
+      rate = Math.min(rate, phase.cap_rate);
+    }
+  }
+  return rate;
+}
+
 export async function getCommissionConfig(
   db: NodePgDatabase,
   now: Date = new Date(),
 ): Promise<CommissionConfig> {
-  const dateStr = await getConfig(db, 'commission_start_date');
-  if (!dateStr) {
-    const devStartDate = new Date('2026-10-01T00:00:00Z');
-    // Before launch date → treat as month 1 (Lanzamiento), never month ≤ 0.
-    const devMonth = Math.max(1, differenceInCalendarMonths(now, devStartDate) + 1);
-    const [devPhase] = await db
-      .select()
-      .from(commissionPhases)
-      .where(
-        and(
-          lte(commissionPhases.month_start, devMonth),
-          sql`(${commissionPhases.month_end} IS NULL OR ${commissionPhases.month_end} >= ${devMonth})`,
-        ),
-      )
-      .limit(1);
-    if (!devPhase) throw new Error('No commission phase found');
-    return { phase: devPhase.name, currentMonth: devMonth, rate: devPhase.base_rate };
-  }
-
+  const dateStr = (await getConfig(db, 'commission_start_date')) || DEV_DEFAULT_START;
   const startDate = new Date(`${dateStr}T00:00:00Z`);
-  // Before start_date (ops set future launch) → month 1, not 0 / negative.
-  const currentMonth = Math.max(1, differenceInCalendarMonths(now, startDate) + 1);
+  const currentDay = currentCommissionDay(now, startDate);
 
   const [phase] = await db
     .select()
     .from(commissionPhases)
     .where(
       and(
-        lte(commissionPhases.month_start, currentMonth),
-        sql`(${commissionPhases.month_end} IS NULL OR ${commissionPhases.month_end} >= ${currentMonth})`,
+        lte(commissionPhases.day_start, currentDay),
+        sql`(${commissionPhases.day_end} IS NULL OR ${commissionPhases.day_end} >= ${currentDay})`,
       ),
     )
     .limit(1);
 
   if (!phase) {
-    throw new Error(`No commission phase found for month ${currentMonth}`);
+    throw new Error(`No commission phase found for day ${currentDay}`);
   }
 
-  let rate = phase.base_rate;
-
-  if (phase.monthly_increment != null) {
-    const extraMonths = currentMonth - phase.month_start;
-    rate = phase.base_rate + extraMonths * phase.monthly_increment;
-    if (phase.cap_rate != null) {
-      rate = Math.min(rate, phase.cap_rate);
-    }
-  }
-
-  return { phase: phase.name, currentMonth, rate };
-}
-
-function differenceInCalendarMonths(a: Date, b: Date): number {
-  return (a.getUTCFullYear() - b.getUTCFullYear()) * 12 + (a.getUTCMonth() - b.getUTCMonth());
+  return {
+    phase: phase.name,
+    currentDay,
+    rate: rateForPhase(phase, currentDay),
+  };
 }

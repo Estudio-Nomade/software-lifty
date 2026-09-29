@@ -34,15 +34,15 @@ async function truncateTables() {
 async function seedPricing() {
   const db = getDb();
   await db.insert(commissionPhases).values([
-    { name: 'Lanzamiento', month_start: 1, month_end: 1, base_rate: 0.0 },
-    { name: 'Medicion', month_start: 2, month_end: 2, base_rate: 0.05 },
-    { name: 'Estabilizacion', month_start: 3, month_end: 6, base_rate: 0.1 },
+    { name: 'Lanzamiento', day_start: 1, day_end: 7, base_rate: 0.0 },
+    { name: 'Medicion', day_start: 8, day_end: 14, base_rate: 0.05 },
+    { name: 'Estabilizacion', day_start: 15, day_end: 120, base_rate: 0.1 },
     {
       name: 'Crecimiento',
-      month_start: 7,
-      month_end: null,
+      day_start: 121,
+      day_end: null,
       base_rate: 0.1,
-      monthly_increment: 0.007,
+      daily_increment: null,
       cap_rate: 0.15,
     },
   ]);
