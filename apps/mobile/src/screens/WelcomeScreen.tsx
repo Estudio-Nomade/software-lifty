@@ -5,8 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import type { DriverStatus } from '../api/types';
 import { driverStatusSchema } from '../api/types';
+import { BrandSplash } from '../components/BrandSplash';
 import { Button } from '../components/Button';
-import { LoadingOverlay } from '../components/feedback/LoadingOverlay';
 import { Text } from '../components/ui/Text';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -88,12 +88,7 @@ export const WelcomeScreen: React.FC = () => {
   }, [signOut, signingOut]);
 
   if (mode === 'loading') {
-    return (
-      <View style={styles.loadingContainer}>
-        <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
-        <LoadingOverlay visible />
-      </View>
-    );
+    return <BrandSplash />;
   }
 
   if (mode === 'handoff') {
@@ -167,12 +162,6 @@ export const WelcomeScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,

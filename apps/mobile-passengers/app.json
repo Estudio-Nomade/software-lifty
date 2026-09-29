@@ -43,7 +43,15 @@
       ],
       "expo-router",
       "expo-web-browser",
-      "expo-splash-screen"
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#EEF7F6",
+          "image": "./assets/lifty-mark-l.png",
+          "imageWidth": 148,
+          "resizeMode": "contain"
+        }
+      ]
     ]
   }
 }
