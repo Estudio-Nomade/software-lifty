@@ -6,17 +6,26 @@ import { getDb, resetDb } from '../db/client';
 import { commissionPhases, platformConfig } from '../db/schema';
 import { getCommissionRate, getCommissionConfig } from './commission';
 
+const DAY_SEED = [
+  { name: 'Lanzamiento', day_start: 1, day_end: 7, base_rate: 0.0 },
+  { name: 'Medición', day_start: 8, day_end: 14, base_rate: 0.05 },
+  { name: 'Estabilización', day_start: 15, day_end: 120, base_rate: 0.1 },
+  {
+    name: 'Crecimiento',
+    day_start: 121,
+    day_end: null,
+    base_rate: 0.1,
+    daily_increment: 0.0005,
+    cap_rate: 0.15,
+  },
+] as const;
+
 beforeEach(async () => {
   const db = getDb();
   await db.delete(commissionPhases);
   await db.delete(platformConfig);
 
-  await db.insert(commissionPhases).values([
-    { name: 'Lanzamiento', month_start: 1, month_end: 1, base_rate: 0.00 },
-    { name: 'Medición', month_start: 2, month_end: 2, base_rate: 0.05 },
-    { name: 'Estabilización', month_start: 3, month_end: 6, base_rate: 0.10 },
-    { name: 'Crecimiento', month_start: 7, month_end: null, base_rate: 0.10, monthly_increment: 0.007, cap_rate: 0.15 },
-  ]);
+  await db.insert(commissionPhases).values([...DAY_SEED]);
 });
 
 afterAll(() => {
@@ -32,45 +41,54 @@ describe('getCommissionRate', () => {
     expect(rate).toBeLessThanOrEqual(0.15);
   });
 
-  test('returns 0% for month 1 (Lanzamiento)', async () => {
+  test('returns 0% for days 1–7 (Lanzamiento)', async () => {
     const db = getDb();
     await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    const rate = await getCommissionRate(db, new Date('2026-10-15'));
+    const rate = await getCommissionRate(db, new Date('2026-10-01T12:00:00Z'));
     expect(rate).toBe(0);
+    const day7 = await getCommissionRate(db, new Date('2026-10-07T12:00:00Z'));
+    expect(day7).toBe(0);
   });
 
-  test('returns 5% for month 2 (Medición)', async () => {
+  test('returns 5% for day 8 (Medición)', async () => {
     const db = getDb();
     await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    const rate = await getCommissionRate(db, new Date('2026-11-10'));
+    const rate = await getCommissionRate(db, new Date('2026-10-08T12:00:00Z'));
     expect(rate).toBe(0.05);
   });
 
-  test('returns 10% for month 3 (Estabilización)', async () => {
+  test('returns 10% for day 15 (Estabilización)', async () => {
     const db = getDb();
     await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    const rate = await getCommissionRate(db, new Date('2026-12-05'));
-    expect(rate).toBe(0.10);
+    const rate = await getCommissionRate(db, new Date('2026-10-15T12:00:00Z'));
+    expect(rate).toBe(0.1);
   });
 
-  test('returns 10% for month 7 day 1 (Crecimiento base)', async () => {
+  test('returns base for open-ended Crecimiento day 121', async () => {
     const db = getDb();
     await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    const rate = await getCommissionRate(db, new Date('2027-04-01'));
-    expect(rate).toBe(0.10);
+    // 2026-10-01 + 120 days = 2027-01-29 (day 121)
+    const rate = await getCommissionRate(db, new Date('2027-01-29T12:00:00Z'));
+    expect(rate).toBe(0.1);
   });
 
-  test('returns 10.7% for month 8 (Crecimiento +1 increment)', async () => {
+  test('applies daily_increment and caps', async () => {
     const db = getDb();
     await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    const rate = await getCommissionRate(db, new Date('2027-05-01'));
-    expect(rate).toBeCloseTo(0.107, 3);
+    // day 121 + 20 = day 141 → 0.10 + 20*0.0005 = 0.11
+    const mid = await getCommissionRate(db, new Date('2027-02-18T12:00:00Z'));
+    expect(mid).toBeCloseTo(0.11, 5);
+    // far future → cap 0.15
+    const capped = await getCommissionRate(db, new Date('2030-01-01T12:00:00Z'));
+    expect(capped).toBe(0.15);
   });
 
-  test('caps at 15% for month 20', async () => {
+  test('before start_date clamps to day 1 / Lanzamiento', async () => {
     const db = getDb();
     await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    const rate = await getCommissionRate(db, new Date('2028-05-01'));
-    expect(rate).toBe(0.15);
+    const config = await getCommissionConfig(db, new Date('2026-09-01T12:00:00Z'));
+    expect(config.currentDay).toBe(1);
+    expect(config.phase).toBe('Lanzamiento');
+    expect(config.rate).toBe(0);
   });
 });

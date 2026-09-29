@@ -508,10 +508,20 @@ export const adminService = {
   },
 
   async listCommissionPhases() {
-    return db.select().from(commissionPhases).orderBy(commissionPhases.month_start);
+    return db.select().from(commissionPhases).orderBy(commissionPhases.day_start);
   },
 
-  async updateCommissionPhase(id: string, data: Record<string, any>) {
+  async updateCommissionPhase(
+    id: string,
+    data: {
+      name?: string;
+      day_start?: number;
+      day_end?: number | null;
+      base_rate?: number;
+      daily_increment?: number | null;
+      cap_rate?: number | null;
+    },
+  ) {
     const [existing] = await db
       .select()
       .from(commissionPhases)
@@ -520,9 +530,39 @@ export const adminService = {
 
     if (!existing) throw new NotFoundError('Commission phase not found');
 
+    const next = {
+      name: data.name ?? existing.name,
+      day_start: data.day_start ?? existing.day_start,
+      day_end: data.day_end !== undefined ? data.day_end : existing.day_end,
+      base_rate: data.base_rate ?? existing.base_rate,
+      daily_increment:
+        data.daily_increment !== undefined ? data.daily_increment : existing.daily_increment,
+      cap_rate: data.cap_rate !== undefined ? data.cap_rate : existing.cap_rate,
+    };
+
+    if (next.day_end != null && next.day_end < next.day_start) {
+      throw new AppError('day_end must be >= day_start', 400, 'BAD_REQUEST');
+    }
+
+    const others = await db.select().from(commissionPhases).where(ne(commissionPhases.id, id));
+
+    for (const other of others) {
+      const aStart = next.day_start;
+      const aEnd = next.day_end ?? Number.POSITIVE_INFINITY;
+      const bStart = other.day_start;
+      const bEnd = other.day_end ?? Number.POSITIVE_INFINITY;
+      if (aStart <= bEnd && bStart <= aEnd) {
+        throw new AppError(
+          `Phase range overlaps with "${other.name}" (days ${other.day_start}–${other.day_end ?? '∞'})`,
+          400,
+          'BAD_REQUEST',
+        );
+      }
+    }
+
     const [updated] = await db
       .update(commissionPhases)
-      .set({ ...data, updated_at: new Date() })
+      .set({ ...next, updated_at: new Date() })
       .where(eq(commissionPhases.id, id))
       .returning();
 

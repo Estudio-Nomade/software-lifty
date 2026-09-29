@@ -12,10 +12,10 @@ export const driverIdParams = t.Object({
 
 export const updatePhaseSchema = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
-  month_start: t.Optional(t.Number({ minimum: 1 })),
-  month_end: t.Optional(t.Nullable(t.Number({ minimum: 1 }))),
+  day_start: t.Optional(t.Number({ minimum: 1 })),
+  day_end: t.Optional(t.Nullable(t.Number({ minimum: 1 }))),
   base_rate: t.Optional(t.Number({ minimum: 0, maximum: 1 })),
-  monthly_increment: t.Optional(t.Nullable(t.Number({ minimum: 0, maximum: 1 }))),
+  daily_increment: t.Optional(t.Nullable(t.Number({ minimum: 0, maximum: 1 }))),
   cap_rate: t.Optional(t.Nullable(t.Number({ minimum: 0, maximum: 1 }))),
 });
 
