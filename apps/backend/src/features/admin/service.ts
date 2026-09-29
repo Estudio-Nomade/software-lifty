@@ -589,7 +589,8 @@ export const adminService = {
         set: { value, updated_at: new Date() },
       });
 
-    return { start_date: value };
+    // Same shape as GET so admin can clear the "not configured" banner without a second fetch.
+    return { start_date: value, configured: true as const };
   },
 
   async getCurrentCommission() {
