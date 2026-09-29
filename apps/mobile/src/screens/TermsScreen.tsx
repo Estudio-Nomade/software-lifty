@@ -96,7 +96,7 @@ export const TermsScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   content: {
     flex: 1,
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
     paddingBottom: theme.spacing.lg,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
   },
   errorText: {

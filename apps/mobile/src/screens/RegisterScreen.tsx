@@ -194,20 +194,18 @@ export const RegisterScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
         <View style={styles.verifyContent}>
-          <Text style={styles.title}>Verifica tu email</Text>
+          <Text style={styles.title}>Verificá tu email</Text>
           <Text style={styles.subtitle}>
-            Te enviamos un codigo de 6 digitos a {email}. Si no lo ves, revisa spam.
+            Te enviamos un código de 6 dígitos a {email}. Si no lo ves, revisá spam.
           </Text>
-          <View style={{ height: 24 }} />
           <OTPInput length={6} value={verificationCode} onChange={setVerificationCode} />
-          <View style={{ height: 16 }} />
           {error !== null && <Text style={styles.errorText}>{error}</Text>}
           {info !== null && <Text style={styles.infoText}>{info}</Text>}
           <Button
             title={
               verificationCode.length === 6 && !verifyEmail.isPending
-                ? 'VERIFICAR CODIGO'
-                : 'INICIAR SESION'
+                ? 'Verificar código'
+                : 'Iniciar sesión'
             }
             onPress={
               verificationCode.length === 6
@@ -219,7 +217,7 @@ export const RegisterScreen: React.FC = () => {
             style={styles.button}
           />
           <TouchableOpacity onPress={handleResendCode} disabled={resendCode.isPending}>
-            <Text style={styles.resendLink}>Reenviar codigo</Text>
+            <Text style={styles.resendLink}>Reenviar código</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -243,92 +241,90 @@ export const RegisterScreen: React.FC = () => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ height: 16 }} />
-          <Text style={styles.title}>Crear cuenta</Text>
-          <Text style={styles.subtitle}>Ingresa tu email y contrasena para registrarte</Text>
-          <View style={{ height: 8 }} />
-          <Input
-            placeholder="Email"
-            value={email}
-            onChangeText={(t) => {
-              setEmail(t);
-              setError(null);
-            }}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            containerStyle={styles.inputField}
-          />
-          <Input
-            placeholder="Contrasena"
-            value={password}
-            onChangeText={(t) => {
-              setPassword(t);
-              setError(null);
-            }}
-            secureTextEntry={!showPassword}
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="newPassword"
-            containerStyle={styles.inputField}
-          />
-          <Input
-            placeholder="Confirmar contrasena"
-            value={confirmPassword}
-            onChangeText={(t) => {
-              setConfirmPassword(t);
-              setError(null);
-            }}
-            secureTextEntry={!showPassword}
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="password"
-            containerStyle={styles.inputField}
-          />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-            <View style={styles.showPasswordRow}>
-              <Ionicons
-                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                size={18}
-                color={theme.colors.mediumGray}
-              />
-              <Text style={styles.showPasswordText}>
-                {showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-          {passwordMismatch && (
-            <Text style={styles.mismatchText}>Las contrasenas no coinciden</Text>
-          )}
-          {passwordMatch && <Text style={styles.matchText}>✓ Las contrasenas coinciden</Text>}
-          <View style={{ height: 8 }} />
-          <Button
-            title="CREAR CUENTA"
-            onPress={handleRegister}
-            loading={signUp.isPending}
-            disabled={!email.trim() || !password || !confirmPassword || signUp.isPending}
-            style={styles.button}
-          />
-          <View style={{ height: 8 }} />
-          <Button
-            title={googleLoading ? '' : 'CONTINUAR CON GOOGLE'}
-            onPress={handleGoogle}
-            loading={googleLoading}
-            style={[styles.button, styles.googleButton]}
-            textStyle={styles.googleButtonText}
-          />
-          {error !== null && <Text style={styles.errorText}>{error}</Text>}
-          <TouchableOpacity
-            onPress={() => {
-              const trimmed = email.trim();
-              if (trimmed) {
-                navigation.navigate('LoginCredentials', { email: trimmed });
-              } else {
-                navigation.navigate('LoginCredentials');
-              }
-            }}
-          >
-            <Text style={styles.loginLink}>Ya tenes cuenta? Inicia sesion</Text>
-          </TouchableOpacity>
+          <View style={styles.form}>
+            <Text style={styles.title}>Crear cuenta</Text>
+            <Text style={styles.subtitle}>Ingresá tu email y contraseña para registrarte</Text>
+            <Input
+              placeholder="Email"
+              value={email}
+              onChangeText={(t) => {
+                setEmail(t);
+                setError(null);
+              }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              containerStyle={styles.inputField}
+            />
+            <Input
+              placeholder="Contraseña"
+              value={password}
+              onChangeText={(t) => {
+                setPassword(t);
+                setError(null);
+              }}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="newPassword"
+              containerStyle={styles.inputField}
+            />
+            <Input
+              placeholder="Confirmar contraseña"
+              value={confirmPassword}
+              onChangeText={(t) => {
+                setConfirmPassword(t);
+                setError(null);
+              }}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="password"
+              containerStyle={styles.inputField}
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+              <View style={styles.showPasswordRow}>
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={18}
+                  color={theme.colors.mediumGray}
+                />
+                <Text style={styles.showPasswordText}>
+                  {showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+            {passwordMismatch && (
+              <Text style={styles.mismatchText}>Las contraseñas no coinciden</Text>
+            )}
+            {passwordMatch && <Text style={styles.matchText}>✓ Las contraseñas coinciden</Text>}
+            <Button
+              title="Crear cuenta"
+              onPress={handleRegister}
+              loading={signUp.isPending}
+              disabled={!email.trim() || !password || !confirmPassword || signUp.isPending}
+              style={styles.button}
+            />
+            <Button
+              title={googleLoading ? '' : 'Continuar con Google'}
+              onPress={handleGoogle}
+              loading={googleLoading}
+              style={[styles.button, styles.googleButton]}
+              textStyle={styles.googleButtonText}
+            />
+            {error !== null && <Text style={styles.errorText}>{error}</Text>}
+            <TouchableOpacity
+              onPress={() => {
+                const trimmed = email.trim();
+                if (trimmed) {
+                  navigation.navigate('LoginCredentials', { email: trimmed });
+                } else {
+                  navigation.navigate('LoginCredentials');
+                }
+              }}
+            >
+              <Text style={styles.loginLink}>¿Ya tenés cuenta? Iniciá sesión</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -338,13 +334,13 @@ export const RegisterScreen: React.FC = () => {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   flex: {
     flex: 1,
@@ -360,34 +356,50 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.medium,
   },
   scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.xl,
+    paddingTop: theme.spacing.md,
+  },
+  form: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    gap: theme.spacing.sm,
   },
   title: {
-    fontSize: theme.fontSize.xl,
+    fontSize: theme.fontSize['2xl'],
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
-    marginBottom: theme.spacing.sm,
+    letterSpacing: -0.4,
+    textAlign: 'center',
+    marginBottom: theme.spacing.xs,
   },
   subtitle: {
-    fontSize: theme.fontSize.md,
+    fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
-    marginBottom: theme.spacing.sm,
+    textAlign: 'center',
+    marginBottom: theme.spacing.md,
   },
   verifyContent: {
     flex: 1,
+    justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.xl,
     alignItems: 'center',
+    gap: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
   },
   inputField: {
-    marginBottom: theme.spacing.sm,
+    width: '100%',
+    marginBottom: theme.spacing.xs,
   },
   showPasswordRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    marginVertical: theme.spacing.sm,
+    marginVertical: theme.spacing.xs,
   },
   showPasswordText: {
     fontSize: theme.fontSize.sm,
@@ -396,16 +408,16 @@ const styles = StyleSheet.create({
   mismatchText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
-    marginTop: theme.spacing.xs,
+    textAlign: 'center',
   },
   matchText: {
     fontSize: theme.fontSize.sm,
-    color: theme.colors.turquoise,
-    marginTop: theme.spacing.xs,
+    color: theme.colors.primary,
+    textAlign: 'center',
   },
   button: {
-    marginTop: theme.spacing.sm,
-    width: 327,
+    marginTop: theme.spacing.xs,
+    width: '100%',
   },
   googleButton: {
     backgroundColor: theme.colors.deepBlue,
@@ -417,25 +429,25 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
-    marginTop: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
     textAlign: 'center',
   },
   infoText: {
     fontSize: theme.fontSize.sm,
-    color: theme.colors.turquoise,
-    marginTop: theme.spacing.sm,
+    color: theme.colors.primary,
+    marginTop: theme.spacing.xs,
     textAlign: 'center',
   },
   resendLink: {
     fontSize: theme.fontSize.md,
     color: theme.colors.deepBlue,
     textAlign: 'center',
-    marginTop: theme.spacing.lg,
+    marginTop: theme.spacing.sm,
   },
   loginLink: {
     fontSize: theme.fontSize.md,
     color: theme.colors.deepBlue,
     textAlign: 'center',
-    marginTop: theme.spacing.lg,
+    marginTop: theme.spacing.md,
   },
 });

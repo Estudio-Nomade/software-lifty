@@ -203,8 +203,8 @@ export const TripHistoryScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-      <Navbar title="Historial" onBack={() => navigation.goBack()} showBack />
+      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <Navbar title="Historial" onBack={() => navigation.goBack()} showBack variant="light" />
       <View style={{ flex: 1 }}>{renderContent()}</View>
     </View>
   );
@@ -217,14 +217,14 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    alignItems: 'center',
+    alignItems: 'stretch',
     backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+    padding: theme.spacing.md,
     paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   tripCard: {
-    width: 343,
+    width: '100%',
     gap: theme.spacing.sm,
   },
   tripHeader: {

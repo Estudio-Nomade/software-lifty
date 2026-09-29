@@ -238,10 +238,10 @@ export const ProfileScreen: React.FC = () => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-        <Navbar title="Perfil" showBack={false} />
+        <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+        <Navbar title="Perfil" showBack={false} variant="light" />
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.colors.turquoise} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       </View>
     );
@@ -265,13 +265,13 @@ export const ProfileScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-      <Navbar title="Perfil" showBack={false} />
+      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <Navbar title="Perfil" showBack={false} variant="light" />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Card style={styles.profileCard} padding={theme.spacing.lg}>
           <View style={styles.avatar}>
-            <Avatar uri={profile?.avatar_url ?? null} name={profile?.full_name ?? ''} size={72} />
+            <Avatar uri={profile?.avatar_url ?? null} name={profile?.full_name ?? ''} size={80} />
           </View>
           <Text style={styles.name}>{profile?.full_name || 'Sin nombre'}</Text>
           <View style={styles.stats}>
@@ -279,6 +279,7 @@ export const ProfileScreen: React.FC = () => {
               <Text style={styles.statValue}>{tripsDisplay}</Text>
               <Text style={styles.statLabel}>Viajes</Text>
             </View>
+            <View style={styles.statDivider} />
             <View style={styles.stat}>
               <View style={styles.ratingRow}>
                 <Text style={styles.statValue}>
@@ -288,12 +289,13 @@ export const ProfileScreen: React.FC = () => {
               </View>
               <Text style={styles.statLabel}>Calificación</Text>
             </View>
+            <View style={styles.statDivider} />
             <View style={styles.stat}>
               <Text style={styles.statValue}>{yearsDisplay}</Text>
               <Text style={styles.statLabel}>{yearsLabel}</Text>
             </View>
           </View>
-          <Button title="EDITAR PERFIL" variant="outline" onPress={openEdit} />
+          <Button title="Editar perfil" variant="secondary" onPress={openEdit} />
         </Card>
 
         {metrics ? (
@@ -432,7 +434,7 @@ export const ProfileScreen: React.FC = () => {
         </Card>
 
         <Button
-          title="Cerrar sesion"
+          title="Cerrar sesión"
           variant="danger"
           onPress={handleSignOut}
           style={styles.button}
@@ -488,7 +490,7 @@ export const ProfileScreen: React.FC = () => {
               />
 
               <Button
-                title="GUARDAR"
+                title="Guardar"
                 onPress={handleSave}
                 loading={saving}
                 disabled={saving}
@@ -513,42 +515,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   content: {
-    alignItems: 'center',
+    alignItems: 'stretch',
     backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
     padding: theme.spacing.md,
     paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   profileCard: {
-    width: 343,
+    width: '100%',
     alignItems: 'center',
     gap: theme.spacing.md,
   },
   avatar: {
-    width: 72,
-    height: 72,
+    width: 88,
+    height: 88,
     borderRadius: theme.radius.full,
-    borderWidth: 2,
-    borderColor: theme.colors.mediumGray,
+    borderWidth: 3,
+    borderColor: theme.colors.surface,
     backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    ...theme.shadows.card,
   },
   name: {
-    fontSize: theme.fontSize.lg,
+    fontSize: theme.fontSize.xl,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
+    letterSpacing: -0.3,
   },
   stats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    alignItems: 'center',
     width: '100%',
-    gap: theme.spacing.sm,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.md,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.sm,
   },
   stat: {
+    flex: 1,
     alignItems: 'center',
     gap: 4,
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 28,
+    backgroundColor: 'rgba(13, 43, 69, 0.12)',
   },
   ratingRow: {
     flexDirection: 'row',
@@ -558,7 +572,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.bold,
-    color: theme.colors.turquoise,
+    color: theme.colors.primary,
   },
   statLabel: {
     fontSize: theme.fontSize.xs,
@@ -566,9 +580,10 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: theme.fontWeight.semibold,
     color: theme.colors.deepBlue,
     marginBottom: theme.spacing.sm,
+    letterSpacing: -0.1,
   },
   cancellationCard: {
     gap: theme.spacing.xs,
@@ -630,9 +645,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.lightGray,
+    paddingVertical: theme.spacing.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 43, 69, 0.08)',
   },
   docInfo: {
     flex: 1,
@@ -640,6 +655,7 @@ const styles = StyleSheet.create({
   docName: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.deepBlue,
+    fontWeight: theme.fontWeight.medium,
   },
   docStatus: {
     fontSize: theme.fontSize.xs,
@@ -647,16 +663,16 @@ const styles = StyleSheet.create({
   },
   docAction: {
     fontSize: theme.fontSize.sm,
-    color: theme.colors.turquoise,
-    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.primary,
+    fontWeight: theme.fontWeight.semibold,
   },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.lightGray,
+    paddingVertical: theme.spacing.sm + 2,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 43, 69, 0.08)',
   },
   menuLabel: {
     flex: 1,
@@ -665,7 +681,7 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.medium,
   },
   reviewBanner: {
-    backgroundColor: 'rgba(255, 107, 107, 0.12)',
+    backgroundColor: 'rgba(229, 57, 53, 0.12)',
     borderRadius: theme.radius.sm,
     padding: theme.spacing.sm,
     marginBottom: theme.spacing.sm,
@@ -675,18 +691,18 @@ const styles = StyleSheet.create({
     color: theme.colors.dangerRed,
   },
   button: {
-    width: 327,
+    width: '100%',
     borderColor: theme.colors.dangerRed,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(13, 43, 69, 0.45)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: theme.colors.white,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.radius.xl,
+    borderTopRightRadius: theme.radius.xl,
     padding: theme.spacing.lg,
     maxHeight: '90%',
   },
@@ -711,7 +727,7 @@ const styles = StyleSheet.create({
   },
   editAvatarLabel: {
     fontSize: theme.fontSize.sm,
-    color: theme.colors.turquoise,
+    color: theme.colors.primary,
     fontWeight: theme.fontWeight.medium,
   },
   editInput: {

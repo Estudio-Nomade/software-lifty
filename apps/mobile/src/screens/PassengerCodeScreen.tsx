@@ -36,7 +36,7 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
   },
   codeBox: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     paddingHorizontal: theme.spacing['2xl'],
     paddingVertical: theme.spacing.lg,
     borderRadius: theme.radius.lg,

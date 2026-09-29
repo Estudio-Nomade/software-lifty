@@ -273,7 +273,7 @@ export const WaitingPassengerScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   header: {
     alignItems: 'center',
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   instructionsCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     borderRadius: theme.radius.sm,
     borderLeftWidth: 3,
     borderLeftColor: theme.colors.turquoise,
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
     marginHorizontal: theme.spacing.md,
     marginTop: theme.spacing.sm,
     borderRadius: theme.radius.lg,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     padding: theme.spacing.sm,
     overflow: 'hidden',
   },
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.sm,
     gap: theme.spacing.sm,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
   },
   chatScroll: {
     flex: 1,
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
   },
   modal: {
     width: 310,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.lg,
     alignItems: 'center',

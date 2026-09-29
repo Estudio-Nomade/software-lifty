@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     width: 327,
   },
   googleButton: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
   },
   googleButtonText: {
     color: theme.colors.deepBlue,

@@ -131,7 +131,7 @@ export const KYCWebViewScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   webview: {
     flex: 1,
@@ -150,6 +150,6 @@ const styles = StyleSheet.create({
     ...(StyleSheet.absoluteFill as object),
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
   },
 });

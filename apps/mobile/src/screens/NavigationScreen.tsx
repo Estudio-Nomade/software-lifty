@@ -458,15 +458,15 @@ export const NavigationScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   mapArea: {
     flex: 1,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   bottomCard: {
     maxHeight: BOTTOM_CARD_MAX_HEIGHT,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderTopLeftRadius: theme.radius.lg,
     borderTopRightRadius: theme.radius.lg,
     // Column: scrollable body + sticky footer so LLEGUE stays visible.
@@ -495,7 +495,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: theme.colors.lightGray,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
   },
   cancelLinkWrap: {
     alignItems: 'center',
@@ -521,7 +521,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing.md,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     borderRadius: theme.radius.md,
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
@@ -584,7 +584,7 @@ const styles = StyleSheet.create({
   instructionsPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     borderRadius: theme.radius.sm,
     paddingVertical: theme.spacing.xs,
     paddingHorizontal: theme.spacing.sm,
@@ -662,7 +662,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',

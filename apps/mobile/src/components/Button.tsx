@@ -27,9 +27,10 @@ interface ButtonProps {
 const variantStyles: Record<ButtonVariant, { container: ViewStyle; text: TextStyle }> = {
   primary: {
     container: {
-      backgroundColor: theme.colors.turquoise,
+      backgroundColor: theme.colors.primary,
       height: theme.dimensions.buttonHeight,
       borderRadius: theme.radius.buttonRadius,
+      ...theme.shadows.button,
     },
     text: {
       color: theme.colors.white,
@@ -37,14 +38,12 @@ const variantStyles: Record<ButtonVariant, { container: ViewStyle; text: TextSty
   },
   secondary: {
     container: {
-      backgroundColor: 'transparent',
+      backgroundColor: theme.colors.surfaceMuted,
       height: theme.dimensions.buttonHeight,
-      borderRadius: theme.radius.pill,
-      borderWidth: 1.5,
-      borderColor: theme.colors.mediumGray,
+      borderRadius: theme.radius.buttonRadius,
     },
     text: {
-      color: theme.colors.mediumGray,
+      color: theme.colors.deepBlue,
     },
   },
   danger: {
@@ -52,7 +51,7 @@ const variantStyles: Record<ButtonVariant, { container: ViewStyle; text: TextSty
       backgroundColor: 'transparent',
       height: theme.dimensions.buttonHeight,
       borderRadius: theme.radius.buttonRadius,
-      borderWidth: 1.5,
+      borderWidth: StyleSheet.hairlineWidth * 2,
       borderColor: theme.colors.dangerRed,
     },
     text: {
@@ -61,27 +60,27 @@ const variantStyles: Record<ButtonVariant, { container: ViewStyle; text: TextSty
   },
   cta: {
     container: {
-      backgroundColor: theme.colors.turquoise,
+      backgroundColor: theme.colors.primary,
       height: theme.dimensions.buttonCTAHeight,
       borderRadius: theme.radius.buttonRadius,
+      ...theme.shadows.button,
     },
     text: {
       color: theme.colors.white,
       fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.bold,
+      fontWeight: theme.fontWeight.semibold,
     },
   },
   outline: {
     container: {
       backgroundColor: 'transparent',
       height: theme.dimensions.buttonHeight,
-      borderRadius: theme.radius.pill,
-      borderWidth: 1.5,
-      borderColor: theme.colors.turquoise,
+      borderRadius: theme.radius.buttonRadius,
+      borderWidth: StyleSheet.hairlineWidth * 2,
+      borderColor: theme.colors.primary,
     },
     text: {
-      color: theme.colors.turquoise,
-      textTransform: 'uppercase',
+      color: theme.colors.primary,
     },
   },
 };
@@ -116,7 +115,7 @@ export const Button: React.FC<ButtonProps> = ({
       ]}
       onPress={onPress}
       disabled={disabled || loading}
-      activeOpacity={0.8}
+      activeOpacity={0.85}
     >
       {loading ? (
         <ActivityIndicator color={outlineOverride?.color ?? variantStyle.text.color} />
@@ -138,15 +137,19 @@ export const Button: React.FC<ButtonProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    width: 327,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'stretch',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
   },
   text: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.bold,
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.semibold,
+    letterSpacing: 0.1,
   },
   disabled: {
-    opacity: 0.4,
+    opacity: 0.45,
   },
 });

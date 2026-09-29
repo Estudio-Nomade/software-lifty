@@ -12,22 +12,19 @@ const fontFamilyByWeight: Record<string, string> = {
   bold: theme.fontFamily.bold,
 };
 
-function resolveFontFamily(style: TextProps['style']): string | undefined {
-  if (!style) return undefined;
+function resolveFontFamily(style: TextProps['style']): string {
+  if (!style) return theme.fontFamily.regular;
   const flattened = StyleSheet.flatten(style);
   const weight = flattened.fontWeight;
-  if (weight === undefined) return undefined;
-  if (typeof weight === 'string') return fontFamilyByWeight[weight];
-  return fontFamilyByWeight[String(weight)];
+  if (weight === undefined) return theme.fontFamily.regular;
+  if (typeof weight === 'string') return fontFamilyByWeight[weight] ?? theme.fontFamily.regular;
+  return fontFamilyByWeight[String(weight)] ?? theme.fontFamily.regular;
 }
 
 export const Text = forwardRef<ComponentRef<typeof RNText>, TextProps>(
   ({ style, ...props }, ref) => {
     const fontFamily = resolveFontFamily(style);
-
-    const mergedStyle = fontFamily ? ([{ fontFamily }, style] as const).flat() : style;
-
-    return <RNText ref={ref} style={mergedStyle} {...props} />;
+    return <RNText ref={ref} style={[{ fontFamily }, style]} {...props} />;
   },
 );
 

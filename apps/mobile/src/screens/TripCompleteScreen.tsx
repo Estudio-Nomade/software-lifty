@@ -353,7 +353,7 @@ export const TripCompleteScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   flex: {
     flex: 1,
@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
   summaryCard: {
     width: 300,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     padding: theme.spacing.md,
     gap: theme.spacing.xs,
   },

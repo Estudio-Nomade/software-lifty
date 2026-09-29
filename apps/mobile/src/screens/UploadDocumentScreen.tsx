@@ -307,7 +307,7 @@ export const UploadDocumentScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   content: {
     alignItems: 'center',
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     width: 343,
     height: 140,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing.sm,

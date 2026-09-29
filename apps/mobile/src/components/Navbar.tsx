@@ -20,15 +20,15 @@ interface NavbarProps {
   avatarName?: string;
   avatarUrl?: string | null;
   style?: ViewStyle;
-  /** `bar` = solid full-width (default). `floating` = transparent chrome over map. */
-  variant?: 'bar' | 'floating';
+  /** `bar` = solid full-width (default). `floating` = transparent chrome over map. `light` = surface bar + navy text. */
+  variant?: 'bar' | 'floating' | 'light';
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   title,
   onBack,
   showBack = true,
-  backgroundColor = theme.colors.deepBlue,
+  backgroundColor,
   leftElement,
   rightElement,
   showHamburger = false,
@@ -42,6 +42,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   const insets = useSafeAreaInsets();
   const navigation = useAppNavigation();
   const floating = variant === 'floating';
+  const light = variant === 'light';
+  const barBg = backgroundColor ?? (light ? theme.colors.background : theme.colors.deepBlue);
+  const iconColor = floating || light ? theme.colors.deepBlue : theme.colors.white;
+  const titleColor = light ? theme.colors.deepBlue : theme.colors.white;
 
   const renderLeft = () => {
     if (leftElement) return leftElement;
@@ -54,18 +58,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           accessibilityRole="button"
           accessibilityLabel="Abrir menú"
         >
-          <Ionicons
-            name="menu"
-            size={24}
-            color={floating ? theme.colors.deepBlue : theme.colors.white}
-          />
+          <Ionicons name="menu" size={24} color={iconColor} />
         </TouchableOpacity>
       );
     }
     if (showBack) {
       return (
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={20} color={theme.colors.white} />
+          <Ionicons name="arrow-back" size={20} color={iconColor} />
         </TouchableOpacity>
       );
     }
@@ -93,8 +93,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       style={[
         styles.container,
         floating ? styles.floatingContainer : null,
+        light ? styles.lightContainer : null,
         {
-          backgroundColor: floating ? 'transparent' : backgroundColor,
+          backgroundColor: floating ? 'transparent' : barBg,
           paddingTop: insets.top,
           height: theme.dimensions.navbarHeight + insets.top,
         },
@@ -104,7 +105,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     >
       {renderLeft()}
       {title && !floating ? (
-        <Text style={styles.title}>{title}</Text>
+        <Text style={[styles.title, { color: titleColor }]}>{title}</Text>
       ) : (
         <View style={{ flex: 1 }} />
       )}
@@ -125,20 +126,20 @@ const styles = StyleSheet.create({
   floatingContainer: {
     backgroundColor: 'transparent',
   },
+  lightContainer: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 43, 69, 0.06)',
+  },
   floatingControl: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.94)',
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 44,
     padding: 0,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
+    ...theme.shadows.card,
   },
   backButton: {
     padding: theme.spacing.xs,
@@ -146,8 +147,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: theme.colors.white,
-    fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
+    fontSize: theme.fontSize.lg,
+    fontWeight: theme.fontWeight.semibold,
+    letterSpacing: -0.2,
     flex: 1,
     textAlign: 'center',
   },

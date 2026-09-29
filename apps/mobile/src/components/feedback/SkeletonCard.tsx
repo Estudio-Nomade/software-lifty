@@ -40,7 +40,7 @@ export const SkeletonCard: React.FC<SkeletonCardProps> = ({ style }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.md,
     padding: theme.spacing.md,
     marginBottom: theme.spacing.sm,
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   },
   line: {
     height: 16,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     borderRadius: theme.radius.sm,
     marginBottom: theme.spacing.sm,
   },

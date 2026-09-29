@@ -347,7 +347,7 @@ export const OnboardingStep1Screen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   flex: {
     flex: 1,
@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.lightGray,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     overflow: 'hidden',
   },
   suggestionRow: {

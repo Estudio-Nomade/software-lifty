@@ -57,8 +57,8 @@ export const EarningsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-      <Navbar title="Cobros" showBack={false} />
+      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <Navbar title="Cobros" showBack={false} variant="light" />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading ? (
@@ -347,13 +347,14 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   content: {
-    alignItems: 'center',
+    alignItems: 'stretch',
     backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
+    padding: theme.spacing.md,
     paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   totalCard: {
-    width: 343,
+    width: '100%',
     alignItems: 'center',
     gap: theme.spacing.xs,
   },
@@ -363,7 +364,7 @@ const styles = StyleSheet.create({
   totalAmount: {
     fontSize: 36,
     fontWeight: theme.fontWeight.bold,
-    color: theme.colors.turquoise,
+    color: theme.colors.primary,
   },
   emptySubtext: {
     fontSize: theme.fontSize.sm,
@@ -405,7 +406,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     marginVertical: theme.spacing.xs,
   },
   earningRow: {
@@ -482,7 +483,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: theme.spacing.sm,
-    backgroundColor: '#E8FAF8',
+    backgroundColor: theme.colors.surfaceMuted,
     borderRadius: theme.radius.sm,
     padding: theme.spacing.sm,
     marginTop: theme.spacing.xs,
@@ -496,7 +497,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   errorSection: {
-    width: 343,
+    width: '100%',
     gap: theme.spacing.md,
   },
   errorCard: {

@@ -16,20 +16,21 @@ interface TabItem {
   key: TabKey;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
+  iconActive: keyof typeof Ionicons.glyphMap;
 }
 
 const tabs: TabItem[] = [
-  { key: 'home', label: 'Inicio', icon: 'home-outline' },
-  { key: 'earnings', label: 'Cobros', icon: 'wallet-outline' },
-  { key: 'trips', label: 'Viajes', icon: 'car-outline' },
-  { key: 'profile', label: 'Perfil', icon: 'person-outline' },
+  { key: 'home', label: 'Inicio', icon: 'home-outline', iconActive: 'home' },
+  { key: 'earnings', label: 'Cobros', icon: 'wallet-outline', iconActive: 'wallet' },
+  { key: 'trips', label: 'Viajes', icon: 'car-outline', iconActive: 'car' },
+  { key: 'profile', label: 'Perfil', icon: 'person-outline', iconActive: 'person' },
 ];
 
 export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabPress }) => {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.key;
         return (
@@ -39,17 +40,17 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabPress }) => {
             onPress={() => onTabPress(tab.key)}
             activeOpacity={0.7}
           >
-            <Ionicons
-              name={tab.icon}
-              size={22}
-              color={isActive ? theme.colors.turquoise : theme.colors.mediumGray}
-              style={!isActive && styles.inactiveIcon}
-              accessibilityLabel={`${tab.label} tab`}
-            />
+            <View style={[styles.iconWell, isActive && styles.iconWellActive]}>
+              <Ionicons
+                name={isActive ? tab.iconActive : tab.icon}
+                size={22}
+                color={isActive ? theme.colors.primary : theme.colors.mediumGray}
+                accessibilityLabel={`${tab.label} tab`}
+              />
+            </View>
             <Text style={[styles.label, isActive ? styles.activeLabel : styles.inactiveLabel]}>
               {tab.label}
             </Text>
-            {isActive && <View style={styles.activeIndicator} />}
           </TouchableOpacity>
         );
       })}
@@ -66,43 +67,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     paddingTop: theme.spacing.sm,
     minHeight: theme.dimensions.tabBarHeight,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.lightGray,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(13, 43, 69, 0.06)',
+    shadowColor: '#0D2B45',
+    shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 10,
+    shadowRadius: 16,
+    elevation: 12,
     zIndex: 1000,
   },
   tab: {
     alignItems: 'center',
-    gap: theme.spacing.xs,
-    paddingVertical: theme.spacing.xs,
+    gap: 4,
+    paddingVertical: 2,
     minWidth: 64,
     minHeight: 48,
   },
-  inactiveIcon: {
-    opacity: 0.4,
+  iconWell: {
+    width: 44,
+    height: 32,
+    borderRadius: theme.radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWellActive: {
+    backgroundColor: 'rgba(0, 194, 179, 0.12)',
   },
   label: {
     fontSize: 11,
     fontWeight: theme.fontWeight.medium,
   },
   activeLabel: {
-    color: theme.colors.turquoise,
+    color: theme.colors.primary,
+    fontWeight: theme.fontWeight.semibold,
   },
   inactiveLabel: {
     color: theme.colors.mediumGray,
-  },
-  activeIndicator: {
-    width: 24,
-    height: 3,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.turquoise,
-    marginTop: 2,
   },
 });

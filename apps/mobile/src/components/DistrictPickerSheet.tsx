@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     height: SHEET_MAX_HEIGHT,
     maxHeight: SHEET_MAX_HEIGHT,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.lg,
     gap: theme.spacing.sm,
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
   listFlex: { flex: 1, minHeight: 0 },
   list: { gap: theme.spacing.sm, paddingBottom: theme.spacing.sm },
   item: {
-    backgroundColor: theme.colors.lightGray,
+    backgroundColor: theme.colors.surfaceMuted,
     padding: theme.spacing.md,
     borderRadius: theme.radius.md,
     gap: theme.spacing.xs,
