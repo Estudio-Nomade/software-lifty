@@ -40,6 +40,8 @@ export function Input({
           secureTextEntry={secureTextEntry}
           editable={!disabled}
           autoFocus={autoFocus}
+          autoCapitalize={keyboardType === 'email-address' ? 'none' : undefined}
+          autoCorrect={keyboardType === 'email-address' ? false : undefined}
         />
       </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -54,16 +56,17 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.inputRadius,
     paddingHorizontal: theme.spacing.md,
     height: theme.dimensions.inputHeight,
     gap: theme.spacing.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.lightGray,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'transparent',
   },
   inputError: {
     borderColor: theme.colors.dangerRed,
+    backgroundColor: theme.colors.surface,
   },
   input: {
     flex: 1,

@@ -53,7 +53,7 @@ export function LoginPhoneScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <Text style={styles.close} onPress={goBack}>
-              ✕
+              ← Volver
             </Text>
           </View>
 
@@ -93,39 +93,47 @@ export function LoginPhoneScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.background,
   },
   flex: {
     flex: 1,
   },
   scroll: {
     flexGrow: 1,
+    justifyContent: 'center',
   },
   header: {
     paddingHorizontal: theme.spacing.md,
-    height: 56,
+    height: theme.dimensions.navbarHeight,
     justifyContent: 'center',
   },
   close: {
-    fontSize: 24,
-    color: theme.colors.primary,
-    fontWeight: '700',
-    padding: theme.spacing.sm,
+    fontSize: theme.fontSize.md,
+    color: theme.colors.deepBlue,
+    fontFamily: theme.fontFamily.medium,
+    paddingVertical: theme.spacing.sm,
   },
   body: {
-    flex: 1,
+    flexGrow: 1,
+    justifyContent: 'center',
     padding: theme.spacing.lg,
-    gap: theme.spacing.lg,
+    gap: theme.spacing.md,
+    maxWidth: 420,
+    width: '100%',
+    alignSelf: 'center',
   },
   title: {
-    fontSize: theme.fontSize.xl,
+    fontSize: theme.fontSize['2xl'],
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.deepBlue,
+    textAlign: 'center',
+    letterSpacing: -0.4,
   },
   subtitle: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
     fontFamily: theme.fontFamily.regular,
+    textAlign: 'center',
   },
   row: {
     flexDirection: 'row',
@@ -135,8 +143,8 @@ const styles = StyleSheet.create({
   countryCode: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.lightGray,
-    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.inputRadius,
     paddingHorizontal: theme.spacing.md,
     height: theme.dimensions.inputHeight,
     gap: theme.spacing.sm,

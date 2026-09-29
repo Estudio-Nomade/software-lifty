@@ -3,13 +3,14 @@ import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { registerPassenger } from '../api/passenger';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -23,6 +24,7 @@ import { theme } from '../theme';
 
 export function LoginCredentialsScreen() {
   const { goBack, navigate, replace } = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const { signInWithGoogle } = useAuth();
   const fullName = useRegistrationDraftStore((s) => s.fullName);
   const clearDraft = useRegistrationDraftStore((s) => s.clear);
@@ -78,8 +80,6 @@ export function LoginCredentialsScreen() {
           registerPassenger(phoneTrimmed, fullName ?? undefined).catch(() => {});
           replace('LocationPermissions');
         } else if (outcome.kind === 'needs_verify') {
-          // confirmation_sent_at means Supabase accepted the send; delivery is SMTP/spam.
-          // User can resend on VerifyEmail (type signup). Keep draft name until verified.
           replace('VerifyEmail', { email: trimmedEmail });
         } else {
           setLoading(false);
@@ -124,213 +124,235 @@ export function LoginCredentialsScreen() {
     }
   };
 
-  return (
-    <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  const form = (
+    <View style={styles.form}>
+      <Text style={styles.brand}>Lifty</Text>
+      <Text style={styles.title}>{isSignUp ? 'Creá tu cuenta' : 'Iniciar sesión'}</Text>
+      <Text style={styles.subtitle}>
+        {isSignUp ? 'Empezá a viajar hoy' : 'Ingresá tus datos para continuar'}
+      </Text>
+
+      <Input
+        placeholder="Email"
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
+        style={styles.inputField}
+      />
+      <View style={styles.passwordRow}>
+        <Input
+          placeholder="Contraseña"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry={!showPassword}
+          style={styles.inputField}
+        />
+        <TouchableOpacity
+          onPress={() => setShowPassword(!showPassword)}
+          style={styles.eyeButton}
+          hitSlop={8}
+        >
+          <Ionicons
+            name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+            size={20}
+            color={theme.colors.mediumGray}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {isSignUp ? (
+        <>
+          <Input
+            placeholder="Repetir contraseña"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry={!showPassword}
+            style={styles.inputField}
+            error={
+              confirmPassword.length > 0 && password !== confirmPassword
+                ? 'Las contraseñas no coinciden'
+                : undefined
+            }
+          />
+          <Input
+            placeholder="Teléfono (opcional)"
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+            style={styles.inputField}
+          />
+          <Text style={styles.fieldHint}>Podés completarlo después desde tu perfil</Text>
+        </>
+      ) : (
+        <TouchableOpacity onPress={() => navigate('ForgotPassword')}>
+          <Text style={styles.forgotPassword}>¿Olvidaste tu clave?</Text>
+        </TouchableOpacity>
+      )}
+
+      <Button
+        variant="primary"
+        onPress={handleSubmit}
+        loading={loading}
+        disabled={isDisabled}
+        style={styles.button}
       >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <TouchableOpacity onPress={goBack} style={styles.backButton}>
-              <Text style={styles.backText}>←</Text>
-            </TouchableOpacity>
-          </View>
+        {isSignUp ? 'Crear cuenta' : 'Iniciar sesión'}
+      </Button>
 
-          <View style={styles.content}>
-            <Text style={styles.brand}>Lifty</Text>
-            <Text style={styles.title}>
-              {isSignUp ? '¡Crea tu cuenta!' : '¡Bienvenido de vuelta!'}
-            </Text>
-            <Text style={styles.subtitle}>
-              {isSignUp ? 'Empieza a viajar hoy' : 'Ingresá tus datos para continuar'}
-            </Text>
-            <View style={styles.spacer} />
+      <Text style={styles.orDivider}>o</Text>
 
-            <Input
-              placeholder="Email"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              style={styles.inputField}
-            />
-            <View style={styles.gap} />
-            <View style={styles.passwordRow}>
-              <Input
-                placeholder="Contraseña"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                style={styles.inputField}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeButton}
-              >
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={theme.colors.mediumGray}
-                />
-              </TouchableOpacity>
-            </View>
+      <Button
+        variant="secondary"
+        onPress={handleGoogle}
+        loading={googleLoading}
+        style={styles.button}
+      >
+        Continuar con Google
+      </Button>
 
-            {isSignUp ? (
-              <>
-                <View style={styles.gap} />
-                <Input
-                  placeholder="Repetir contraseña"
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  secureTextEntry={!showPassword}
-                  style={styles.inputField}
-                  error={
-                    confirmPassword.length > 0 && password !== confirmPassword
-                      ? 'Las contraseñas no coinciden'
-                      : undefined
-                  }
-                />
-                <View style={styles.gap} />
-                <Input
-                  placeholder="Teléfono (opcional)"
-                  value={phone}
-                  onChangeText={setPhone}
-                  keyboardType="phone-pad"
-                  style={styles.inputField}
-                />
-                <Text style={styles.fieldHint}>Podés completarlo después desde tu perfil</Text>
-              </>
-            ) : (
-              <TouchableOpacity onPress={() => navigate('ForgotPassword')}>
-                <Text style={styles.forgotPassword}>¿Olvidaste tu clave?</Text>
-              </TouchableOpacity>
-            )}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {info ? <Text style={styles.info}>{info}</Text> : null}
 
-            <View style={styles.spacer} />
+      {!isSignUp ? (
+        <TouchableOpacity
+          onPress={() => {
+            setError(null);
+            setInfo(null);
+            setEmail('');
+            setPassword('');
+            setConfirmPassword('');
+            setPhone('');
+            navigate('Register');
+          }}
+        >
+          <Text style={styles.switchAuth}>¿No tenés cuenta? Crear cuenta</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          onPress={() => {
+            clearDraft();
+            setError(null);
+            setInfo(null);
+            setEmail('');
+            setPassword('');
+            setConfirmPassword('');
+            setPhone('');
+          }}
+        >
+          <Text style={styles.switchAuth}>¿Ya tenés cuenta? Iniciar sesión</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 
-            <Button
-              variant="primary"
-              onPress={handleSubmit}
-              loading={loading}
-              disabled={isDisabled}
-              style={styles.button}
-            >
-              {isSignUp ? 'CREAR CUENTA' : 'INICIAR SESIÓN'}
-            </Button>
+  const scrollBottom = Math.max(insets.bottom, theme.spacing.lg) + theme.spacing.xl;
 
-            <Text style={styles.orDivider}>─── o ───</Text>
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={goBack} style={styles.backButton} hitSlop={8}>
+          <Text style={styles.backText}>← Volver</Text>
+        </TouchableOpacity>
+      </View>
 
-            <Button
-              variant="secondary"
-              onPress={handleGoogle}
-              loading={googleLoading}
-              style={styles.button}
-            >
-              CONTINUAR CON GOOGLE
-            </Button>
-
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            {info ? <Text style={styles.info}>{info}</Text> : null}
-
-            {!isSignUp ? (
-              <TouchableOpacity
-                onPress={() => {
-                  setError(null);
-                  setInfo(null);
-                  setEmail('');
-                  setPassword('');
-                  setConfirmPassword('');
-                  setPhone('');
-                  navigate('Register');
-                }}
-              >
-                <Text style={styles.switchAuth}>¿No tienes cuenta? Crear cuenta</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                onPress={() => {
-                  clearDraft();
-                  setError(null);
-                  setInfo(null);
-                  setEmail('');
-                  setPassword('');
-                  setConfirmPassword('');
-                  setPhone('');
-                }}
-              >
-                <Text style={styles.switchAuth}>¿Ya tienes cuenta? Iniciar sesión</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+      {/*
+        Android: no KeyboardAvoidingView — el SO ya hace resize y KAV deja un hueco gris
+        arriba del teclado. iOS: padding simple + ScrollView insets nativos.
+      */}
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          <ScrollView
+            style={styles.flex}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottom }]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+            showsVerticalScrollIndicator={false}
+          >
+            {form}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottom }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
+          {form}
         </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
+  container: {
     flex: 1,
-    backgroundColor: theme.colors.deepBlue,
+    backgroundColor: theme.colors.background,
   },
   flex: {
     flex: 1,
   },
-  scroll: {
-    flexGrow: 1,
-  },
   header: {
     height: theme.dimensions.navbarHeight,
-    justifyContent: 'center',
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: theme.spacing.md,
   },
   backButton: {
     paddingVertical: theme.spacing.sm,
     paddingRight: theme.spacing.md,
-    alignSelf: 'flex-start',
   },
   backText: {
-    color: theme.colors.primary,
-    fontSize: theme.fontSize.xl,
-    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.deepBlue,
+    fontSize: theme.fontSize.md,
+    fontFamily: theme.fontFamily.medium,
   },
-  content: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.xl,
+    paddingTop: theme.spacing.md,
+  },
+  form: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    gap: theme.spacing.md,
   },
   brand: {
-    fontSize: theme.fontSize['4xl'],
+    fontSize: theme.fontSize['2xl'],
     fontFamily: theme.fontFamily.bold,
     color: theme.colors.primary,
     textAlign: 'center',
+    letterSpacing: -0.4,
   },
   title: {
     fontSize: theme.fontSize['2xl'],
     fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
-    marginTop: theme.spacing.sm,
+    color: theme.colors.deepBlue,
+    letterSpacing: -0.4,
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
     fontFamily: theme.fontFamily.regular,
-    marginTop: theme.spacing.xs,
-  },
-  spacer: {
-    height: theme.spacing.lg,
-  },
-  gap: {
-    height: theme.spacing.md,
+    textAlign: 'center',
+    marginBottom: theme.spacing.sm,
   },
   fieldHint: {
     fontSize: theme.fontSize.xs,
     color: theme.colors.mediumGray,
     fontFamily: theme.fontFamily.regular,
-    marginTop: theme.spacing.xs,
+    marginTop: -theme.spacing.sm,
   },
   inputField: {
-    borderWidth: 0,
+    width: '100%',
   },
   passwordRow: {
     position: 'relative',
@@ -339,7 +361,7 @@ const styles = StyleSheet.create({
   eyeButton: {
     position: 'absolute',
     right: theme.spacing.md,
-    top: 14,
+    top: 16,
     zIndex: 1,
   },
   button: {
@@ -350,33 +372,30 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
     fontFamily: theme.fontFamily.regular,
     textAlign: 'center',
-    marginVertical: theme.spacing.md,
   },
   error: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
     fontFamily: theme.fontFamily.regular,
     textAlign: 'center',
-    marginTop: theme.spacing.sm,
   },
   info: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.primary,
     fontFamily: theme.fontFamily.regular,
     textAlign: 'center',
-    marginTop: theme.spacing.sm,
   },
   forgotPassword: {
     fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
+    fontFamily: theme.fontFamily.medium,
     color: theme.colors.primary,
-    marginTop: theme.spacing.sm,
+    textAlign: 'center',
   },
   switchAuth: {
     fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.bold,
+    fontFamily: theme.fontFamily.semibold,
     color: theme.colors.primary,
     textAlign: 'center',
-    marginTop: theme.spacing.lg,
+    marginTop: theme.spacing.sm,
   },
 });

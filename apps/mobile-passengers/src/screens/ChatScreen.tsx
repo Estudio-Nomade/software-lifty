@@ -56,7 +56,7 @@ export function ChatScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} accessibilityLabel="Volver">
-          <Ionicons name="arrow-back" size={24} color={theme.colors.white} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.deepBlue} />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
           <Text style={styles.headerTitle}>Chat con {trip?.driver_name ?? 'tu conductor'}</Text>
@@ -124,11 +124,13 @@ export function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.white },
+  safe: { flex: 1, backgroundColor: theme.colors.background },
   flex: { flex: 1 },
   header: {
     height: theme.dimensions.navbarHeight,
-    backgroundColor: theme.colors.deepBlue,
+    backgroundColor: theme.colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 43, 69, 0.06)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -138,7 +140,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
+    color: theme.colors.deepBlue,
   },
   chat: { flex: 1, padding: theme.spacing.md },
   chatContent: { flexGrow: 1, gap: theme.spacing.sm, paddingBottom: theme.spacing.md },

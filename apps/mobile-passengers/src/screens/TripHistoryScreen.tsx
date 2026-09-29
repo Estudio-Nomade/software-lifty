@@ -123,8 +123,8 @@ export function TripHistoryScreen() {
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <TouchableOpacity onPress={goBack}>
-        <Ionicons name="arrow-back" size={24} color={theme.colors.white} />
+      <TouchableOpacity onPress={goBack} hitSlop={8}>
+        <Ionicons name="arrow-back" size={24} color={theme.colors.deepBlue} />
       </TouchableOpacity>
       <Text style={styles.title}>Historial de viajes</Text>
       <View style={{ width: 24 }} />
@@ -211,7 +211,9 @@ const styles = StyleSheet.create({
   list: { flex: 1 },
   header: {
     height: theme.dimensions.navbarHeight,
-    backgroundColor: theme.colors.deepBlue,
+    backgroundColor: theme.colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 43, 69, 0.06)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -220,7 +222,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: theme.fontSize.lg,
     fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
+    color: theme.colors.deepBlue,
   },
   listContent: {
     padding: theme.spacing.md,
