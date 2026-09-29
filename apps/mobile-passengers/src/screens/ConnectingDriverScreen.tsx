@@ -9,9 +9,16 @@ import { useAuthStore } from '../store/authStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 
-export const SEARCH_TIMEOUT_MS = 300_000;
+export const SEARCH_TIMEOUT_MS = 120_000;
 
 const LIVE_STATUSES = new Set(['accepted', 'en_route', 'waiting', 'in_trip']);
+
+function formatCountdown(totalSeconds: number): string {
+  const s = Math.max(0, totalSeconds);
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
 
 export function ConnectingDriverScreen() {
   const { navigate, replace } = useAppNavigation();
@@ -22,6 +29,7 @@ export function ConnectingDriverScreen() {
   const [noDrivers, setNoDrivers] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(Math.floor(SEARCH_TIMEOUT_MS / 1000));
 
   const proceedToTrip = useCallback(
     async (id: string, statusHint?: string) => {
@@ -61,8 +69,26 @@ export function ConnectingDriverScreen() {
 
   useEffect(() => {
     setTimedOut(false);
-    const timeout = setTimeout(() => setTimedOut(true), SEARCH_TIMEOUT_MS);
-    return () => clearTimeout(timeout);
+    const totalSeconds = Math.floor(SEARCH_TIMEOUT_MS / 1000);
+    setSecondsLeft(totalSeconds);
+    const startedAt = Date.now();
+    const tick = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      const left = Math.max(0, totalSeconds - elapsed);
+      setSecondsLeft(left);
+      if (left <= 0) {
+        clearInterval(tick);
+        setTimedOut(true);
+      }
+    }, 1000);
+    const timeout = setTimeout(() => {
+      setSecondsLeft(0);
+      setTimedOut(true);
+    }, SEARCH_TIMEOUT_MS);
+    return () => {
+      clearInterval(tick);
+      clearTimeout(timeout);
+    };
   }, [attempt]);
 
   const handleRetry = async () => {
@@ -72,6 +98,7 @@ export function ConnectingDriverScreen() {
       const res = await retryRide(tripId);
       if (res.drivers_found > 0) {
         setNoDrivers(false);
+        setTimedOut(false);
         setAttempt((a) => a + 1);
       }
     } catch {
@@ -92,10 +119,10 @@ export function ConnectingDriverScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <Text style={styles.title}>No hay conductores disponibles cerca</Text>
-          <Text style={styles.subtitle}>Intentá buscar de nuevo en unos minutos.</Text>
+          <Text style={styles.title}>No encontramos conductor cerca</Text>
+          <Text style={styles.subtitle}>Podés volver a buscar o cancelar.</Text>
           <Button variant="primary" onPress={handleRetry} loading={retrying} style={styles.button}>
-            Buscar conductor de nuevo
+            Volver a buscar
           </Button>
           <Button variant="secondary" onPress={handleCancel} style={styles.button}>
             Cancelar
@@ -109,8 +136,9 @@ export function ConnectingDriverScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.center}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={styles.title}>Conectando con el conductor...</Text>
+        <Text style={styles.title}>Buscando conductor…</Text>
         <Text style={styles.subtitle}>Buscando el conductor más cercano</Text>
+        <Text style={styles.countdown}>{formatCountdown(secondsLeft)}</Text>
         <Button variant="secondary" onPress={handleCancel} style={styles.button}>
           Cancelar
         </Button>
@@ -138,6 +166,12 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
+    textAlign: 'center',
+  },
+  countdown: {
+    fontSize: theme.fontSize.xl,
+    fontFamily: theme.fontFamily.bold,
+    color: theme.colors.deepBlue,
     textAlign: 'center',
   },
   button: { marginTop: theme.spacing.md, minWidth: 200 },
