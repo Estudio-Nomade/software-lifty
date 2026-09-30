@@ -34,3 +34,18 @@ export const driverTripsQuery = t.Object({
   from: t.Optional(t.String()),
   to: t.Optional(t.String()),
 });
+
+export const adminTripsQuery = t.Object({
+  limit: t.Optional(t.String()),
+  offset: t.Optional(t.String()),
+  status: t.Optional(t.String()),
+  from: t.Optional(t.String()),
+  to: t.Optional(t.String()),
+  driver_id: t.Optional(t.String()),
+  district_id: t.Optional(t.String()),
+  q: t.Optional(t.String()),
+});
+
+export const tripIdParams = t.Object({
+  trip_id: t.String(),
+});

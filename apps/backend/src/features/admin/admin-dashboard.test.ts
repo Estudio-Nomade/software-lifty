@@ -400,3 +400,307 @@ describe('Admin dashboard + driver trips', () => {
     expect(all.data.items.some((t: { id: string }) => bIds.includes(t.id))).toBe(false);
   });
 });
+
+describe('Admin global trips list', () => {
+  test('GET /trips non-admin 403', async () => {
+    const { token } = await createDriverWithToken('+5492612220001');
+    const { status } = await request('GET', '/api/admin/trips', undefined, token);
+    expect(status).toBe(403);
+  });
+
+  test('GET /trips default completed+rated + money totals + pagination', async () => {
+    const adminToken = await createAdminToken();
+    const a = await createDriverWithToken('+5492612220002');
+    const b = await createDriverWithToken('+5492612220003');
+    const db = getDb();
+    const [passenger] = await db
+      .insert(users)
+      .values({ phone: '+5492612220099', full_name: 'Pax Global', role: 'passenger' })
+      .returning({ id: users.id });
+
+    const now = new Date();
+    await insertTrip({
+      driverId: a.driverId,
+      status: 'completed',
+      total_fare: 1000,
+      platform_fee: 100,
+      driver_earnings: 900,
+      tip_amount: 10,
+      created_at: new Date(now.getTime() - 2000),
+      passenger_id: passenger.id,
+      origin_address: 'Calle Falsa 123',
+    });
+    await insertTrip({
+      driverId: a.driverId,
+      status: 'rated',
+      total_fare: 500,
+      platform_fee: 50,
+      driver_earnings: 450,
+      created_at: now,
+      passenger_id: passenger.id,
+    });
+    await insertTrip({
+      driverId: a.driverId,
+      status: 'cancelled',
+      total_fare: 200,
+      platform_fee: 20,
+      driver_earnings: 180,
+      created_at: now,
+    });
+    await insertTrip({
+      driverId: a.driverId,
+      status: 'in_trip',
+      total_fare: 300,
+      platform_fee: 30,
+      driver_earnings: 270,
+      created_at: now,
+    });
+    await insertTrip({
+      driverId: b.driverId,
+      status: 'completed',
+      total_fare: 400,
+      platform_fee: 40,
+      driver_earnings: 360,
+      created_at: new Date(now.getTime() - 1000),
+    });
+
+    const page1 = await request(
+      'GET',
+      '/api/admin/trips?limit=2&offset=0',
+      undefined,
+      adminToken,
+    );
+    expect(page1.status).toBe(200);
+    expect(page1.data.total).toBe(3);
+    expect(page1.data.items).toHaveLength(2);
+    expect(page1.data.limit).toBe(2);
+    expect(page1.data.offset).toBe(0);
+    expect(page1.data.totals_in_filter).toEqual({
+      trip_count: 3,
+      gross_fare: 1900,
+      platform_fee: 190,
+      driver_earnings: 1710,
+    });
+    expect(page1.data.items[0].status).toBe('rated');
+    expect(page1.data.items[0].driver_id).toBe(a.driverId);
+    expect(page1.data.items[0].driver_name).toBe('Dash Driver');
+    expect(page1.data.items[0].passenger_name).toBe('Pax Global');
+
+    const page2 = await request(
+      'GET',
+      '/api/admin/trips?limit=2&offset=2',
+      undefined,
+      adminToken,
+    );
+    expect(page2.status).toBe(200);
+    expect(page2.data.total).toBe(3);
+    expect(page2.data.items).toHaveLength(1);
+    expect(page2.data.items[0].status).toBe('completed');
+    expect(page2.data.items[0].origin_address).toBe('Calle Falsa 123');
+
+    for (const t of [...page1.data.items, ...page2.data.items]) {
+      expect(['completed', 'rated']).toContain(t.status);
+      expect(t.platform_fee + t.driver_earnings).toBe(t.total_fare);
+    }
+  });
+
+  test('GET /trips status=in_progress only live; money 0', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createDriverWithToken('+5492612220004');
+    const now = new Date();
+
+    await insertTrip({
+      driverId,
+      status: 'completed',
+      total_fare: 1000,
+      platform_fee: 100,
+      driver_earnings: 900,
+      created_at: now,
+    });
+    await insertTrip({
+      driverId,
+      status: 'in_trip',
+      total_fare: 300,
+      platform_fee: 30,
+      driver_earnings: 270,
+      created_at: now,
+    });
+    await insertTrip({
+      driverId,
+      status: 'en_route',
+      total_fare: 0,
+      platform_fee: 0,
+      driver_earnings: 0,
+      created_at: now,
+    });
+
+    const { status, data } = await request(
+      'GET',
+      '/api/admin/trips?status=in_progress',
+      undefined,
+      adminToken,
+    );
+    expect(status).toBe(200);
+    expect(data.total).toBe(2);
+    expect(data.items).toHaveLength(2);
+    expect(data.items.every((t: { status: string }) =>
+      ['accepted', 'en_route', 'waiting', 'in_trip'].includes(t.status),
+    )).toBe(true);
+    expect(data.totals_in_filter).toEqual({
+      trip_count: 2,
+      gross_fare: 0,
+      platform_fee: 0,
+      driver_earnings: 0,
+    });
+  });
+
+  test('GET /trips q finds by driver name or address', async () => {
+    const adminToken = await createAdminToken();
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({
+        phone: '+5492612220005',
+        full_name: 'Martina Conductora',
+        role: 'driver',
+      })
+      .returning({ id: users.id });
+    const [driver] = await db
+      .insert(drivers)
+      .values({
+        user_id: user.id,
+        status: 'approved',
+        is_online: false,
+        admin_review_status: 'approved',
+      })
+      .returning({ id: drivers.id });
+
+    const other = await createDriverWithToken('+5492612220006');
+    const now = new Date();
+    await insertTrip({
+      driverId: driver.id,
+      status: 'completed',
+      total_fare: 800,
+      platform_fee: 80,
+      driver_earnings: 720,
+      created_at: now,
+      origin_address: 'Av San Martin 4500',
+    });
+    await insertTrip({
+      driverId: other.driverId,
+      status: 'completed',
+      total_fare: 100,
+      platform_fee: 10,
+      driver_earnings: 90,
+      created_at: now,
+      origin_address: 'Otra Calle 1',
+    });
+
+    const byName = await request(
+      'GET',
+      '/api/admin/trips?q=Martina',
+      undefined,
+      adminToken,
+    );
+    expect(byName.status).toBe(200);
+    expect(byName.data.total).toBe(1);
+    expect(byName.data.items[0].driver_name).toBe('Martina Conductora');
+
+    const byAddr = await request(
+      'GET',
+      '/api/admin/trips?q=San%20Martin',
+      undefined,
+      adminToken,
+    );
+    expect(byAddr.status).toBe(200);
+    expect(byAddr.data.total).toBe(1);
+    expect(byAddr.data.items[0].origin_address).toContain('San Martin');
+  });
+
+  test('GET /trips driver_id filters one driver', async () => {
+    const adminToken = await createAdminToken();
+    const a = await createDriverWithToken('+5492612220007');
+    const b = await createDriverWithToken('+5492612220008');
+    const now = new Date();
+    await insertTrip({
+      driverId: a.driverId,
+      status: 'completed',
+      total_fare: 100,
+      platform_fee: 10,
+      driver_earnings: 90,
+      created_at: now,
+    });
+    await insertTrip({
+      driverId: b.driverId,
+      status: 'completed',
+      total_fare: 200,
+      platform_fee: 20,
+      driver_earnings: 180,
+      created_at: now,
+    });
+
+    const { status, data } = await request(
+      'GET',
+      `/api/admin/trips?driver_id=${a.driverId}`,
+      undefined,
+      adminToken,
+    );
+    expect(status).toBe(200);
+    expect(data.total).toBe(1);
+    expect(data.items[0].driver_id).toBe(a.driverId);
+    expect(data.totals_in_filter.gross_fare).toBe(100);
+  });
+
+  test('GET /trips/:id 200 shape + 404 missing', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createDriverWithToken('+5492612220009');
+    const db = getDb();
+    const [passenger] = await db
+      .insert(users)
+      .values({ phone: '+5492612220010', full_name: 'Detail Pax', role: 'passenger' })
+      .returning({ id: users.id });
+
+    const tripId = await insertTrip({
+      driverId,
+      status: 'completed',
+      total_fare: 1200,
+      platform_fee: 120,
+      driver_earnings: 1080,
+      tip_amount: 50,
+      created_at: new Date(),
+      passenger_id: passenger.id,
+      origin_address: 'Origen Detail',
+      dest_address: 'Destino Detail',
+    });
+
+    await db
+      .update(trips)
+      .set({ base_fare: 200, distance_fare: 800, time_fare: 200 })
+      .where(eq(trips.id, tripId));
+
+    const ok = await request('GET', `/api/admin/trips/${tripId}`, undefined, adminToken);
+    expect(ok.status).toBe(200);
+    expect(ok.data.id).toBe(tripId);
+    expect(ok.data.status).toBe('completed');
+    expect(ok.data.total_fare).toBe(1200);
+    expect(ok.data.platform_fee).toBe(120);
+    expect(ok.data.driver_earnings).toBe(1080);
+    expect(ok.data.tip_amount).toBe(50);
+    expect(ok.data.base_fare).toBe(200);
+    expect(ok.data.distance_fare).toBe(800);
+    expect(ok.data.time_fare).toBe(200);
+    expect(ok.data.driver_id).toBe(driverId);
+    expect(ok.data.passenger_name).toBe('Detail Pax');
+    expect(ok.data.origin_address).toBe('Origen Detail');
+    expect(ok.data).toHaveProperty('assigned_at');
+    expect(ok.data).toHaveProperty('updated_at');
+
+    const missing = await request(
+      'GET',
+      '/api/admin/trips/00000000-0000-4000-8000-000000000099',
+      undefined,
+      adminToken,
+    );
+    expect(missing.status).toBe(404);
+  });
+});
