@@ -58,12 +58,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
-      syncStore(data.session);
-      setLoading(false);
-    });
+    const finishLoading = () => {
+      if (mounted) setLoading(false);
+    };
+
+    // If getSession hangs (offline / blocked storage), still unlock UI.
+    const timeoutId = setTimeout(finishLoading, 8_000);
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!mounted) return;
+        setSession(data.session);
+        syncStore(data.session);
+        finishLoading();
+      })
+      .catch((err) => {
+        console.log('[AuthProvider] getSession ERROR:', err?.message ?? err);
+        finishLoading();
+      });
 
     const {
       data: { subscription },
@@ -78,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       mounted = false;
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);

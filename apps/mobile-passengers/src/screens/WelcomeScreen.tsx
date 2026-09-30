@@ -1,7 +1,9 @@
 import { Image, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BrandSplash } from '../components/BrandSplash';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
 /** Teal L monogram (portrait mark). Wordmark + tagline are text below. */
@@ -10,6 +12,14 @@ const MARK_L = require('../../assets/lifty-mark-l.png');
 export function WelcomeScreen() {
   const { navigate } = useAppNavigation();
   const insets = useSafeAreaInsets();
+  const sessionRestored = useAuthStore((s) => s.sessionRestored);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  // Boot / session restore: brand only. Logged-in → watcher routes to home.
+  // Never flash Crear cuenta / Iniciar sesión when session already exists.
+  if (!sessionRestored || isAuthenticated) {
+    return <BrandSplash />;
+  }
 
   return (
     <View

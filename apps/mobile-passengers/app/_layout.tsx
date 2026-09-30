@@ -33,6 +33,7 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
+  // While fonts load, keep brand stack (matches native splash-brand.png).
   if (!fontsLoaded && !fontError) {
     return <BrandSplash />;
   }

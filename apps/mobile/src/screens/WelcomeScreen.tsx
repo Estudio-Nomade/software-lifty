@@ -40,8 +40,8 @@ export const WelcomeScreen: React.FC = () => {
 
   const handleRetryStatus = useCallback(async () => {
     if (retrying) return;
-    setRecoveryError(null);
     setRetrying(true);
+    setRecoveryError(null);
     try {
       const { data: body } = await apiClient.get('/drivers/me/status');
       const payload = body?.data ?? body;
@@ -87,12 +87,11 @@ export const WelcomeScreen: React.FC = () => {
     }
   }, [signOut, signingOut]);
 
-  if (mode === 'loading') {
+  // Boot / session restore: brand only (no Crear cuenta).
+  // loading = fonts/session; handoff = logged-in, watcher routing away.
+  // Guest CTAs only when unauthenticated after restore.
+  if (mode === 'loading' || mode === 'handoff') {
     return <BrandSplash />;
-  }
-
-  if (mode === 'handoff') {
-    return null;
   }
 
   if (mode === 'recovery') {
