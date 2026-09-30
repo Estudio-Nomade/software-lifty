@@ -22,3 +22,15 @@ export const updatePhaseSchema = t.Object({
 export const updateStartDateSchema = t.Object({
   value: t.String({ pattern: '^\\d{4}-\\d{2}-\\d{2}$' }),
 });
+
+export const dashboardSummaryQuery = t.Object({
+  range: t.Optional(t.Union([t.Literal('today'), t.Literal('7d'), t.Literal('30d')])),
+});
+
+export const driverTripsQuery = t.Object({
+  limit: t.Optional(t.String()),
+  offset: t.Optional(t.String()),
+  status: t.Optional(t.String()),
+  from: t.Optional(t.String()),
+  to: t.Optional(t.String()),
+});
