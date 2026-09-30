@@ -9,10 +9,12 @@ import { approveDriver } from './approve';
 import { adminDashboardService } from './dashboard';
 import { adminPushService } from './push-service';
 import {
+  adminTripsQuery,
   dashboardSummaryQuery,
   driverIdParams,
   driverTripsQuery,
   reviewBody,
+  tripIdParams,
   updatePhaseSchema,
   updateStartDateSchema,
 } from './schema';
@@ -55,6 +57,45 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
       return safeCall(() => adminDashboardService.getDashboardSummary(allowed), set);
     },
     { query: dashboardSummaryQuery, requireAuth: true },
+  )
+  .get(
+    '/trips',
+    ({ user, set, query }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      const q = query as {
+        limit?: string;
+        offset?: string;
+        status?: string;
+        from?: string;
+        to?: string;
+        driver_id?: string;
+        district_id?: string;
+        q?: string;
+      };
+      return safeCall(
+        () =>
+          adminDashboardService.listGlobalTrips({
+            limit: q.limit ? Number(q.limit) : undefined,
+            offset: q.offset ? Number(q.offset) : undefined,
+            status: q.status,
+            from: q.from,
+            to: q.to,
+            driver_id: q.driver_id,
+            district_id: q.district_id,
+            q: q.q,
+          }),
+        set,
+      );
+    },
+    { query: adminTripsQuery, requireAuth: true },
+  )
+  .get(
+    '/trips/:trip_id',
+    ({ user, params, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminDashboardService.getGlobalTrip(params.trip_id), set);
+    },
+    { params: tripIdParams, requireAuth: true },
   )
   .get(
     '/drivers/pending',
