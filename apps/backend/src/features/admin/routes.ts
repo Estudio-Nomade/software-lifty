@@ -6,8 +6,16 @@ import { authGuard } from '../../shared/middleware/require-auth';
 import { clearBlock } from '../cancellations/blocks';
 import { cancellationService, getCancellationConfig } from '../cancellations/service';
 import { approveDriver } from './approve';
+import { adminDashboardService } from './dashboard';
 import { adminPushService } from './push-service';
-import { driverIdParams, reviewBody, updatePhaseSchema, updateStartDateSchema } from './schema';
+import {
+  dashboardSummaryQuery,
+  driverIdParams,
+  driverTripsQuery,
+  reviewBody,
+  updatePhaseSchema,
+  updateStartDateSchema,
+} from './schema';
 import { adminService } from './service';
 
 export const adminApproveRoute = new Elysia().get('/admin/approve', async ({ query, set }) => {
@@ -38,6 +46,16 @@ function isAdmin(user: AuthUser, set: { status: number }): boolean {
 
 export const adminRoutes = new Elysia({ prefix: '/admin' })
   .use(authGuard)
+  .get(
+    '/dashboard/summary',
+    ({ user, set, query }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      const range = (query as { range?: string }).range;
+      const allowed = range === 'today' || range === '7d' || range === '30d' ? range : 'today';
+      return safeCall(() => adminDashboardService.getDashboardSummary(allowed), set);
+    },
+    { query: dashboardSummaryQuery, requireAuth: true },
+  )
   .get(
     '/drivers/pending',
     ({ user, set }) => {
@@ -70,6 +88,31 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
       );
     },
     { requireAuth: true },
+  )
+  .get(
+    '/drivers/:driver_id/trips',
+    ({ user, params, set, query }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      const q = query as {
+        limit?: string;
+        offset?: string;
+        status?: string;
+        from?: string;
+        to?: string;
+      };
+      return safeCall(
+        () =>
+          adminDashboardService.listDriverTrips(params.driver_id, {
+            limit: q.limit ? Number(q.limit) : undefined,
+            offset: q.offset ? Number(q.offset) : undefined,
+            status: q.status,
+            from: q.from,
+            to: q.to,
+          }),
+        set,
+      );
+    },
+    { params: driverIdParams, query: driverTripsQuery, requireAuth: true },
   )
   .get(
     '/drivers/:driver_id',
