@@ -12,7 +12,6 @@ import {
 } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
-import { LoadingOverlay } from './feedback/LoadingOverlay';
 
 const PUBLIC_ROUTES = [
   '',
@@ -24,28 +23,50 @@ const PUBLIC_ROUTES = [
   'location-permissions',
 ];
 
+const SESSION_RESTORE_TIMEOUT_MS = 8_000;
+
 function SessionRestore() {
   const setSession = useAuthStore((s) => s.setSession);
   const setSessionRestored = useAuthStore((s) => s.setSessionRestored);
 
   useEffect(() => {
-    const restore = async () => {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token ?? null;
-      if (!token) {
-        setSessionRestored(true);
-        return;
-      }
-      const metadata = data.session?.user?.user_metadata as Record<string, unknown> | undefined;
-      setSession(
-        token,
-        data.session?.user?.id ?? null,
-        data.session?.user?.email ?? null,
-        (metadata?.full_name as string) ?? undefined,
-      );
+    let cancelled = false;
+    const markRestored = () => {
+      if (cancelled) return;
       setSessionRestored(true);
     };
+    const timeoutId = setTimeout(() => {
+      console.log('[SessionRestore] timeout — marking session restored');
+      markRestored();
+    }, SESSION_RESTORE_TIMEOUT_MS);
+
+    const restore = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (cancelled) return;
+        const token = data.session?.access_token ?? null;
+        if (!token) {
+          markRestored();
+          return;
+        }
+        const metadata = data.session?.user?.user_metadata as Record<string, unknown> | undefined;
+        setSession(
+          token,
+          data.session?.user?.id ?? null,
+          data.session?.user?.email ?? null,
+          (metadata?.full_name as string) ?? undefined,
+        );
+        markRestored();
+      } catch (err: unknown) {
+        console.log('[SessionRestore] getSession ERROR:', err instanceof Error ? err.message : err);
+        markRestored();
+      }
+    };
     restore();
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, [setSession, setSessionRestored]);
 
   return null;
@@ -150,11 +171,8 @@ function NotificationSetup() {
 }
 
 export function AppInitializer() {
-  const sessionRestored = useAuthStore((s) => s.sessionRestored);
-
   return (
     <>
-      <LoadingOverlay visible={!sessionRestored} />
       <SessionRestore />
       <PassengerProfileRegistrar />
       <AuthRedirectWatcher />

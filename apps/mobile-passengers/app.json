@@ -2,7 +2,7 @@
   "expo": {
     "name": "Lifty Passenger",
     "slug": "lifty-passenger",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "scheme": "lifty-passenger",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,15 +15,16 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         },
-        "NSPhotoLibraryUsageDescription": "Lifty necesita acceso a tu galería para la foto de perfil."
+        "NSPhotoLibraryUsageDescription": "Lifty necesita acceso a tu galer\u00eda para la foto de perfil."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0D2B45"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#EEF7F6"
       },
       "package": "com.lifty.passenger",
-      "versionCode": 1
+      "versionCode": 3
     },
     "web": {
       "bundler": "metro",
@@ -47,11 +48,16 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#EEF7F6",
-          "image": "./assets/lifty-mark-l.png",
-          "imageWidth": 148,
+          "image": "./assets/splash-brand.png",
+          "imageWidth": 300,
           "resizeMode": "contain"
         }
       ]
-    ]
+    ],
+    "splash": {
+      "image": "./assets/splash-brand.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#EEF7F6"
+    }
   }
 }

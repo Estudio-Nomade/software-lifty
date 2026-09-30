@@ -19,53 +19,77 @@ import { AuthRedirectWatcher } from './AuthRedirectWatcher';
 import { DriverRealtimeProvider } from './DriverRealtimeProvider';
 import { LoadingOverlay } from './feedback/LoadingOverlay';
 
+const SESSION_RESTORE_TIMEOUT_MS = 8_000;
+
 function SessionRestore() {
   useEffect(() => {
+    let cancelled = false;
+    const markRestored = () => {
+      if (cancelled) return;
+      useAuthStore.getState().setSessionRestored(true);
+    };
+
+    // Never leave Welcome stuck in loading if Supabase/API hang.
+    const timeoutId = setTimeout(() => {
+      console.log('[SessionRestore] timeout — marking session restored');
+      markRestored();
+    }, SESSION_RESTORE_TIMEOUT_MS);
+
     const restore = async () => {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token ?? null;
-      if (!token) {
-        // Drop stale zustand persist (isAuthenticated/token) so unauthenticated
-        // users never get redirected into onboarding as if they had a session.
-        useAuthStore.getState().clearAuthState();
-        useAuthStore.getState().setSessionRestored(true);
-        return;
-      }
-      useAuthStore.getState().setSession(token, data.session?.user?.id ?? null);
-
       try {
-        const response = await apiClient.get('/auth/me');
-        const user = response.data;
-
-        try {
-          const meRes = await apiClient.get('/drivers/me');
-          const me = meRes.data?.data ?? meRes.data;
-          if (me?.id) {
-            useAuthStore.getState().setDriverId(me.id);
-          }
-        } catch {
-          if (user?.id) {
-            useAuthStore.getState().setDriverId(user.id);
-          }
+        const { data } = await supabase.auth.getSession();
+        if (cancelled) return;
+        const token = data.session?.access_token ?? null;
+        if (!token) {
+          // Drop stale zustand persist (isAuthenticated/token) so unauthenticated
+          // users never get redirected into onboarding as if they had a session.
+          useAuthStore.getState().clearAuthState();
+          markRestored();
+          return;
         }
+        useAuthStore.getState().setSession(token, data.session?.user?.id ?? null);
 
         try {
-          const statusRes = await apiClient.get('/drivers/me/status');
-          const parsed = driverStatusSchema.safeParse(statusRes.data?.data ?? statusRes.data);
-          if (parsed.success) {
-            useAuthStore.getState().setDriverStatus(parsed.data.status);
-            useAuthStore.getState().setOnboardingStep(parsed.data.step ?? null);
+          const response = await apiClient.get('/auth/me');
+          const user = response.data;
+
+          try {
+            const meRes = await apiClient.get('/drivers/me');
+            const me = meRes.data?.data ?? meRes.data;
+            if (me?.id) {
+              useAuthStore.getState().setDriverId(me.id);
+            }
+          } catch {
+            if (user?.id) {
+              useAuthStore.getState().setDriverId(user.id);
+            }
           }
-        } catch (statusErr: any) {
-          console.log('[SessionRestore] /drivers/me/status ERROR:', statusErr?.message);
+
+          try {
+            const statusRes = await apiClient.get('/drivers/me/status');
+            const parsed = driverStatusSchema.safeParse(statusRes.data?.data ?? statusRes.data);
+            if (parsed.success) {
+              useAuthStore.getState().setDriverStatus(parsed.data.status);
+              useAuthStore.getState().setOnboardingStep(parsed.data.step ?? null);
+            }
+          } catch (statusErr: any) {
+            console.log('[SessionRestore] /drivers/me/status ERROR:', statusErr?.message);
+          }
+        } catch (err: any) {
+          console.log('[SessionRestore] /auth/me ERROR:', err?.message);
+        } finally {
+          markRestored();
         }
       } catch (err: any) {
-        console.log('[SessionRestore] /auth/me ERROR:', err?.message);
-      } finally {
-        useAuthStore.getState().setSessionRestored(true);
+        console.log('[SessionRestore] getSession ERROR:', err?.message);
+        markRestored();
       }
     };
     restore();
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   return null;

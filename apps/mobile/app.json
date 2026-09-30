@@ -2,7 +2,7 @@
   "expo": {
     "name": "Lifty",
     "slug": "lifty-app",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "scheme": "lifty",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -19,10 +19,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0F2A44"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#EEF7F6"
       },
       "package": "com.lifty.conductor",
-      "versionCode": 1,
+      "versionCode": 3,
       "usesCleartextTraffic": true,
       "navigationBar": {
         "backgroundColor": "#FFFFFF",
@@ -51,11 +52,16 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#EEF7F6",
-          "image": "./assets/lifty-mark-l.png",
-          "imageWidth": 148,
+          "image": "./assets/splash-brand.png",
+          "imageWidth": 300,
           "resizeMode": "contain"
         }
       ]
-    ]
+    ],
+    "splash": {
+      "image": "./assets/splash-brand.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#EEF7F6"
+    }
   }
 }
