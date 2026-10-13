@@ -170,7 +170,8 @@ async function fetchPhoton(
   return (await res.json()) as { features?: PhotonFeature[] };
 }
 
-function normalizeAutocompleteQuery(input: string): string {
+/** Exported for unit tests — do not use as public API. */
+export function normalizeAutocompleteQuery(input: string): string {
   return input.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
@@ -179,7 +180,8 @@ function biasBucket(value: number | undefined): string {
   return String(Math.round(value / GEO_BIAS_BUCKET) * GEO_BIAS_BUCKET);
 }
 
-function autocompleteCacheKey(query: string, lat?: number, lng?: number): string {
+/** Exported for unit tests — do not use as public API. */
+export function autocompleteCacheKey(query: string, lat?: number, lng?: number): string {
   return `geo:ac:v1:${normalizeAutocompleteQuery(query)}:${biasBucket(lat)}:${biasBucket(lng)}`;
 }
 
