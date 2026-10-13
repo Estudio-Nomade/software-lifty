@@ -69,6 +69,12 @@ export interface FareEstimate {
   vehicle_type: 'auto' | 'moto';
 }
 
+export interface DirectionsResult {
+  distance_km: number;
+  duration_minutes: number;
+  polyline: string;
+}
+
 export interface PlaceSuggestion {
   place_id: string;
   description: string;

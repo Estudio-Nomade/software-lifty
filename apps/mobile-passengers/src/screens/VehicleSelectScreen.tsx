@@ -10,18 +10,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { estimateFare, requestRide } from '../api/passenger';
+import { estimateFare, getDirections, requestRide } from '../api/passenger';
 import type { FareEstimate } from '../api/types';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
+import type { MarkerData } from '../components/Map/mapHtml';
 import { RequestBlockedCard } from '../components/RequestBlockedCard';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { toMapCoordinate } from '../hooks/useLocation';
+import { decodePolyline } from '../lib/polyline';
 import { type RideRequestErrorInfo, parseRideRequestError } from '../lib/rideRequestErrors';
-import { useLocationStore } from '../store/locationStore';
 import { type PaymentMethodType, usePaymentStore } from '../store/paymentStore';
 import { theme } from '../theme';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, formatDistanceKm, formatDurationMin } from '../utils/formatters';
 
 interface Vehicle {
   id: 'auto' | 'moto';
@@ -45,6 +46,14 @@ const PAYMENT_OPTIONS: {
   { type: 'transfer', id: 'transfer', title: 'Transferencia', icon: 'business-outline' },
 ];
 
+type RoutePreview = {
+  distance_km: number;
+  duration_minutes: number;
+  line: Array<[number, number]>;
+};
+
+type RouteStatus = 'idle' | 'loading' | 'ok' | 'error';
+
 function paramText(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return value[0] ?? '';
   return value ?? '';
@@ -52,7 +61,6 @@ function paramText(value: string | string[] | undefined): string {
 
 export function VehicleSelectScreen() {
   const { goBack, replace, navigate } = useAppNavigation();
-  const current = useLocationStore((s) => s.current);
   const methods = usePaymentStore((s) => s.methods);
   const setDefault = usePaymentStore((s) => s.setDefault);
   const defaultMethod = methods.find((m) => m.isDefault) ?? methods[0];
@@ -71,6 +79,8 @@ export function VehicleSelectScreen() {
   const destination = paramText(params.destination);
   const [selected, setSelected] = useState<Vehicle['id']>('auto');
   const [fares, setFares] = useState<Partial<Record<Vehicle['id'], FareEstimate>>>({});
+  const [route, setRoute] = useState<RoutePreview | null>(null);
+  const [routeStatus, setRouteStatus] = useState<RouteStatus>('idle');
   const [loading, setLoading] = useState(false);
   const [blocked, setBlocked] = useState<RideRequestErrorInfo | null>(null);
 
@@ -86,23 +96,43 @@ export function VehicleSelectScreen() {
   useEffect(() => {
     if (!coords) {
       setFares({});
+      setRoute(null);
+      setRouteStatus('idle');
       Alert.alert('Ubicación no disponible', 'No pudimos obtener tu ubicación. Reintentá.');
       return;
     }
 
     let cancelled = false;
     setFares({});
+    setRoute(null);
+    setRouteStatus('loading');
 
     (async () => {
-      const results = await Promise.allSettled([
+      const [directionsResult, ...fareResults] = await Promise.allSettled([
+        getDirections(coords),
         estimateFare({ ...coords, vehicle_type: 'auto' }),
         estimateFare({ ...coords, vehicle_type: 'moto' }),
       ]);
       if (cancelled) return;
 
+      if (directionsResult.status === 'fulfilled') {
+        const d = directionsResult.value;
+        const line = decodePolyline(d.polyline);
+        setRoute({
+          distance_km: d.distance_km,
+          duration_minutes: d.duration_minutes,
+          line,
+        });
+        setRouteStatus(line.length >= 2 ? 'ok' : 'error');
+      } else {
+        console.error('[VehicleSelect] directions failed', directionsResult.reason);
+        setRoute(null);
+        setRouteStatus('error');
+      }
+
       const next: Partial<Record<Vehicle['id'], FareEstimate>> = {};
       let anyFailed = false;
-      results.forEach((result, index) => {
+      fareResults.forEach((result, index) => {
         const id: Vehicle['id'] = index === 0 ? 'auto' : 'moto';
         if (result.status === 'fulfilled') {
           next[id] = result.value;
@@ -126,8 +156,40 @@ export function VehicleSelectScreen() {
   const selectedEstimate = fares[selected];
   const continueLabel =
     selectedEstimate != null && Number.isFinite(selectedEstimate.fare)
-      ? `CONTINUAR ${formatCurrency(selectedEstimate.fare)}`
-      : 'CONTINUAR';
+      ? `Continuar · ${formatCurrency(selectedEstimate.fare)}`
+      : 'Continuar';
+
+  const summaryDistanceKm =
+    route?.distance_km ?? fares.auto?.distance_km ?? fares.moto?.distance_km ?? null;
+  const summaryDurationMin =
+    route?.duration_minutes ?? fares.auto?.duration_min ?? fares.moto?.duration_min ?? null;
+
+  const mapMarkers: MarkerData[] = useMemo(() => {
+    if (!coords) return [];
+    return [
+      {
+        id: 'origin',
+        coordinate: [coords.origin_lng, coords.origin_lat],
+        color: theme.colors.deepBlue,
+        title: 'Origen',
+      },
+      {
+        id: 'dest',
+        coordinate: [coords.dest_lng, coords.dest_lat],
+        color: theme.colors.dangerRed,
+        icon: 'destination',
+        title: 'Destino',
+      },
+    ];
+  }, [coords]);
+
+  const mapCenter = useMemo((): [number, number] => {
+    if (!coords) return [0, 0];
+    return toMapCoordinate(
+      (coords.origin_lat + coords.dest_lat) / 2,
+      (coords.origin_lng + coords.dest_lng) / 2,
+    );
+  }, [coords]);
 
   const selectPayment = (type: PaymentMethodType) => {
     const preferredId = type === 'cash' ? 'cash' : 'transfer';
@@ -165,6 +227,15 @@ export function VehicleSelectScreen() {
     }
   };
 
+  const routeChipLabel = (() => {
+    if (routeStatus === 'loading') return 'Calculando ruta…';
+    if (summaryDistanceKm != null || summaryDurationMin != null) {
+      return `${formatDistanceKm(summaryDistanceKm)} · ${formatDurationMin(summaryDurationMin)}`;
+    }
+    if (routeStatus === 'error') return 'No pudimos trazar la ruta';
+    return '—';
+  })();
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.navbar}>
@@ -175,23 +246,31 @@ export function VehicleSelectScreen() {
 
       <View style={styles.mapContainer}>
         <PassengerMap
-          centerCoordinate={current ? toMapCoordinate(current.lat, current.lng) : [0, 0]}
-          userLocation={current ? toMapCoordinate(current.lat, current.lng) : null}
-          followUserLocation
+          centerCoordinate={mapCenter}
+          userLocation={null}
+          followUserLocation={false}
+          markers={mapMarkers}
+          routeLine={route?.line ?? []}
           style={styles.mapFill}
         />
       </View>
 
       <View style={styles.routeSummary}>
-        <Ionicons name="location-outline" size={16} color={theme.colors.dangerRed} />
-        <Text style={styles.routeAddr} numberOfLines={1}>
-          {pickup || 'Origen'}
-        </Text>
-        <Ionicons name="arrow-forward" size={14} color={theme.colors.mediumGray} />
-        <Ionicons name="navigate-outline" size={16} color={theme.colors.primary} />
-        <Text style={styles.routeAddr} numberOfLines={1}>
-          {destination || 'Destino'}
-        </Text>
+        <View style={styles.routeChip}>
+          <Ionicons name="navigate-outline" size={14} color={theme.colors.primary} />
+          <Text style={styles.routeChipText}>{routeChipLabel}</Text>
+        </View>
+        <View style={styles.routeAddrs}>
+          <Ionicons name="location-outline" size={16} color={theme.colors.deepBlue} />
+          <Text style={styles.routeAddr} numberOfLines={1}>
+            {pickup || 'Origen'}
+          </Text>
+          <Ionicons name="arrow-forward" size={14} color={theme.colors.mediumGray} />
+          <Ionicons name="flag-outline" size={16} color={theme.colors.dangerRed} />
+          <Text style={styles.routeAddr} numberOfLines={1}>
+            {destination || 'Destino'}
+          </Text>
+        </View>
       </View>
 
       <ScrollView
@@ -200,10 +279,11 @@ export function VehicleSelectScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.sectionTitle}>Selecciona tu vehículo</Text>
+        <Text style={styles.sectionTitle}>Seleccioná tu vehículo</Text>
 
         {VEHICLES.map((v) => {
           const estimate = fares[v.id];
+          const cardKm = route?.distance_km ?? estimate?.distance_km;
           return (
             <TouchableOpacity
               key={v.id}
@@ -217,9 +297,15 @@ export function VehicleSelectScreen() {
                   <View style={styles.metaItem}>
                     <Ionicons name="time-outline" size={12} color={theme.colors.mediumGray} />
                     <Text style={styles.vehicleDetail}>
-                      {estimate ? `${estimate.duration_min} min` : '—'}
+                      {estimate ? formatDurationMin(estimate.duration_min) : '—'}
                     </Text>
                   </View>
+                  {cardKm != null ? (
+                    <View style={styles.metaItem}>
+                      <Ionicons name="resize-outline" size={12} color={theme.colors.mediumGray} />
+                      <Text style={styles.vehicleDetail}>{formatDistanceKm(cardKm)}</Text>
+                    </View>
+                  ) : null}
                   <Text style={styles.vehicleDetail}>{v.capacity}</Text>
                 </View>
               </View>
@@ -309,18 +395,39 @@ const styles = StyleSheet.create({
     padding: theme.spacing.sm,
   },
   mapContainer: {
-    height: 160,
+    minHeight: 280,
+    height: '38%',
     backgroundColor: theme.colors.background,
   },
   mapFill: {
     flex: 1,
   },
   routeSummary: {
-    height: 48,
     backgroundColor: theme.colors.white,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    gap: theme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.lightGray,
+  },
+  routeChip: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: theme.spacing.md,
+    gap: 6,
+    backgroundColor: theme.colors.surfaceMuted,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 6,
+    borderRadius: theme.radius.full,
+  },
+  routeChipText: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.deepBlue,
+  },
+  routeAddrs: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: theme.spacing.sm,
   },
   routeAddr: {
@@ -376,6 +483,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
+    flexWrap: 'wrap',
   },
   metaItem: {
     flexDirection: 'row',
