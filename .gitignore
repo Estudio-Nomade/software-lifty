@@ -30,8 +30,10 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 .cache
 *.tsbuildinfo
 
-# expo
+# expo / eas
 .expo/
+credentials.json
+**/credentials.json
 
 # IntelliJ based IDEs
 .idea

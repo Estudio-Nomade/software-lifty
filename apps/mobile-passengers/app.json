@@ -15,7 +15,7 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
         },
-        "NSPhotoLibraryUsageDescription": "Lifty necesita acceso a tu galer\u00eda para la foto de perfil."
+        "NSPhotoLibraryUsageDescription": "Lifty necesita acceso a tu galería para la foto de perfil."
       }
     },
     "android": {
@@ -58,6 +58,13 @@
       "image": "./assets/splash-brand.png",
       "resizeMode": "contain",
       "backgroundColor": "#EEF7F6"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "97a435a9-6725-4207-a930-c11ec77c7de5"
+      }
+    },
+    "owner": "martiyaquinta"
   }
 }
