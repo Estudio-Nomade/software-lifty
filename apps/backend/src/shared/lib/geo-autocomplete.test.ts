@@ -15,30 +15,33 @@ mock.module('./redis', () => ({
 
 const { autocomplete } = await import('./geo');
 
+type FetchMock = ReturnType<typeof spyOn<typeof globalThis, 'fetch'>>;
+
+function mockPhotonOk(): FetchMock {
+  const impl = (async () =>
+    Response.json({
+      features: [
+        {
+          geometry: { coordinates: [-65.19, -31.94] },
+          properties: {
+            osm_id: 1,
+            name: 'San Martín',
+            city: 'Villa Dolores',
+            state: 'Córdoba',
+            country: 'Argentina',
+          },
+        },
+      ],
+    })) as unknown as typeof fetch;
+  return spyOn(globalThis, 'fetch').mockImplementation(impl);
+}
+
 describe('geo.autocomplete cache + timeout', () => {
-  let fetchSpy: ReturnType<typeof spyOn>;
+  let fetchSpy: FetchMock;
 
   beforeEach(() => {
     redisStore.clear();
-    fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async () => {
-      return new Response(
-        JSON.stringify({
-          features: [
-            {
-              geometry: { coordinates: [-65.19, -31.94] },
-              properties: {
-                osm_id: 1,
-                name: 'San Martín',
-                city: 'Villa Dolores',
-                state: 'Córdoba',
-                country: 'Argentina',
-              },
-            },
-          ],
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    });
+    fetchSpy = mockPhotonOk();
   });
 
   afterEach(() => {
@@ -64,9 +67,11 @@ describe('geo.autocomplete cache + timeout', () => {
   });
 
   test('timeout / fetch failure returns empty array fast', async () => {
-    fetchSpy.mockImplementation(async () => {
-      throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
-    });
+    fetchSpy.mockImplementation(
+      (async () => {
+        throw new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+      }) as unknown as typeof fetch,
+    );
     const t0 = Date.now();
     const results = await autocomplete('calle que no existe xyz');
     expect(results).toEqual([]);
