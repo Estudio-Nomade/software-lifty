@@ -11,7 +11,7 @@ import {
 
 describe('vehicle year policy', () => {
   it('exposes normative constants', () => {
-    expect(VEHICLE_MIN_MODEL_YEAR).toBe(2010);
+    expect(VEHICLE_MIN_MODEL_YEAR).toBe(2011);
     expect(VEHICLE_MAX_AGE_YEARS).toBe(15);
   });
 
@@ -28,11 +28,11 @@ describe('vehicle year policy', () => {
     expect(validateVehicleYear('2028', now)).toBeDefined();
   });
 
-  it('2025 → minYear 2010', () => {
+  it('2025 → minYear 2011; 2010 invalid', () => {
     const now = new Date('2025-01-01T12:00:00.000Z');
-    expect(getVehicleYearBounds(now).minYear).toBe(2010);
-    expect(validateVehicleYear('2010', now)).toBeUndefined();
-    expect(validateVehicleYear('2009', now)).toBeDefined();
+    expect(getVehicleYearBounds(now).minYear).toBe(2011);
+    expect(validateVehicleYear('2011', now)).toBeUndefined();
+    expect(validateVehicleYear('2010', now)).toBeDefined();
   });
 
   it('2030 → minYear 2015', () => {

@@ -1,8 +1,8 @@
 /** UI labels shown on OnboardingVehicle. Backend stores English slugs. */
 export type VehicleTypeUi = 'Auto' | 'Moto' | 'Camioneta';
 
-/** Normativa Lifty: piso histórico 2010 + antigüedad máx. 15 años. */
-export const VEHICLE_MIN_MODEL_YEAR = 2010;
+/** Normativa Lifty: piso histórico 2011 + antigüedad máx. 15 años. */
+export const VEHICLE_MIN_MODEL_YEAR = 2011;
 export const VEHICLE_MAX_AGE_YEARS = 15;
 
 export function getVehicleYearBounds(now: Date = new Date()): {

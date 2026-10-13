@@ -657,7 +657,7 @@ describe('Vehicle step (no duplicate form)', () => {
 
   test('vehicle PUT with year older than policy returns VEHICLE_YEAR_INVALID', async () => {
     const { token } = await fullOnboarding('+5492617777003', password);
-    const oldYear = Math.max(2010, new Date().getFullYear() - 15) - 1;
+    const oldYear = Math.max(2011, new Date().getFullYear() - 15) - 1;
     const { status, data } = await request(
       'PUT',
       '/api/drivers/me',

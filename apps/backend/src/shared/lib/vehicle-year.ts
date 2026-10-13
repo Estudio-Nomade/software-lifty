@@ -1,6 +1,6 @@
 import { AppError } from './errors';
 
-export const VEHICLE_MIN_MODEL_YEAR = 2010;
+export const VEHICLE_MIN_MODEL_YEAR = 2011;
 export const VEHICLE_MAX_AGE_YEARS = 15;
 
 export function getVehicleYearBounds(now: Date = new Date()): {
