@@ -654,6 +654,26 @@ describe('Vehicle step (no duplicate form)', () => {
     expect(status).toBe(400);
     expect(data.error?.code).toBe('KYC_REQUIRED');
   });
+
+  test('vehicle PUT with year older than policy returns VEHICLE_YEAR_INVALID', async () => {
+    const { token } = await fullOnboarding('+5492617777003', password);
+    const oldYear = Math.max(2011, new Date().getFullYear() - 15) - 1;
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Toyota',
+        vehicle_model: 'Corolla',
+        vehicle_year: oldYear,
+        vehicle_color: 'Blanco',
+        vehicle_plate: 'XYZ999',
+        vehicle_type: 'car',
+      },
+      token,
+    );
+    expect(status).toBe(400);
+    expect(data.error?.code).toBe('VEHICLE_YEAR_INVALID');
+  });
 });
 
 describe('Document step completeness', () => {

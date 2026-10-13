@@ -23,6 +23,7 @@ import {
   contentTypeForFile,
   supabaseStorage,
 } from '../../shared/lib/storage';
+import { assertVehicleYear } from '../../shared/lib/vehicle-year';
 
 let _storage: StorageProvider = supabaseStorage;
 
@@ -743,6 +744,11 @@ export const driversService = {
     }
 
     if (hasVehicleData) {
+      if (data.vehicle_year === undefined || data.vehicle_year === null) {
+        throw new AppError('Ingresá el año del vehículo.', 400, 'VEHICLE_YEAR_INVALID');
+      }
+      assertVehicleYear(data.vehicle_year);
+
       const [existingVehicle] = await db
         .select({ id: vehicles.id })
         .from(vehicles)
@@ -753,7 +759,7 @@ export const driversService = {
         driver_id: driverId,
         brand: data.vehicle_brand ?? '',
         model: data.vehicle_model ?? '',
-        year: data.vehicle_year ?? new Date().getFullYear(),
+        year: data.vehicle_year,
         color: data.vehicle_color ?? '',
         plate: data.vehicle_plate ?? '',
         vehicle_type: data.vehicle_type ?? 'car',

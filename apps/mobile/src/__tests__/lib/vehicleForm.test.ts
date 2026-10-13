@@ -1,9 +1,55 @@
 import {
+  VEHICLE_MAX_AGE_YEARS,
+  VEHICLE_MIN_MODEL_YEAR,
+  getVehicleYearBounds,
   hasCompleteVehicle,
+  validateVehicleYear,
   vehicleFormFromProfile,
   vehicleTypeFromApi,
   vehicleTypeToApi,
 } from '../../lib/vehicleForm';
+
+describe('vehicle year policy', () => {
+  it('exposes normative constants', () => {
+    expect(VEHICLE_MIN_MODEL_YEAR).toBe(2011);
+    expect(VEHICLE_MAX_AGE_YEARS).toBe(15);
+  });
+
+  it('2026 → minYear 2011; 2010 invalid; 2011 ok', () => {
+    const now = new Date('2026-06-01T12:00:00.000Z');
+    const { minYear, maxYear } = getVehicleYearBounds(now);
+    expect(minYear).toBe(2011);
+    expect(maxYear).toBe(2027);
+    expect(validateVehicleYear('2010', now)).toMatch(/No podés registrarte/);
+    expect(validateVehicleYear('2010', now)).toMatch(/2011/);
+    expect(validateVehicleYear('2011', now)).toBeUndefined();
+    expect(validateVehicleYear('2009', now)).toMatch(/No podés registrarte/);
+    expect(validateVehicleYear('2026', now)).toBeUndefined();
+    expect(validateVehicleYear('2027', now)).toBeUndefined();
+    expect(validateVehicleYear('2028', now)).toMatch(/mayor a/);
+  });
+
+  it('2025 → minYear 2011; 2010 invalid with clear copy', () => {
+    const now = new Date('2025-01-01T12:00:00.000Z');
+    expect(getVehicleYearBounds(now).minYear).toBe(2011);
+    expect(validateVehicleYear('2011', now)).toBeUndefined();
+    expect(validateVehicleYear('2010', now)).toMatch(
+      /No podés registrarte con un vehículo 2010/,
+    );
+  });
+
+  it('2030 → minYear 2015', () => {
+    const now = new Date('2030-07-15T12:00:00.000Z');
+    expect(getVehicleYearBounds(now).minYear).toBe(2015);
+    expect(validateVehicleYear('2014', now)).toBeDefined();
+    expect(validateVehicleYear('2015', now)).toBeUndefined();
+  });
+
+  it('empty year is not a field error (required handled elsewhere)', () => {
+    expect(validateVehicleYear('')).toBeUndefined();
+    expect(validateVehicleYear('   ')).toBeUndefined();
+  });
+});
 
 describe('vehicleType mapping', () => {
   it('maps UI labels to API slugs', () => {
