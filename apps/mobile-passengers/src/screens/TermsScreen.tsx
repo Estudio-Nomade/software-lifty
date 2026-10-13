@@ -1,6 +1,15 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Alert,
+  Linking,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -9,8 +18,22 @@ import {
   GENERAL_TERMS_UPDATED_LABEL,
   GENERAL_TERMS_VERSION,
 } from '../legal/generalTermsSummary';
+import {
+  PRIVACY_POLICY_LABEL,
+  PRIVACY_POLICY_URL,
+  TERMS_FULL_LABEL,
+  TERMS_URL,
+} from '../legal/legalUrls';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
+
+async function openLegalUrl(url: string) {
+  try {
+    await Linking.openURL(url);
+  } catch {
+    Alert.alert('No se pudo abrir el enlace', 'Revisá tu conexión e intentá de nuevo.');
+  }
+}
 
 export function TermsScreen() {
   const { goBack, replace } = useAppNavigation();
@@ -58,6 +81,29 @@ export function TermsScreen() {
               </Text>
             </View>
           ))}
+
+          <View style={styles.legalLinks}>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={PRIVACY_POLICY_LABEL}
+              onPress={() => {
+                void openLegalUrl(PRIVACY_POLICY_URL);
+              }}
+              style={styles.legalLink}
+            >
+              <Text style={styles.legalLinkText}>Ver {PRIVACY_POLICY_LABEL}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={TERMS_FULL_LABEL}
+              onPress={() => {
+                void openLegalUrl(TERMS_URL);
+              }}
+              style={styles.legalLink}
+            >
+              <Text style={styles.legalLinkText}>Ver {TERMS_FULL_LABEL}</Text>
+            </Pressable>
+          </View>
         </Card>
       </ScrollView>
 
@@ -129,6 +175,22 @@ const styles = StyleSheet.create({
     color: theme.colors.deepBlue,
     marginTop: theme.spacing.sm,
     marginBottom: theme.spacing.xs,
+  },
+  legalLinks: {
+    marginTop: theme.spacing.md,
+    gap: theme.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.lightGray,
+    paddingTop: theme.spacing.md,
+  },
+  legalLink: {
+    paddingVertical: theme.spacing.xs,
+  },
+  legalLinkText: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.primary,
+    textDecorationLine: 'underline',
   },
   footer: {
     padding: theme.spacing.md,

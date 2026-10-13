@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import type React from 'react';
 import { useState } from 'react';
-import { ScrollView, StatusBar, StyleSheet, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
@@ -11,10 +11,24 @@ import {
   GENERAL_TERMS_UPDATED_LABEL,
   GENERAL_TERMS_VERSION,
 } from '../legal/generalTermsSummary';
+import {
+  PRIVACY_POLICY_LABEL,
+  PRIVACY_POLICY_URL,
+  TERMS_FULL_LABEL,
+  TERMS_URL,
+} from '../legal/legalUrls';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
 import { isTermsReadMode } from '../lib/termsReadMode';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
+
+async function openLegalUrl(url: string) {
+  try {
+    await Linking.openURL(url);
+  } catch {
+    Alert.alert('No se pudo abrir el enlace', 'Revisá tu conexión e intentá de nuevo.');
+  }
+}
 
 export const TermsScreen: React.FC = () => {
   const navigation = useAppNavigation();
@@ -76,6 +90,29 @@ export const TermsScreen: React.FC = () => {
           </View>
         ))}
 
+        <View style={styles.legalLinks}>
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={PRIVACY_POLICY_LABEL}
+            onPress={() => {
+              void openLegalUrl(PRIVACY_POLICY_URL);
+            }}
+            style={styles.legalLink}
+          >
+            <Text style={styles.legalLinkText}>Ver {PRIVACY_POLICY_LABEL}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={TERMS_FULL_LABEL}
+            onPress={() => {
+              void openLegalUrl(TERMS_URL);
+            }}
+            style={styles.legalLink}
+          >
+            <Text style={styles.legalLinkText}>Ver {TERMS_FULL_LABEL}</Text>
+          </Pressable>
+        </View>
+
         <View style={{ height: 48 }} />
       </ScrollView>
       <View style={styles.footer}>
@@ -135,6 +172,19 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontWeight: theme.fontWeight.medium,
     marginBottom: theme.spacing.sm,
+  },
+  legalLinks: {
+    marginTop: theme.spacing.lg,
+    gap: theme.spacing.sm,
+  },
+  legalLink: {
+    paddingVertical: theme.spacing.sm,
+  },
+  legalLinkText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.turquoise,
+    textDecorationLine: 'underline',
   },
   footer: {
     paddingHorizontal: theme.spacing.lg,
