@@ -1,6 +1,34 @@
 /** UI labels shown on OnboardingVehicle. Backend stores English slugs. */
 export type VehicleTypeUi = 'Auto' | 'Moto' | 'Camioneta';
 
+/** Normativa Lifty: piso histórico 2010 + antigüedad máx. 15 años. */
+export const VEHICLE_MIN_MODEL_YEAR = 2010;
+export const VEHICLE_MAX_AGE_YEARS = 15;
+
+export function getVehicleYearBounds(now: Date = new Date()): {
+  currentYear: number;
+  minYear: number;
+  maxYear: number;
+} {
+  const currentYear = now.getFullYear();
+  return {
+    currentYear,
+    minYear: Math.max(VEHICLE_MIN_MODEL_YEAR, currentYear - VEHICLE_MAX_AGE_YEARS),
+    maxYear: currentYear + 1,
+  };
+}
+
+/** Field error message, or undefined if empty/valid. Empty is handled by required check. */
+export function validateVehicleYear(value: string, now: Date = new Date()): string | undefined {
+  if (!value.trim()) return undefined;
+  const num = Number.parseInt(value, 10);
+  const { minYear, maxYear } = getVehicleYearBounds(now);
+  if (Number.isNaN(num) || !Number.isInteger(num) || num < minYear || num > maxYear) {
+    return `El vehículo debe ser modelo ${minYear} o más nuevo (máx. ${VEHICLE_MAX_AGE_YEARS} años de antigüedad; desde ${VEHICLE_MIN_MODEL_YEAR}).`;
+  }
+  return undefined;
+}
+
 const UI_TO_API: Record<VehicleTypeUi, string> = {
   Auto: 'car',
   Moto: 'motorcycle',

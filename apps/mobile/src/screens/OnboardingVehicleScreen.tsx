@@ -17,7 +17,12 @@ import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
-import { type VehicleTypeUi, vehicleFormFromProfile, vehicleTypeToApi } from '../lib/vehicleForm';
+import {
+  type VehicleTypeUi,
+  validateVehicleYear,
+  vehicleFormFromProfile,
+  vehicleTypeToApi,
+} from '../lib/vehicleForm';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -31,7 +36,6 @@ interface ValidationErrors {
 
 const PLATE_REGEX = /^[A-Z]{2,3}[0-9]{3}[A-Z]{0,2}$/;
 const VEHICLE_TYPES: VehicleTypeUi[] = ['Auto', 'Moto', 'Camioneta'];
-const CURRENT_YEAR = new Date().getFullYear();
 
 const normalizePlate = (value: string) => value.replace(/\s+/g, '').toUpperCase();
 
@@ -46,13 +50,7 @@ const validateRequired = (value: string) => {
   return undefined;
 };
 
-const validateYear = (value: string) => {
-  if (!value.trim()) return undefined;
-  const num = Number.parseInt(value, 10);
-  if (Number.isNaN(num) || num < 2000 || num > CURRENT_YEAR + 1)
-    return `Ano entre 2000 y ${CURRENT_YEAR + 1}`;
-  return undefined;
-};
+const validateYear = (value: string) => validateVehicleYear(value);
 
 const isFormValid = (
   vehiclePlate: string,
