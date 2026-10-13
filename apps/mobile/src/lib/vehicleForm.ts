@@ -23,8 +23,14 @@ export function validateVehicleYear(value: string, now: Date = new Date()): stri
   if (!value.trim()) return undefined;
   const num = Number.parseInt(value, 10);
   const { minYear, maxYear } = getVehicleYearBounds(now);
-  if (Number.isNaN(num) || !Number.isInteger(num) || num < minYear || num > maxYear) {
-    return `El vehículo debe ser modelo ${minYear} o más nuevo (máx. ${VEHICLE_MAX_AGE_YEARS} años de antigüedad; desde ${VEHICLE_MIN_MODEL_YEAR}).`;
+  if (Number.isNaN(num) || !Number.isInteger(num)) {
+    return 'Ingresá un año válido (4 dígitos).';
+  }
+  if (num < minYear) {
+    return `No podés registrarte con un vehículo ${num}. Lifty solo admite modelos ${minYear} o más nuevos.`;
+  }
+  if (num > maxYear) {
+    return `El año no puede ser mayor a ${maxYear}.`;
   }
   return undefined;
 }

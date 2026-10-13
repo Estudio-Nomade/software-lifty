@@ -255,8 +255,10 @@ export const OnboardingVehicleScreen: React.FC = () => {
               placeholder="Año"
               value={vehicleYear}
               onChangeText={(t) => {
-                setVehicleYear(t);
-                setError('vehicleYear', undefined);
+                const digits = t.replace(/\D/g, '').slice(0, 4);
+                setVehicleYear(digits);
+                // Show error live once they typed a full year (e.g. 2010).
+                setError('vehicleYear', digits.length === 4 ? validateYear(digits) : undefined);
               }}
               onBlur={() => setError('vehicleYear', validateYear(vehicleYear))}
               error={errors.vehicleYear}

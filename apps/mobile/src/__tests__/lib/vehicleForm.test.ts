@@ -20,19 +20,22 @@ describe('vehicle year policy', () => {
     const { minYear, maxYear } = getVehicleYearBounds(now);
     expect(minYear).toBe(2011);
     expect(maxYear).toBe(2027);
+    expect(validateVehicleYear('2010', now)).toMatch(/No podés registrarte/);
     expect(validateVehicleYear('2010', now)).toMatch(/2011/);
     expect(validateVehicleYear('2011', now)).toBeUndefined();
-    expect(validateVehicleYear('2009', now)).toBeDefined();
+    expect(validateVehicleYear('2009', now)).toMatch(/No podés registrarte/);
     expect(validateVehicleYear('2026', now)).toBeUndefined();
     expect(validateVehicleYear('2027', now)).toBeUndefined();
-    expect(validateVehicleYear('2028', now)).toBeDefined();
+    expect(validateVehicleYear('2028', now)).toMatch(/mayor a/);
   });
 
-  it('2025 → minYear 2011; 2010 invalid', () => {
+  it('2025 → minYear 2011; 2010 invalid with clear copy', () => {
     const now = new Date('2025-01-01T12:00:00.000Z');
     expect(getVehicleYearBounds(now).minYear).toBe(2011);
     expect(validateVehicleYear('2011', now)).toBeUndefined();
-    expect(validateVehicleYear('2010', now)).toBeDefined();
+    expect(validateVehicleYear('2010', now)).toMatch(
+      /No podés registrarte con un vehículo 2010/,
+    );
   });
 
   it('2030 → minYear 2015', () => {

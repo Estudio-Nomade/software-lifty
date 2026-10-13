@@ -55,6 +55,7 @@ describe('vehicle year policy', () => {
       const appErr = err as AppError;
       expect(appErr.statusCode).toBe(400);
       expect(appErr.code).toBe('VEHICLE_YEAR_INVALID');
+      expect(appErr.message).toContain('No podés registrarte');
       expect(appErr.message).toContain('2011');
     }
   });

@@ -25,10 +25,10 @@ export function isVehicleYearAllowed(year: number, now: Date = new Date()): bool
 export function assertVehicleYear(year: number, now: Date = new Date()): void {
   const { minYear, maxYear } = getVehicleYearBounds(now);
   if (!Number.isInteger(year) || year < minYear || year > maxYear) {
-    throw new AppError(
-      `El vehículo debe ser modelo ${minYear} o más nuevo (máx. ${VEHICLE_MAX_AGE_YEARS} años de antigüedad; desde ${VEHICLE_MIN_MODEL_YEAR}). Año permitido: ${minYear}–${maxYear}.`,
-      400,
-      'VEHICLE_YEAR_INVALID',
-    );
+    const message =
+      Number.isInteger(year) && year < minYear
+        ? `No podés registrarte con un vehículo ${year}. Lifty solo admite modelos ${minYear} o más nuevos.`
+        : `Año de vehículo inválido. Solo se admiten modelos ${minYear}–${maxYear}.`;
+    throw new AppError(message, 400, 'VEHICLE_YEAR_INVALID');
   }
 }
