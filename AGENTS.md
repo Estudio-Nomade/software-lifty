@@ -52,7 +52,19 @@ bun run lint           # biome check all
 bun run format         # biome format all
 bun run check          # lint + typecheck
 bun run clean          # turbo clean
+
+# EAS Android preview (APK → Railway backend)
+bun run eas:login                      # una vez (cuenta martiyaquinta)
+bun run eas:env:push                   # sube Supabase desde cada apps/*/ .env
+bun run eas:build:android:preview      # conductor + pasajero APK
+# o por app:
+bun run eas:build:android:preview:driver
+bun run eas:build:android:preview:passenger
 ```
+
+> **EAS monorepo**: cada app tiene su `app.json` + `eas.json` + `projectId`.
+> No hay `eas.json` en la raíz. Preview inyecta
+> `EXPO_PUBLIC_API_URL=https://liftybackend-production.up.railway.app/api`.
 
 > `bun run dev` usa `scripts/dev-all.ts` (orquestador dedicado), **no** `turbo dev`.
 > Turbo antepone `pkg:task:` a cada línea y pipea el stdout sin TTY, lo que rompe

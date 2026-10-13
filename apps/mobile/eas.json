@@ -1,28 +1,35 @@
 {
   "cli": {
-    "version": ">= 14.0.0"
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "environment": "development",
+      "android": {
+        "buildType": "apk"
+      }
     },
     "preview": {
+      "distribution": "internal",
+      "environment": "preview",
       "android": {
         "buildType": "apk"
       },
-      "distribution": "internal"
-    },
-    "emulator": {
-      "developmentClient": true,
-      "android": {
-        "buildType": "apk"
-      },
-      "distribution": "internal"
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://liftybackend-production.up.railway.app/api"
+      }
     },
     "production": {
+      "autoIncrement": true,
+      "environment": "production",
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://liftybackend-production.up.railway.app/api"
       }
     }
   },

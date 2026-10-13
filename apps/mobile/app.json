@@ -62,6 +62,13 @@
       "image": "./assets/splash-brand.png",
       "resizeMode": "contain",
       "backgroundColor": "#EEF7F6"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "90f11dff-37cf-4b27-b6e8-598491a871c5"
+      }
+    },
+    "owner": "martiyaquinta"
   }
 }
