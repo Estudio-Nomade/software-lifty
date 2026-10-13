@@ -1,5 +1,12 @@
 import { api } from './client';
-import type { FareEstimate, PassengerProfile, PlaceSuggestion, Trip, TripMessage } from './types';
+import type {
+  DirectionsResult,
+  FareEstimate,
+  PassengerProfile,
+  PlaceSuggestion,
+  Trip,
+  TripMessage,
+} from './types';
 
 export async function registerPassenger(
   phone?: string,
@@ -109,12 +116,20 @@ export async function getDirections(params: {
   origin_lng: number;
   dest_lat: number;
   dest_lng: number;
-}): Promise<{ distance_km: number; duration_minutes: number }> {
-  const { data } = await api.get<{ distance_km: number; duration_minutes: number }>(
+}): Promise<DirectionsResult> {
+  const { data } = await api.get<DirectionsResult & { data?: DirectionsResult }>(
     '/maps/directions',
     { params },
   );
-  return data;
+  const body = data?.polyline != null ? data : data?.data;
+  if (!body || typeof body.polyline !== 'string') {
+    throw new Error('Respuesta inválida de directions');
+  }
+  return {
+    distance_km: Number(body.distance_km),
+    duration_minutes: Number(body.duration_minutes),
+    polyline: body.polyline,
+  };
 }
 
 export async function geocodeAddress(address: string): Promise<{

@@ -1,10 +1,11 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { estimateFare, requestRide } from '../../api/passenger';
+import { estimateFare, getDirections, requestRide } from '../../api/passenger';
 import { VehicleSelectScreen } from '../../screens/VehicleSelectScreen';
 
 const mockNavigate = jest.fn();
+let lastMapProps: Record<string, unknown> | null = null;
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: jest.fn(),
@@ -12,6 +13,7 @@ jest.mock('expo-router', () => ({
 
 jest.mock('../../api/passenger', () => ({
   estimateFare: jest.fn(),
+  getDirections: jest.fn(),
   requestRide: jest.fn(),
 }));
 
@@ -40,14 +42,21 @@ jest.mock('../../store/paymentStore', () => ({
 }));
 
 jest.mock('../../components/Map/PassengerMap', () => ({
-  PassengerMap: () => null,
+  PassengerMap: (props: Record<string, unknown>) => {
+    lastMapProps = props;
+    return null;
+  },
 }));
 
 const mockUseLocalSearchParams = useLocalSearchParams as unknown as jest.Mock;
 const mockEstimateFare = estimateFare as unknown as jest.Mock;
+const mockGetDirections = getDirections as unknown as jest.Mock;
 const mockRequestRide = requestRide as unknown as jest.Mock;
 
 jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+/** Encoded polyline for two points roughly matching NEAR coords (lng,lat order after decode). */
+const SHORT_POLYLINE = '_p~iF~ps|U_ulLnnqC_mqNvxq`@';
 
 const NEAR = {
   pickup: 'Origen A',
@@ -70,8 +79,14 @@ const FAR = {
 describe('VehicleSelectScreen fare estimation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    lastMapProps = null;
     mockUseLocalSearchParams.mockReturnValue(NEAR);
     mockRequestRide.mockResolvedValue({ id: 'trip-1' });
+    mockGetDirections.mockResolvedValue({
+      distance_km: 4.2,
+      duration_minutes: 14,
+      polyline: SHORT_POLYLINE,
+    });
     mockEstimateFare.mockImplementation(async (p: { vehicle_type: string; dest_lng: number }) => {
       const isFar = p.dest_lng === -59.0;
       if (p.vehicle_type === 'moto') {
@@ -111,11 +126,43 @@ describe('VehicleSelectScreen fare estimation', () => {
     });
   });
 
+  test('calls getDirections with the same trip coords', async () => {
+    const { findByText } = await render(<VehicleSelectScreen />);
+    await findByText('$4.200');
+
+    expect(mockGetDirections).toHaveBeenCalledWith({
+      origin_lat: -34.5,
+      origin_lng: -58.4,
+      dest_lat: -34.6,
+      dest_lng: -58.5,
+    });
+  });
+
+  test('shows route km and min chip from directions', async () => {
+    const { findByText } = await render(<VehicleSelectScreen />);
+    expect(await findByText(/4[,.]2 km · 14 min/)).toBeTruthy();
+  });
+
+  test('passes routeLine and pins to PassengerMap without followUser', async () => {
+    const { findByText } = await render(<VehicleSelectScreen />);
+    await findByText('$4.200');
+    await act(async () => {});
+
+    expect(lastMapProps).toBeTruthy();
+    expect(lastMapProps?.followUserLocation).toBe(false);
+    expect(lastMapProps?.userLocation).toBeNull();
+    const line = lastMapProps?.routeLine as Array<[number, number]>;
+    expect(Array.isArray(line)).toBe(true);
+    expect(line.length).toBeGreaterThanOrEqual(2);
+    const markers = lastMapProps?.markers as Array<{ id: string }>;
+    expect(markers?.map((m) => m.id).sort()).toEqual(['dest', 'origin']);
+  });
+
   test('renders the API price, not the hardcoded $3.500', async () => {
     const { findByText, queryByText } = await render(<VehicleSelectScreen />);
     await findByText('$4.200');
 
-    expect(await findByText('CONTINUAR $4.200')).toBeTruthy();
+    expect(await findByText('Continuar · $4.200')).toBeTruthy();
     expect(queryByText('CONTINUO')).toBeNull();
     expect(queryByText('$3.500')).toBeNull();
     expect(queryByText('$2.100')).toBeNull();
@@ -137,6 +184,11 @@ describe('VehicleSelectScreen fare estimation', () => {
 
   test('shows a different fare for a farther destination', async () => {
     mockUseLocalSearchParams.mockReturnValue(FAR);
+    mockGetDirections.mockResolvedValue({
+      distance_km: 12.5,
+      duration_minutes: 32,
+      polyline: SHORT_POLYLINE,
+    });
 
     const { findByText, queryByText } = await render(<VehicleSelectScreen />);
     await findByText('$7.800');
@@ -146,6 +198,7 @@ describe('VehicleSelectScreen fare estimation', () => {
 
   test('on API error it never falls back to $3.500 and the CTA does not navigate', async () => {
     mockEstimateFare.mockRejectedValue(new Error('network down'));
+    mockGetDirections.mockRejectedValue(new Error('directions down'));
 
     const { getByText, queryByText } = await render(<VehicleSelectScreen />);
     await act(async () => {});
@@ -155,18 +208,28 @@ describe('VehicleSelectScreen fare estimation', () => {
     expect(queryByText('$4.200')).toBeNull();
 
     await act(async () => {
-      fireEvent.press(getByText('CONTINUAR'));
+      fireEvent.press(getByText('Continuar'));
     });
 
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  test('CONTINUAR requests ride with selected payment and goes to ConnectingDriver', async () => {
+  test('directions fail still shows fares when estimate OK', async () => {
+    mockGetDirections.mockRejectedValue(new Error('directions down'));
+
+    const { findByText, getAllByText, queryByText } = await render(<VehicleSelectScreen />);
+    await findByText('$4.200');
+    // Fallback metrics from fare when directions fail (chip + card km).
+    expect(getAllByText(/4[,.]2\s*km/).length).toBeGreaterThan(0);
+    expect(queryByText('No pudimos trazar la ruta')).toBeNull();
+  });
+
+  test('Continuar requests ride with selected payment and goes to ConnectingDriver', async () => {
     const { findByText, getByText } = await render(<VehicleSelectScreen />);
     await findByText('$4.200');
 
     await act(async () => {
-      fireEvent.press(getByText('CONTINUAR $4.200'));
+      fireEvent.press(getByText('Continuar · $4.200'));
     });
 
     expect(mockRequestRide).toHaveBeenCalledWith({
@@ -200,7 +263,7 @@ describe('VehicleSelectScreen fare estimation', () => {
     await findByText('$4.200');
 
     await act(async () => {
-      fireEvent.press(getByText('CONTINUAR $4.200'));
+      fireEvent.press(getByText('Continuar · $4.200'));
     });
 
     expect(await findByText('Cuenta suspendida temporalmente')).toBeTruthy();
