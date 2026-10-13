@@ -6,6 +6,17 @@ const OSRM_URL = process.env.OSRM_URL || 'https://router.project-osrm.org';
 const IS_PROD = process.env.NODE_ENV === 'production';
 const GEO_USER_AGENT = 'Lifty/1.0 (contact: liftyviajes.com)';
 const GEO_TIMEOUT_MS = 8000;
+/** Autocomplete must fail fast — Photon public can take 5–8s cold from AR. */
+const GEO_AUTOCOMPLETE_TIMEOUT_MS = Number(process.env.GEO_AUTOCOMPLETE_TIMEOUT_MS) || 2500;
+const GEO_AUTOCOMPLETE_CACHE_TTL = 7 * 24 * 60 * 60;
+/** ~5 km buckets so nearby users share cache without leaking exact pin. */
+const GEO_BIAS_BUCKET = 0.05;
+const GEO_DEFAULT_LAT = process.env.GEO_DEFAULT_LAT
+  ? Number(process.env.GEO_DEFAULT_LAT)
+  : undefined;
+const GEO_DEFAULT_LNG = process.env.GEO_DEFAULT_LNG
+  ? Number(process.env.GEO_DEFAULT_LNG)
+  : undefined;
 
 const GEO_CACHE_TTL = 24 * 60 * 60;
 
@@ -147,13 +158,31 @@ interface PhotonFeature {
   };
 }
 
-async function fetchPhoton(url: URL): Promise<{ features?: PhotonFeature[] }> {
+async function fetchPhoton(
+  url: URL,
+  timeoutMs: number = GEO_TIMEOUT_MS,
+): Promise<{ features?: PhotonFeature[] }> {
   const res = await fetch(url.toString(), {
     headers: { 'User-Agent': GEO_USER_AGENT },
-    signal: AbortSignal.timeout(GEO_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error(`Photon API error: ${res.status}`);
   return (await res.json()) as { features?: PhotonFeature[] };
+}
+
+/** Exported for unit tests — do not use as public API. */
+export function normalizeAutocompleteQuery(input: string): string {
+  return input.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function biasBucket(value: number | undefined): string {
+  if (value == null || !Number.isFinite(value)) return 'none';
+  return String(Math.round(value / GEO_BIAS_BUCKET) * GEO_BIAS_BUCKET);
+}
+
+/** Exported for unit tests — do not use as public API. */
+export function autocompleteCacheKey(query: string, lat?: number, lng?: number): string {
+  return `geo:ac:v1:${normalizeAutocompleteQuery(query)}:${biasBucket(lat)}:${biasBucket(lng)}`;
 }
 
 export async function autocomplete(
@@ -163,6 +192,7 @@ export async function autocomplete(
 ): Promise<PlaceResult[]> {
   if (!input || input.trim().length === 0) return [];
 
+  const t0 = Date.now();
   try {
     if (process.env.NODE_ENV === 'test') {
       return [
@@ -181,25 +211,55 @@ export async function autocomplete(
       ];
     }
 
+    const biasLat = lat ?? GEO_DEFAULT_LAT;
+    const biasLng = lng ?? GEO_DEFAULT_LNG;
+    const cacheKey = autocompleteCacheKey(input, biasLat, biasLng);
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      const hits = JSON.parse(cached) as PlaceResult[];
+      logger.info('[geo] autocomplete', {
+        ms: Date.now() - t0,
+        cache: 'hit',
+        count: hits.length,
+        qLen: input.trim().length,
+      });
+      return hits;
+    }
+
     const url = new URL(`${PHOTON_URL}/api/`);
     url.searchParams.set('q', input.trim());
     url.searchParams.set('limit', '5');
     url.searchParams.set('lang', 'default');
-    if (lat != null && lng != null) {
-      url.searchParams.set('lat', String(lat));
-      url.searchParams.set('lon', String(lng));
+    if (biasLat != null && biasLng != null) {
+      url.searchParams.set('lat', String(biasLat));
+      url.searchParams.set('lon', String(biasLng));
     }
 
-    const data = await fetchPhoton(url);
+    const data = await fetchPhoton(url, GEO_AUTOCOMPLETE_TIMEOUT_MS);
 
-    return (data.features || []).map((f) => ({
+    const results = (data.features || []).map((f) => ({
       description: formatPhotonAddress(f.properties),
       place_id: String(f.properties.osm_id),
       lat: f.geometry.coordinates[1],
       lng: f.geometry.coordinates[0],
     }));
+
+    if (results.length > 0) {
+      await cacheSet(cacheKey, JSON.stringify(results), GEO_AUTOCOMPLETE_CACHE_TTL);
+    }
+
+    logger.info('[geo] autocomplete', {
+      ms: Date.now() - t0,
+      cache: 'miss',
+      count: results.length,
+      qLen: input.trim().length,
+    });
+    return results;
   } catch (err) {
-    logger.error('[geo] autocomplete failed:', (err as Error).message);
+    logger.error('[geo] autocomplete failed:', (err as Error).message, {
+      ms: Date.now() - t0,
+      qLen: input.trim().length,
+    });
     return [];
   }
 }

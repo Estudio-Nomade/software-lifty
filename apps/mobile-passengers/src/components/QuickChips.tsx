@@ -5,8 +5,14 @@ import { type Favorite, useFavoritesStore } from '../store/favoritesStore';
 import { theme } from '../theme';
 import { FavoriteEditor } from './FavoriteEditor';
 
+export interface ChipSelection {
+  address: string;
+  lat?: number;
+  lng?: number;
+}
+
 interface QuickChipsProps {
-  onSelect: (address: string) => void;
+  onSelect: (selection: ChipSelection) => void;
 }
 
 type EditorTarget = { mode: 'add'; label?: string } | { mode: 'edit'; favorite: Favorite };
@@ -30,7 +36,11 @@ export function QuickChips({ onSelect }: QuickChipsProps) {
 
   const handleChipPress = (favorite: Favorite) => {
     if (favorite.address) {
-      onSelect(favorite.address);
+      onSelect({
+        address: favorite.address,
+        lat: favorite.lat,
+        lng: favorite.lng,
+      });
       return;
     }
     setEditor({ mode: 'edit', favorite });
@@ -52,20 +62,25 @@ export function QuickChips({ onSelect }: QuickChipsProps) {
     ]);
   };
 
-  const handleSave = (label: string, address: string) => {
+  const handleSave = (label: string, address: string, lat?: number, lng?: number) => {
     if (editor?.mode === 'edit') {
-      updateFavorite(editor.favorite.id, label, address);
+      updateFavorite(editor.favorite.id, label, address, lat, lng);
     } else {
-      addFavorite(label, address);
+      addFavorite(label, address, lat, lng);
     }
     setEditor(null);
-    onSelect(address);
+    onSelect({ address, lat, lng });
   };
 
   if (editor) {
     const initial =
       editor.mode === 'edit'
-        ? { label: editor.favorite.label, address: editor.favorite.address }
+        ? {
+            label: editor.favorite.label,
+            address: editor.favorite.address,
+            lat: editor.favorite.lat,
+            lng: editor.favorite.lng,
+          }
         : { label: editor.label ?? '', address: '' };
     return (
       <FavoriteEditor initial={initial} onSave={handleSave} onCancel={() => setEditor(null)} />

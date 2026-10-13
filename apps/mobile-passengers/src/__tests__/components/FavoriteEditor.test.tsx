@@ -3,7 +3,7 @@ import React from 'react';
 import { FavoriteEditor } from '../../components/FavoriteEditor';
 
 jest.mock('../../hooks/usePlaceAutocomplete', () => ({
-  usePlaceAutocomplete: () => [],
+  usePlaceAutocomplete: () => ({ suggestions: [], loading: false, error: null }),
 }));
 
 describe('FavoriteEditor', () => {
@@ -44,6 +44,6 @@ describe('FavoriteEditor', () => {
     await fireEvent.changeText(getByPlaceholderText('Ej: Casa, Trabajo, Gimnasio'), 'Gimnasio');
     await fireEvent.changeText(getByPlaceholderText('Escribí la dirección'), '  Av. Corrientes  ');
     await fireEvent.press(getByText('Agregar a favorito'));
-    expect(onSave).toHaveBeenCalledWith('Gimnasio', 'Av. Corrientes');
+    expect(onSave).toHaveBeenCalledWith('Gimnasio', 'Av. Corrientes', undefined, undefined);
   });
 });

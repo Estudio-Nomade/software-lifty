@@ -24,9 +24,15 @@ describe('favoritesStore', () => {
   });
 
   test('updateFavorite edits label and address by id', () => {
-    useFavoritesStore.getState().updateFavorite('casa', 'Hogar', 'Cabildo 200');
+    useFavoritesStore.getState().updateFavorite('casa', 'Hogar', 'Cabildo 200', -34.5, -58.4);
     const { favorites } = useFavoritesStore.getState();
-    expect(favorites[0]).toEqual({ id: 'casa', label: 'Hogar', address: 'Cabildo 200' });
+    expect(favorites[0]).toEqual({
+      id: 'casa',
+      label: 'Hogar',
+      address: 'Cabildo 200',
+      lat: -34.5,
+      lng: -58.4,
+    });
   });
 
   test('removeFavorite deletes by id', () => {

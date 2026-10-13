@@ -5,7 +5,7 @@ import { QuickChips } from '../../components/QuickChips';
 import { SEED_FAVORITES, useFavoritesStore } from '../../store/favoritesStore';
 
 jest.mock('../../hooks/usePlaceAutocomplete', () => ({
-  usePlaceAutocomplete: () => [],
+  usePlaceAutocomplete: () => ({ suggestions: [], loading: false, error: null }),
 }));
 
 describe('QuickChips', () => {
@@ -21,11 +21,15 @@ describe('QuickChips', () => {
   });
 
   test('tapping a saved favorite calls onSelect with its address', async () => {
-    useFavoritesStore.getState().updateFavorite('casa', 'Casa', 'Cabildo 200');
+    useFavoritesStore.getState().updateFavorite('casa', 'Casa', 'Cabildo 200', -34.5, -58.4);
     const onSelect = jest.fn();
     const { getByText } = await render(<QuickChips onSelect={onSelect} />);
     fireEvent.press(getByText('Casa'));
-    expect(onSelect).toHaveBeenCalledWith('Cabildo 200');
+    expect(onSelect).toHaveBeenCalledWith({
+      address: 'Cabildo 200',
+      lat: -34.5,
+      lng: -58.4,
+    });
   });
 
   test('tapping Casa without an address opens the editor', async () => {
@@ -42,18 +46,18 @@ describe('QuickChips', () => {
     await fireEvent.press(getByText('Agregar a favorito'));
     const { favorites } = useFavoritesStore.getState();
     expect(favorites).toHaveLength(2);
-    expect(favorites[0]).toEqual({ id: 'casa', label: 'Casa', address: 'Cabildo 200' });
+    expect(favorites[0]).toMatchObject({ id: 'casa', label: 'Casa', address: 'Cabildo 200' });
   });
 
-  test('deleting a favorite confirms and removes it', async () => {
+  test('long-press on saved favorite offers edit/delete', async () => {
     useFavoritesStore.getState().updateFavorite('casa', 'Casa', 'Cabildo 200');
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    const { getByLabelText } = await render(<QuickChips onSelect={jest.fn()} />);
-    fireEvent.press(getByLabelText('Eliminar Casa'));
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _msg, buttons) => {
+      const eliminar = buttons?.find((b) => b?.text === 'Eliminar');
+      eliminar?.onPress?.();
+    });
+    const { getByText } = await render(<QuickChips onSelect={jest.fn()} />);
+    fireEvent(getByText('Casa'), 'onLongPress');
     expect(alertSpy).toHaveBeenCalled();
-    const buttons = alertSpy.mock.calls[0][2];
-    const eliminar = buttons?.find((b) => b?.text === 'Eliminar');
-    eliminar?.onPress?.();
     expect(useFavoritesStore.getState().favorites).toHaveLength(1);
     alertSpy.mockRestore();
   });

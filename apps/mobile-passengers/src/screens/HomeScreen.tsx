@@ -88,13 +88,13 @@ export function HomeScreen() {
   const [pickupLoading, setPickupLoading] = useState(false);
   const lastGpsLabel = useRef<{ lat: number; lng: number; acc: number } | null>(null);
 
-  const pickupSuggestions = usePlaceAutocomplete(
+  const pickupAc = usePlaceAutocomplete(
     focusedField === 'pickup' && !pickupPicked ? pickupAddress : '',
   );
-  const destSuggestions = usePlaceAutocomplete(
-    focusedField === 'dest' && !destPicked ? destAddress : '',
-  );
-  const visibleSuggestions = focusedField === 'pickup' ? pickupSuggestions : destSuggestions;
+  const destAc = usePlaceAutocomplete(focusedField === 'dest' && !destPicked ? destAddress : '');
+  const visibleSuggestions = focusedField === 'pickup' ? pickupAc.suggestions : destAc.suggestions;
+  const placesLoading = focusedField === 'pickup' ? pickupAc.loading : destAc.loading;
+  const placesError = focusedField === 'pickup' ? pickupAc.error : destAc.error;
 
   // "Desde" autofill: wait for best GPS (not first coarse WiFi), then label.
   useEffect(() => {
@@ -177,9 +177,13 @@ export function HomeScreen() {
     setSearchError(null);
   };
 
-  const handleChipSelect = (address: string) => {
-    setDestAddress(address);
-    setDestCoord(null);
+  const handleChipSelect = (selection: { address: string; lat?: number; lng?: number }) => {
+    setDestAddress(selection.address);
+    setDestCoord(
+      selection.lat != null && selection.lng != null
+        ? { lat: selection.lat, lng: selection.lng }
+        : null,
+    );
     setDestPicked(true);
     setFocusedField(null);
     Keyboard.dismiss();
@@ -293,6 +297,8 @@ export function HomeScreen() {
       focusedField={focusedField}
       pickupLoading={pickupLoading}
       suggestions={visibleSuggestions}
+      placesLoading={placesLoading}
+      placesError={placesError}
       searchError={searchError}
       showUseMyLocation={showUseMyLocation}
       onBack={handleCloseSearch}

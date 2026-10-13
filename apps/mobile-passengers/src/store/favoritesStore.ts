@@ -6,12 +6,14 @@ export interface Favorite {
   id: string;
   label: string;
   address: string;
+  lat?: number;
+  lng?: number;
 }
 
 interface FavoritesState {
   favorites: Favorite[];
-  addFavorite: (label: string, address: string) => void;
-  updateFavorite: (id: string, label: string, address: string) => void;
+  addFavorite: (label: string, address: string, lat?: number, lng?: number) => void;
+  updateFavorite: (id: string, label: string, address: string, lat?: number, lng?: number) => void;
   removeFavorite: (id: string) => void;
 }
 
@@ -26,17 +28,30 @@ export const useFavoritesStore = create<FavoritesState>()(
   persist(
     (set) => ({
       favorites: SEED_FAVORITES,
-      addFavorite: (label, address) =>
+      addFavorite: (label, address, lat, lng) =>
         set((state) => ({
           favorites: [
             ...state.favorites,
-            { id: generateId(), label: label.trim(), address: address.trim() },
+            {
+              id: generateId(),
+              label: label.trim(),
+              address: address.trim(),
+              ...(lat != null && lng != null ? { lat, lng } : {}),
+            },
           ],
         })),
-      updateFavorite: (id, label, address) =>
+      updateFavorite: (id, label, address, lat, lng) =>
         set((state) => ({
           favorites: state.favorites.map((f) =>
-            f.id === id ? { ...f, label: label.trim(), address: address.trim() } : f,
+            f.id === id
+              ? {
+                  ...f,
+                  label: label.trim(),
+                  address: address.trim(),
+                  lat: lat != null ? lat : undefined,
+                  lng: lng != null ? lng : undefined,
+                }
+              : f,
           ),
         })),
       removeFavorite: (id) =>
