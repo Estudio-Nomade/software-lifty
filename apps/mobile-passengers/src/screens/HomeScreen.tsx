@@ -8,7 +8,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -17,9 +16,9 @@ import { geocodeAddress, getActiveRide } from '../api/passenger';
 import type { PlaceSuggestion } from '../api/types';
 import { BottomTabBar } from '../components/BottomTabBar';
 import { HomeHeader } from '../components/HomeHeader';
-import { HowItWorks } from '../components/HowItWorks';
 import { PassengerMap } from '../components/Map/PassengerMap';
-import { QuickChips } from '../components/QuickChips';
+import { DestinationSearchPill } from '../components/home/DestinationSearchPill';
+import { ExpandedTripSearch } from '../components/home/ExpandedTripSearch';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
   TARGET_ACCURACY_M,
@@ -86,6 +85,7 @@ export function HomeScreen() {
   const [searchError, setSearchError] = useState<string | null>(null);
   /** True while "Desde" still tracks live GPS (not user-edited). */
   const [pickupFromGps, setPickupFromGps] = useState(false);
+  const [pickupLoading, setPickupLoading] = useState(false);
   const lastGpsLabel = useRef<{ lat: number; lng: number; acc: number } | null>(null);
 
   const pickupSuggestions = usePlaceAutocomplete(
@@ -101,9 +101,14 @@ export function HomeScreen() {
     if (!searchExpanded) return;
     if (pickupPicked || pickupAddress.trim()) return;
     let cancelled = false;
+    setPickupLoading(true);
     (async () => {
       const fix = await requestFreshPosition();
-      if (cancelled || !fix) return;
+      if (cancelled) return;
+      if (!fix) {
+        setPickupLoading(false);
+        return;
+      }
 
       const acc = fix.accuracy ?? Number.POSITIVE_INFINITY;
       setPickupCoord({ lat: fix.lat, lng: fix.lng });
@@ -113,6 +118,7 @@ export function HomeScreen() {
       setPickupAddress(label);
       setPickupPicked(true);
       setPickupFromGps(true);
+      setPickupLoading(false);
       lastGpsLabel.current = { lat: fix.lat, lng: fix.lng, acc };
     })();
 
@@ -165,6 +171,7 @@ export function HomeScreen() {
     setPickupPicked(false);
     setDestPicked(false);
     setPickupFromGps(false);
+    setPickupLoading(false);
     lastGpsLabel.current = null;
     setFocusedField('dest');
     setSearchError(null);
@@ -184,6 +191,7 @@ export function HomeScreen() {
       setPickupCoord({ lat: suggestion.lat, lng: suggestion.lng });
       setPickupPicked(true);
       setPickupFromGps(false);
+      setPickupLoading(false);
     } else {
       setDestAddress(suggestion.description);
       setDestCoord({ lat: suggestion.lat, lng: suggestion.lng });
@@ -193,11 +201,34 @@ export function HomeScreen() {
     Keyboard.dismiss();
   };
 
+  const handleUseMyLocation = () => {
+    void (async () => {
+      setPickupLoading(true);
+      setSearchError(null);
+      const fix = await requestFreshPosition();
+      if (!fix) {
+        setPickupLoading(false);
+        return;
+      }
+      const acc = fix.accuracy ?? Number.POSITIVE_INFINITY;
+      const label = await resolveAddressLabel(fix.lat, fix.lng, { accuracy: acc });
+      setPickupCoord({ lat: fix.lat, lng: fix.lng });
+      setPickupAddress(label);
+      setPickupPicked(true);
+      setPickupFromGps(true);
+      setPickupLoading(false);
+      lastGpsLabel.current = { lat: fix.lat, lng: fix.lng, acc };
+      setFocusedField('dest');
+      Keyboard.dismiss();
+    })();
+  };
+
   const clearPickup = () => {
     setPickupAddress('');
     setPickupCoord(null);
     setPickupPicked(false);
     setPickupFromGps(false);
+    setPickupLoading(false);
     setFocusedField('pickup');
   };
 
@@ -252,119 +283,44 @@ export function HomeScreen() {
     });
   };
 
+  const showUseMyLocation =
+    focusedField === 'pickup' || (!pickupAddress.trim() && !pickupLoading && !pickupPicked);
+
   const searchForm = (
-    <>
-      <View style={styles.searchFields}>
-        <View style={styles.fieldRow}>
-          <Ionicons
-            name="navigate-circle-outline"
-            size={22}
-            color={theme.colors.deepBlue}
-            style={styles.fieldIcon}
-          />
-          <TextInput
-            style={styles.fieldInput}
-            placeholder="Desde"
-            placeholderTextColor={theme.colors.mediumGray}
-            value={pickupAddress}
-            onFocus={() => setFocusedField('pickup')}
-            onChangeText={(text) => {
-              setPickupAddress(text);
-              setPickupCoord(null);
-              setPickupPicked(false);
-              setPickupFromGps(false);
-              setFocusedField('pickup');
-              setSearchError(null);
-            }}
-          />
-          {pickupAddress.trim().length > 0 ? (
-            <TouchableOpacity
-              style={styles.fieldClear}
-              onPress={clearPickup}
-              accessibilityLabel="Borrar origen"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="close-circle" size={20} color={theme.colors.mediumGray} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        <View style={styles.fieldDivider} />
-
-        <View style={styles.fieldRow}>
-          <Ionicons
-            name="flag-outline"
-            size={22}
-            color={theme.colors.deepBlue}
-            style={styles.fieldIcon}
-          />
-          <TextInput
-            style={styles.fieldInput}
-            placeholder="Hacia"
-            placeholderTextColor={theme.colors.mediumGray}
-            value={destAddress}
-            onFocus={() => setFocusedField('dest')}
-            onChangeText={(text) => {
-              setDestAddress(text);
-              setDestCoord(null);
-              setDestPicked(false);
-              setFocusedField('dest');
-              setSearchError(null);
-            }}
-            autoFocus
-            returnKeyType="search"
-            onSubmitEditing={handleConfirmDestination}
-          />
-          {destAddress.trim().length > 0 ? (
-            <TouchableOpacity
-              style={styles.fieldClear}
-              onPress={clearDest}
-              accessibilityLabel="Borrar destino"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="close-circle" size={20} color={theme.colors.mediumGray} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      </View>
-
-      {visibleSuggestions.length > 0 ? (
-        <View style={styles.suggestions}>
-          {visibleSuggestions.map((suggestion) => (
-            <TouchableOpacity
-              key={suggestion.place_id}
-              style={styles.suggestionItem}
-              onPress={() => handleSelectSuggestion(suggestion)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="location-outline" size={18} color={theme.colors.deepBlue} />
-              <Text style={styles.suggestionText} numberOfLines={1}>
-                {suggestion.description}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : null}
-
-      <QuickChips onSelect={handleChipSelect} />
-
-      {searchError ? (
-        <View style={styles.searchErrorBox} accessibilityRole="alert">
-          <Ionicons name="alert-circle" size={16} color={theme.colors.dangerRed} />
-          <Text style={styles.searchErrorText}>{searchError}</Text>
-        </View>
-      ) : null}
-
-      <TouchableOpacity
-        style={[styles.confirmBtn, !destAddress.trim() && styles.confirmBtnDisabled]}
-        onPress={handleConfirmDestination}
-        disabled={!destAddress.trim()}
-        activeOpacity={0.85}
-      >
-        <Ionicons name="search" size={18} color={theme.colors.white} />
-        <Text style={styles.confirmBtnText}>Buscar destino</Text>
-      </TouchableOpacity>
-    </>
+    <ExpandedTripSearch
+      pickupAddress={pickupAddress}
+      destAddress={destAddress}
+      focusedField={focusedField}
+      pickupLoading={pickupLoading}
+      suggestions={visibleSuggestions}
+      searchError={searchError}
+      showUseMyLocation={showUseMyLocation}
+      onBack={handleCloseSearch}
+      onPickupChange={(text) => {
+        setPickupAddress(text);
+        setPickupCoord(null);
+        setPickupPicked(false);
+        setPickupFromGps(false);
+        setPickupLoading(false);
+        setFocusedField('pickup');
+        setSearchError(null);
+      }}
+      onDestChange={(text) => {
+        setDestAddress(text);
+        setDestCoord(null);
+        setDestPicked(false);
+        setFocusedField('dest');
+        setSearchError(null);
+      }}
+      onPickupFocus={() => setFocusedField('pickup')}
+      onDestFocus={() => setFocusedField('dest')}
+      onClearPickup={clearPickup}
+      onClearDest={clearDest}
+      onSelectSuggestion={handleSelectSuggestion}
+      onUseMyLocation={handleUseMyLocation}
+      onChipSelect={handleChipSelect}
+      onConfirm={handleConfirmDestination}
+    />
   );
 
   return (
@@ -372,13 +328,6 @@ export function HomeScreen() {
       <View style={styles.bodyWrap}>
         {searchExpanded ? (
           <View style={styles.expandedSearch}>
-            <View style={styles.expandedHeader}>
-              <TouchableOpacity onPress={handleCloseSearch} style={styles.expandedBack}>
-                <Ionicons name="arrow-back" size={22} color={theme.colors.deepBlue} />
-              </TouchableOpacity>
-              <Text style={styles.expandedTitle}>Solicitar viaje</Text>
-            </View>
-
             {/*
               Android: sin KeyboardAvoidingView (el SO ya hace resize; KAV deja hueco).
               ScrollView con padding extra para ver chips + CTA con teclado abierto.
@@ -409,21 +358,8 @@ export function HomeScreen() {
             )}
           </View>
         ) : (
-          <ScrollView
-            style={styles.body}
-            contentContainerStyle={styles.bodyContent}
-            showsVerticalScrollIndicator={false}
-          >
+          <View style={styles.collapsed}>
             <HomeHeader />
-
-            <TouchableOpacity
-              style={styles.searchBar}
-              onPress={handleOpenSearch}
-              activeOpacity={0.9}
-            >
-              <Ionicons name="search" size={18} color={theme.colors.mediumGray} />
-              <Text style={styles.searchPlaceholder}>¿A dónde vas?</Text>
-            </TouchableOpacity>
 
             <View style={styles.mapArea}>
               <PassengerMap
@@ -459,11 +395,15 @@ export function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <HowItWorks />
-          </ScrollView>
+            <View style={styles.sheetDock}>
+              <DestinationSearchPill onPress={handleOpenSearch} />
+            </View>
+          </View>
         )}
 
-        <BottomTabBar activeTab="home" onSearchPress={handleOpenSearch} />
+        {!searchExpanded ? (
+          <BottomTabBar activeTab="home" onSearchPress={handleOpenSearch} />
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -477,43 +417,27 @@ const styles = StyleSheet.create({
   bodyWrap: {
     flex: 1,
   },
-  body: {
-    flexGrow: 1,
+  collapsed: {
+    flex: 1,
     backgroundColor: theme.colors.background,
   },
-  bodyContent: {
-    paddingBottom: theme.spacing.md,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.md,
-    marginHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
-    paddingHorizontal: 12,
-    gap: 8,
-    height: 48,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(13, 43, 69, 0.06)',
-    ...theme.shadows.card,
-  },
-  searchPlaceholder: {
-    flex: 1,
-    fontSize: theme.fontSize.md,
-    fontFamily: theme.fontFamily.regular,
-    color: theme.colors.mediumGray,
-  },
   mapArea: {
-    height: 200,
-    marginHorizontal: theme.spacing.md,
-    borderRadius: theme.radius.md,
+    flex: 1,
+    marginHorizontal: 0,
     backgroundColor: theme.colors.background,
     overflow: 'hidden',
   },
   mapFill: {
     flex: 1,
+  },
+  sheetDock: {
+    backgroundColor: theme.colors.background,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+    borderTopLeftRadius: theme.radius.xl,
+    borderTopRightRadius: theme.radius.xl,
+    marginTop: -theme.radius.xl,
+    ...theme.shadows.card,
   },
   locateBtn: {
     position: 'absolute',
@@ -561,116 +485,6 @@ const styles = StyleSheet.create({
   },
   expandedBodyContent: {
     flexGrow: 1,
-    paddingBottom: 280,
-  },
-  expandedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: theme.dimensions.navbarHeight,
-    paddingHorizontal: theme.spacing.md,
-    gap: theme.spacing.md,
-  },
-  expandedBack: {
-    padding: theme.spacing.sm,
-  },
-  expandedTitle: {
-    fontSize: theme.fontSize.lg,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.deepBlue,
-  },
-  searchFields: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.md,
-    marginHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(13, 43, 69, 0.06)',
-    ...theme.shadows.card,
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    height: 48,
-    gap: 10,
-  },
-  fieldIcon: {
-    width: 22,
-  },
-  fieldDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(13, 43, 69, 0.08)',
-    marginHorizontal: 12,
-  },
-  fieldInput: {
-    flex: 1,
-    fontSize: theme.fontSize.md,
-    fontFamily: theme.fontFamily.regular,
-    color: theme.colors.deepBlue,
-    padding: 0,
-  },
-  fieldClear: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  suggestions: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.md,
-    marginHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(13, 43, 69, 0.06)',
-    overflow: 'hidden',
-    ...theme.shadows.card,
-  },
-  suggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
-    minHeight: 44,
-  },
-  suggestionText: {
-    flex: 1,
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
-    color: theme.colors.deepBlue,
-  },
-  searchErrorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    marginHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.md,
-    padding: theme.spacing.md,
-    borderRadius: theme.radius.md,
-    backgroundColor: 'rgba(229, 57, 53, 0.08)',
-  },
-  searchErrorText: {
-    flex: 1,
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
-    color: theme.colors.dangerRed,
-  },
-  confirmBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.md,
-    marginHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.lg,
-    height: 48,
-    gap: 8,
-  },
-  confirmBtnDisabled: {
-    opacity: 0.5,
-  },
-  confirmBtnText: {
-    fontSize: theme.fontSize.md,
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.white,
+    paddingBottom: 120,
   },
 });
