@@ -29,7 +29,7 @@ jest.mock('../../utils/resolveAddressLabel', () => ({
 }));
 
 jest.mock('../../hooks/usePlaceAutocomplete', () => ({
-  usePlaceAutocomplete: () => [],
+  usePlaceAutocomplete: () => ({ suggestions: [], loading: false, error: null }),
 }));
 
 jest.mock('../../api/passenger', () => ({

@@ -18,6 +18,8 @@ interface ExpandedTripSearchProps {
   focusedField: 'pickup' | 'dest' | null;
   pickupLoading: boolean;
   suggestions: PlaceSuggestion[];
+  placesLoading: boolean;
+  placesError: string | null;
   searchError: string | null;
   showUseMyLocation: boolean;
   onBack: () => void;
@@ -29,7 +31,7 @@ interface ExpandedTripSearchProps {
   onClearDest: () => void;
   onSelectSuggestion: (suggestion: PlaceSuggestion) => void;
   onUseMyLocation: () => void;
-  onChipSelect: (address: string) => void;
+  onChipSelect: (selection: { address: string; lat?: number; lng?: number }) => void;
   onConfirm: () => void;
 }
 
@@ -48,6 +50,8 @@ export function ExpandedTripSearch({
   focusedField,
   pickupLoading,
   suggestions,
+  placesLoading,
+  placesError,
   searchError,
   showUseMyLocation,
   onBack,
@@ -66,7 +70,12 @@ export function ExpandedTripSearch({
   const pickupQuery = pickupAddress.trim();
   const activeQuery = focusedField === 'pickup' ? pickupQuery : destQuery;
   const showEmptySuggestions =
-    focusedField !== null && activeQuery.length >= 3 && suggestions.length === 0 && !pickupLoading;
+    focusedField !== null &&
+    activeQuery.length >= 3 &&
+    suggestions.length === 0 &&
+    !pickupLoading &&
+    !placesLoading &&
+    !placesError;
 
   return (
     <View style={styles.root}>
@@ -170,7 +179,20 @@ export function ExpandedTripSearch({
         </TouchableOpacity>
       ) : null}
 
-      {suggestions.length > 0 ? (
+      {placesLoading ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+          <Text style={styles.loadingLabel}>Buscando…</Text>
+        </View>
+      ) : null}
+
+      {placesError && !placesLoading ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyText}>{placesError}</Text>
+        </View>
+      ) : null}
+
+      {suggestions.length > 0 && !placesLoading ? (
         <View style={styles.suggestions}>
           {suggestions.map((suggestion) => {
             const { primary, secondary } = splitSuggestion(suggestion.description);
@@ -404,6 +426,22 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
     marginTop: 2,
+  },
+  loadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginHorizontal: theme.spacing.md,
+    marginTop: theme.spacing.md,
+    padding: theme.spacing.md,
+    minHeight: 52,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surfaceMuted,
+  },
+  loadingLabel: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.mediumGray,
   },
   emptyBox: {
     marginHorizontal: theme.spacing.md,

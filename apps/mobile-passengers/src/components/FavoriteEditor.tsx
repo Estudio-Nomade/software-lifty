@@ -1,28 +1,31 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
 import { theme } from '../theme';
 import { Button } from './Button';
 import { Input } from './Input';
 
 interface FavoriteEditorProps {
-  initial?: { label: string; address: string };
-  onSave: (label: string, address: string) => void;
+  initial?: { label: string; address: string; lat?: number; lng?: number };
+  onSave: (label: string, address: string, lat?: number, lng?: number) => void;
   onCancel: () => void;
 }
 
 export function FavoriteEditor({ initial, onSave, onCancel }: FavoriteEditorProps) {
   const [label, setLabel] = useState(initial?.label ?? '');
   const [address, setAddress] = useState(initial?.address ?? '');
-  const suggestions = usePlaceAutocomplete(address);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    initial?.lat != null && initial?.lng != null ? { lat: initial.lat, lng: initial.lng } : null,
+  );
+  const { suggestions, loading, error } = usePlaceAutocomplete(address);
 
   const isEditing = initial != null && initial.address !== '';
   const canSave = label.trim().length > 0 && address.trim().length > 0;
 
   const handleSave = () => {
     if (!canSave) return;
-    onSave(label.trim(), address.trim());
+    onSave(label.trim(), address.trim(), coords?.lat, coords?.lng);
   };
 
   return (
@@ -41,9 +44,21 @@ export function FavoriteEditor({ initial, onSave, onCancel }: FavoriteEditorProp
       <Input
         placeholder="Escribí la dirección"
         value={address}
-        onChangeText={setAddress}
+        onChangeText={(text) => {
+          setAddress(text);
+          setCoords(null);
+        }}
         autoFocus
       />
+
+      {loading ? (
+        <View style={styles.loadingRow}>
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Buscando…</Text>
+        </View>
+      ) : null}
+
+      {error && !loading ? <Text style={styles.errorText}>{error}</Text> : null}
 
       {suggestions.length > 0 ? (
         <View style={styles.suggestions}>
@@ -51,7 +66,10 @@ export function FavoriteEditor({ initial, onSave, onCancel }: FavoriteEditorProp
             <TouchableOpacity
               key={suggestion.place_id}
               style={styles.suggestionItem}
-              onPress={() => setAddress(suggestion.description)}
+              onPress={() => {
+                setAddress(suggestion.description);
+                setCoords({ lat: suggestion.lat, lng: suggestion.lng });
+              }}
               activeOpacity={0.7}
             >
               <Ionicons name="location-outline" size={18} color={theme.colors.mediumGray} />
@@ -98,6 +116,24 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
     marginBottom: theme.spacing.xs,
     marginTop: theme.spacing.sm,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+    minHeight: 44,
+  },
+  loadingText: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+  },
+  errorText: {
+    marginTop: theme.spacing.sm,
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.dangerRed,
   },
   suggestions: {
     marginTop: theme.spacing.xs,

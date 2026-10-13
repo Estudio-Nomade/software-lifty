@@ -200,9 +200,12 @@ export async function searchPlaces(
   input: string,
   lat?: number,
   lng?: number,
+  signal?: AbortSignal,
 ): Promise<PlaceSuggestion[]> {
   const { data } = await api.get<PlaceSuggestion[]>('/maps/places/autocomplete', {
     params: { input, lat, lng },
+    timeout: 5000,
+    signal,
   });
   return data;
 }
