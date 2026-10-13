@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { type Favorite, useFavoritesStore } from '../store/favoritesStore';
 import { theme } from '../theme';
 import { FavoriteEditor } from './FavoriteEditor';
@@ -12,12 +12,12 @@ interface QuickChipsProps {
 type EditorTarget = { mode: 'add'; label?: string } | { mode: 'edit'; favorite: Favorite };
 
 const ICON_BY_LABEL: Record<string, keyof typeof Ionicons.glyphMap> = {
-  casa: 'home-outline',
-  trabajo: 'briefcase-outline',
+  casa: 'home',
+  trabajo: 'briefcase',
 };
 
 function chipIcon(label: string): keyof typeof Ionicons.glyphMap {
-  return ICON_BY_LABEL[label.toLowerCase()] ?? 'location-outline';
+  return ICON_BY_LABEL[label.toLowerCase()] ?? 'location';
 }
 
 export function QuickChips({ onSelect }: QuickChipsProps) {
@@ -36,12 +36,19 @@ export function QuickChips({ onSelect }: QuickChipsProps) {
     setEditor({ mode: 'edit', favorite });
   };
 
-  const handleEditPress = (favorite: Favorite) => setEditor({ mode: 'edit', favorite });
-
-  const handleDeletePress = (favorite: Favorite) => {
-    Alert.alert('Eliminar favorito', `¿Querés eliminar "${favorite.label}"?`, [
+  const handleChipLongPress = (favorite: Favorite) => {
+    if (!favorite.address) {
+      setEditor({ mode: 'edit', favorite });
+      return;
+    }
+    Alert.alert(favorite.label, '¿Qué querés hacer?', [
       { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => removeFavorite(favorite.id) },
+      { text: 'Editar', onPress: () => setEditor({ mode: 'edit', favorite }) },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: () => removeFavorite(favorite.id),
+      },
     ]);
   };
 
@@ -73,43 +80,29 @@ export function QuickChips({ onSelect }: QuickChipsProps) {
       contentContainerStyle={styles.scrollContent}
     >
       {favorites.map((favorite) => (
-        <View key={favorite.id} style={styles.favoriteGroup}>
-          <TouchableOpacity
-            style={styles.chip}
-            onPress={() => handleChipPress(favorite)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name={chipIcon(favorite.label)} size={16} color={theme.colors.deepBlue} />
-            <Text style={styles.chipLabel}>{favorite.label}</Text>
-          </TouchableOpacity>
-
-          {favorite.address ? (
-            <>
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={() => handleEditPress(favorite)}
-                accessibilityLabel={`Editar ${favorite.label}`}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="pencil" size={16} color={theme.colors.mediumGray} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.iconBtn}
-                onPress={() => handleDeletePress(favorite)}
-                accessibilityLabel={`Eliminar ${favorite.label}`}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="trash-outline" size={16} color={theme.colors.dangerRed} />
-              </TouchableOpacity>
-            </>
-          ) : null}
-        </View>
+        <TouchableOpacity
+          key={favorite.id}
+          style={styles.chip}
+          onPress={() => handleChipPress(favorite)}
+          onLongPress={() => handleChipLongPress(favorite)}
+          delayLongPress={350}
+          activeOpacity={0.7}
+          accessibilityLabel={
+            favorite.address
+              ? `${favorite.label}. Mantener para editar o eliminar`
+              : `Configurar ${favorite.label}`
+          }
+        >
+          <Ionicons name={chipIcon(favorite.label)} size={16} color={theme.colors.primary} />
+          <Text style={styles.chipLabel}>{favorite.label}</Text>
+        </TouchableOpacity>
       ))}
 
       <TouchableOpacity
         style={styles.addChip}
         onPress={() => setEditor({ mode: 'add' })}
         activeOpacity={0.7}
+        accessibilityLabel="Agregar favorito"
       >
         <Ionicons name="add" size={16} color={theme.colors.primary} />
         <Text style={styles.addLabel}>Agregar</Text>
@@ -127,20 +120,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     gap: theme.spacing.sm,
   },
-  favoriteGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.xs,
-  },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
+    minHeight: 44,
     paddingHorizontal: theme.spacing.md,
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.surfaceMuted,
     borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.lightGray,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(13, 43, 69, 0.08)',
     gap: theme.spacing.xs,
   },
   chipLabel: {
@@ -148,20 +136,10 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.medium,
     color: theme.colors.deepBlue,
   },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.white,
-    borderWidth: 1,
-    borderColor: theme.colors.lightGray,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   addChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
+    minHeight: 44,
     paddingHorizontal: theme.spacing.md,
     borderRadius: theme.radius.full,
     borderWidth: 1,

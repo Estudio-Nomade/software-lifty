@@ -143,7 +143,7 @@ describe('HomeScreen destination confirmation', () => {
     await fireEvent.changeText(getByPlaceholderText('Hacia'), 'Calle Falsa 123');
 
     await act(async () => {
-      fireEvent.press(getByText('Buscar destino'));
+      fireEvent.press(getByText('Continuar'));
     });
 
     expect(mockGeocodeAddress).toHaveBeenCalledWith('Calle Falsa 123');
@@ -165,7 +165,7 @@ describe('HomeScreen destination confirmation', () => {
     await fireEvent.changeText(getByPlaceholderText('Hacia'), 'Dirección Inexistente');
 
     await act(async () => {
-      fireEvent.press(getByText('Buscar destino'));
+      fireEvent.press(getByText('Continuar'));
     });
 
     expect(mockNavigate).not.toHaveBeenCalled();
