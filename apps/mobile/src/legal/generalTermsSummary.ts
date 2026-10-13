@@ -1,5 +1,5 @@
-export const GENERAL_TERMS_VERSION = '0.1-borrador';
-export const GENERAL_TERMS_UPDATED_LABEL = 'Borrador legal — septiembre 2026';
+export const GENERAL_TERMS_VERSION = '0.1.1-borrador';
+export const GENERAL_TERMS_UPDATED_LABEL = 'Borrador legal — octubre 2026';
 
 export type TermsBlock = {
   heading?: string;
@@ -9,10 +9,11 @@ export type TermsBlock = {
 /**
  * In-app summary of docs/legal/terminos-y-condiciones-lifty-borrador.md
  * Full counsel-reviewed text is not embedded here.
+ * Public pages: https://web.liftyviajes.com/terminos | /privacidad
  */
 export const GENERAL_TERMS_SUMMARY: TermsBlock[] = [
   {
-    body: 'AVISO: este texto es un resumen del borrador de Términos y Condiciones de Lifty. Debe ser revisado y validado por un abogado matriculado antes de publicarse como versión definitiva. El documento completo está en la documentación legal interna de Lifty.',
+    body: 'AVISO: este texto es un resumen del borrador de Términos y Condiciones de Lifty. Debe ser revisado y validado por un abogado matriculado antes de publicarse como versión definitiva. La versión pública completa está en https://web.liftyviajes.com/terminos y la Política de Privacidad en https://web.liftyviajes.com/privacidad.',
   },
   {
     heading: '1. Qué es Lifty',
@@ -20,7 +21,7 @@ export const GENERAL_TERMS_SUMMARY: TermsBlock[] = [
   },
   {
     heading: '2. Aceptación',
-    body: 'Al usar la aplicación aceptás estos Términos Generales, la Política de Privacidad (documento separado) y, cuando corresponda, el Anexo de la jurisdicción donde se presta el viaje (por ejemplo, Villa Dolores). Si no estás de acuerdo, no uses la plataforma. Ninguna cláusula puede interpretarse como renuncia a derechos irrenunciables del consumidor (Ley 24.240).',
+    body: 'Al usar la aplicación aceptás estos Términos Generales, la Política de Privacidad publicada en https://web.liftyviajes.com/privacidad y, cuando corresponda, el Anexo de la jurisdicción donde se presta el viaje (por ejemplo, Villa Dolores). Los términos completos están en https://web.liftyviajes.com/terminos. Si no estás de acuerdo, no uses la plataforma. Ninguna cláusula puede interpretarse como renuncia a derechos irrenunciables del consumidor (Ley 24.240).',
   },
   {
     heading: '3. Cuenta y verificación',
@@ -36,7 +37,7 @@ export const GENERAL_TERMS_SUMMARY: TermsBlock[] = [
   },
   {
     heading: '6. Datos personales',
-    body: 'Lifty trata datos de cuenta, viajes, ubicación/GPS, dispositivo, pagos y seguridad conforme a la Ley 25.326 y a la Política de Privacidad. La geolocalización es necesaria para prestar el servicio. El detalle de finalidades, derechos y retención está en la Política de Privacidad (documento separado, pendiente de versión definitiva).',
+    body: 'Lifty trata datos de cuenta, viajes, ubicación/GPS, dispositivo, pagos y seguridad conforme a la Ley 25.326 y a la Política de Privacidad publicada en https://web.liftyviajes.com/privacidad. La geolocalización es necesaria para prestar el servicio. Ahí figuran finalidades, derechos del titular, conservación y canales de contacto (incluido admin@liftyviajes.com y la AAIP).',
   },
   {
     heading: '7. Responsabilidad',
@@ -56,7 +57,7 @@ export const GENERAL_TERMS_SUMMARY: TermsBlock[] = [
   },
   {
     heading: '11. Cambios',
-    body: 'Lifty puede modificar estos términos. Los cambios sustanciales se comunican por medios razonables antes de su vigencia, salvo urgencia legal o de seguridad. El uso continuado puede importar aceptación, sin perjuicio de tu derecho a dar de baja la cuenta y de los derechos del consumidor.',
+    body: 'Lifty puede modificar estos términos. Los cambios sustanciales se comunican por medios razonables antes de su vigencia, salvo urgencia legal o de seguridad. El uso continuado puede importar aceptación, sin perjuicio de tu derecho a dar de baja la cuenta y de los derechos del consumidor. La versión pública actualizada se publica en https://web.liftyviajes.com/terminos.',
   },
   {
     heading: '12. Reclamos y ley aplicable',

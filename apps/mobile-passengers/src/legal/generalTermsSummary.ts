@@ -1,5 +1,5 @@
-export const GENERAL_TERMS_VERSION = '0.1-borrador';
-export const GENERAL_TERMS_UPDATED_LABEL = 'Borrador legal — septiembre 2026';
+export const GENERAL_TERMS_VERSION = '0.1.1-borrador';
+export const GENERAL_TERMS_UPDATED_LABEL = 'Borrador legal — octubre 2026';
 
 export type TermsBlock = {
   heading?: string;
@@ -9,10 +9,11 @@ export type TermsBlock = {
 /**
  * In-app summary of docs/legal/terminos-y-condiciones-lifty-borrador.md
  * Full counsel-reviewed text is not embedded here.
+ * Public pages: https://web.liftyviajes.com/terminos | /privacidad
  */
 export const GENERAL_TERMS_SUMMARY: TermsBlock[] = [
   {
-    body: 'AVISO: este texto es un resumen del borrador de Términos y Condiciones de Lifty. Debe ser revisado y validado por un abogado matriculado antes de publicarse como versión definitiva. El documento completo está en la documentación legal interna de Lifty.',
+    body: 'AVISO: este texto es un resumen del borrador de Términos y Condiciones de Lifty. Debe ser revisado y validado por un abogado matriculado antes de publicarse como versión definitiva. La versión pública completa está en https://web.liftyviajes.com/terminos y la Política de Privacidad en https://web.liftyviajes.com/privacidad.',
   },
   {
     heading: '1. Qué es Lifty',
@@ -20,7 +21,7 @@ export const GENERAL_TERMS_SUMMARY: TermsBlock[] = [
   },
   {
     heading: '2. Aceptación',
-    body: 'Al usar Lifty aceptás estos Términos Generales y la Política de Privacidad (documento separado). En relaciones de consumo rige la Ley 24.240: tenés derecho a información clara, trato digno y a no renunciar a derechos irrenunciables. Si no estás de acuerdo, no uses la aplicación.',
+    body: 'Al usar Lifty aceptás estos Términos Generales y la Política de Privacidad publicada en https://web.liftyviajes.com/privacidad. Los términos completos están en https://web.liftyviajes.com/terminos. En relaciones de consumo rige la Ley 24.240: tenés derecho a información clara, trato digno y a no renunciar a derechos irrenunciables. Si no estás de acuerdo, no uses la aplicación.',
   },
   {
     heading: '3. Tu cuenta',
@@ -48,7 +49,7 @@ export const GENERAL_TERMS_SUMMARY: TermsBlock[] = [
   },
   {
     heading: '9. Datos personales',
-    body: 'Tratamos nombre, contacto, ubicación/GPS, historial de viajes, datos de pago y del dispositivo según la Ley 25.326 y la Política de Privacidad. La ubicación es necesaria para el servicio. El detalle completo estará en la Política de Privacidad definitiva.',
+    body: 'Tratamos nombre, contacto, ubicación/GPS, historial de viajes, datos de pago y del dispositivo según la Ley 25.326 y la Política de Privacidad publicada en https://web.liftyviajes.com/privacidad. La ubicación es necesaria para el servicio. Ahí figuran finalidades, derechos del titular y canales de contacto.',
   },
   {
     heading: '10. Responsabilidad',
@@ -60,6 +61,6 @@ export const GENERAL_TERMS_SUMMARY: TermsBlock[] = [
   },
   {
     heading: '12. Cambios y reclamos',
-    body: 'Podemos actualizar estos términos avisando con anticipación razonable cuando el cambio sea sustancial. Podés reclamar por soporte in-app o los canales de contacto publicados, y ante las autoridades competentes. Ley aplicable: República Argentina.',
+    body: 'Podemos actualizar estos términos avisando con anticipación razonable cuando el cambio sea sustancial. La versión pública se publica en https://web.liftyviajes.com/terminos. Podés reclamar por soporte in-app o los canales de contacto publicados, y ante las autoridades competentes. Ley aplicable: República Argentina.',
   },
 ];
