@@ -30,7 +30,7 @@ const SUPPORT_WHATSAPP_TEXT = [
   '-',
 ].join('\n');
 
-const SUPPORT_MAIL_SUBJECT = '[Lifty Pasajero] Reporte de error';
+const SUPPORT_MAIL_SUBJECT = '[Lifty] Reporte de error';
 
 const SUPPORT_MAIL_BODY = [
   'Hola equipo Lifty,',

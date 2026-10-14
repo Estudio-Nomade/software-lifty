@@ -14,10 +14,10 @@ No existe “nunca más compilar”. Existe “casi nunca para fixes de UI/lógi
 
 ## Projects (dos EAS distintos)
 
-| App | Path | projectId | Package | Channel production |
-|-----|------|-----------|---------|-------------------|
-| Conductor | `apps/mobile` | `90f11dff-37cf-4b27-b6e8-598491a871c5` | `com.lifty.conductor` | `production` |
-| Pasajero | `apps/mobile-passengers` | `97a435a9-6725-4207-a930-c11ec77c7de5` | `com.lifty.passenger` | `production` |
+| App | Path | Display name | projectId | Package | Channel production |
+|-----|------|--------------|-----------|---------|-------------------|
+| Conductor | `apps/mobile` | **Lifty Conductor** | `90f11dff-37cf-4b27-b6e8-598491a871c5` | `com.lifty.conductor` | `production` |
+| Pasajero | `apps/mobile-passengers` | **Lifty** | `97a435a9-6725-4207-a930-c11ec77c7de5` | `com.lifty.passenger` | `production` |
 
 - `runtimeVersion.policy`: **`appVersion`** — OTA válido mientras `expo.version` no cambie.
 - Si subís `version` o tocás native → **nuevo AAB** (y ese binario es el que recibe updates del channel).
