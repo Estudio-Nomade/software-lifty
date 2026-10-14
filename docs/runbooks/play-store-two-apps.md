@@ -95,32 +95,49 @@ Si algo “en local andaba y acá no”: casi siempre API URL, Supabase key, o p
 
 Desde monorepo root, cuenta `gh`/`eas` = **martiyaquinta**.
 
+El primer AAB **después** de habilitar EAS Update debe salir del commit con `expo-updates` + channels (si no, el binario no recibe OTA). Detalle OTA: [`eas-update-ota.md`](./eas-update-ota.md).
+
 ```bash
 export PATH="$HOME/.bun/bin:$PATH:$HOME/.local/bin"
 cd /home/marti/Documentos/LIfty/software-lifty
 git checkout main && git pull origin main
-# o la rama store-ready mergeada
 
 # opcional: empujar secrets otra vez
 bun run eas:env:push
 
-# Conductor AAB
-cd apps/mobile
-bunx eas-cli build -p android --profile production --non-interactive
+# Ambas apps (profile production = AAB + channel production)
+bun run eas:build:android:production
 
-# Pasajero AAB
-cd ../mobile-passengers
-bunx eas-cli build -p android --profile production --non-interactive
+# o por app:
+bun run eas:build:android:production:driver
+bun run eas:build:android:production:passenger
+```
+
+Equivalente directo:
+
+```bash
+bash scripts/eas-build-android-production.sh apps/mobile
+bash scripts/eas-build-android-production.sh apps/mobile-passengers
 ```
 
 Esperá `FINISHED` + link del **.aab** (no .apk).
 
 Ver:
 ```bash
-eas build:list --platform android --limit 3
+cd apps/mobile && bunx eas-cli build:list --platform android --limit 3
 ```
 
 `autoIncrement` sube versionCode remoto; no pelear con el `versionCode` del app.json si `appVersionSource=remote`.
+
+### 3b) Después del AAB — updates JS sin recompilar
+
+Solo JS/TS/UI/copy → OTA. Native / `expo.version` / permisos → AAB de nuevo.
+
+```bash
+bun run eas:update:production -- "fix: …"
+```
+
+Ver runbook completo: [`eas-update-ota.md`](./eas-update-ota.md).
 
 ---
 
