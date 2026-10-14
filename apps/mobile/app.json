@@ -12,9 +12,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.lifty.conductor",
       "infoPlist": {
-        "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": true
-        }
+        "NSCameraUsageDescription": "Lifty necesita la cámara para fotos de perfil y documentación del conductor.",
+        "NSPhotoLibraryUsageDescription": "Lifty necesita acceso a tu galería para foto de perfil y documentación.",
+        "NSLocationWhenInUseUsageDescription": "Lifty usa tu ubicación para mostrarte en el mapa, recibir viajes cercanos y navegar hacia el pasajero."
       }
     },
     "android": {
@@ -24,7 +24,6 @@
       },
       "package": "com.lifty.conductor",
       "versionCode": 3,
-      "usesCleartextTraffic": true,
       "navigationBar": {
         "backgroundColor": "#FFFFFF",
         "barStyle": "dark-content"
@@ -40,12 +39,7 @@
     },
     "plugins": [
       "expo-font",
-      [
-        "expo-notifications",
-        {
-          "mode": "development"
-        }
-      ],
+      "expo-notifications",
       "expo-router",
       "expo-web-browser",
       [
@@ -55,6 +49,27 @@
           "image": "./assets/splash-brand.png",
           "imageWidth": 300,
           "resizeMode": "contain"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Lifty usa tu ubicación para mostrarte en el mapa, recibir viajes cercanos y navegar hacia el pasajero.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Lifty necesita acceso a tu galería para foto de perfil y documentación.",
+          "cameraPermission": "Lifty necesita la cámara para fotos de perfil y documentación del conductor."
+        }
+      ],
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
         }
       ]
     ],
