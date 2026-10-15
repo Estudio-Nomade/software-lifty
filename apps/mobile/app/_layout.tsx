@@ -20,7 +20,12 @@ import { AuthProvider } from '../src/context/AuthContext';
 import { TabBarProvider, useTabBar } from '../src/context/TabBarContext';
 import { useAppNavigation } from '../src/hooks/useAppNavigation';
 import { queryClient } from '../src/lib/queryClient';
-import { isTabBarRoute } from '../src/lib/tabBarRoutes';
+import {
+  isSameTabRoute,
+  isTabBarRoute,
+  screenForTab,
+  tabKeyFromPathname,
+} from '../src/lib/tabBarRoutes';
 import { theme } from '../src/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -32,10 +37,9 @@ function TabBarShell() {
 
   const handleTabPress = (tab: TabKey) => {
     setActiveTab(tab);
-    if (tab === 'home') navigation.navigate('Active');
-    if (tab === 'earnings') navigation.navigate('Earnings');
-    if (tab === 'trips') navigation.navigate('TripHistory');
-    if (tab === 'profile') navigation.navigate('Profile');
+    // Tabs must replace, not push — otherwise stack grows and screens remount (loop).
+    if (isSameTabRoute(pathname, tab)) return;
+    navigation.replace(screenForTab(tab));
   };
 
   if (!isTabBarRoute(pathname)) return null;
@@ -48,15 +52,8 @@ function RouteSync() {
   const { setActiveTab } = useTabBar();
 
   useEffect(() => {
-    if (pathname === '/' || pathname === '/online' || pathname === '/active') {
-      setActiveTab('home');
-    } else if (pathname === '/earnings') {
-      setActiveTab('earnings');
-    } else if (pathname === '/trip-history') {
-      setActiveTab('trips');
-    } else if (pathname === '/profile' || pathname === '/cancellation-policy') {
-      setActiveTab('profile');
-    }
+    const tab = tabKeyFromPathname(pathname);
+    if (tab) setActiveTab(tab);
   }, [pathname, setActiveTab]);
 
   return null;
