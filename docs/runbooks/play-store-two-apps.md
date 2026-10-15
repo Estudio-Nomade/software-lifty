@@ -1,4 +1,4 @@
-# Play Store — Lifty Conductor + Lifty
+# Play Store — Lifty Conductor + Lifty Pasajero
 
 Guía operativa para dejar las **dos** apps Android listas y subirlas a Google Play.
 No es un deploy de Railway: la API ya vive en Railway; Play solo recibe el **binario móvil**.
@@ -15,7 +15,7 @@ No es un deploy de Railway: la API ya vive en Railway; Play solo recibe el **bin
 | Play app | Path | Nombre | Package |
 |----------|------|--------|---------|
 | Conductor | `apps/mobile` | **Lifty Conductor** | `com.lifty.conductor` |
-| Pasajero | `apps/mobile-passengers` | **Lifty** | `com.lifty.passenger` |
+| Pasajero | `apps/mobile-passengers` | **Lifty Pasajero** | `com.lifty.passenger` |
 
 versionCode es **independiente** por app.
 
@@ -50,7 +50,7 @@ Marcá cada ítem antes de build production.
 ### Cuenta Google Play
 - [ ] Cuenta de desarrollador paga (USD 25 una vez)
 - [ ] App creada en Console: **Lifty Conductor** (`com.lifty.conductor`)
-- [ ] App creada en Console: **Lifty** (`com.lifty.passenger`)
+- [ ] App creada en Console: **Lifty Pasajero** (`com.lifty.passenger`)
 - [ ] Play App Signing aceptado (default)
 - [ ] Service account / `google-service-account.json` para `eas submit` **o** upload manual del AAB
 
@@ -148,7 +148,7 @@ Para **cada** app:
 1. Play Console → Create app (si no existe).
 2. Dashboard → completar **declaraciones** (política de datos, ads, target audience, content rating).
 3. **Store presence** → main store listing:
-   - Nombre: Lifty Conductor / Lifty
+   - Nombre: Lifty Conductor / Lifty Pasajero
    - Short + full description
    - Graphics
 4. **App content** → Privacy policy = `https://web.liftyviajes.com/privacidad`
