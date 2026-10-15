@@ -103,14 +103,34 @@ function realGetUser(token: string): Promise<AuthUser | null> {
   });
 }
 
+/**
+ * Resolve a display name from Supabase/Google user_metadata.
+ * Prefer given+family (real person parts) over bare profile nicknames in name/full_name.
+ * Never use email local-part. Callers must not overwrite a non-empty users.full_name.
+ */
+export function resolveDisplayNameFromMetadata(
+  meta: Record<string, unknown> | undefined | null,
+): string | null {
+  if (!meta) return null;
+
+  const given = typeof meta.given_name === 'string' ? meta.given_name.trim() : '';
+  const family = typeof meta.family_name === 'string' ? meta.family_name.trim() : '';
+  if (given && family) {
+    const combined = `${given} ${family}`.trim();
+    if (combined.length > 0) return combined;
+  }
+
+  const full =
+    (typeof meta.full_name === 'string' && meta.full_name.trim()) ||
+    (typeof meta.name === 'string' && meta.name.trim()) ||
+    '';
+  return full.length > 0 ? full : null;
+}
+
 function metadataFullName(supabaseUser: User): string | null {
-  const meta = supabaseUser.user_metadata as Record<string, unknown> | undefined;
-  const raw =
-    (typeof meta?.full_name === 'string' && meta.full_name) ||
-    (typeof meta?.name === 'string' && meta.name) ||
-    null;
-  const trimmed = raw?.trim() || null;
-  return trimmed && trimmed.length > 0 ? trimmed : null;
+  return resolveDisplayNameFromMetadata(
+    supabaseUser.user_metadata as Record<string, unknown> | undefined,
+  );
 }
 
 /** Backfill users.full_name from Supabase metadata when the DB row has none. */

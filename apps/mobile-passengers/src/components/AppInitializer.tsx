@@ -3,7 +3,7 @@ import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { InteractionManager, Platform } from 'react-native';
 import { api } from '../api/client';
-import { registerPassenger } from '../api/passenger';
+import { getProfile, registerPassenger } from '../api/passenger';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
   handleNotificationResponse,
@@ -12,6 +12,7 @@ import {
 } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
+import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 
 const PUBLIC_ROUTES = [
   '',
@@ -49,13 +50,8 @@ function SessionRestore() {
           markRestored();
           return;
         }
-        const metadata = data.session?.user?.user_metadata as Record<string, unknown> | undefined;
-        setSession(
-          token,
-          data.session?.user?.id ?? null,
-          data.session?.user?.email ?? null,
-          (metadata?.full_name as string) ?? undefined,
-        );
+        // Token/ids only here; fullName comes from draft/register + profile SoT (users.full_name).
+        setSession(token, data.session?.user?.id ?? null, data.session?.user?.email ?? null);
         markRestored();
       } catch (err: unknown) {
         console.log('[SessionRestore] getSession ERROR:', err instanceof Error ? err.message : err);
@@ -74,14 +70,32 @@ function SessionRestore() {
 
 function PassengerProfileRegistrar() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const fullName = useAuthStore((s) => s.fullName);
+  const setFullName = useAuthStore((s) => s.setFullName);
   const registeredRef = useRef(false);
 
   useEffect(() => {
     if (!isAuthenticated || registeredRef.current) return;
     registeredRef.current = true;
-    registerPassenger(undefined, fullName ?? undefined).catch(() => {});
-  }, [isAuthenticated, fullName]);
+
+    const draftName = useRegistrationDraftStore.getState().fullName?.trim() || null;
+    const storeName = useAuthStore.getState().fullName?.trim() || null;
+    // Prefer Lifty draft typed before Google over OAuth nickname metadata.
+    const nameForRegister = draftName || storeName || undefined;
+
+    registerPassenger(undefined, nameForRegister)
+      .then((profile) => {
+        if (profile.full_name) setFullName(profile.full_name);
+        if (draftName) useRegistrationDraftStore.getState().clear();
+      })
+      .catch(() => {
+        // Profile may already exist — still hydrate name from DB SoT.
+        getProfile()
+          .then((profile) => {
+            if (profile.full_name) setFullName(profile.full_name);
+          })
+          .catch(() => {});
+      });
+  }, [isAuthenticated, setFullName]);
 
   return null;
 }
