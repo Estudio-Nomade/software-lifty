@@ -34,15 +34,29 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/** Metadata is flash-only; never clobber a Lifty DB name already in the store. */
+function flashNameFromMetadata(metadata: Record<string, unknown> | undefined): string | undefined {
+  const given = typeof metadata?.given_name === 'string' ? metadata.given_name.trim() : '';
+  const family = typeof metadata?.family_name === 'string' ? metadata.family_name.trim() : '';
+  if (given && family) return `${given} ${family}`;
+  const full =
+    (typeof metadata?.full_name === 'string' && metadata.full_name.trim()) ||
+    (typeof metadata?.name === 'string' && metadata.name.trim()) ||
+    '';
+  return full.length > 0 ? full : undefined;
+}
+
 function syncStore(session: Session | null) {
   const store = useAuthStore.getState();
   if (session?.access_token) {
     const metadata = session.user?.user_metadata as Record<string, unknown> | undefined;
+    // Prefer existing store name (from profile API / prior edit). Metadata only fills empty.
+    const flash = store.fullName?.trim() ? undefined : flashNameFromMetadata(metadata);
     store.setSession(
       session.access_token,
       session.user?.id ?? null,
       session.user?.email ?? null,
-      (metadata?.full_name as string) ?? undefined,
+      flash,
     );
   }
 }
