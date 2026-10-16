@@ -21,15 +21,24 @@ export interface PassengerMapProps {
   recenterKey?: number;
   style?: ViewStyle;
   onError?: () => void;
+  /**
+   * Lift MapLibre zoom (+/−) above floating chrome (search pill + tab bar).
+   * Pixels from the bottom of the map container.
+   */
+  bottomControlsOffset?: number;
 }
 
 export const DEFAULT_ZOOM = 15;
 
-export function generateMapHtml(colors: { primary: string; lightGray: string }) {
+export function generateMapHtml(
+  colors: { primary: string; lightGray: string },
+  options: { bottomControlsOffset?: number } = {},
+) {
   const r = Number.parseInt(colors.primary.slice(1, 3), 16);
   const g = Number.parseInt(colors.primary.slice(3, 5), 16);
   const b = Number.parseInt(colors.primary.slice(5, 7), 16);
   const primaryRgba = `rgba(${r}, ${g}, ${b}, 0.4)`;
+  const bottomOffset = Math.max(0, Math.round(options.bottomControlsOffset ?? 0));
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -43,6 +52,11 @@ export function generateMapHtml(colors: { primary: string; lightGray: string }) 
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body, #map { width: 100%; height: 100%; overflow: hidden; }
   body { background: ${colors.lightGray}; }
+  .maplibregl-ctrl-bottom-right {
+    bottom: ${bottomOffset}px !important;
+    margin-bottom: 8px;
+    margin-right: 8px;
+  }
   .marker-dot {
     width: 16px; height: 16px;
     border-radius: 50%;

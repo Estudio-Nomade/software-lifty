@@ -18,13 +18,17 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getProfile, updateProfile, uploadProfilePhoto } from '../api/passenger';
 import { Avatar } from '../components/Avatar';
+import { BottomTabBar } from '../components/BottomTabBar';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
 import { buildSosWhatsAppUrl } from '../lib/supportContact';
+import { getTabBarReserve } from '../lib/tabBarLayout';
 import { useAuthStore } from '../store/authStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
@@ -40,6 +44,9 @@ interface MenuItem {
 export function ProfileScreen() {
   const { goBack, navigate } = useAppNavigation();
   const { signOut } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { visible, onScroll } = useTabBarScrollVisibility();
+  const contentPadBottom = getTabBarReserve(insets.bottom) + theme.spacing['2xl'];
   const fullName = useAuthStore((s) => s.fullName);
   const email = useAuthStore((s) => s.email);
   const setFullName = useAuthStore((s) => s.setFullName);
@@ -253,7 +260,14 @@ export function ProfileScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, { paddingBottom: contentPadBottom }]}
+        showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        bounces
+      >
         <View style={styles.profileSection}>
           <Avatar uri={avatarUrl} name={displayName} size={80} />
           <Text style={styles.name}>{fullName || displayName}</Text>
@@ -276,6 +290,8 @@ export function ProfileScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <BottomTabBar activeTab="profile" visible={visible} />
 
       <Modal visible={editVisible} animationType="fade" transparent onRequestClose={closeEdit}>
         <KeyboardAvoidingView
@@ -355,6 +371,7 @@ export function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
+  scroll: { flex: 1 },
   header: {
     height: theme.dimensions.navbarHeight,
     backgroundColor: theme.colors.background,
@@ -373,7 +390,6 @@ const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.md,
     gap: theme.spacing.md,
-    paddingBottom: theme.spacing['2xl'],
   },
   profileSection: {
     alignItems: 'center',
