@@ -32,14 +32,18 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
   recenterKey,
   style,
   onError,
+  bottomControlsOffset = 0,
 }) => {
   const mapHtml = useMemo(
     () =>
-      generateMapHtml({
-        primary: theme.colors.primary,
-        lightGray: theme.colors.lightGray,
-      }),
-    [],
+      generateMapHtml(
+        {
+          primary: theme.colors.primary,
+          lightGray: theme.colors.lightGray,
+        },
+        { bottomControlsOffset },
+      ),
+    [bottomControlsOffset],
   );
 
   const containerRef = useRef<any>(null);

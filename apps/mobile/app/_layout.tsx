@@ -18,6 +18,7 @@ import { ConnectivityBanner } from '../src/components/feedback/ConnectivityBanne
 import { ErrorBoundary } from '../src/components/feedback/ErrorBoundary';
 import { AuthProvider } from '../src/context/AuthContext';
 import { TabBarProvider, useTabBar } from '../src/context/TabBarContext';
+import { TabBarVisibilityProvider } from '../src/context/TabBarVisibilityContext';
 import { useAppNavigation } from '../src/hooks/useAppNavigation';
 import { queryClient } from '../src/lib/queryClient';
 import {
@@ -83,21 +84,23 @@ export default function RootLayout() {
       <ErrorBoundary>
         <AuthProvider>
           <TabBarProvider>
-            <SafeAreaView style={styles.root} edges={['left', 'right']}>
-              <StatusBar style="auto" />
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  animation: 'slide_from_right',
-                  contentStyle: { backgroundColor: theme.colors.background },
-                }}
-              />
-              <TabBarShell />
-              <RouteSync />
-              <AppInitializer />
-              <LocationSync />
-              <ConnectivityBanner />
-            </SafeAreaView>
+            <TabBarVisibilityProvider>
+              <SafeAreaView style={styles.root} edges={['left', 'right']}>
+                <StatusBar style="auto" />
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    animation: 'slide_from_right',
+                    contentStyle: { backgroundColor: theme.colors.background },
+                  }}
+                />
+                <TabBarShell />
+                <RouteSync />
+                <AppInitializer />
+                <LocationSync />
+                <ConnectivityBanner />
+              </SafeAreaView>
+            </TabBarVisibilityProvider>
           </TabBarProvider>
         </AuthProvider>
       </ErrorBoundary>
