@@ -53,7 +53,7 @@ import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-/** Collapsed: handle + one peeker line above tabs (invite to pull up). */
+/** Collapsed: horizontal strip above tab bar (handle + peeker line). */
 const SHEET_COLLAPSED = 56;
 /** Gap between GO+hint stack bottom and collapsed offline sheet top. */
 const GO_STACK_SHEET_GAP = theme.spacing.sm;
