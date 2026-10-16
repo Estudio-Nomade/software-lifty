@@ -1,5 +1,12 @@
 import type * as Notifications from 'expo-notifications';
-import { handleNotificationResponse } from '../../lib/notifications';
+import {
+  handleNotificationReceived,
+  handleNotificationResponse,
+} from '../../lib/notifications';
+
+const mockSetDriverStatus = jest.fn();
+const mockSetOnboardingStep = jest.fn();
+const mockInvalidateQueries = jest.fn();
 
 jest.mock('../../lib/postAuthRouting', () => ({
   resolvePostAuthRoute: jest.fn(async () => ({ screen: 'Active', status: 'approved' })),
@@ -10,11 +17,17 @@ jest.mock('../../api/client', () => ({
   apiClient: { get: jest.fn() },
 }));
 
+jest.mock('../../lib/queryClient', () => ({
+  queryClient: {
+    invalidateQueries: (...args: unknown[]) => mockInvalidateQueries(...args),
+  },
+}));
+
 jest.mock('../../store/authStore', () => ({
   useAuthStore: {
     getState: () => ({
-      setDriverStatus: jest.fn(),
-      setOnboardingStep: jest.fn(),
+      setDriverStatus: mockSetDriverStatus,
+      setOnboardingStep: mockSetOnboardingStep,
     }),
   },
 }));
@@ -31,13 +44,31 @@ function makeResponse(type: string, extra?: Record<string, string>): Notificatio
   } as unknown as Notifications.NotificationResponse;
 }
 
+function makeNotification(type: string, extra?: Record<string, string>): Notifications.Notification {
+  return {
+    request: {
+      content: {
+        data: { type, ...extra },
+      },
+    },
+  } as unknown as Notifications.Notification;
+}
+
 describe('handleNotificationResponse driver review', () => {
+  beforeEach(() => {
+    mockSetDriverStatus.mockClear();
+    mockSetOnboardingStep.mockClear();
+    mockInvalidateQueries.mockClear();
+  });
+
   it('routes driver:approved and legacy kyc:approved to Active', () => {
     const navigate = jest.fn();
     handleNotificationResponse(makeResponse('driver:approved'), navigate);
     expect(navigate).toHaveBeenCalledWith('Active');
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['driverStatus'] });
 
     navigate.mockClear();
+    mockInvalidateQueries.mockClear();
     handleNotificationResponse(makeResponse('kyc:approved'), navigate);
     expect(navigate).toHaveBeenCalledWith('Active');
   });
@@ -64,5 +95,29 @@ describe('handleNotificationResponse driver review', () => {
       reviewReason: 'Falta dorso de la licencia',
     });
     expect(navigate).not.toHaveBeenCalledWith('WaitingApproval');
+  });
+});
+
+describe('handleNotificationReceived foreground review', () => {
+  beforeEach(() => {
+    mockSetDriverStatus.mockClear();
+    mockSetOnboardingStep.mockClear();
+    mockInvalidateQueries.mockClear();
+  });
+
+  it('refreshes store + invalidates driverStatus without navigating on approve', () => {
+    const navigate = jest.fn();
+    handleNotificationReceived(makeNotification('driver:approved'), navigate);
+    expect(mockSetDriverStatus).toHaveBeenCalledWith('approved');
+    expect(mockSetOnboardingStep).toHaveBeenCalledWith('approved');
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['driverStatus'] });
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('ignores non-review notification types', () => {
+    const navigate = jest.fn();
+    handleNotificationReceived(makeNotification('trip:request'), navigate);
+    expect(mockSetDriverStatus).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
   });
 });

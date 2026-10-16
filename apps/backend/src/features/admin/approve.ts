@@ -7,6 +7,7 @@ import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
 import { DRIVER_APPROVED_PUSH } from './driver-review-push';
+import { notifyDriverApproved } from './notifications';
 
 export async function approveDriver(token: string): Promise<{ message: string }> {
   const [driver] = await db
@@ -62,16 +63,29 @@ export async function approveDriver(token: string): Promise<{ message: string }>
     );
 
   const [userRow] = await db
-    .select({ full_name: users.full_name })
+    .select({ full_name: users.full_name, email: users.email })
     .from(users)
     .where(eq(users.id, driver.user_id))
     .limit(1);
 
+  const driverIdShort = driver.id.split('-')[0];
+  const name = userRow?.full_name ?? 'Conductor';
+
   logger.info('[ADMIN-APPROVE] Driver approved (platform)', {
-    driverId: driver.id.split('-')[0],
+    driverId: driverIdShort,
   });
 
-  sendPushToUser(driver.user_id, {
+  // Same notify path as panel reviewDriver (PR #343) — one-click mail must not skip Resend.
+  if (userRow?.email) {
+    void notifyDriverApproved(userRow.email, name);
+    logger.info('[DRIVER-NOTIFY] approved email queued', { driverId: driverIdShort });
+  } else {
+    logger.info('[DRIVER-NOTIFY] Skip approved email — no email', {
+      driverId: driverIdShort,
+    });
+  }
+
+  void sendPushToUser(driver.user_id, {
     title: DRIVER_APPROVED_PUSH.title,
     body: DRIVER_APPROVED_PUSH.body,
     data: { ...DRIVER_APPROVED_PUSH.data },
@@ -81,6 +95,6 @@ export async function approveDriver(token: string): Promise<{ message: string }>
   });
 
   return {
-    message: `Conductor ${userRow?.full_name ?? driver.id} aprobado. Debe retirar stickers en tránsito (plazo 30 días; después se suspende).`,
+    message: `Conductor ${name} aprobado. Debe retirar stickers en tránsito (plazo 30 días; después se suspende).`,
   };
 }
