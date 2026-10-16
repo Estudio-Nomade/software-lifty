@@ -12,6 +12,7 @@ const SCREEN_TO_ROUTE = {
   VerifyEmail: '/verify-email',
   Terms: '/terms',
   Home: '/home',
+  ServiceArea: '/service-area',
   LocationPermissions: '/location-permissions',
   TripRequest: '/trip-request',
   VehicleSelect: '/vehicle-select',

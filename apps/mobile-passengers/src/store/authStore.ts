@@ -10,6 +10,8 @@ interface AuthState {
   sessionRestored: boolean;
   email: string | null;
   fullName: string | null;
+  /** One-shot Villa Dolores coverage notice after first signup/login on this device. */
+  coverageNoticeSeen: boolean;
   setSession: (
     token: string | null,
     userId?: string | null,
@@ -20,6 +22,7 @@ interface AuthState {
   resetRedirect: () => void;
   setSessionRestored: (restored: boolean) => void;
   setFullName: (fullName: string | null) => void;
+  setCoverageNoticeSeen: (seen: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -32,6 +35,7 @@ export const useAuthStore = create<AuthState>()(
       sessionRestored: false,
       email: null,
       fullName: null,
+      coverageNoticeSeen: false,
       setSession: (token, userId, email, fullName) =>
         set((state) => ({
           token,
@@ -49,10 +53,12 @@ export const useAuthStore = create<AuthState>()(
           fullName: null,
           isAuthenticated: false,
           needsRedirect: true,
+          // keep coverageNoticeSeen — device already saw launch footprint
         }),
       resetRedirect: () => set({ needsRedirect: false }),
       setSessionRestored: (sessionRestored) => set({ sessionRestored }),
       setFullName: (fullName) => set({ fullName }),
+      setCoverageNoticeSeen: (coverageNoticeSeen) => set({ coverageNoticeSeen }),
     }),
     {
       name: 'lifty-passenger-auth',
@@ -63,6 +69,7 @@ export const useAuthStore = create<AuthState>()(
         email: state.email,
         fullName: state.fullName,
         isAuthenticated: state.isAuthenticated,
+        coverageNoticeSeen: state.coverageNoticeSeen,
       }),
       merge: (persisted: unknown, current: AuthState) => {
         const p = persisted as Partial<AuthState>;
@@ -70,6 +77,7 @@ export const useAuthStore = create<AuthState>()(
           ...current,
           ...p,
           fullName: current.fullName || p?.fullName || null,
+          coverageNoticeSeen: Boolean(p?.coverageNoticeSeen ?? current.coverageNoticeSeen),
         };
       },
     },
