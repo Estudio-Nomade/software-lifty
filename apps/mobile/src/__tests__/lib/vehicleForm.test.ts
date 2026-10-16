@@ -1,13 +1,48 @@
 import {
   VEHICLE_MAX_AGE_YEARS,
   VEHICLE_MIN_MODEL_YEAR,
+  VEHICLE_PLATE_MAX_LEN,
   getVehicleYearBounds,
   hasCompleteVehicle,
+  normalizeVehiclePlate,
+  validateVehiclePlate,
   validateVehicleYear,
   vehicleFormFromProfile,
   vehicleTypeFromApi,
   vehicleTypeToApi,
 } from '../../lib/vehicleForm';
+
+describe('vehicle plate', () => {
+  it('accepts moto plate A278TWP (was rejected by old AR regex)', () => {
+    expect(validateVehiclePlate('A278TWP')).toBeUndefined();
+    expect(normalizeVehiclePlate('a 278 twp')).toBe('A278TWP');
+  });
+
+  it('accepts common auto / mercosur shapes', () => {
+    expect(validateVehiclePlate('ABC123')).toBeUndefined();
+    expect(validateVehiclePlate('AB123CD')).toBeUndefined();
+    expect(validateVehiclePlate('A123BCD')).toBeUndefined();
+    expect(validateVehiclePlate('123ABC')).toBeUndefined();
+    expect(validateVehiclePlate('AA000AA')).toBeUndefined();
+  });
+
+  it('strips spaces and hyphens on normalize', () => {
+    expect(normalizeVehiclePlate('ABC-123')).toBe('ABC123');
+    expect(normalizeVehiclePlate('ab 123 cd')).toBe('AB123CD');
+    expect(validateVehiclePlate('ABC-123')).toBeUndefined();
+  });
+
+  it('empty is not a field error (required handled elsewhere)', () => {
+    expect(validateVehiclePlate('')).toBeUndefined();
+    expect(validateVehiclePlate('   ')).toBeUndefined();
+  });
+
+  it('rejects over max length and non-alphanumeric symbols', () => {
+    expect(VEHICLE_PLATE_MAX_LEN).toBe(20);
+    expect(validateVehiclePlate('A'.repeat(21))).toMatch(/Máximo 20/);
+    expect(validateVehiclePlate('ABC@123')).toMatch(/letras y números/);
+  });
+});
 
 describe('vehicle year policy', () => {
   it('exposes normative constants', () => {

@@ -18,7 +18,10 @@ import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
 import {
+  VEHICLE_PLATE_MAX_LEN,
   type VehicleTypeUi,
+  normalizeVehiclePlate,
+  validateVehiclePlate,
   validateVehicleYear,
   vehicleFormFromProfile,
   vehicleTypeToApi,
@@ -34,16 +37,7 @@ interface ValidationErrors {
   vehicleYear?: string;
 }
 
-const PLATE_REGEX = /^[A-Z]{2,3}[0-9]{3}[A-Z]{0,2}$/;
 const VEHICLE_TYPES: VehicleTypeUi[] = ['Auto', 'Moto', 'Camioneta'];
-
-const normalizePlate = (value: string) => value.replace(/\s+/g, '').toUpperCase();
-
-const validatePlate = (value: string) => {
-  if (!value.trim()) return undefined;
-  if (!PLATE_REGEX.test(normalizePlate(value))) return 'Formato invalido (ej: ABC123)';
-  return undefined;
-};
 
 const validateRequired = (value: string) => {
   if (!value.trim()) return 'Requerido';
@@ -61,7 +55,7 @@ const isFormValid = (
 ) => {
   return (
     vehiclePlate.trim() !== '' &&
-    !validatePlate(vehiclePlate) &&
+    !validateVehiclePlate(vehiclePlate) &&
     vehicleBrand.trim() !== '' &&
     vehicleModel.trim() !== '' &&
     vehicleColor.trim() !== '' &&
@@ -132,7 +126,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
 
     try {
       const { data } = await apiClient.put('/drivers/me', {
-        vehicle_plate: normalizePlate(vehiclePlate),
+        vehicle_plate: normalizeVehiclePlate(vehiclePlate),
         vehicle_brand: vehicleBrand.trim(),
         vehicle_model: vehicleModel.trim(),
         vehicle_color: vehicleColor.trim(),
@@ -203,17 +197,17 @@ export const OnboardingVehicleScreen: React.FC = () => {
             ))}
           </View>
           <Input
-            placeholder="Patente"
+            placeholder="Patente (como en la cédula)"
             value={vehiclePlate}
             onChangeText={(t) => {
               setVehiclePlate(t.toUpperCase());
               setError('vehiclePlate', undefined);
             }}
-            onBlur={() => setError('vehiclePlate', validatePlate(vehiclePlate))}
+            onBlur={() => setError('vehiclePlate', validateVehiclePlate(vehiclePlate))}
             error={errors.vehiclePlate}
             containerStyle={styles.input}
             autoCapitalize="characters"
-            maxLength={9}
+            maxLength={VEHICLE_PLATE_MAX_LEN}
           />
           <View style={styles.row}>
             <Input
