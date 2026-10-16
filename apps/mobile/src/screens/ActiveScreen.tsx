@@ -161,7 +161,12 @@ export const ActiveScreen: React.FC = () => {
   const { data: driverStatus } = useQuery({
     queryKey: ['driverStatus'],
     queryFn: () => getValidated('/drivers/me/status', driverStatusSchema),
-    refetchInterval: 30_000,
+    // Faster poll while waiting on admin review so GO unlocks without push tap.
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      const waiting = d?.status === 'under_review' || d?.step === 'review';
+      return waiting ? 5_000 : 30_000;
+    },
   });
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
