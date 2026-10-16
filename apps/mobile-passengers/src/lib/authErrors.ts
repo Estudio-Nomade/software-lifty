@@ -64,8 +64,18 @@ export function getFriendlyAuthError(error: unknown): string {
   if (message.includes('rate') || message.includes('too many') || message.includes('security')) {
     return 'Demasiados intentos. Espera un momento antes de reintentar.';
   }
-  if (message.includes('send') && message.includes('email')) {
+  if (
+    (message.includes('send') && message.includes('email')) ||
+    message.includes('error sending confirmation') ||
+    message.includes('error sending magic link')
+  ) {
     return 'Error al enviar el email. Verifica tu conexion o intenta mas tarde.';
+  }
+  if (message.includes('signup') && message.includes('disabled')) {
+    return 'El registro esta temporalmente deshabilitado. Intenta mas tarde.';
+  }
+  if (message.includes('signups not allowed') || message.includes('signup is disabled')) {
+    return 'El registro esta temporalmente deshabilitado. Intenta mas tarde.';
   }
   if (
     message.includes('network') ||

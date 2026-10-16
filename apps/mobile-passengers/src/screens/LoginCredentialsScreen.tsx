@@ -80,9 +80,18 @@ export function LoginCredentialsScreen() {
             identities: data.user?.identities?.length ?? 0,
             confirmation_sent_at: data.user?.confirmation_sent_at ?? null,
             error: err?.message ?? null,
+            status: err && 'status' in err ? (err as { status?: number }).status : null,
+            code: err && 'code' in err ? (err as { code?: string }).code : null,
           });
         }
-        if (err) throw err;
+        if (err) {
+          console.error('[signUp] raw', {
+            message: err.message,
+            status: 'status' in err ? (err as { status?: number }).status : undefined,
+            code: 'code' in err ? (err as { code?: string }).code : undefined,
+          });
+          throw err;
+        }
         const outcome = classifySignUpResult(data, trimmedEmail);
         if (outcome.kind === 'session') {
           clearDraft();
@@ -113,6 +122,11 @@ export function LoginCredentialsScreen() {
         }
       }
     } catch (err) {
+      const raw =
+        typeof err === 'object' && err !== null && 'message' in err
+          ? String((err as { message?: unknown }).message ?? '')
+          : String(err ?? '');
+      console.error('[LoginCredentials] auth catch raw:', raw, err);
       setError(getFriendlyAuthError(err));
     } finally {
       setLoading(false);
@@ -125,8 +139,20 @@ export function LoginCredentialsScreen() {
     setInfo(null);
     setGoogleLoading(true);
     try {
-      await signInWithGoogle();
+      const session = await signInWithGoogle();
+      if (!session) {
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) {
+          // Cancel/dismiss without session — silent; cancel copy only on thrown cancel.
+          return;
+        }
+      }
     } catch (err) {
+      const raw =
+        typeof err === 'object' && err !== null && 'message' in err
+          ? String((err as { message?: unknown }).message ?? '')
+          : String(err ?? '');
+      console.error('[LoginCredentials] google catch raw:', raw, err);
       setError(getFriendlyAuthError(err));
     } finally {
       setGoogleLoading(false);
