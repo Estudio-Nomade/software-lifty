@@ -51,7 +51,20 @@ export function VerifyEmailScreen() {
     setInfo(null);
     setLoading(true);
     try {
-      await verifySignupEmailOtp(supabase, email, code);
+      const trimmedEmail = email.trim();
+      const trimmedCode = code.trim();
+      if (__DEV__) {
+        console.log('[VerifyEmail]', {
+          emailLen: trimmedEmail.length,
+          codeLen: trimmedCode.length,
+        });
+      }
+      if (!trimmedEmail) {
+        setError('Falta el email de verificación. Volvé e iniciá el registro de nuevo.');
+        setLoading(false);
+        return;
+      }
+      await verifySignupEmailOtp(supabase, trimmedEmail, trimmedCode);
 
       const metaName =
         draftFullName ||
@@ -64,6 +77,13 @@ export function VerifyEmailScreen() {
       clearDraft();
       replace(nextAfterAuthSession());
     } catch (e) {
+      if (__DEV__) {
+        const raw =
+          typeof e === 'object' && e !== null && 'message' in e
+            ? String((e as { message?: unknown }).message ?? '')
+            : String(e ?? '');
+        console.log('[VerifyEmail] verify error raw:', raw);
+      }
       setError(getFriendlyAuthError(e));
       setLoading(false);
     }

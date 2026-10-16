@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -31,6 +32,7 @@ export function LoginCredentialsScreen() {
   const { goBack, navigate, replace } = useAppNavigation();
   const insets = useSafeAreaInsets();
   const { signInWithGoogle } = useAuth();
+  const params = useLocalSearchParams<{ authError?: string }>();
   const fullName = useRegistrationDraftStore((s) => s.fullName);
   const clearDraft = useRegistrationDraftStore((s) => s.clear);
   const isSignUp = (fullName?.length ?? 0) > 0;
@@ -39,7 +41,9 @@ export function LoginCredentialsScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    typeof params.authError === 'string' && params.authError.length > 0 ? params.authError : null,
+  );
   const [info, setInfo] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [loading, setLoading] = useState(false);

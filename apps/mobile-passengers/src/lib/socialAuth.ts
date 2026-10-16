@@ -1,32 +1,22 @@
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import { getAuthQueryParams } from './authUrlParams';
 import { supabase } from './supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export type SocialProvider = 'google';
 
+export { getAuthQueryParams };
+
 export const authRedirectUri = AuthSession.makeRedirectUri({
   scheme: 'lifty-passenger',
   path: 'auth-callback',
 });
 
-function getQueryParams(url: string): { params: Record<string, string>; errorCode: string | null } {
-  const params: Record<string, string> = {};
-  const match = url.match(/[?#](.*)/);
-  if (!match) return { params, errorCode: null };
-
-  const queryString = match[1];
-  queryString.split('&').forEach((pair) => {
-    const [key, value] = pair.split('=');
-    if (key) params[decodeURIComponent(key)] = decodeURIComponent(value ?? '');
-  });
-
-  return { params, errorCode: params.error ?? null };
-}
-
-async function createSessionFromUrl(url: string) {
-  const { params, errorCode } = getQueryParams(url);
+/** PKCE `?code=` or implicit `#access_token=` → Supabase session. Idempotent if already signed in. */
+export async function createSessionFromUrl(url: string) {
+  const { params, errorCode } = getAuthQueryParams(url);
   if (errorCode) throw new Error(errorCode);
 
   const { code, access_token, refresh_token } = params;
@@ -47,6 +37,10 @@ async function createSessionFromUrl(url: string) {
 }
 
 export async function signInWithProvider(provider: SocialProvider) {
+  if (__DEV__) {
+    console.log('[socialAuth] authRedirectUri', authRedirectUri);
+  }
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
@@ -58,6 +52,12 @@ export async function signInWithProvider(provider: SocialProvider) {
   if (!data?.url) throw new Error('No se pudo iniciar el flujo de autenticacion.');
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, authRedirectUri);
+
+  if (__DEV__) {
+    const pathOnly =
+      result.type === 'success' && result.url ? result.url.split('?')[0]?.split('#')[0] : null;
+    console.log('[socialAuth] openAuthSession', { type: result.type, path: pathOnly });
+  }
 
   if (result.type === 'success' && result.url) {
     return createSessionFromUrl(result.url);
