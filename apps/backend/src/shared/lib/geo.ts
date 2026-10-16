@@ -39,11 +39,24 @@ function localityFromPhotonProps(props: Record<string, string | number | undefin
   city: string | null;
   province: string | null;
 } {
-  const cityRaw =
-    props.city || props.town || props.village || props.municipality || props.county || props.name;
+  // Prefer settlement fields; OSM county "Pedanía Dolores" is not the Lifty municipality.
+  // Mirrors extractLocalityFromPhotonProps in drivers/municipality.ts (keep in sync).
+  const settlement = props.city || props.town || props.village || props.municipality || undefined;
+  const county = props.county ? String(props.county) : null;
+  const name = props.name ? String(props.name) : null;
+  const isPedania = (v: string) => {
+    const n = v.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+    return n === 'pedania' || n.startsWith('pedania ');
+  };
+
+  let cityRaw: string | null = settlement ? String(settlement) : null;
+  if (!cityRaw && county && !isPedania(county)) cityRaw = county;
+  if (!cityRaw && name && !isPedania(name)) cityRaw = name;
+  if (!cityRaw && county) cityRaw = county;
+
   const provinceRaw = props.state;
   return {
-    city: cityRaw ? String(cityRaw) : null,
+    city: cityRaw,
     province: provinceRaw ? String(provinceRaw) : null,
   };
 }
