@@ -38,4 +38,16 @@ describe('getFriendlyAuthError', () => {
   it('maps network errors', () => {
     expect(getFriendlyAuthError(new Error('Network request failed'))).toContain('conexion');
   });
+
+  it('maps confirmation email send failure without OTP wording', () => {
+    expect(getFriendlyAuthError(new Error('Error sending confirmation email'))).toContain(
+      'enviar el email',
+    );
+  });
+
+  it('maps signup disabled', () => {
+    expect(getFriendlyAuthError(new Error('Signups not allowed for this instance'))).toContain(
+      'deshabilitado',
+    );
+  });
 });

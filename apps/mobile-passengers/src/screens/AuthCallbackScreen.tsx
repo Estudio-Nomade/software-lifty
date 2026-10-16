@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { BrandSplash } from '../components/BrandSplash';
 import { getFriendlyAuthError } from '../lib/authErrors';
+import { shouldTreatAuthCallbackAsSuccess } from '../lib/oauthSessionRecovery';
 import { createSessionFromUrl } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
 import { theme } from '../theme';
@@ -69,8 +70,19 @@ export function AuthCallbackScreen() {
       router.replace('/');
     };
 
-    const finishErr = (err: unknown) => {
+    const finishErr = async (err: unknown) => {
       if (cancelled) return;
+      if (await shouldTreatAuthCallbackAsSuccess(() => supabase.auth.getSession())) {
+        finishOk();
+        return;
+      }
+      if (__DEV__) {
+        const raw =
+          typeof err === 'object' && err !== null && 'message' in err
+            ? String((err as { message?: unknown }).message ?? '')
+            : String(err ?? '');
+        console.error('[AuthCallback] finishErr', raw);
+      }
       const msg = getFriendlyAuthError(err);
       setError(msg);
       setTimeout(() => {
@@ -119,8 +131,9 @@ export function AuthCallbackScreen() {
           return;
         }
 
+        // Twin path (openAuthSessionAsync) may still be exchanging — wait briefly.
         await new Promise<void>((resolve) => {
-          setTimeout(resolve, 500);
+          setTimeout(resolve, 1200);
         });
         if (cancelled) return;
 
@@ -136,9 +149,9 @@ export function AuthCallbackScreen() {
           return;
         }
 
-        finishErr(new Error('No se pudo completar el inicio de sesion con Google.'));
+        await finishErr(new Error('No se pudo completar el inicio de sesion con Google.'));
       } catch (e) {
-        finishErr(e);
+        await finishErr(e);
       }
     };
 
@@ -151,7 +164,9 @@ export function AuthCallbackScreen() {
       ) {
         return;
       }
-      exchange(eventUrl).catch(finishErr);
+      exchange(eventUrl).catch((e) => {
+        void finishErr(e);
+      });
     });
 
     run();
@@ -170,10 +185,28 @@ export function AuthCallbackScreen() {
     );
   }
 
-  return <BrandSplash />;
+  return (
+    <View style={styles.splashRoot}>
+      <BrandSplash />
+      <Text style={styles.splashHint}>Completando inicio de sesion…</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
+  splashRoot: {
+    flex: 1,
+  },
+  splashHint: {
+    position: 'absolute',
+    bottom: theme.spacing.xl * 2,
+    left: theme.spacing.lg,
+    right: theme.spacing.lg,
+    textAlign: 'center',
+    color: theme.colors.mediumGray,
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+  },
   errorRoot: {
     flex: 1,
     backgroundColor: theme.colors.background,
