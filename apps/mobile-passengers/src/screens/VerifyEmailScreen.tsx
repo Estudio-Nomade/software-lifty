@@ -18,8 +18,13 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { resendSignupEmailOtp, verifySignupEmailOtp } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../store/authStore';
 import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 import { theme } from '../theme';
+
+function nextAfterAuthSession(): 'ServiceArea' | 'Home' {
+  return useAuthStore.getState().coverageNoticeSeen ? 'Home' : 'ServiceArea';
+}
 
 export function VerifyEmailScreen() {
   const { goBack, replace } = useAppNavigation();
@@ -57,7 +62,7 @@ export function VerifyEmailScreen() {
         )?.full_name;
       await registerPassenger(undefined, metaName ?? undefined).catch(() => {});
       clearDraft();
-      replace('LocationPermissions');
+      replace(nextAfterAuthSession());
     } catch (e) {
       setError(getFriendlyAuthError(e));
       setLoading(false);

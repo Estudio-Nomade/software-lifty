@@ -78,7 +78,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(({ data }) => {
         if (!mounted) return;
         setSession(data.session);
-        syncStore(data.session);
+        if (data.session?.access_token) {
+          syncStore(data.session);
+        } else {
+          // Drop persist isAuthenticated when Supabase has no session (guest boot).
+          const store = useAuthStore.getState();
+          if (store.isAuthenticated || store.token) {
+            useAuthStore.setState({
+              token: null,
+              userId: null,
+              email: null,
+              fullName: null,
+              isAuthenticated: false,
+              needsRedirect: false,
+            });
+          }
+        }
         finishLoading();
       })
       .catch((err) => {
@@ -92,8 +107,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(nextSession);
       if (nextSession?.access_token) {
         syncStore(nextSession);
-      } else if (event === 'SIGNED_OUT') {
-        useAuthStore.getState().clearAuth();
+      } else if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
+        // INITIAL_SESSION with null = guest; clear stale persist auth.
+        const store = useAuthStore.getState();
+        if (store.isAuthenticated || store.token) {
+          if (event === 'SIGNED_OUT') {
+            store.clearAuth();
+          } else {
+            useAuthStore.setState({
+              token: null,
+              userId: null,
+              email: null,
+              fullName: null,
+              isAuthenticated: false,
+              needsRedirect: false,
+            });
+          }
+        }
       }
     });
 

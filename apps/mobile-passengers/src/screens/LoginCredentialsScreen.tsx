@@ -19,8 +19,13 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { classifySignUpResult } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../store/authStore';
 import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 import { theme } from '../theme';
+
+function nextAfterAuthSession(): 'ServiceArea' | 'Home' {
+  return useAuthStore.getState().coverageNoticeSeen ? 'Home' : 'ServiceArea';
+}
 
 export function LoginCredentialsScreen() {
   const { goBack, navigate, replace } = useAppNavigation();
@@ -78,7 +83,7 @@ export function LoginCredentialsScreen() {
         if (outcome.kind === 'session') {
           clearDraft();
           registerPassenger(phoneTrimmed, fullName ?? undefined).catch(() => {});
-          replace('LocationPermissions');
+          replace(nextAfterAuthSession());
         } else if (outcome.kind === 'needs_verify') {
           replace('VerifyEmail', { email: trimmedEmail });
         } else {
@@ -100,7 +105,7 @@ export function LoginCredentialsScreen() {
             fullName ??
             undefined;
           registerPassenger(undefined, metaName).catch(() => {});
-          replace('LocationPermissions');
+          replace(nextAfterAuthSession());
         }
       }
     } catch (err) {

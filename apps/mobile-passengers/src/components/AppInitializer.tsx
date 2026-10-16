@@ -5,6 +5,7 @@ import { InteractionManager, Platform } from 'react-native';
 import { api } from '../api/client';
 import { getProfile, registerPassenger } from '../api/passenger';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { isAllowedWithoutSession, isPostAuthOnboardingRoute } from '../lib/authRouteGate';
 import {
   handleNotificationResponse,
   registerForPush,
@@ -14,15 +15,33 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 
-const PUBLIC_ROUTES = [
+const PUBLIC_ENTRY_ROUTES = [
   '',
   'register',
   'forgot-password',
   'auth',
   'login-credentials',
   'verify-email',
-  'location-permissions',
 ];
+
+/** First-run coverage notice before Home (Villa Dolores launch). Auth only. */
+function postAuthLandingScreen(): 'ServiceArea' | 'Home' {
+  return useAuthStore.getState().coverageNoticeSeen ? 'Home' : 'ServiceArea';
+}
+
+/** Drop fake auth from persist when Supabase has no live token (no logout redirect spam). */
+function clearStaleAuthWithoutRedirect() {
+  const s = useAuthStore.getState();
+  if (!s.isAuthenticated && !s.token) return;
+  useAuthStore.setState({
+    token: null,
+    userId: null,
+    email: null,
+    fullName: null,
+    isAuthenticated: false,
+    needsRedirect: false,
+  });
+}
 
 const SESSION_RESTORE_TIMEOUT_MS = 8_000;
 
@@ -47,6 +66,8 @@ function SessionRestore() {
         if (cancelled) return;
         const token = data.session?.access_token ?? null;
         if (!token) {
+          // Never keep persist isAuthenticated without a live session → no ServiceArea flash.
+          clearStaleAuthWithoutRedirect();
           markRestored();
           return;
         }
@@ -55,6 +76,7 @@ function SessionRestore() {
         markRestored();
       } catch (err: unknown) {
         console.log('[SessionRestore] getSession ERROR:', err instanceof Error ? err.message : err);
+        clearStaleAuthWithoutRedirect();
         markRestored();
       }
     };
@@ -118,32 +140,64 @@ function AuthRedirectWatcher() {
     }
   }, [needsRedirect, resetRedirect, router, segments]);
 
+  // No session → never stay on ServiceArea / Home / private routes.
+  useEffect(() => {
+    if (!sessionRestored) return;
+    if (isAuthenticated) return;
+
+    const current = segments[0] ?? '';
+    if (!isAllowedWithoutSession(current)) {
+      router.replace('/');
+    }
+  }, [sessionRestored, isAuthenticated, segments, router]);
+
+  // Live session on welcome/auth entry → ServiceArea (once) or Home.
   useEffect(() => {
     if (!sessionRestored) return;
     if (!isAuthenticated) return;
 
     const current = segments[0] ?? '';
-    if (PUBLIC_ROUTES.includes(current) || current === '') {
-      router.replace('/home');
+    // Stay on coverage / GPS onboarding until the user finishes those steps.
+    if (isPostAuthOnboardingRoute(current)) return;
+    if (PUBLIC_ENTRY_ROUTES.includes(current) || current === '') {
+      const landing = postAuthLandingScreen();
+      router.replace(landing === 'ServiceArea' ? '/service-area' : '/home');
     }
   }, [sessionRestored, isAuthenticated, segments, router]);
 
   return null;
 }
 
+/**
+ * Cold-open recovery for authenticated users only.
+ * Does not run for guests — Welcome must win when there is no session.
+ */
 function ActiveTripRecovery() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const sessionRestored = useAuthStore((s) => s.sessionRestored);
+  const coverageNoticeSeen = useAuthStore((s) => s.coverageNoticeSeen);
   const router = useRouter();
+  const segments = useSegments();
   const navigatedRef = useRef(false);
 
   useEffect(() => {
     if (!sessionRestored || !isAuthenticated || navigatedRef.current) return;
+    const current = segments[0] ?? '';
+    // Never yank the user off coverage / GPS steps mid-flow.
+    if (isPostAuthOnboardingRoute(current)) return;
+    // Only reclaim from welcome/auth entry or empty stack — not mid-trip screens.
+    if (!(PUBLIC_ENTRY_ROUTES.includes(current) || current === '')) return;
     navigatedRef.current = true;
     InteractionManager.runAfterInteractions(() => {
+      // Re-check: session may have been cleared while we waited.
+      if (!useAuthStore.getState().isAuthenticated) return;
+      if (!useAuthStore.getState().coverageNoticeSeen) {
+        router.replace('/service-area');
+        return;
+      }
       router.replace('/home');
     });
-  }, [sessionRestored, isAuthenticated, router]);
+  }, [sessionRestored, isAuthenticated, coverageNoticeSeen, segments, router]);
 
   return null;
 }
