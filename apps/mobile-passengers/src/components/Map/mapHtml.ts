@@ -161,9 +161,8 @@ export function generateMapHtml(
       style: 'https://tiles.openfreemap.org/styles/liberty',
       center: WAITING_CENTER,
       zoom: WAITING_ZOOM,
-      attributionControl: true,
+      attributionControl: false,
     });
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
   } catch (e) {
     postToHost(JSON.stringify({ type: 'error', message: (e && e.message) || 'Failed to initialize the map' }));
     throw e;
