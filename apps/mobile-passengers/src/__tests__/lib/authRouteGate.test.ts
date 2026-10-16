@@ -10,6 +10,7 @@ describe('authRouteGate', () => {
     expect(isAllowedWithoutSession('login-credentials')).toBe(true);
     expect(isAllowedWithoutSession('verify-email')).toBe(true);
     expect(isAllowedWithoutSession('terms')).toBe(true);
+    expect(isAllowedWithoutSession('auth-callback')).toBe(true);
   });
 
   it('blocks ServiceArea / GPS / Home without session', () => {

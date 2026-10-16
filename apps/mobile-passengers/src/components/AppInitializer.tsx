@@ -20,6 +20,7 @@ const PUBLIC_ENTRY_ROUTES = [
   'register',
   'forgot-password',
   'auth',
+  'auth-callback',
   'login-credentials',
   'verify-email',
 ];
