@@ -71,7 +71,7 @@ export function ExpandedTripSearch({
   const activeQuery = focusedField === 'pickup' ? pickupQuery : destQuery;
   const showEmptySuggestions =
     focusedField !== null &&
-    activeQuery.length >= 3 &&
+    activeQuery.length >= 2 &&
     suggestions.length === 0 &&
     !pickupLoading &&
     !placesLoading &&
