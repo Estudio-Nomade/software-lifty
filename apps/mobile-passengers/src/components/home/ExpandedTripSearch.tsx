@@ -224,7 +224,7 @@ export function ExpandedTripSearch({
 
       {showEmptySuggestions ? (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>No encontramos lugares. Probá otra calle.</Text>
+          <Text style={styles.emptyText}>No encontramos calles ni lugares. Probá otro nombre.</Text>
         </View>
       ) : null}
 

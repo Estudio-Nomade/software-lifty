@@ -2,10 +2,11 @@ import {
   DEFAULT_PLACE_BIAS,
   formatPhotonPlaceLabel,
   mapPhotonFeaturesToPlaces,
+  rankPhotonFeatures,
 } from '../../utils/photonPlaces';
 
 describe('formatPhotonPlaceLabel', () => {
-  it('prefers street+number over POI name', () => {
+  it('prefers street+number for address features', () => {
     expect(
       formatPhotonPlaceLabel({
         name: 'Someone',
@@ -28,6 +29,32 @@ describe('formatPhotonPlaceLabel', () => {
         country: 'Argentina',
       }),
     ).toBe('San Martín, Villa Dolores, Córdoba, Argentina');
+  });
+
+  it('keeps POI name even when street is present (amenity/tourism)', () => {
+    expect(
+      formatPhotonPlaceLabel({
+        name: 'Dique seco De los Curas',
+        street: 'Camino del Lago',
+        osm_key: 'waterway',
+        osm_value: 'dam',
+        city: 'Tandil',
+        state: 'Buenos Aires',
+        country: 'Argentina',
+      }),
+    ).toBe('Dique seco De los Curas, Tandil, Buenos Aires, Argentina');
+  });
+
+  it('labels named leisure/tourism without street', () => {
+    expect(
+      formatPhotonPlaceLabel({
+        name: 'Monte Calvario',
+        osm_key: 'natural',
+        osm_value: 'peak',
+        city: 'Tandil',
+        country: 'Argentina',
+      }),
+    ).toBe('Monte Calvario, Tandil, Argentina');
   });
 });
 
@@ -56,9 +83,57 @@ describe('mapPhotonFeaturesToPlaces', () => {
     expect(places[0].place_id).toBe('1');
   });
 
+  it('keeps amenity/tourism POIs with name-only properties', () => {
+    const places = mapPhotonFeaturesToPlaces({
+      features: [
+        {
+          geometry: { coordinates: [-59.15, -37.32] },
+          properties: {
+            osm_id: 42,
+            name: 'Calvario',
+            osm_key: 'tourism',
+            osm_value: 'attraction',
+            city: 'Tandil',
+            country: 'Argentina',
+          },
+        },
+      ],
+    });
+    expect(places).toHaveLength(1);
+    expect(places[0].description).toMatch(/^Calvario/);
+    expect(places[0].lat).toBeCloseTo(-37.32, 2);
+  });
+
   it('returns empty for missing features', () => {
     expect(mapPhotonFeaturesToPlaces({})).toEqual([]);
     expect(mapPhotonFeaturesToPlaces({ features: [] })).toEqual([]);
+  });
+});
+
+describe('rankPhotonFeatures', () => {
+  it('prefers nearer name match over far homonym', () => {
+    const ranked = rankPhotonFeatures(
+      [
+        {
+          geometry: { coordinates: [124.07, 9.6] },
+          properties: { name: 'Calvario', osm_key: 'place', osm_value: 'village' },
+        },
+        {
+          geometry: { coordinates: [-59.15, -37.32] },
+          properties: {
+            name: 'Parque Calvario',
+            osm_key: 'place',
+            osm_value: 'suburb',
+            city: 'Tandil',
+          },
+        },
+      ],
+      'Calvario',
+      -37.32,
+      -59.13,
+    );
+    expect(ranked[0].properties?.name).toMatch(/Calvario/);
+    expect(ranked[0].geometry?.coordinates?.[0]).toBeCloseTo(-59.15, 1);
   });
 });
 
