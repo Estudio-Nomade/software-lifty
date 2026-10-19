@@ -21,7 +21,8 @@ export function usePlaceAutocomplete(query: string): PlaceAutocompleteResult {
 
   useEffect(() => {
     const trimmed = query.trim();
-    if (trimmed.length < 3) {
+    // Google-Maps-like: start suggesting after 2 chars (was 3 — felt broken).
+    if (trimmed.length < 2) {
       setSuggestions([]);
       setLoading(false);
       setError(null);

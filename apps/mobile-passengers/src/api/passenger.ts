@@ -1,3 +1,4 @@
+import { searchPhotonPlaces } from '../utils/photonPlaces';
 import { api } from './client';
 import type {
   DirectionsResult,
@@ -217,10 +218,21 @@ export async function searchPlaces(
   lng?: number,
   signal?: AbortSignal,
 ): Promise<PlaceSuggestion[]> {
-  const { data } = await api.get<PlaceSuggestion[]>('/maps/places/autocomplete', {
-    params: { input, lat, lng },
-    timeout: 5000,
-    signal,
-  });
-  return data;
+  const q = input.trim();
+  if (q.length < 2) return [];
+
+  try {
+    const { data } = await api.get<PlaceSuggestion[]>('/maps/places/autocomplete', {
+      params: { input: q, lat, lng },
+      timeout: 5000,
+      signal,
+    });
+    const list = Array.isArray(data) ? data : [];
+    if (list.length > 0) return list;
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    // 401 / network / timeout — fall through to Photon
+  }
+
+  return searchPhotonPlaces(q, lat, lng, signal);
 }
