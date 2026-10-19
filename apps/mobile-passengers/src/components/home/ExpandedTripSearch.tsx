@@ -22,6 +22,8 @@ interface ExpandedTripSearchProps {
   placesError: string | null;
   searchError: string | null;
   showUseMyLocation: boolean;
+  /** Resolved street under the GPS row (check that pickup is correct). */
+  gpsSubtitle?: string | null;
   onBack: () => void;
   onPickupChange: (text: string) => void;
   onDestChange: (text: string) => void;
@@ -54,6 +56,7 @@ export function ExpandedTripSearch({
   placesError,
   searchError,
   showUseMyLocation,
+  gpsSubtitle = null,
   onBack,
   onPickupChange,
   onDestChange,
@@ -69,13 +72,15 @@ export function ExpandedTripSearch({
   const destQuery = destAddress.trim();
   const pickupQuery = pickupAddress.trim();
   const activeQuery = focusedField === 'pickup' ? pickupQuery : destQuery;
+  // Only after the user typed a real search — never for GPS placeholder labels.
   const showEmptySuggestions =
     focusedField !== null &&
     activeQuery.length >= 2 &&
     suggestions.length === 0 &&
     !pickupLoading &&
     !placesLoading &&
-    !placesError;
+    !placesError &&
+    !(focusedField === 'dest' && destQuery.length === 0);
 
   return (
     <View style={styles.root}>
@@ -175,7 +180,14 @@ export function ExpandedTripSearch({
           <View style={styles.useLocationIcon}>
             <Ionicons name="locate" size={18} color={theme.colors.primary} />
           </View>
-          <Text style={styles.useLocationText}>Usar mi ubicación actual</Text>
+          <View style={styles.useLocationTexts}>
+            <Text style={styles.useLocationText}>Usar mi ubicación actual</Text>
+            {gpsSubtitle ? (
+              <Text style={styles.useLocationSub} numberOfLines={2}>
+                {gpsSubtitle}
+              </Text>
+            ) : null}
+          </View>
         </TouchableOpacity>
       ) : null}
 
@@ -379,11 +391,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  useLocationText: {
+  useLocationTexts: {
     flex: 1,
+    gap: 2,
+  },
+  useLocationText: {
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.medium,
     color: theme.colors.deepBlue,
+  },
+  useLocationSub: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
   },
   suggestions: {
     backgroundColor: theme.colors.surface,

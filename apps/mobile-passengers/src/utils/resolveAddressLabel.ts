@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import { reverseGeocode } from '../api/passenger';
 
 type PhotonProps = {
@@ -122,30 +121,29 @@ export async function resolveAddressLabel(
       if (hasHouseNumber(addr)) return addr;
     }
   } catch {
-    // unauthenticated or network
+    // unauthenticated or network — fall through to direct Photon/Nominatim
   }
 
-  if (Platform.OS === 'web') {
-    try {
-      const photon = await reversePhoton(lat, lng);
-      if (photon) {
-        if (!best || (hasHouseNumber(photon) && !hasHouseNumber(best))) best = photon;
-        else if (!best) best = photon;
-        if (best && hasHouseNumber(best)) return best;
-      }
-    } catch {
-      // continue
+  // Native + web: backend reverse often 401/offline on Expo Go; Photon is public.
+  try {
+    const photon = await reversePhoton(lat, lng);
+    if (photon) {
+      if (!best || (hasHouseNumber(photon) && !hasHouseNumber(best))) best = photon;
+      else if (!best) best = photon;
+      if (best && hasHouseNumber(best)) return best;
     }
+  } catch {
+    // continue
+  }
 
-    try {
-      const nomi = await reverseNominatim(lat, lng);
-      if (nomi) {
-        if (!best || hasHouseNumber(nomi)) return nomi;
-        return best;
-      }
-    } catch {
-      // fall through
+  try {
+    const nomi = await reverseNominatim(lat, lng);
+    if (nomi) {
+      if (!best || hasHouseNumber(nomi)) return nomi;
+      return best ?? nomi;
     }
+  } catch {
+    // fall through
   }
 
   return best || 'Mi ubicación actual';
