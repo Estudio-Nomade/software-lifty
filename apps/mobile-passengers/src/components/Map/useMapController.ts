@@ -24,13 +24,14 @@ function isRealFix(lng: number | null | undefined, lat: number | null | undefine
 }
 
 /**
- * Thin bridge: push markers/route/userLocation/recenter to the MapLibre document.
+ * Thin bridge: push markers/route/userLocation/followUser/recenter to MapLibre.
  * Host owns GPS; mapHtml only draws the pin from userLocation messages.
  */
 export function useMapController({
   markers,
   routeLine,
   userLocation,
+  followUserLocation,
   recenterKey,
   onError,
   isLoaded,
@@ -51,6 +52,12 @@ export function useMapController({
       lastRecenterKey.current = null;
     }
   }, [isLoaded]);
+
+  // Parity with driver MapView: enable follow before first userLocation.
+  useEffect(() => {
+    if (!isLoaded) return;
+    postMessage({ type: 'followUser', enabled: followUserLocation });
+  }, [followUserLocation, isLoaded, postMessage]);
 
   useEffect(() => {
     if (!isLoaded) return;
