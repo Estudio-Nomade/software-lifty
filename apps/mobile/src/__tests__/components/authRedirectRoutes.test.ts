@@ -8,6 +8,7 @@ describe('unauthenticated route gate', () => {
     expect(isAllowedWithoutSession('forgot-password')).toBe(true);
     expect(isAllowedWithoutSession('terms')).toBe(true);
     expect(isAllowedWithoutSession('login-otp')).toBe(true);
+    expect(isAllowedWithoutSession('auth-callback')).toBe(true);
   });
 
   it('blocks onboarding and app home without a session', () => {
