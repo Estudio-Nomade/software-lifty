@@ -92,7 +92,9 @@ export function HomeScreen() {
   const lastGpsLabel = useRef<{ lat: number; lng: number; acc: number } | null>(null);
 
   const pickupAc = usePlaceAutocomplete(
-    focusedField === 'pickup' && !pickupPicked ? pickupAddress : '',
+    focusedField === 'pickup' && !pickupPicked && pickupAddress.trim() !== 'Mi ubicación actual'
+      ? pickupAddress
+      : '',
   );
   const destAc = usePlaceAutocomplete(focusedField === 'dest' && !destPicked ? destAddress : '');
   const visibleSuggestions = focusedField === 'pickup' ? pickupAc.suggestions : destAc.suggestions;
@@ -293,6 +295,14 @@ export function HomeScreen() {
   const showUseMyLocation =
     focusedField === 'pickup' || (!pickupAddress.trim() && !pickupLoading && !pickupPicked);
 
+  const gpsSubtitle =
+    pickupFromGps && pickupAddress.trim() && pickupAddress.trim() !== 'Mi ubicación actual'
+      ? pickupAddress.trim()
+      : null;
+
+  // Keep GPS row visible so the user can check the resolved street under the CTA.
+  const showGpsRow = showUseMyLocation || Boolean(gpsSubtitle);
+
   const searchForm = (
     <ExpandedTripSearch
       pickupAddress={pickupAddress}
@@ -303,7 +313,8 @@ export function HomeScreen() {
       placesLoading={placesLoading}
       placesError={placesError}
       searchError={searchError}
-      showUseMyLocation={showUseMyLocation}
+      showUseMyLocation={showGpsRow}
+      gpsSubtitle={gpsSubtitle}
       onBack={handleCloseSearch}
       onPickupChange={(text) => {
         setPickupAddress(text);
