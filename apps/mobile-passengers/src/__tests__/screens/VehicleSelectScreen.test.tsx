@@ -214,6 +214,54 @@ describe('VehicleSelectScreen fare estimation', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
+  test('Railway Application not found → one API-down alert, not fare-only copy', async () => {
+    const railway404 = {
+      code: 'ERR_BAD_REQUEST',
+      response: {
+        status: 404,
+        data: { status: 'error', code: 404, message: 'Application not found' },
+      },
+      message: 'Request failed with status code 404',
+    };
+    mockEstimateFare.mockRejectedValue(railway404);
+    mockGetDirections.mockRejectedValue(railway404);
+
+    await render(<VehicleSelectScreen />);
+    await act(async () => {});
+    await act(async () => {});
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'El servidor Lifty no responde',
+      expect.stringMatching(/API no está disponible/i),
+    );
+    const fareOnlyCalls = (Alert.alert as jest.Mock).mock.calls.filter(
+      (c) => c[0] === 'No pudimos calcular la tarifa',
+    );
+    expect(fareOnlyCalls).toHaveLength(0);
+    // One alert total (not 3× auto+moto+directions)
+    expect((Alert.alert as jest.Mock).mock.calls.length).toBe(1);
+  });
+
+  test('business fare failure (API up) still uses tarifa copy', async () => {
+    mockEstimateFare.mockRejectedValue({
+      response: { status: 500, data: { error: { message: 'fare matrix failed' } } },
+    });
+    mockGetDirections.mockResolvedValue({
+      distance_km: 4.2,
+      duration_minutes: 14,
+      polyline: SHORT_POLYLINE,
+    });
+
+    await render(<VehicleSelectScreen />);
+    await act(async () => {});
+    await act(async () => {});
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'No pudimos calcular la tarifa',
+      'Reintentá más tarde.',
+    );
+  });
+
   test('directions fail still shows fares when estimate OK', async () => {
     mockGetDirections.mockRejectedValue(new Error('directions down'));
 

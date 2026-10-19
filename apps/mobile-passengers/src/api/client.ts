@@ -33,6 +33,20 @@ const API_URL = getApiUrl();
 
 if (__DEV__) {
   console.log('[API] Backend URL:', API_URL);
+  // Fail-fast lab check: dead Railway returns 404 "Application not found".
+  const healthUrl = API_URL.replace(/\/api\/?$/, '/health');
+  void fetch(healthUrl)
+    .then(async (res) => {
+      const text = await res.text().catch(() => '');
+      if (!res.ok || /application not found/i.test(text)) {
+        console.warn(
+          `[API] health NOT OK (${res.status}) at ${healthUrl} — fare/maps will fail. Point EXPO_PUBLIC_API_URL at local :3001 (see .env.example).`,
+        );
+      }
+    })
+    .catch((err) => {
+      console.warn('[API] health unreachable:', healthUrl, err);
+    });
 }
 
 const api = axios.create({
