@@ -4,8 +4,9 @@ import type { PlaceSuggestion } from '../api/types';
 export const DEFAULT_PLACE_BIAS = { lat: -31.9456, lng: -65.1895 } as const;
 
 const PHOTON_API = 'https://photon.komoot.io/api/';
+const PHOTON_LIMIT = 10;
 
-type PhotonProps = {
+export type PhotonProps = {
   osm_id?: number | string;
   name?: string;
   street?: string;
@@ -27,20 +28,37 @@ type PhotonFeature = {
 
 type PhotonResponse = { features?: PhotonFeature[] };
 
-/** Prefer street+number; highway `name` counts as the street. */
+function isHighwayProps(p: PhotonProps): boolean {
+  return (
+    p.osm_key === 'highway' ||
+    p.type === 'street' ||
+    p.type === 'road' ||
+    p.osm_value === 'residential'
+  );
+}
+
+/**
+ * Street+number for addresses/highways; **name first** for POIs (amenity, tourism,
+ * leisure, natural, waterway, place, …) so dique/calvario/plaza don't collapse to street.
+ */
 export function formatPhotonPlaceLabel(p: PhotonProps): string {
   const streetField = typeof p.street === 'string' ? p.street.trim() : '';
   const num = typeof p.housenumber === 'string' ? p.housenumber.trim() : '';
   const name = typeof p.name === 'string' ? p.name.trim() : '';
+  const highway = isHighwayProps(p);
 
-  const isHighway =
-    p.osm_key === 'highway' ||
-    p.type === 'street' ||
-    p.type === 'road' ||
-    p.osm_value === 'residential';
-  const street = streetField || (isHighway && name ? name : '');
-  const streetLine = [street, num].filter(Boolean).join(' ');
-  const primary = streetLine || name;
+  let primary = '';
+  if (highway) {
+    const street = streetField || name;
+    primary = [street, num].filter(Boolean).join(' ');
+  } else if (num && streetField) {
+    // Address node (housenumber) — street line, not resident/POI name on the pin.
+    primary = [streetField, num].filter(Boolean).join(' ');
+  } else if (name) {
+    primary = name;
+  } else {
+    primary = [streetField, num].filter(Boolean).join(' ');
+  }
   if (!primary) return '';
 
   const locality =
@@ -53,8 +71,75 @@ export function formatPhotonPlaceLabel(p: PhotonProps): string {
     .join(', ');
 }
 
-export function mapPhotonFeaturesToPlaces(data: PhotonResponse): PlaceSuggestion[] {
-  const features = data.features ?? [];
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function normalizeMatch(s: string): string {
+  return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+}
+
+/** Soft-rank: name match to query + proximity to bias (GPS or default). */
+export function rankPhotonFeatures(
+  features: PhotonFeature[],
+  query: string,
+  biasLat: number,
+  biasLng: number,
+): PhotonFeature[] {
+  const q = normalizeMatch(query);
+  if (!q || features.length <= 1) return features;
+
+  const scored = features.map((f, index) => {
+    const props = f.properties ?? {};
+    const name = normalizeMatch(typeof props.name === 'string' ? props.name : '');
+    const street = normalizeMatch(typeof props.street === 'string' ? props.street : '');
+    const label = normalizeMatch(formatPhotonPlaceLabel(props));
+    let match = 0;
+    if (name === q || street === q) match = 100;
+    else if (name.startsWith(q) || street.startsWith(q)) match = 70;
+    else if (name.includes(q) || street.includes(q) || label.includes(q)) match = 45;
+
+    const coords = f.geometry?.coordinates;
+    let distKm = 1e9;
+    if (coords && coords.length >= 2) {
+      const [lng, lat] = coords;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        distKm = haversineKm(biasLat, biasLng, lat, lng);
+      }
+    }
+    // Proximity within ~150 km can outrank a far exact homonym (e.g. Calvario PH vs Tandil).
+    const proximity = Number.isFinite(distKm) ? Math.max(0, 150 - distKm) : 0;
+    const score = match + proximity;
+    return { f, score, index };
+  });
+
+  scored.sort((a, b) => b.score - a.score || a.index - b.index);
+  return scored.map((s) => s.f);
+}
+
+export function mapPhotonFeaturesToPlaces(
+  data: PhotonResponse,
+  opts?: { query?: string; biasLat?: number; biasLng?: number },
+): PlaceSuggestion[] {
+  let features = data.features ?? [];
+  const biasLat =
+    typeof opts?.biasLat === 'number' && Number.isFinite(opts.biasLat)
+      ? opts.biasLat
+      : DEFAULT_PLACE_BIAS.lat;
+  const biasLng =
+    typeof opts?.biasLng === 'number' && Number.isFinite(opts.biasLng)
+      ? opts.biasLng
+      : DEFAULT_PLACE_BIAS.lng;
+  if (opts?.query) {
+    features = rankPhotonFeatures(features, opts.query, biasLat, biasLng);
+  }
+
   const out: PlaceSuggestion[] = [];
   for (const f of features) {
     const coords = f.geometry?.coordinates;
@@ -93,7 +178,7 @@ export async function searchPhotonPlaces(
 
   const url = new URL(PHOTON_API);
   url.searchParams.set('q', q);
-  url.searchParams.set('limit', '8');
+  url.searchParams.set('limit', String(PHOTON_LIMIT));
   url.searchParams.set('lang', 'default');
   url.searchParams.set('lat', String(biasLat));
   url.searchParams.set('lon', String(biasLng));
@@ -101,5 +186,5 @@ export async function searchPhotonPlaces(
   const res = await fetch(url.toString(), { signal });
   if (!res.ok) return [];
   const data = (await res.json()) as PhotonResponse;
-  return mapPhotonFeaturesToPlaces(data);
+  return mapPhotonFeaturesToPlaces(data, { query: q, biasLat, biasLng });
 }

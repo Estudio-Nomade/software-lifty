@@ -133,14 +133,20 @@ export async function getDirections(params: {
   };
 }
 
-export async function geocodeAddress(address: string): Promise<{
+export async function geocodeAddress(
+  address: string,
+  bias?: { lat?: number; lng?: number },
+): Promise<{
   lat: number;
   lng: number;
   formatted_address: string;
 }> {
+  const params: { address: string; bias_lat?: number; bias_lng?: number } = { address };
+  if (typeof bias?.lat === 'number' && Number.isFinite(bias.lat)) params.bias_lat = bias.lat;
+  if (typeof bias?.lng === 'number' && Number.isFinite(bias.lng)) params.bias_lng = bias.lng;
   const { data } = await api.get<{ lat: number; lng: number; formatted_address: string }>(
     '/maps/geocode',
-    { params: { address } },
+    { params },
   );
   return data;
 }

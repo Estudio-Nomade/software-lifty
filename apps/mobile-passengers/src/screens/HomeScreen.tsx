@@ -252,10 +252,15 @@ export function HomeScreen() {
     Keyboard.dismiss();
     setSearchError(null);
 
+    const bias =
+      current && Number.isFinite(current.lat) && Number.isFinite(current.lng)
+        ? { lat: current.lat, lng: current.lng }
+        : undefined;
+
     let resolvedPickup = pickupCoord;
     if (!resolvedPickup && pickupAddress.trim()) {
       try {
-        const g = await geocodeAddress(pickupAddress.trim());
+        const g = await geocodeAddress(pickupAddress.trim(), bias);
         resolvedPickup = { lat: g.lat, lng: g.lng };
       } catch {
         resolvedPickup = null;
@@ -268,7 +273,7 @@ export function HomeScreen() {
     let resolvedDest = destCoord;
     if (!resolvedDest) {
       try {
-        const g = await geocodeAddress(dest);
+        const g = await geocodeAddress(dest, bias);
         resolvedDest = { lat: g.lat, lng: g.lng };
       } catch {
         resolvedDest = null;
@@ -276,7 +281,9 @@ export function HomeScreen() {
     }
 
     if (!resolvedPickup || !resolvedDest) {
-      setSearchError('No encontramos esa dirección. Revisá la dirección e intentá de nuevo.');
+      setSearchError(
+        'No encontramos esa calle o lugar. Probá otra búsqueda o elegí una sugerencia.',
+      );
       return;
     }
 
