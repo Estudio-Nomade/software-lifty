@@ -52,7 +52,7 @@ export function usePlaceAutocomplete(query: string): PlaceAutocompleteResult {
             (err as { name?: string })?.name === 'AbortError';
           if (isAbort) return;
           setSuggestions([]);
-          setError('No pudimos buscar direcciones');
+          setError('No pudimos buscar calles ni lugares');
         } finally {
           if (!cancelled) setLoading(false);
           if (loadingTimer) clearTimeout(loadingTimer);
