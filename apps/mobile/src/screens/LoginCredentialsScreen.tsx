@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import type { DriverStatus } from '../api/types';
 import { driverStatusSchema } from '../api/types';
@@ -35,6 +36,7 @@ const COOLDOWN_SECONDS = 30;
 
 export const LoginCredentialsScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -47,6 +49,11 @@ export const LoginCredentialsScreen: React.FC = () => {
   const [cooldown, setCooldown] = useState(0);
   const [googleLoading, setGoogleLoading] = useState(false);
   const setDriverStatus = useAuthStore((s) => s.setDriverStatus);
+
+  const headerStyle = [
+    styles.header,
+    { paddingTop: insets.top, height: theme.dimensions.navbarHeight + insets.top },
+  ];
 
   const login = useLogin();
   const { sendEmailOtp, verifyEmailOtp, resendEmailOtp, signInWithGoogle, signOut } = useAuth();
@@ -229,13 +236,15 @@ export const LoginCredentialsScreen: React.FC = () => {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" />
-        <View style={styles.header}>
+        <View style={headerStyle}>
           <TouchableOpacity
+            hitSlop={8}
             onPress={() => {
               setStep('credentials');
               setError(null);
               setInfo(null);
             }}
+            style={styles.backButton}
           >
             <Text style={styles.backText}>← Volver</Text>
           </TouchableOpacity>
@@ -269,8 +278,8 @@ export const LoginCredentialsScreen: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <StatusBar barStyle="dark-content" />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+      <View style={headerStyle}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={8}>
           <Text style={styles.backText}>← Volver</Text>
         </TouchableOpacity>
       </View>

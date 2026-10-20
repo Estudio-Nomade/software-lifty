@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { OTPInput } from '../components/OTPInput';
@@ -37,6 +38,7 @@ async function clearSessionAfterStatusFail(
 
 export const RegisterScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const setDriverStatus = useAuthStore((s) => s.setDriverStatus);
   const { loading, signInWithGoogle, signOut } = useAuth();
 
@@ -183,8 +185,9 @@ export const RegisterScreen: React.FC = () => {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" />
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + theme.spacing.lg }]}>
           <TouchableOpacity
+            hitSlop={8}
             onPress={() => {
               setStep('form');
               setError(null);
@@ -227,8 +230,8 @@ export const RegisterScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.lg }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8}>
           <Text style={styles.backText}>← Volver</Text>
         </TouchableOpacity>
       </View>
@@ -347,7 +350,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.lg,
     paddingBottom: theme.spacing.sm,
   },
   backText: {
