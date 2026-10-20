@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { OTPInput } from '../components/OTPInput';
@@ -24,6 +25,7 @@ import { theme } from '../theme';
 
 export const ForgotPasswordScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const { loading, signOut } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -124,8 +126,9 @@ export const ForgotPasswordScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.sm }]}>
         <TouchableOpacity
+          hitSlop={8}
           onPress={() => {
             if (step === 'reset') {
               setStep('email');
@@ -262,7 +265,6 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.lg,
     paddingBottom: theme.spacing.sm,
   },
   backText: {

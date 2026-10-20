@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import type { DriverStatus } from '../api/types';
 import { driverStatusSchema } from '../api/types';
@@ -17,6 +18,7 @@ const COOLDOWN_SECONDS = 30;
 
 export const LoginOTPScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const verifyEmail = useVerifyEmail();
   const email = useAuthStore((s) => s.phone);
   const setDriverStatus = useAuthStore((s) => s.setDriverStatus);
@@ -73,8 +75,13 @@ export const LoginOTPScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+      <View
+        style={[
+          styles.header,
+          { paddingTop: insets.top, height: theme.dimensions.navbarHeight + insets.top },
+        ]}
+      >
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={8}>
           <Text style={styles.backText}>← Volver</Text>
         </TouchableOpacity>
       </View>
@@ -120,7 +127,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    height: theme.dimensions.navbarHeight,
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
