@@ -1,15 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import type React from 'react';
 import { Linking, ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Card } from '../components/Card';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
 import {
   SUPPORT_EMAIL,
   buildSupportMailtoUrl,
   buildSupportWhatsAppUrl,
 } from '../lib/supportContact';
+import { getTabBarReserve } from '../lib/tabBarLayout';
 import { theme } from '../theme';
 
 const FAQ: { question: string; answer: string }[] = [
@@ -42,13 +45,21 @@ const FAQ: { question: string; answer: string }[] = [
 
 export const SupportScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
+  const { onScroll } = useTabBarScrollVisibility();
+  const contentPadBottom = getTabBarReserve(insets.bottom) + theme.spacing['2xl'];
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
       <Navbar title="Soporte" onBack={() => navigation.goBack()} />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: contentPadBottom }]}
+        showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+      >
         <Text style={styles.sectionTitle}>Contacto</Text>
         <Card style={styles.actionsCard} padding={0}>
           <TouchableOpacity
@@ -106,7 +117,6 @@ const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.md,
     gap: theme.spacing.md,
-    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   sectionTitle: {
     fontSize: theme.fontSize.sm,

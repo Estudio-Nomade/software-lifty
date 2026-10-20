@@ -46,6 +46,7 @@ import {
   isDistrictRequiredError,
   shouldOpenDistrictPicker,
 } from '../lib/shouldOpenDistrictPicker';
+import { getTabBarReserve } from '../lib/tabBarLayout';
 import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -381,8 +382,8 @@ export const ActiveScreen: React.FC = () => {
       ? havDistance(mapCenter, { lat: locationLat!, lng: locationLng! }) > 10
       : false;
 
-  // Tab bar is its own absolute layer (zIndex 1000). Sheet sits ON TOP of it via bottomOffset.
-  const tabPad = theme.dimensions.tabBarHeight + insets.bottom;
+  // Floating tab pill: sheet sits above full reserve (height + gap + safe inset).
+  const tabPad = getTabBarReserve(insets.bottom);
   // ~55% of map area; ScrollView covers overflow (Ver ganancias, etc.).
   const expandedHeight = Math.max(
     SHEET_COLLAPSED + 160,
