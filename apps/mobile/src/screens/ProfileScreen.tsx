@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 import { apiClient, getValidated } from '../api/client';
 import { type DriverDocument, documentSchema } from '../api/types';
@@ -27,6 +28,8 @@ import { Text } from '../components/ui/Text';
 import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
+import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
+import { getTabBarReserve } from '../lib/tabBarLayout';
 import { theme } from '../theme';
 import { compressImage } from '../utils/image';
 import { uploadPhotoToBackend } from '../utils/upload';
@@ -139,6 +142,9 @@ export const ProfileScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const signOut = useSignOut();
   const { setActiveTab } = useTabBar();
+  const insets = useSafeAreaInsets();
+  const { onScroll } = useTabBarScrollVisibility();
+  const contentPadBottom = getTabBarReserve(insets.bottom) + theme.spacing['2xl'];
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [documents, setDocuments] = useState<DriverDocument[]>([]);
@@ -268,7 +274,14 @@ export const ProfileScreen: React.FC = () => {
       <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
       <Navbar title="Perfil" showBack={false} variant="light" />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, { paddingBottom: contentPadBottom }]}
+        showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        bounces
+      >
         <Card style={styles.profileCard} padding={theme.spacing.lg}>
           <View style={styles.avatar}>
             <Avatar uri={profile?.avatar_url ?? null} name={profile?.full_name ?? ''} size={80} />
@@ -509,6 +522,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
+  scroll: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -519,7 +535,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
     padding: theme.spacing.md,
-    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   profileCard: {
     width: '100%',

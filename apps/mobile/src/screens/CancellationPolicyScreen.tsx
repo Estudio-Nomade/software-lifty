@@ -2,12 +2,15 @@ import { Ionicons } from '@expo/vector-icons';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
+import { getTabBarReserve } from '../lib/tabBarLayout';
 import { theme } from '../theme';
 
 const FEE_ARS = 600;
@@ -92,6 +95,9 @@ const THRESHOLDS: { title: string; body: string; color: string }[] = [
 
 export const CancellationPolicyScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
+  const { onScroll } = useTabBarScrollVisibility();
+  const contentPadBottom = getTabBarReserve(insets.bottom) + theme.spacing['2xl'];
   const [metrics, setMetrics] = useState<CancellationMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -198,7 +204,12 @@ export const CancellationPolicyScreen: React.FC = () => {
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
       <Navbar title="Cancelaciones" onBack={() => navigation.goBack()} />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: contentPadBottom }]}
+        showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+      >
         {renderHero()}
 
         <Card style={styles.card}>
@@ -324,7 +335,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
     padding: theme.spacing.md,
-    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   card: {
     width: '100%',

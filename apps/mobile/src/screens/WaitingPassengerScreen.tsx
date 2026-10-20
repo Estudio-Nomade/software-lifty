@@ -23,6 +23,7 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTripChat } from '../hooks/useTripChat';
 import { buildTripCancelledParams } from '../lib/cancellation';
 import { mergeTripUpdate } from '../lib/mergeTrip';
+import { getTabBarReserve } from '../lib/tabBarLayout';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
@@ -223,7 +224,7 @@ export const WaitingPassengerScreen: React.FC = () => {
       <View
         style={[
           styles.footer,
-          { paddingBottom: theme.dimensions.tabBarHeight + insets.bottom + theme.spacing.sm },
+          { paddingBottom: getTabBarReserve(insets.bottom) + theme.spacing.sm },
         ]}
       >
         <View style={styles.chatInputRow}>

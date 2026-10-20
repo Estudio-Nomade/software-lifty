@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { geocodeAddress, getActiveRide } from '../api/passenger';
 import type { PlaceSuggestion } from '../api/types';
 import { BottomTabBar } from '../components/BottomTabBar';
@@ -27,6 +27,7 @@ import {
   useLocation,
 } from '../hooks/useLocation';
 import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
+import { getTabBarReserve } from '../lib/tabBarLayout';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 import { resolveAddressLabel } from '../utils/resolveAddressLabel';
@@ -45,6 +46,8 @@ function metersBetween(a: { lat: number; lng: number }, b: { lat: number; lng: n
 
 export function HomeScreen() {
   const { navigate, replace } = useAppNavigation();
+  const insets = useSafeAreaInsets();
+  const tabReserve = getTabBarReserve(insets.bottom);
   const { current, locationError, refresh } = useLocation();
   const setActiveTrip = useRideStore((s) => s.setActiveTrip);
 
@@ -375,6 +378,10 @@ export function HomeScreen() {
                 followUserLocation
                 recenterKey={recenterKey}
                 style={styles.mapFill}
+                // Zoom +/− above search pill (~52) + gap + floating tab bar reserve.
+                bottomControlsOffset={
+                  tabReserve + theme.dimensions.inputHeight + theme.spacing.md + theme.spacing.sm
+                }
               />
               {locationError && !current ? (
                 <TouchableOpacity
@@ -399,16 +406,16 @@ export function HomeScreen() {
               >
                 <Ionicons name="locate-outline" size={20} color={theme.colors.primary} />
               </TouchableOpacity>
-            </View>
 
-            <View style={styles.sheetDock}>
-              <DestinationSearchPill onPress={handleOpenSearch} />
+              <View style={[styles.searchFloat, { bottom: tabReserve + theme.spacing.sm }]}>
+                <DestinationSearchPill onPress={handleOpenSearch} />
+              </View>
             </View>
           </View>
         )}
 
         {!searchExpanded ? (
-          <BottomTabBar activeTab="home" onSearchPress={handleOpenSearch} />
+          <BottomTabBar activeTab="home" onSearchPress={handleOpenSearch} visible />
         ) : null}
       </View>
     </SafeAreaView>
@@ -436,14 +443,11 @@ const styles = StyleSheet.create({
   mapFill: {
     flex: 1,
   },
-  sheetDock: {
-    backgroundColor: theme.colors.background,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.sm,
-    borderTopLeftRadius: theme.radius.xl,
-    borderTopRightRadius: theme.radius.xl,
-    marginTop: -theme.radius.xl,
-    ...theme.shadows.card,
+  searchFloat: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
   locateBtn: {
     position: 'absolute',
