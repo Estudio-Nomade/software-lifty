@@ -28,6 +28,7 @@ import {
 } from '../hooks/useLocation';
 import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
 import { getTabBarReserve } from '../lib/tabBarLayout';
+import { useLocationStore } from '../store/locationStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 import { resolveAddressLabel } from '../utils/resolveAddressLabel';
@@ -156,9 +157,13 @@ export function HomeScreen() {
   }, [current?.lat, current?.lng, current?.accuracy, searchExpanded, pickupFromGps]);
 
   const handleLocate = () => {
-    void (typeof refresh === 'function' ? refresh() : requestFreshPosition()).finally(() => {
-      setRecenterKey((k) => k + 1);
-    });
+    void (async () => {
+      const fix = await (typeof refresh === 'function' ? refresh() : requestFreshPosition());
+      // Only bump recenter when we have a fix — empty recenter is a no-op on the map.
+      if (fix || useLocationStore.getState().current) {
+        setRecenterKey((k) => k + 1);
+      }
+    })();
   };
 
   const handleOpenSearch = () => {

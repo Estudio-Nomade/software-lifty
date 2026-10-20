@@ -335,8 +335,10 @@ export function generateMapHtml(
     try { return JSON.parse(data); } catch (e) { return null; }
   }
 
-  window.addEventListener('message', function (event) {
-    var msg = parseMsg(event.data);
+  // RN WebView: iOS delivers host postMessage on window; Android on document.
+  // Listening only on window → pin/recenter never apply on Android.
+  function onHostMessage(event) {
+    var msg = parseMsg(event && event.data);
     if (!msg || !msg.type) return;
 
     switch (msg.type) {
@@ -367,7 +369,9 @@ export function generateMapHtml(
         }
         break;
     }
-  });
+  }
+  window.addEventListener('message', onHostMessage);
+  document.addEventListener('message', onHostMessage);
 
   window.addEventListener('error', function (e) {
     postToHost(JSON.stringify({ type: 'error', message: e.message || 'Unknown error' }));

@@ -354,7 +354,8 @@ export function generateMapHtml(colors: { turquoise: string; lightGray: string; 
     }));
   });
 
-  window.addEventListener('message', function (event) {
+  // RN WebView: iOS → window message; Android → document message.
+  function onHostMessage(event) {
     var msg;
     try {
       msg = JSON.parse(event.data);
@@ -414,7 +415,9 @@ export function generateMapHtml(colors: { turquoise: string; lightGray: string; 
         }
         break;
     }
-  });
+  }
+  window.addEventListener('message', onHostMessage);
+  document.addEventListener('message', onHostMessage);
 
   window.addEventListener('error', function (e) {
     postToHost(JSON.stringify({

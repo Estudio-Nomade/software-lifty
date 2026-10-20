@@ -83,6 +83,8 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
         ref={webViewRef}
         source={source}
         style={styles.webview}
+        // Required for inline HTML source on Android (Guide.md).
+        originWhitelist={['*']}
         onLoadEnd={() => setIsLoaded(true)}
         onError={handleError}
         onMessage={handleMessage}
