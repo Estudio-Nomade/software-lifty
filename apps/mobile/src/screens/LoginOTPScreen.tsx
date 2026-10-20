@@ -75,8 +75,13 @@ export const LoginOTPScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <View style={[styles.header, { marginTop: insets.top }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+      <View
+        style={[
+          styles.header,
+          { paddingTop: insets.top, height: theme.dimensions.navbarHeight + insets.top },
+        ]}
+      >
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={8}>
           <Text style={styles.backText}>← Volver</Text>
         </TouchableOpacity>
       </View>
