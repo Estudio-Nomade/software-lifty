@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -20,19 +19,13 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { classifySignUpResult } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../store/authStore';
 import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 import { theme } from '../theme';
-
-function nextAfterAuthSession(): 'ServiceArea' | 'Home' {
-  return useAuthStore.getState().coverageNoticeSeen ? 'Home' : 'ServiceArea';
-}
 
 export function LoginCredentialsScreen() {
   const { goBack, navigate, replace } = useAppNavigation();
   const insets = useSafeAreaInsets();
   const { signInWithGoogle } = useAuth();
-  const params = useLocalSearchParams<{ authError?: string }>();
   const fullName = useRegistrationDraftStore((s) => s.fullName);
   const clearDraft = useRegistrationDraftStore((s) => s.clear);
   const isSignUp = (fullName?.length ?? 0) > 0;
@@ -41,9 +34,7 @@ export function LoginCredentialsScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(
-    typeof params.authError === 'string' && params.authError.length > 0 ? params.authError : null,
-  );
+  const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -80,23 +71,14 @@ export function LoginCredentialsScreen() {
             identities: data.user?.identities?.length ?? 0,
             confirmation_sent_at: data.user?.confirmation_sent_at ?? null,
             error: err?.message ?? null,
-            status: err && 'status' in err ? (err as { status?: number }).status : null,
-            code: err && 'code' in err ? (err as { code?: string }).code : null,
           });
         }
-        if (err) {
-          console.error('[signUp] raw', {
-            message: err.message,
-            status: 'status' in err ? (err as { status?: number }).status : undefined,
-            code: 'code' in err ? (err as { code?: string }).code : undefined,
-          });
-          throw err;
-        }
+        if (err) throw err;
         const outcome = classifySignUpResult(data, trimmedEmail);
         if (outcome.kind === 'session') {
           clearDraft();
           registerPassenger(phoneTrimmed, fullName ?? undefined).catch(() => {});
-          replace(nextAfterAuthSession());
+          replace('LocationPermissions');
         } else if (outcome.kind === 'needs_verify') {
           replace('VerifyEmail', { email: trimmedEmail });
         } else {
@@ -118,15 +100,10 @@ export function LoginCredentialsScreen() {
             fullName ??
             undefined;
           registerPassenger(undefined, metaName).catch(() => {});
-          replace(nextAfterAuthSession());
+          replace('LocationPermissions');
         }
       }
     } catch (err) {
-      const raw =
-        typeof err === 'object' && err !== null && 'message' in err
-          ? String((err as { message?: unknown }).message ?? '')
-          : String(err ?? '');
-      console.error('[LoginCredentials] auth catch raw:', raw, err);
       setError(getFriendlyAuthError(err));
     } finally {
       setLoading(false);
@@ -139,20 +116,8 @@ export function LoginCredentialsScreen() {
     setInfo(null);
     setGoogleLoading(true);
     try {
-      const session = await signInWithGoogle();
-      if (!session) {
-        const { data } = await supabase.auth.getSession();
-        if (!data.session) {
-          // Cancel/dismiss without session — silent; cancel copy only on thrown cancel.
-          return;
-        }
-      }
+      await signInWithGoogle();
     } catch (err) {
-      const raw =
-        typeof err === 'object' && err !== null && 'message' in err
-          ? String((err as { message?: unknown }).message ?? '')
-          : String(err ?? '');
-      console.error('[LoginCredentials] google catch raw:', raw, err);
       setError(getFriendlyAuthError(err));
     } finally {
       setGoogleLoading(false);

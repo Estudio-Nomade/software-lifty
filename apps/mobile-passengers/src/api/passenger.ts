@@ -1,4 +1,3 @@
-import { searchPhotonPlaces } from '../utils/photonPlaces';
 import { api } from './client';
 import type {
   DirectionsResult,
@@ -133,20 +132,14 @@ export async function getDirections(params: {
   };
 }
 
-export async function geocodeAddress(
-  address: string,
-  bias?: { lat?: number; lng?: number },
-): Promise<{
+export async function geocodeAddress(address: string): Promise<{
   lat: number;
   lng: number;
   formatted_address: string;
 }> {
-  const params: { address: string; bias_lat?: number; bias_lng?: number } = { address };
-  if (typeof bias?.lat === 'number' && Number.isFinite(bias.lat)) params.bias_lat = bias.lat;
-  if (typeof bias?.lng === 'number' && Number.isFinite(bias.lng)) params.bias_lng = bias.lng;
   const { data } = await api.get<{ lat: number; lng: number; formatted_address: string }>(
     '/maps/geocode',
-    { params },
+    { params: { address } },
   );
   return data;
 }
@@ -224,21 +217,10 @@ export async function searchPlaces(
   lng?: number,
   signal?: AbortSignal,
 ): Promise<PlaceSuggestion[]> {
-  const q = input.trim();
-  if (q.length < 2) return [];
-
-  try {
-    const { data } = await api.get<PlaceSuggestion[]>('/maps/places/autocomplete', {
-      params: { input: q, lat, lng },
-      timeout: 5000,
-      signal,
-    });
-    const list = Array.isArray(data) ? data : [];
-    if (list.length > 0) return list;
-  } catch (err) {
-    if (signal?.aborted) throw err;
-    // 401 / network / timeout — fall through to Photon
-  }
-
-  return searchPhotonPlaces(q, lat, lng, signal);
+  const { data } = await api.get<PlaceSuggestion[]>('/maps/places/autocomplete', {
+    params: { input, lat, lng },
+    timeout: 5000,
+    signal,
+  });
+  return data;
 }

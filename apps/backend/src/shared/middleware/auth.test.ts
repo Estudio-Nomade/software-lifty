@@ -7,7 +7,7 @@ import { Elysia } from 'elysia';
 import { db } from '../db/client';
 import { users } from '../db/schema';
 import { getRedis } from '../lib/redis';
-import { createAuthPlugin, resolveDisplayNameFromMetadata } from './auth';
+import { createAuthPlugin } from './auth';
 import { createTestAuthPlugin, createTestToken } from '../testing/utils';
 
 let app: any;
@@ -99,34 +99,5 @@ describe('authPlugin', () => {
     expect(res.user).not.toBeNull();
     expect(res.user.id).toBe(userId);
     expect(res.authStatus).toBe('authenticated');
-  });
-});
-
-describe('resolveDisplayNameFromMetadata', () => {
-  test('prefers given_name + family_name over bare name', () => {
-    expect(
-      resolveDisplayNameFromMetadata({
-        name: 'Martin Transito',
-        given_name: 'Martina',
-        family_name: 'Yaquinta',
-      }),
-    ).toBe('Martina Yaquinta');
-  });
-
-  test('falls back to full_name then name', () => {
-    expect(resolveDisplayNameFromMetadata({ full_name: '  Ana Perez  ' })).toBe('Ana Perez');
-    expect(resolveDisplayNameFromMetadata({ name: 'Martin Transito' })).toBe('Martin Transito');
-  });
-
-  test('returns null for empty metadata', () => {
-    expect(resolveDisplayNameFromMetadata(null)).toBeNull();
-    expect(resolveDisplayNameFromMetadata({})).toBeNull();
-    expect(resolveDisplayNameFromMetadata({ name: '   ' })).toBeNull();
-  });
-
-  test('does not use given_name alone without family_name', () => {
-    expect(resolveDisplayNameFromMetadata({ given_name: 'Martina', name: 'Fallback' })).toBe(
-      'Fallback',
-    );
   });
 });

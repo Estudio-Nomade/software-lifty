@@ -112,6 +112,12 @@ Key colors: `deepBlue` (#0F2A44), `turquoise` (#1BBFAE), `white`, `lightGray` (#
 - `TabBar` is a **custom UI component**, not a navigator. Tab switching calls `navigation.navigate()`.
 - `Navbar` uses `deepBlue` background by default
 
+## Cross-platform layout (iOS ↔ Android)
+
+**REQUIRED skill:** `cross-platform-layout-safety` (`.agents/skills/cross-platform-layout-safety/`).
+
+Invoke it before changing tab bar, bottom sheet/peeker, safe-area/chrome, map overlays, StatusBar/nav bar, keyboard avoiding, or any fix that “works on one OS only”. Dual-OS verify is part of done; do not cascade layout rewrites to please a single platform.
+
 ## Key changes from SDK 54 → 57
 - Expo 54 → 55 → 56 → 57; RN 0.81 → 0.83 → 0.85 → 0.86; React 19.2.x
 - New Architecture required (cannot disable)

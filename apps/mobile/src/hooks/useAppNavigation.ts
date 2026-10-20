@@ -8,7 +8,6 @@ const SCREEN_TO_ROUTE = {
   LoginPhone: '/login-phone',
   LoginOTP: '/login-otp',
   LoginCredentials: '/login-credentials',
-  AuthCallback: '/auth-callback',
   ForgotPassword: '/forgot-password',
   Terms: '/terms',
   Support: '/support',

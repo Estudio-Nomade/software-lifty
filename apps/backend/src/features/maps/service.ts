@@ -24,13 +24,7 @@ export const mapsService = {
     return geoAutocomplete(input, lat, lng);
   },
 
-  async geocode(params: {
-    lat?: number;
-    lng?: number;
-    address?: string;
-    bias_lat?: number;
-    bias_lng?: number;
-  }): Promise<GeocodeResult> {
+  async geocode(params: { lat?: number; lng?: number; address?: string }): Promise<GeocodeResult> {
     return geoGeocode(params);
   },
 

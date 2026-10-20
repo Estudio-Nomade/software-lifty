@@ -2,24 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from 'expo-router';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Animated,
-  Keyboard,
   KeyboardAvoidingView,
   Modal,
-  PanResponder,
   Platform,
-  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { z } from 'zod';
 import { apiClient, getValidated } from '../api/client';
 import { type DriverDocument, documentSchema } from '../api/types';
@@ -32,8 +27,6 @@ import { Text } from '../components/ui/Text';
 import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
-import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
-import { getTabBarReserve } from '../lib/tabBarLayout';
 import { theme } from '../theme';
 import { compressImage } from '../utils/image';
 import { uploadPhotoToBackend } from '../utils/upload';
@@ -146,9 +139,6 @@ export const ProfileScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const signOut = useSignOut();
   const { setActiveTab } = useTabBar();
-  const insets = useSafeAreaInsets();
-  const { onScroll } = useTabBarScrollVisibility();
-  const contentPadBottom = getTabBarReserve(insets.bottom) + theme.spacing['2xl'];
 
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [documents, setDocuments] = useState<DriverDocument[]>([]);
@@ -160,59 +150,6 @@ export const ProfileScreen: React.FC = () => {
   const [editPhone, setEditPhone] = useState('');
   const [editPhotoUri, setEditPhotoUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const sheetTranslateY = useRef(new Animated.Value(0)).current;
-  const sheetDragStart = useRef(0);
-
-  const closeEdit = useCallback(() => {
-    Keyboard.dismiss();
-    setEditVisible(false);
-    setEditPhotoUri(null);
-    setSaving(false);
-    sheetTranslateY.setValue(0);
-  }, [sheetTranslateY]);
-
-  const dismissSheet = useCallback(() => {
-    Animated.timing(sheetTranslateY, {
-      toValue: 480,
-      duration: 180,
-      useNativeDriver: true,
-    }).start(() => closeEdit());
-  }, [closeEdit, sheetTranslateY]);
-
-  const sheetPan = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, g) =>
-          Math.abs(g.dy) > 4 && Math.abs(g.dy) > Math.abs(g.dx),
-        onPanResponderTerminationRequest: () => false,
-        onPanResponderGrant: () => {
-          sheetTranslateY.stopAnimation((v) => {
-            sheetDragStart.current = v;
-          });
-        },
-        onPanResponderMove: (_, g) => {
-          const next = Math.max(0, sheetDragStart.current + g.dy);
-          sheetTranslateY.setValue(next);
-        },
-        onPanResponderRelease: (_, g) => {
-          const dy = Math.max(0, sheetDragStart.current + g.dy);
-          if (dy > 120 || g.vy > 0.35) {
-            dismissSheet();
-            return;
-          }
-          Animated.spring(sheetTranslateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            damping: 50,
-            stiffness: 300,
-            mass: 0.5,
-          }).start();
-        },
-      }),
-    [dismissSheet, sheetTranslateY],
-  );
-
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -251,7 +188,6 @@ export const ProfileScreen: React.FC = () => {
     setEditLastName(parts.slice(1).join(' ') ?? '');
     setEditPhone(profile.phone ?? '');
     setEditPhotoUri(null);
-    sheetTranslateY.setValue(0);
     setEditVisible(true);
   };
 
@@ -290,7 +226,7 @@ export const ProfileScreen: React.FC = () => {
         photo_url: photoUrl,
       });
 
-      closeEdit();
+      setEditVisible(false);
       await fetchData();
     } catch {
       Alert.alert('Error', 'No se pudo guardar el perfil.');
@@ -332,14 +268,7 @@ export const ProfileScreen: React.FC = () => {
       <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
       <Navbar title="Perfil" showBack={false} variant="light" />
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: contentPadBottom }]}
-        showsVerticalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        bounces
-      >
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Card style={styles.profileCard} padding={theme.spacing.lg}>
           <View style={styles.avatar}>
             <Avatar uri={profile?.avatar_url ?? null} name={profile?.full_name ?? ''} size={80} />
@@ -513,49 +442,23 @@ export const ProfileScreen: React.FC = () => {
         />
       </ScrollView>
 
-      <Modal visible={editVisible} animationType="fade" transparent onRequestClose={closeEdit}>
+      <Modal visible={editVisible} animationType="slide" transparent>
         <KeyboardAvoidingView
           style={styles.modalOverlay}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={dismissSheet}
-            accessibilityLabel="Cerrar sin guardar"
-          />
-          <Animated.View
-            style={[styles.modalContent, { transform: [{ translateY: sheetTranslateY }] }]}
-          >
-            <View {...sheetPan.panHandlers} style={styles.sheetHandleZone}>
-              <View style={styles.sheetHandle} />
-              <View style={styles.modalHeader}>
-                <TouchableOpacity
-                  onPress={dismissSheet}
-                  hitSlop={12}
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancelar"
-                  style={styles.headerSideBtn}
-                >
-                  <Text style={styles.cancelText}>Cancelar</Text>
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Editar perfil</Text>
-                <TouchableOpacity
-                  onPress={dismissSheet}
-                  hitSlop={12}
-                  accessibilityRole="button"
-                  accessibilityLabel="Cerrar"
-                  style={styles.closeBtn}
-                >
-                  <Ionicons name="close" size={24} color={theme.colors.deepBlue} />
-                </TouchableOpacity>
-              </View>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Editar perfil</Text>
+              <TouchableOpacity onPress={() => setEditVisible(false)}>
+                <Ionicons name="close" size={24} color={theme.colors.mediumGray} />
+              </TouchableOpacity>
             </View>
 
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
-              bounces={false}
             >
               <TouchableOpacity style={styles.editAvatar} onPress={handlePickPhoto}>
                 <Avatar
@@ -594,7 +497,7 @@ export const ProfileScreen: React.FC = () => {
                 style={styles.editButton}
               />
             </ScrollView>
-          </Animated.View>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
     </View>
@@ -606,9 +509,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
-  scroll: {
-    flex: 1,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -619,6 +519,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
     padding: theme.spacing.md,
+    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   profileCard: {
     width: '100%',
@@ -802,22 +703,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderTopLeftRadius: theme.radius.xl,
     borderTopRightRadius: theme.radius.xl,
-    paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.lg,
+    padding: theme.spacing.lg,
     maxHeight: '90%',
-  },
-  sheetHandleZone: {
-    paddingTop: theme.spacing.sm,
-    minHeight: 56,
-  },
-  sheetHandle: {
-    alignSelf: 'center',
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: theme.colors.mediumGray,
-    marginBottom: theme.spacing.sm,
-    opacity: 0.7,
   },
   modalScrollContent: {
     gap: theme.spacing.md,
@@ -827,27 +714,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    minHeight: 44,
-  },
-  headerSideBtn: {
-    minWidth: 72,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  cancelText: {
-    fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.semibold,
-    color: theme.colors.mediumGray,
-  },
-  closeBtn: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
   },
   modalTitle: {
-    flex: 1,
-    textAlign: 'center',
     fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,

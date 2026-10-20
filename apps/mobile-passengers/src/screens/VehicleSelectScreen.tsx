@@ -18,13 +18,6 @@ import type { MarkerData } from '../components/Map/mapHtml';
 import { RequestBlockedCard } from '../components/RequestBlockedCard';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { toMapCoordinate } from '../hooks/useLocation';
-import {
-  API_DOWN_MESSAGE,
-  API_DOWN_TITLE,
-  FARE_FAIL_MESSAGE,
-  FARE_FAIL_TITLE,
-  isApiUnreachable,
-} from '../lib/apiReachability';
 import { decodePolyline } from '../lib/polyline';
 import { type RideRequestErrorInfo, parseRideRequestError } from '../lib/rideRequestErrors';
 import { type PaymentMethodType, usePaymentStore } from '../store/paymentStore';
@@ -138,35 +131,21 @@ export function VehicleSelectScreen() {
       }
 
       const next: Partial<Record<Vehicle['id'], FareEstimate>> = {};
-      let anyFareFailed = false;
-      const failReasons: unknown[] = [];
+      let anyFailed = false;
       fareResults.forEach((result, index) => {
         const id: Vehicle['id'] = index === 0 ? 'auto' : 'moto';
         if (result.status === 'fulfilled') {
           next[id] = result.value;
         } else {
-          anyFareFailed = true;
-          failReasons.push(result.reason);
+          anyFailed = true;
           console.error('[VehicleSelect] fare estimate failed', result.reason);
         }
       });
 
       setFares(next);
-
-      // One Alert only — never spam auto+moto+directions.
-      const allReasons = [
-        ...(directionsResult.status === 'rejected' ? [directionsResult.reason] : []),
-        ...failReasons,
-      ];
-      const apiDown = allReasons.some(isApiUnreachable);
-
-      if (apiDown) {
-        Alert.alert(API_DOWN_TITLE, API_DOWN_MESSAGE);
-      } else if (anyFareFailed) {
-        // Real fare/maps business failure (API is up) — not "server dead".
-        Alert.alert(FARE_FAIL_TITLE, FARE_FAIL_MESSAGE);
+      if (anyFailed) {
+        Alert.alert('No pudimos calcular la tarifa', 'Reintentá más tarde.');
       }
-      // Directions-only failure: chip shows km from fare or "No pudimos trazar la ruta".
     })();
 
     return () => {

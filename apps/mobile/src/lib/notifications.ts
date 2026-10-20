@@ -7,15 +7,6 @@ import { driverStatusSchema } from '../api/types';
 import { useAuthStore } from '../store/authStore';
 import { buildTripCancelledParams } from './cancellation';
 import { resolvePostAuthRoute, routeForDriverStatus } from './postAuthRouting';
-import { queryClient } from './queryClient';
-
-const DRIVER_REVIEW_PUSH_TYPES = new Set([
-  'driver:approved',
-  'kyc:approved',
-  'driver:rejected',
-  'kyc:rejected',
-  'driver:review_notes',
-]);
 
 interface PermStatus {
   status: string;
@@ -83,40 +74,30 @@ export async function reactToDriverReviewPush(
   type: string,
   navigate: (screen: string, params?: Record<string, string>) => void,
   pushReason?: string,
-  options?: { navigateOnReview?: boolean },
 ): Promise<void> {
   const isApproved = type === 'driver:approved' || type === 'kyc:approved';
   const isRejected = type === 'driver:rejected' || type === 'kyc:rejected';
   const isReviewNotes = type === 'driver:review_notes';
   if (!isApproved && !isRejected && !isReviewNotes) return;
 
-  const shouldNavigate = options?.navigateOnReview !== false;
-
-  void queryClient.invalidateQueries({ queryKey: ['driverStatus'] });
-
   // Optimistic route so tap feels instant; API refresh corrects store.
   if (isApproved) {
     useAuthStore.getState().setDriverStatus('approved');
     useAuthStore.getState().setOnboardingStep('approved');
-    if (shouldNavigate) navigate('Active');
+    navigate('Active');
   } else if (isReviewNotes) {
     // Soft correction: stay under_review, open docs with the reason.
     useAuthStore.getState().setDriverStatus('under_review');
     useAuthStore.getState().setOnboardingStep('documents');
-    if (shouldNavigate) {
-      navigate('OnboardingStep2', pushReason ? { reviewReason: pushReason } : undefined);
-    }
+    navigate('OnboardingStep2', pushReason ? { reviewReason: pushReason } : undefined);
   } else {
     useAuthStore.getState().setDriverStatus('rejected');
     useAuthStore.getState().setOnboardingStep('documents');
-    if (shouldNavigate) {
-      navigate('OnboardingStep2', pushReason ? { reviewReason: pushReason } : undefined);
-    }
+    navigate('OnboardingStep2', pushReason ? { reviewReason: pushReason } : undefined);
   }
 
   try {
     const route = await resolvePostAuthRoute();
-    if (!shouldNavigate) return;
     const fallback = isApproved ? 'Active' : 'OnboardingStep2';
     if (route.screen && route.screen !== fallback) {
       // Soft notes: prefer staying on docs with reason even if status maps to Active.
@@ -138,7 +119,6 @@ export async function reactToDriverReviewPush(
       if (driverData.step != null) {
         useAuthStore.getState().setOnboardingStep(driverData.step);
       }
-      if (!shouldNavigate) return;
       if (isReviewNotes) {
         navigate(
           'OnboardingStep2',
@@ -154,20 +134,6 @@ export async function reactToDriverReviewPush(
       // keep optimistic navigation
     }
   }
-}
-
-/**
- * Foreground delivery (no tap). Refreshes driver status for review decisions.
- * Does not force navigation — user may already be on Active waiting for GO.
- */
-export function handleNotificationReceived(
-  notification: Notifications.Notification,
-  navigate: (screen: string, params?: Record<string, string>) => void,
-): void {
-  const data = notification.request.content.data as Record<string, string | undefined> | undefined;
-  const type = data?.type;
-  if (!type || !DRIVER_REVIEW_PUSH_TYPES.has(type)) return;
-  void reactToDriverReviewPush(type, navigate, data?.reason, { navigateOnReview: false });
 }
 
 export function handleNotificationResponse(

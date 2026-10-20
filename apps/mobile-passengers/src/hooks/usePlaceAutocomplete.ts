@@ -21,8 +21,7 @@ export function usePlaceAutocomplete(query: string): PlaceAutocompleteResult {
 
   useEffect(() => {
     const trimmed = query.trim();
-    // Google-Maps-like: start suggesting after 2 chars (was 3 — felt broken).
-    if (trimmed.length < 2) {
+    if (trimmed.length < 3) {
       setSuggestions([]);
       setLoading(false);
       setError(null);
@@ -52,7 +51,7 @@ export function usePlaceAutocomplete(query: string): PlaceAutocompleteResult {
             (err as { name?: string })?.name === 'AbortError';
           if (isAbort) return;
           setSuggestions([]);
-          setError('No pudimos buscar calles ni lugares');
+          setError('No pudimos buscar direcciones');
         } finally {
           if (!cancelled) setLoading(false);
           if (loadingTimer) clearTimeout(loadingTimer);

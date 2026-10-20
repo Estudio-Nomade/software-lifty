@@ -54,13 +54,7 @@ export function RegisterScreen() {
     setError(null);
     setGoogleLoading(true);
     try {
-      // Keep typed name as draft so post-Google register prefers Lifty name over Google nickname.
-      const typed = `${name.trim()} ${surname.trim()}`.trim();
-      if (typed.length > 0) {
-        setFullName(typed);
-      } else {
-        clearDraft();
-      }
+      clearDraft();
       await signInWithGoogle();
     } catch (err) {
       setError(getFriendlyAuthError(err));

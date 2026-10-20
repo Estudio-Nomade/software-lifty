@@ -1,35 +1,9 @@
 /** UI labels shown on OnboardingVehicle. Backend stores English slugs. */
 export type VehicleTypeUi = 'Auto' | 'Moto' | 'Camioneta';
 
-/** Match DB `vehicles.plate` varchar(20). No national format regex — cédula is proof. */
-export const VEHICLE_PLATE_MAX_LEN = 20;
-
 /** Normativa Lifty: piso histórico 2011 + antigüedad máx. 15 años. */
 export const VEHICLE_MIN_MODEL_YEAR = 2011;
 export const VEHICLE_MAX_AGE_YEARS = 15;
-
-/** Trim spaces/hyphens/dots, uppercase. */
-export function normalizeVehiclePlate(value: string): string {
-  return value.replace(/\s+/g, '').replace(/[-.]/g, '').toUpperCase();
-}
-
-/**
- * Field error, or undefined if empty/valid.
- * Empty is handled by required check on the screen.
- * Accepts any alphanumeric plate ≤20 (moto/auto/mercosur/legacy).
- */
-export function validateVehiclePlate(value: string): string | undefined {
-  if (!value.trim()) return undefined;
-  const n = normalizeVehiclePlate(value);
-  if (n.length < 1) return undefined;
-  if (n.length > VEHICLE_PLATE_MAX_LEN) {
-    return `Máximo ${VEHICLE_PLATE_MAX_LEN} caracteres.`;
-  }
-  if (!/^[A-Z0-9]+$/.test(n)) {
-    return 'Usá solo letras y números (sin símbolos).';
-  }
-  return undefined;
-}
 
 export function getVehicleYearBounds(now: Date = new Date()): {
   currentYear: number;
@@ -137,7 +111,9 @@ export function vehicleFormFromProfile(
 ): VehicleFormValues | null {
   if (!vehicle || !hasCompleteVehicle(vehicle)) return null;
   return {
-    plate: normalizeVehiclePlate(String(vehicle.plate ?? '')),
+    plate: String(vehicle.plate ?? '')
+      .replace(/\s+/g, '')
+      .toUpperCase(),
     brand: String(vehicle.brand ?? '').trim(),
     model: String(vehicle.model ?? '').trim(),
     color: String(vehicle.color ?? '').trim(),

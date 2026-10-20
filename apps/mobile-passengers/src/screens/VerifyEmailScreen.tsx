@@ -18,13 +18,8 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { resendSignupEmailOtp, verifySignupEmailOtp } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../store/authStore';
 import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 import { theme } from '../theme';
-
-function nextAfterAuthSession(): 'ServiceArea' | 'Home' {
-  return useAuthStore.getState().coverageNoticeSeen ? 'Home' : 'ServiceArea';
-}
 
 export function VerifyEmailScreen() {
   const { goBack, replace } = useAppNavigation();
@@ -51,20 +46,7 @@ export function VerifyEmailScreen() {
     setInfo(null);
     setLoading(true);
     try {
-      const trimmedEmail = email.trim();
-      const trimmedCode = code.trim();
-      if (__DEV__) {
-        console.log('[VerifyEmail]', {
-          emailLen: trimmedEmail.length,
-          codeLen: trimmedCode.length,
-        });
-      }
-      if (!trimmedEmail) {
-        setError('Falta el email de verificación. Volvé e iniciá el registro de nuevo.');
-        setLoading(false);
-        return;
-      }
-      await verifySignupEmailOtp(supabase, trimmedEmail, trimmedCode);
+      await verifySignupEmailOtp(supabase, email, code);
 
       const metaName =
         draftFullName ||
@@ -75,15 +57,8 @@ export function VerifyEmailScreen() {
         )?.full_name;
       await registerPassenger(undefined, metaName ?? undefined).catch(() => {});
       clearDraft();
-      replace(nextAfterAuthSession());
+      replace('LocationPermissions');
     } catch (e) {
-      if (__DEV__) {
-        const raw =
-          typeof e === 'object' && e !== null && 'message' in e
-            ? String((e as { message?: unknown }).message ?? '')
-            : String(e ?? '');
-        console.log('[VerifyEmail] verify error raw:', raw);
-      }
       setError(getFriendlyAuthError(e));
       setLoading(false);
     }

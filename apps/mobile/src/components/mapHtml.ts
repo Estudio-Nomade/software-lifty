@@ -118,8 +118,10 @@ export function generateMapHtml(colors: { turquoise: string; lightGray: string; 
     style: 'https://tiles.openfreemap.org/styles/liberty',
     center: DEFAULT_CENTER,
     zoom: DEFAULT_ZOOM,
-    attributionControl: false,
+    attributionControl: true,
   });
+
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
   var mapLoaded = false;
   var markers = [];

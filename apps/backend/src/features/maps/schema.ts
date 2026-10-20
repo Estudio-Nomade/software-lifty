@@ -10,9 +10,6 @@ export const geocodeQuery = t.Object({
   lat: t.Optional(t.Number()),
   lng: t.Optional(t.Number()),
   address: t.Optional(t.String()),
-  /** Proximity bias for forward geocode (passenger GPS). */
-  bias_lat: t.Optional(t.Number()),
-  bias_lng: t.Optional(t.Number()),
 });
 
 export const directionsQuery = t.Object({

@@ -1,19 +1,17 @@
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, InteractionManager, Platform } from 'react-native';
+import { InteractionManager, Platform } from 'react-native';
 import { apiClient } from '../api/client';
 import { driverStatusSchema } from '../api/types';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { isLiveTrip } from '../lib/isLiveTrip';
 import { getCurrentPosition } from '../lib/location';
 import {
-  handleNotificationReceived,
   handleNotificationResponse,
   registerForPush,
   setupNotificationHandler,
 } from '../lib/notifications';
-import { queryClient } from '../lib/queryClient';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { useTripStore } from '../store/tripStore';
@@ -180,30 +178,14 @@ function NotificationSetup() {
   useEffect(() => {
     setupNotificationHandler();
 
-    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       handleNotificationResponse(response, navigate);
     });
 
-    // Foreground: refresh status on approve/reject without requiring a tap.
-    const receivedSub = Notifications.addNotificationReceivedListener((notification) => {
-      handleNotificationReceived(notification, navigate);
-    });
-
     return () => {
-      responseSub.remove();
-      receivedSub.remove();
+      subscription.remove();
     };
   }, [navigate]);
-
-  useEffect(() => {
-    if (!authToken) return;
-    const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active') {
-        void queryClient.invalidateQueries({ queryKey: ['driverStatus'] });
-      }
-    });
-    return () => sub.remove();
-  }, [authToken]);
 
   useEffect(() => {
     if (!sessionRestored || !authToken) return;

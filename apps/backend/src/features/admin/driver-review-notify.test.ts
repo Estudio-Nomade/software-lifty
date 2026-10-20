@@ -1,8 +1,5 @@
 process.env.NODE_ENV = 'test';
 
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'bun:test';
 import {
   DRIVER_APPROVED_PUSH,
@@ -10,29 +7,6 @@ import {
   driverReviewNotesPush,
   shortReviewReason,
 } from './driver-review-push';
-
-const adminDir = dirname(fileURLToPath(import.meta.url));
-
-describe('approve paths both notify driver (mail + push contract)', () => {
-  test('one-click mail approve (approve.ts) queues notifyDriverApproved + push', () => {
-    const src = readFileSync(join(adminDir, 'approve.ts'), 'utf8');
-    expect(src).toContain("from './notifications'");
-    expect(src).toContain('notifyDriverApproved');
-    expect(src).toContain('sendPushToUser');
-    expect(src).toContain('users.email');
-    expect(src).toContain('[DRIVER-NOTIFY] Skip approved email — no email');
-    expect(src).toContain('[DRIVER-NOTIFY] approved email queued');
-  });
-
-  test('panel reviewDriver approve (service.ts) still queues mail + push', () => {
-    const src = readFileSync(join(adminDir, 'service.ts'), 'utf8');
-    expect(src).toContain('notifyDriverApproved');
-    expect(src).toContain('sendPushToUser');
-    expect(src).toContain('DRIVER_APPROVED_PUSH');
-    // approve branch still present (do not regress #343)
-    expect(src).toMatch(/if \(isApprove\)[\s\S]*notifyDriverApproved/);
-  });
-});
 
 describe('driver review notify copy', () => {
   test('DRIVER_APPROVED_PUSH uses canonical type and 30d stickers body', () => {

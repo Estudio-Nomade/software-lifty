@@ -46,14 +46,13 @@ import {
   isDistrictRequiredError,
   shouldOpenDistrictPicker,
 } from '../lib/shouldOpenDistrictPicker';
-import { getTabBarReserve } from '../lib/tabBarLayout';
 import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
 import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-/** Collapsed: horizontal strip above tab bar (handle + peeker line). */
+/** Collapsed: handle + one peeker line above tabs (invite to pull up). */
 const SHEET_COLLAPSED = 56;
 /** Gap between GO+hint stack bottom and collapsed offline sheet top. */
 const GO_STACK_SHEET_GAP = theme.spacing.sm;
@@ -161,12 +160,7 @@ export const ActiveScreen: React.FC = () => {
   const { data: driverStatus } = useQuery({
     queryKey: ['driverStatus'],
     queryFn: () => getValidated('/drivers/me/status', driverStatusSchema),
-    // Faster poll while waiting on admin review so GO unlocks without push tap.
-    refetchInterval: (q) => {
-      const d = q.state.data;
-      const waiting = d?.status === 'under_review' || d?.step === 'review';
-      return waiting ? 5_000 : 30_000;
-    },
+    refetchInterval: 30_000,
   });
 
   const documentsPendingReview = driverStatus?.documents_pending_review ?? false;
@@ -387,8 +381,8 @@ export const ActiveScreen: React.FC = () => {
       ? havDistance(mapCenter, { lat: locationLat!, lng: locationLng! }) > 10
       : false;
 
-  // Floating tab pill: sheet sits above full reserve (height + gap + safe inset).
-  const tabPad = getTabBarReserve(insets.bottom);
+  // Tab bar is its own absolute layer (zIndex 1000). Sheet sits ON TOP of it via bottomOffset.
+  const tabPad = theme.dimensions.tabBarHeight + insets.bottom;
   // ~55% of map area; ScrollView covers overflow (Ver ganancias, etc.).
   const expandedHeight = Math.max(
     SHEET_COLLAPSED + 160,

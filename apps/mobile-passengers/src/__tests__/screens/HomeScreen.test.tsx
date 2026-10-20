@@ -146,10 +146,7 @@ describe('HomeScreen destination confirmation', () => {
       fireEvent.press(getByText('Continuar'));
     });
 
-    expect(mockGeocodeAddress).toHaveBeenCalledWith(
-      'Calle Falsa 123',
-      expect.objectContaining({ lat: expect.any(Number), lng: expect.any(Number) }),
-    );
+    expect(mockGeocodeAddress).toHaveBeenCalledWith('Calle Falsa 123');
     expect(mockNavigate).toHaveBeenCalledWith(
       'VehicleSelect',
       expect.objectContaining({
@@ -172,8 +169,6 @@ describe('HomeScreen destination confirmation', () => {
     });
 
     expect(mockNavigate).not.toHaveBeenCalled();
-    expect(
-      getByText('No encontramos esa calle o lugar. Probá otra búsqueda o elegí una sugerencia.'),
-    ).toBeTruthy();
+    expect(getByText('No encontramos esa dirección. Revisá la dirección e intentá de nuevo.')).toBeTruthy();
   });
 });

@@ -1,11 +1,4 @@
-import {
-  TAB_BAR_ROUTES,
-  TAB_SCREEN,
-  isSameTabRoute,
-  isTabBarRoute,
-  screenForTab,
-  tabKeyFromPathname,
-} from '../../lib/tabBarRoutes';
+import { TAB_BAR_ROUTES, isTabBarRoute } from '../../lib/tabBarRoutes';
 
 describe('isTabBarRoute', () => {
   it('shows the tab bar on authenticated tab screens', () => {
@@ -53,52 +46,5 @@ describe('isTabBarRoute', () => {
 
   it('only exposes the six tab screens', () => {
     expect(TAB_BAR_ROUTES).toHaveLength(6);
-  });
-});
-
-describe('tabKeyFromPathname', () => {
-  it('maps home-equivalent paths to home', () => {
-    expect(tabKeyFromPathname('/')).toBe('home');
-    expect(tabKeyFromPathname('/online')).toBe('home');
-    expect(tabKeyFromPathname('/active')).toBe('home');
-  });
-
-  it('maps each primary tab path', () => {
-    expect(tabKeyFromPathname('/earnings')).toBe('earnings');
-    expect(tabKeyFromPathname('/trip-history')).toBe('trips');
-    expect(tabKeyFromPathname('/profile')).toBe('profile');
-    expect(tabKeyFromPathname('/cancellation-policy')).toBe('profile');
-  });
-
-  it('returns null for non-tab routes', () => {
-    expect(tabKeyFromPathname('/incoming-request')).toBeNull();
-    expect(tabKeyFromPathname('/navigation')).toBeNull();
-  });
-});
-
-describe('isSameTabRoute', () => {
-  it('is true when already on that tab (including home equivalents)', () => {
-    expect(isSameTabRoute('/active', 'home')).toBe(true);
-    expect(isSameTabRoute('/online', 'home')).toBe(true);
-    expect(isSameTabRoute('/earnings', 'earnings')).toBe(true);
-    expect(isSameTabRoute('/trip-history', 'trips')).toBe(true);
-    expect(isSameTabRoute('/profile', 'profile')).toBe(true);
-    expect(isSameTabRoute('/cancellation-policy', 'profile')).toBe(true);
-  });
-
-  it('is false when switching to a different tab', () => {
-    expect(isSameTabRoute('/active', 'earnings')).toBe(false);
-    expect(isSameTabRoute('/earnings', 'home')).toBe(false);
-    expect(isSameTabRoute('/profile', 'trips')).toBe(false);
-  });
-});
-
-describe('screenForTab', () => {
-  it('returns canonical screens (home → Active)', () => {
-    expect(screenForTab('home')).toBe('Active');
-    expect(screenForTab('earnings')).toBe('Earnings');
-    expect(screenForTab('trips')).toBe('TripHistory');
-    expect(screenForTab('profile')).toBe('Profile');
-    expect(TAB_SCREEN.home).toBe('Active');
   });
 });

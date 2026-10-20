@@ -7,21 +7,15 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/97a435a9-6725-4207-a930-c11ec77c7de5",
-      "fallbackToCacheTimeout": 0
-    },
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.lifty.passenger",
       "infoPlist": {
-        "NSCameraUsageDescription": "Lifty necesita la cámara para tu foto de perfil.",
-        "NSPhotoLibraryUsageDescription": "Lifty necesita acceso a tu galería para la foto de perfil.",
-        "NSLocationWhenInUseUsageDescription": "Lifty usa tu ubicación para ubicar el origen del viaje y mostrarte conductores cercanos."
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "NSPhotoLibraryUsageDescription": "Lifty necesita acceso a tu galería para la foto de perfil."
       }
     },
     "android": {
@@ -42,7 +36,12 @@
     },
     "plugins": [
       "expo-font",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "mode": "development"
+        }
+      ],
       "expo-router",
       "expo-web-browser",
       [
@@ -52,21 +51,6 @@
           "image": "./assets/splash-brand.png",
           "imageWidth": 300,
           "resizeMode": "contain"
-        }
-      ],
-      [
-        "expo-location",
-        {
-          "locationWhenInUsePermission": "Lifty usa tu ubicación para ubicar el origen del viaje y mostrarte conductores cercanos.",
-          "isAndroidBackgroundLocationEnabled": false,
-          "isIosBackgroundLocationEnabled": false
-        }
-      ],
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Lifty necesita acceso a tu galería para la foto de perfil.",
-          "cameraPermission": "Lifty necesita la cámara para tu foto de perfil."
         }
       ]
     ],

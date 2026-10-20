@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import { ApiError, reportTags } from '../api/types';
 import { Button } from '../components/Button';
@@ -20,7 +19,6 @@ import { StarRating } from '../components/StarRating';
 import { Text } from '../components/ui/Text';
 import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { getTabBarReserve } from '../lib/tabBarLayout';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
 
@@ -30,12 +28,10 @@ type Step = 'collect' | 'rate';
 
 export const TripCompleteScreen: React.FC = () => {
   const navigation = useAppNavigation();
-  const insets = useSafeAreaInsets();
   const activeTripId = useTripStore((s) => s.activeTripId);
   const trip = useTripStore((s) => s.trip);
   const clearTrip = useTripStore((s) => s.clearTrip);
   const { setActiveTab } = useTabBar();
-  const contentPadBottom = getTabBarReserve(insets.bottom) + theme.spacing['2xl'];
   const preferredMethod =
     trip?.payment_method === 'transfer' || trip?.payment_method === 'cash'
       ? trip.payment_method
@@ -333,7 +329,7 @@ export const TripCompleteScreen: React.FC = () => {
       >
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: contentPadBottom }]}
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -366,6 +362,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     paddingVertical: theme.spacing.lg,
+    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   content: {
     alignItems: 'center',

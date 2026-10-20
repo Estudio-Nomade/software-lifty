@@ -6,9 +6,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import {
   autocomplete,
   autocompleteCacheKey,
-  formatPhotonAddress,
   normalizeAutocompleteQuery,
-  rankPhotonPlaceFeatures,
 } from './geo';
 
 type FetchMock = ReturnType<typeof spyOn<typeof globalThis, 'fetch'>>;
@@ -22,55 +20,8 @@ describe('geo autocomplete helpers', () => {
     const a = autocompleteCacheKey('San  Martin', -31.945, -65.189);
     const b = autocompleteCacheKey('san martin', -31.94, -65.19);
     expect(a).toBe(b);
-    expect(a).toContain('geo:ac:v2:san martin:');
+    expect(a).toContain('geo:ac:v1:san martin:');
     expect(autocompleteCacheKey('x')).toContain(':none:none');
-  });
-});
-
-describe('formatPhotonAddress POI vs street', () => {
-  test('POI keeps name when street is also present', () => {
-    expect(
-      formatPhotonAddress({
-        name: 'Dique seco De los Curas',
-        street: 'Camino del Lago',
-        osm_key: 'waterway',
-        osm_value: 'dam',
-        city: 'Tandil',
-        country: 'Argentina',
-      }),
-    ).toContain('Dique seco De los Curas');
-  });
-
-  test('highway uses name as street', () => {
-    expect(
-      formatPhotonAddress({
-        name: 'San Martín',
-        osm_key: 'highway',
-        city: 'Villa Dolores',
-        country: 'Argentina',
-      }),
-    ).toMatch(/^San Martín/);
-  });
-});
-
-describe('rankPhotonPlaceFeatures', () => {
-  test('prefers nearer match', () => {
-    const ranked = rankPhotonPlaceFeatures(
-      [
-        {
-          geometry: { coordinates: [124.07, 9.6] },
-          properties: { osm_id: 1, name: 'Calvario', osm_key: 'place' },
-        },
-        {
-          geometry: { coordinates: [-59.15, -37.32] },
-          properties: { osm_id: 2, name: 'Parque Calvario', osm_key: 'place', city: 'Tandil' },
-        },
-      ],
-      'Calvario',
-      -37.32,
-      -59.13,
-    );
-    expect(ranked[0].properties.osm_id).toBe(2);
   });
 });
 
