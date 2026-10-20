@@ -126,9 +126,8 @@ export const ForgotPasswordScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.sm }]}>
+      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.lg }]}>
         <TouchableOpacity
-          hitSlop={8}
           onPress={() => {
             if (step === 'reset') {
               setStep('email');
