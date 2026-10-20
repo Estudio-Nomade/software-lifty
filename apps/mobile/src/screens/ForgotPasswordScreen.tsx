@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { OTPInput } from '../components/OTPInput';
@@ -24,6 +25,7 @@ import { theme } from '../theme';
 
 export const ForgotPasswordScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const { loading, signOut } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -63,11 +65,11 @@ export const ForgotPasswordScreen: React.FC = () => {
       return;
     }
     if (password.length < 6) {
-      setError('La contrasena debe tener al menos 6 caracteres');
+      setError('La contraseña debe tener al menos 6 caracteres');
       return;
     }
     if (password !== confirmPassword) {
-      setError('Las contrasenas no coinciden');
+      setError('Las contraseñas no coinciden');
       return;
     }
 
@@ -89,7 +91,7 @@ export const ForgotPasswordScreen: React.FC = () => {
         navigation.replace('Terms');
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al restablecer la contrasena';
+      const message = err instanceof Error ? err.message : 'Error al restablecer la contraseña';
       setError(message);
       if (isTransientStatusFailure(err)) {
         try {
@@ -124,8 +126,18 @@ export const ForgotPasswordScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top + theme.spacing.sm,
+            paddingBottom: theme.spacing.sm,
+            minHeight: theme.dimensions.navbarHeight + insets.top,
+          },
+        ]}
+      >
         <TouchableOpacity
+          hitSlop={8}
           onPress={() => {
             if (step === 'reset') {
               setStep('email');
@@ -135,6 +147,7 @@ export const ForgotPasswordScreen: React.FC = () => {
               navigation.goBack();
             }
           }}
+          style={styles.backButton}
         >
           <Text style={styles.backText}>← Volver</Text>
         </TouchableOpacity>
@@ -151,7 +164,7 @@ export const ForgotPasswordScreen: React.FC = () => {
           <View style={{ height: 16 }} />
           {step === 'email' ? (
             <>
-              <Text style={styles.title}>Recuperar contrasena</Text>
+              <Text style={styles.title}>Recuperar contraseña</Text>
               <Text style={styles.subtitle}>
                 Ingresa tu email y te enviamos un codigo para restablecerla
               </Text>
@@ -178,7 +191,7 @@ export const ForgotPasswordScreen: React.FC = () => {
             </>
           ) : (
             <>
-              <Text style={styles.title}>Restablecer contrasena</Text>
+              <Text style={styles.title}>Restablecer contraseña</Text>
               <Text style={styles.subtitle}>
                 Te enviamos un codigo de 6 digitos a {email.trim()}
               </Text>
@@ -186,7 +199,7 @@ export const ForgotPasswordScreen: React.FC = () => {
               <OTPInput length={6} value={code} onChange={setCode} />
               <View style={{ height: 16 }} />
               <Input
-                placeholder="Nueva contrasena"
+                placeholder="Nueva contraseña"
                 value={password}
                 onChangeText={(t) => {
                   setPassword(t);
@@ -199,7 +212,7 @@ export const ForgotPasswordScreen: React.FC = () => {
                 containerStyle={styles.inputField}
               />
               <Input
-                placeholder="Confirmar contrasena"
+                placeholder="Confirmar contraseña"
                 value={confirmPassword}
                 onChangeText={(t) => {
                   setConfirmPassword(t);
@@ -219,13 +232,13 @@ export const ForgotPasswordScreen: React.FC = () => {
                     color={theme.colors.mediumGray}
                   />
                   <Text style={styles.showPasswordText}>
-                    {showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+                    {showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                   </Text>
                 </View>
               </TouchableOpacity>
               <View style={{ height: 8 }} />
               <Button
-                title="RESTABLECER CONTRASENA"
+                title="RESTABLECER CONTRASEÑA"
                 onPress={handleReset}
                 loading={resetPassword.isPending}
                 disabled={
@@ -261,9 +274,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.lg,
-    paddingBottom: theme.spacing.sm,
+  },
+  backButton: {
+    paddingVertical: theme.spacing.sm,
+    paddingRight: theme.spacing.md,
   },
   backText: {
     fontSize: theme.fontSize.md,
