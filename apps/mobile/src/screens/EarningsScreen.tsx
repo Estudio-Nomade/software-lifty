@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import type React from 'react';
 import { ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import type { EarningsDaily } from '../api/types';
 import { Card } from '../components/Card';
@@ -11,17 +10,12 @@ import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { Text } from '../components/ui/Text';
 import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
 import { shouldShowPlatformDebt } from '../lib/commission';
-import { getTabBarReserve } from '../lib/tabBarLayout';
 import { theme } from '../theme';
 
 export const EarningsScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const { setActiveTab } = useTabBar();
-  const insets = useSafeAreaInsets();
-  const { onScroll } = useTabBarScrollVisibility();
-  const contentPadBottom = getTabBarReserve(insets.bottom) + theme.spacing['2xl'];
 
   const {
     data: earnings,
@@ -66,12 +60,7 @@ export const EarningsScreen: React.FC = () => {
       <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
       <Navbar title="Cobros" showBack={false} variant="light" />
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: contentPadBottom }]}
-        showsVerticalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-      >
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading ? (
           <>
             <SkeletonCard />
@@ -362,6 +351,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
     padding: theme.spacing.md,
+    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   totalCard: {
     width: '100%',

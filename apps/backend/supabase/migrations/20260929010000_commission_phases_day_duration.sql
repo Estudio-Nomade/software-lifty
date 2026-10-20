@@ -2,7 +2,6 @@
 -- Seed is launch-oriented (week 1 free). Environments still on default month seed get
 -- reseeded; custom month ranges are backfilled with 1 month ≈ 30 days before drop.
 -- Idempotent: safe if month_* already dropped (re-run / partial apply).
--- CRITICAL: drop month_* BEFORE day-only DELETE/INSERT (month_start is NOT NULL).
 
 ALTER TABLE "commission_phases" ADD COLUMN IF NOT EXISTS "day_start" integer;
 ALTER TABLE "commission_phases" ADD COLUMN IF NOT EXISTS "day_end" integer;
@@ -38,7 +37,7 @@ BEGIN
         END
       );
 
-    -- Detect default month seed shape WHILE month_* still exist.
+    -- Reseed to week-based launch defaults when still on original month seed shape.
     SELECT EXISTS (
       SELECT 1 FROM "commission_phases" p
       WHERE p.name = 'Lanzamiento' AND p.month_start = 1 AND p.month_end = 1
@@ -50,11 +49,6 @@ BEGIN
     ) = 4
     INTO looks_like_default;
 
-    -- Drop month_* BEFORE any day-only reseed (avoids 23502 on month_start NOT NULL).
-    ALTER TABLE "commission_phases" DROP COLUMN IF EXISTS "month_start";
-    ALTER TABLE "commission_phases" DROP COLUMN IF EXISTS "month_end";
-    ALTER TABLE "commission_phases" DROP COLUMN IF EXISTS "monthly_increment";
-
     IF looks_like_default THEN
       DELETE FROM "commission_phases";
       INSERT INTO "commission_phases" (name, day_start, day_end, base_rate, daily_increment, cap_rate)
@@ -64,6 +58,10 @@ BEGIN
         ('Estabilización', 15, 120, 0.10, NULL, NULL),
         ('Crecimiento', 121, NULL, 0.10, NULL, 0.15);
     END IF;
+
+    ALTER TABLE "commission_phases" DROP COLUMN IF EXISTS "month_start";
+    ALTER TABLE "commission_phases" DROP COLUMN IF EXISTS "month_end";
+    ALTER TABLE "commission_phases" DROP COLUMN IF EXISTS "monthly_increment";
   END IF;
 
   -- Ensure day_start populated (empty/odd DBs or already-migrated).

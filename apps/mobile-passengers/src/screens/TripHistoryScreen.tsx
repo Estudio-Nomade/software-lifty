@@ -9,13 +9,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { getRideHistory } from '../api/passenger';
 import type { Trip } from '../api/types';
 import { BottomTabBar } from '../components/BottomTabBar';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
-import { getTabBarReserve } from '../lib/tabBarLayout';
 import { theme } from '../theme';
 
 const LIMIT = 20;
@@ -99,9 +97,6 @@ function TripCard({ trip, onSupport }: { trip: Trip; onSupport: () => void }) {
 
 export function TripHistoryScreen() {
   const { goBack, navigate } = useAppNavigation();
-  const insets = useSafeAreaInsets();
-  const { visible, onScroll } = useTabBarScrollVisibility();
-  const contentPadBottom = getTabBarReserve(insets.bottom) + theme.spacing['2xl'];
   const [page, setPage] = useState(1);
   const [allTrips, setAllTrips] = useState<Trip[]>([]);
 
@@ -182,11 +177,9 @@ export function TripHistoryScreen() {
         data={allTrips}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <TripCard trip={item} onSupport={() => navigate('Support')} />}
-        contentContainerStyle={[styles.listContent, { paddingBottom: contentPadBottom }]}
+        contentContainerStyle={styles.listContent}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
         ListFooterComponent={
           <>
             {isFetching && (
@@ -207,7 +200,7 @@ export function TripHistoryScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {renderHeader()}
       <View style={styles.body}>{content}</View>
-      <BottomTabBar activeTab="trips" visible={visible} />
+      <BottomTabBar activeTab="trips" />
     </SafeAreaView>
   );
 }

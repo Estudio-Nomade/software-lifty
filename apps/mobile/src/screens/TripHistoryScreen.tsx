@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import type { Trip, TripStatus } from '../api/types';
 import { Card } from '../components/Card';
@@ -18,8 +17,6 @@ import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { Text } from '../components/ui/Text';
 import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
-import { getTabBarReserve } from '../lib/tabBarLayout';
 import { theme } from '../theme';
 
 const LIMIT = 20;
@@ -114,9 +111,6 @@ export const TripHistoryScreen: React.FC = () => {
   const [page, setPage] = useState(1);
   const [allTrips, setAllTrips] = useState<Trip[]>([]);
   const { setActiveTab } = useTabBar();
-  const insets = useSafeAreaInsets();
-  const { onScroll } = useTabBarScrollVisibility();
-  const contentPadBottom = getTabBarReserve(insets.bottom) + theme.spacing['2xl'];
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<Trip[]>({
     queryKey: ['trip-history', page],
@@ -200,11 +194,9 @@ export const TripHistoryScreen: React.FC = () => {
         data={allTrips}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <TripCard trip={item} />}
-        contentContainerStyle={[styles.content, { paddingBottom: contentPadBottom }]}
+        contentContainerStyle={styles.content}
         ListFooterComponent={renderFooter}
         showsVerticalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
       />
     );
   };
@@ -229,6 +221,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     gap: theme.spacing.md,
     padding: theme.spacing.md,
+    paddingBottom: theme.dimensions.tabBarHeight + theme.spacing['2xl'],
   },
   tripCard: {
     width: '100%',

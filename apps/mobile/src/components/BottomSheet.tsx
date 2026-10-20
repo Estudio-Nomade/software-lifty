@@ -2,12 +2,13 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { theme } from '../theme';
+import { bottomSheetTranslateRange } from './bottomSheetMath';
 import { Text } from './ui/Text';
 
 interface BottomSheetProps {
-  /** [collapsedHeight, expandedHeight] — real heights ABOVE the tab bar only. */
+  /** [collapsedHeight, expandedHeight] — content height ABOVE the tab bar. */
   snapPoints: [number, number];
-  /** Distance from screen bottom to sit on (tab bar reserve). Default 0. */
+  /** Distance from screen bottom to sit on (tab bar + safe inset). Default 0. */
   bottomOffset?: number;
   /** One-line invite shown under the handle while collapsed. */
   peekerLabel?: string;
@@ -15,14 +16,6 @@ interface BottomSheetProps {
   onSnapChange?: (index: number) => void;
 }
 
-const TAP_SLOP = 10;
-const DRAG_SLOP = 2;
-
-/**
- * Sheet that lives only above the tab bar.
- * Collapsed = compact strip sized to label (centered, not edge-to-edge).
- * Expanded = full-width panel growing upward. Swipe up/down or tap peeker.
- */
 export const BottomSheet: React.FC<BottomSheetProps> = ({
   snapPoints,
   bottomOffset = 0,
@@ -31,32 +24,36 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   onSnapChange,
 }) => {
   const [collapsedHeight, expandedHeight] = snapPoints;
-  const collapsedH = Math.max(0, collapsedHeight);
-  const expandedH = Math.max(expandedHeight, collapsedH);
+  const { collapsedTranslateY, expandedTranslateY } = useMemo(
+    () => bottomSheetTranslateRange(collapsedHeight, expandedHeight),
+    [collapsedHeight, expandedHeight],
+  );
 
-  const heightAnim = useRef(new Animated.Value(collapsedH)).current;
-  const dragStartH = useRef(collapsedH);
-  const grantY = useRef(0);
-  const grantX = useRef(0);
+  // Larger Y = more hidden (pushed down past the tab bar).
+  const collapsedY = collapsedTranslateY;
+  const expandedY = expandedTranslateY;
+
+  const translateY = useRef(new Animated.Value(collapsedY)).current;
+  const dragStartY = useRef(collapsedY);
   const [snapIndex, setSnapIndex] = useState(0);
   const snapIndexRef = useRef(0);
-  const collapsedHRef = useRef(collapsedH);
-  const expandedHRef = useRef(expandedH);
-  collapsedHRef.current = collapsedH;
-  expandedHRef.current = expandedH;
+  const collapsedYRef = useRef(collapsedY);
+  const expandedYRef = useRef(expandedY);
+  collapsedYRef.current = collapsedY;
+  expandedYRef.current = expandedY;
 
   const snapTo = useCallback(
     (index: number) => {
-      const target = index === 0 ? collapsedHRef.current : expandedHRef.current;
-      Animated.spring(heightAnim, {
+      const target = index === 0 ? collapsedYRef.current : expandedYRef.current;
+      Animated.spring(translateY, {
         toValue: target,
         damping: 50,
         stiffness: 300,
         mass: 0.5,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }).start();
     },
-    [heightAnim],
+    [translateY],
   );
 
   const notifySnap = useCallback(
@@ -68,81 +65,65 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
     [onSnapChange],
   );
 
-  const goTo = useCallback(
-    (index: number) => {
-      snapTo(index);
-      notifySnap(index);
-    },
-    [snapTo, notifySnap],
-  );
-
+  // Keep position in sync when snap heights / tab inset change.
   useEffect(() => {
-    const target = snapIndexRef.current === 0 ? collapsedH : expandedH;
-    heightAnim.setValue(target);
-  }, [heightAnim, collapsedH, expandedH]);
+    const target = snapIndexRef.current === 0 ? collapsedY : expandedY;
+    translateY.setValue(target);
+  }, [translateY, collapsedY, expandedY]);
 
-  // Pan only on grabber — body keeps button taps (e.g. "Ver ganancias" → Cobros).
+  // Drag on handle + peeker strip so ScrollView body can scroll freely when expanded.
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: (_, g) =>
-          Math.abs(g.dy) > DRAG_SLOP && Math.abs(g.dy) > Math.abs(g.dx),
+          Math.abs(g.dy) > 4 && Math.abs(g.dy) > Math.abs(g.dx),
         onPanResponderTerminationRequest: () => false,
-        onShouldBlockNativeResponder: () => true,
-        onPanResponderGrant: (e) => {
-          grantY.current = e.nativeEvent.pageY;
-          grantX.current = e.nativeEvent.pageX;
-          heightAnim.stopAnimation((value) => {
-            dragStartH.current = value;
+        onPanResponderGrant: () => {
+          translateY.stopAnimation((value) => {
+            dragStartY.current = value;
           });
         },
         onPanResponderMove: (_, gestureState) => {
-          const minH = collapsedHRef.current;
-          const maxH = expandedHRef.current;
-          const next = dragStartH.current - gestureState.dy;
-          heightAnim.setValue(Math.max(minH, Math.min(maxH, next)));
+          const minY = expandedYRef.current;
+          const maxY = collapsedYRef.current;
+          const next = dragStartY.current + gestureState.dy;
+          translateY.setValue(Math.max(minY, Math.min(maxY, next)));
         },
         onPanResponderRelease: (_, gestureState) => {
-          const minH = collapsedHRef.current;
-          const maxH = expandedHRef.current;
-          const absDy = Math.abs(gestureState.dy);
-          const absDx = Math.abs(gestureState.dx);
-
-          if (absDy < TAP_SLOP && absDx < TAP_SLOP) {
-            goTo(snapIndexRef.current === 0 ? 1 : 0);
-            return;
-          }
-
-          const currentH = Math.max(minH, Math.min(maxH, dragStartH.current - gestureState.dy));
-          const mid = (maxH + minH) / 2;
+          const minY = expandedYRef.current;
+          const maxY = collapsedYRef.current;
+          const currentY = Math.max(minY, Math.min(maxY, dragStartY.current + gestureState.dy));
+          const mid = (maxY + minY) / 2;
           let nextIndex: 0 | 1;
-          if (gestureState.vy < -0.2 || gestureState.dy < -24) {
+          if (gestureState.vy < -0.35) {
             nextIndex = 1;
-          } else if (gestureState.vy > 0.2 || gestureState.dy > 24) {
+          } else if (gestureState.vy > 0.35) {
             nextIndex = 0;
           } else {
-            nextIndex = currentH > mid ? 1 : 0;
+            nextIndex = currentY < mid ? 1 : 0;
           }
-          goTo(nextIndex);
+          snapTo(nextIndex);
+          notifySnap(nextIndex);
         },
       }),
-    [heightAnim, goTo],
+    [translateY, snapTo, notifySnap],
   );
 
   const overlayOpacity = useMemo(
     () =>
-      heightAnim.interpolate({
-        inputRange: collapsedH < expandedH ? [collapsedH, expandedH] : [0, 1],
-        outputRange: [0, 1],
+      translateY.interpolate({
+        inputRange: collapsedY > expandedY ? [expandedY, collapsedY] : [0, 1],
+        outputRange: [1, 0],
         extrapolate: 'clamp',
       }),
-    [heightAnim, collapsedH, expandedH],
+    [translateY, collapsedY, expandedY],
   );
 
   const handleOverlayPress = useCallback(() => {
-    goTo(0);
-  }, [goTo]);
+    snapTo(0);
+    notifySnap(0);
+  }, [snapTo, notifySnap]);
 
   const collapsed = snapIndex === 0;
   const label = peekerLabel?.trim() || 'Deslizá para ver más';
@@ -158,42 +139,36 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={handleOverlayPress} />
       </Animated.View>
-
-      {/* Transparent shell: full width for layout; card inside hugs text when collapsed. */}
       <Animated.View
         style={[
-          styles.shell,
+          styles.sheet,
           {
             bottom: bottomOffset,
-            height: heightAnim,
+            height: expandedHeight,
+            transform: [{ translateY }],
           },
         ]}
-        pointerEvents="box-none"
       >
-        <View style={[styles.card, collapsed ? styles.cardCollapsed : styles.cardExpanded]}>
-          <View
-            style={styles.grabber}
-            {...panResponder.panHandlers}
-            accessibilityRole="adjustable"
-            accessibilityLabel={
-              collapsed
-                ? `${label}. Deslizá hacia arriba o tocá`
-                : 'Deslizá hacia abajo para cerrar'
-            }
-          >
-            <View style={styles.handle} />
-            {collapsed ? (
-              <Text style={styles.peekerText} numberOfLines={1}>
-                {label}
-              </Text>
-            ) : null}
-          </View>
-          <View
-            style={[styles.body, collapsed && styles.bodyCollapsed]}
-            pointerEvents={collapsed ? 'none' : 'auto'}
-          >
-            {children}
-          </View>
+        <View
+          style={styles.grabber}
+          {...panResponder.panHandlers}
+          accessibilityRole="adjustable"
+          accessibilityLabel={
+            collapsed ? `${label}. Deslizá hacia arriba` : 'Deslizá hacia abajo para cerrar'
+          }
+        >
+          <View style={styles.handle} />
+          {collapsed && (
+            <Text style={styles.peekerText} numberOfLines={1}>
+              {label}
+            </Text>
+          )}
+        </View>
+        <View
+          style={[styles.body, collapsed && styles.bodyCollapsed]}
+          pointerEvents={collapsed ? 'none' : 'auto'}
+        >
+          {children}
         </View>
       </Animated.View>
     </>
@@ -209,71 +184,48 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.28)',
     zIndex: 20,
   },
-  shell: {
+  sheet: {
     position: 'absolute',
     left: 0,
     right: 0,
-    zIndex: 30,
-    alignItems: 'center',
-    overflow: 'visible',
-  },
-  card: {
     backgroundColor: theme.colors.surface,
-    overflow: 'hidden',
+    borderTopLeftRadius: theme.radius.xl,
+    borderTopRightRadius: theme.radius.xl,
     shadowColor: '#0D2B45',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 14,
-  },
-  /** Compact strip: width follows label, centered, not touching screen edges. */
-  cardCollapsed: {
-    alignSelf: 'center',
-    maxWidth: '88%',
-    borderRadius: theme.radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(13, 43, 69, 0.08)',
-  },
-  /** Expanded panel: full width above tab bar. */
-  cardExpanded: {
-    alignSelf: 'stretch',
-    width: '100%',
-    flex: 1,
-    borderTopLeftRadius: theme.radius.lg,
-    borderTopRightRadius: theme.radius.lg,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 16,
+    zIndex: 30,
+    overflow: 'hidden',
   },
   grabber: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: theme.spacing.sm + 2,
-    paddingBottom: theme.spacing.sm,
+    paddingBottom: theme.spacing.xs,
     paddingHorizontal: theme.spacing.md,
-    gap: 6,
+    gap: 8,
     minHeight: 48,
   },
   handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(13, 43, 69, 0.22)',
+    width: 44,
+    height: 5,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.surfaceMuted,
   },
   peekerText: {
+    width: '100%',
     textAlign: 'center',
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.semibold,
+    fontWeight: theme.fontWeight.medium,
     color: theme.colors.deepBlue,
-    // No width:100% — box hugs the text.
   },
   body: {
     flex: 1,
     minHeight: 0,
-    width: '100%',
   },
   bodyCollapsed: {
     opacity: 0,
-    height: 0,
-    overflow: 'hidden',
   },
 });

@@ -39,24 +39,11 @@ function localityFromPhotonProps(props: Record<string, string | number | undefin
   city: string | null;
   province: string | null;
 } {
-  // Prefer settlement fields; OSM county "Pedanía Dolores" is not the Lifty municipality.
-  // Mirrors extractLocalityFromPhotonProps in drivers/municipality.ts (keep in sync).
-  const settlement = props.city || props.town || props.village || props.municipality || undefined;
-  const county = props.county ? String(props.county) : null;
-  const name = props.name ? String(props.name) : null;
-  const isPedania = (v: string) => {
-    const n = v.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
-    return n === 'pedania' || n.startsWith('pedania ');
-  };
-
-  let cityRaw: string | null = settlement ? String(settlement) : null;
-  if (!cityRaw && county && !isPedania(county)) cityRaw = county;
-  if (!cityRaw && name && !isPedania(name)) cityRaw = name;
-  if (!cityRaw && county) cityRaw = county;
-
+  const cityRaw =
+    props.city || props.town || props.village || props.municipality || props.county || props.name;
   const provinceRaw = props.state;
   return {
-    city: cityRaw,
+    city: cityRaw ? String(cityRaw) : null,
     province: provinceRaw ? String(provinceRaw) : null,
   };
 }
@@ -140,34 +127,13 @@ async function cacheSet(key: string, value: string, ttlSeconds: number): Promise
   await redis.setex(key, ttlSeconds, value);
 }
 
-function isHighwayPhoton(props: Record<string, string | number | undefined>): boolean {
-  const osmKey = props.osm_key ? String(props.osm_key) : '';
-  const osmValue = props.osm_value ? String(props.osm_value) : '';
-  const type = props.type ? String(props.type) : '';
-  return osmKey === 'highway' || type === 'street' || type === 'road' || osmValue === 'residential';
-}
-
-/**
- * Highways/addresses → street(+number); named POIs (amenity/tourism/leisure/…) → name first
- * so dique/calvario/plaza don't collapse to an adjacent street.
- */
-export function formatPhotonAddress(props: Record<string, string | number | undefined>): string {
-  const name = props.name ? String(props.name).trim() : '';
-  const street = props.street ? String(props.street).trim() : '';
-  const housenumber = props.housenumber ? String(props.housenumber).trim() : '';
-  const highway = isHighwayPhoton(props);
-
-  let primary = '';
-  if (highway) {
-    primary = [street || name, housenumber].filter(Boolean).join(' ');
-  } else if (housenumber && street) {
-    primary = [street, housenumber].filter(Boolean).join(' ');
-  } else if (name) {
-    primary = name;
-  } else {
-    primary = [street, housenumber].filter(Boolean).join(' ');
-  }
-  if (!primary) return '';
+function formatPhotonAddress(props: Record<string, string | number | undefined>): string {
+  const name = props.name ? String(props.name) : '';
+  const street = props.street ? String(props.street) : '';
+  const housenumber = props.housenumber ? String(props.housenumber) : '';
+  // Street+number first — bare `name` is often a POI/person near the pin.
+  const streetLine = street && housenumber ? `${street} ${housenumber}` : street;
+  const primary = streetLine || name;
 
   const parts = [
     primary,
@@ -176,52 +142,6 @@ export function formatPhotonAddress(props: Record<string, string | number | unde
     String(props.country || ''),
   ].filter(Boolean);
   return parts.join(', ');
-}
-
-function normalizePlaceMatch(s: string): string {
-  return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
-}
-
-/** Soft-rank Photon hits: query name match + proximity to bias. */
-export function rankPhotonPlaceFeatures(
-  features: PhotonFeature[],
-  query: string,
-  biasLat?: number,
-  biasLng?: number,
-): PhotonFeature[] {
-  const q = normalizePlaceMatch(query);
-  if (!q || features.length <= 1) return features;
-
-  const hasBias =
-    typeof biasLat === 'number' &&
-    Number.isFinite(biasLat) &&
-    typeof biasLng === 'number' &&
-    Number.isFinite(biasLng);
-
-  const scored = features.map((f, index) => {
-    const props = f.properties ?? {};
-    const name = normalizePlaceMatch(props.name ? String(props.name) : '');
-    const street = normalizePlaceMatch(props.street ? String(props.street) : '');
-    const label = normalizePlaceMatch(formatPhotonAddress(props));
-    let match = 0;
-    if (name === q || street === q) match = 100;
-    else if (name.startsWith(q) || street.startsWith(q)) match = 70;
-    else if (name.includes(q) || street.includes(q) || label.includes(q)) match = 45;
-
-    let distKm = 1e9;
-    if (hasBias && f.geometry?.coordinates?.length >= 2) {
-      const [lng, lat] = f.geometry.coordinates;
-      if (Number.isFinite(lat) && Number.isFinite(lng)) {
-        distKm = haversineDistance(biasLat as number, biasLng as number, lat, lng);
-      }
-    }
-    const proximity = Number.isFinite(distKm) ? Math.max(0, 150 - distKm) : 0;
-    const score = match + proximity;
-    return { f, score, index };
-  });
-
-  scored.sort((a, b) => b.score - a.score || a.index - b.index);
-  return scored.map((s) => s.f);
 }
 
 interface PhotonFeature {
@@ -262,7 +182,7 @@ function biasBucket(value: number | undefined): string {
 
 /** Exported for unit tests — do not use as public API. */
 export function autocompleteCacheKey(query: string, lat?: number, lng?: number): string {
-  return `geo:ac:v2:${normalizeAutocompleteQuery(query)}:${biasBucket(lat)}:${biasBucket(lng)}`;
+  return `geo:ac:v1:${normalizeAutocompleteQuery(query)}:${biasBucket(lat)}:${biasBucket(lng)}`;
 }
 
 export async function autocomplete(
@@ -308,7 +228,7 @@ export async function autocomplete(
 
     const url = new URL(`${PHOTON_URL}/api/`);
     url.searchParams.set('q', input.trim());
-    url.searchParams.set('limit', '10');
+    url.searchParams.set('limit', '5');
     url.searchParams.set('lang', 'default');
     if (biasLat != null && biasLng != null) {
       url.searchParams.set('lat', String(biasLat));
@@ -316,22 +236,13 @@ export async function autocomplete(
     }
 
     const data = await fetchPhoton(url, GEO_AUTOCOMPLETE_TIMEOUT_MS);
-    const ranked = rankPhotonPlaceFeatures(data.features || [], input.trim(), biasLat, biasLng);
 
-    const results: PlaceResult[] = [];
-    for (const f of ranked) {
-      const description = formatPhotonAddress(f.properties);
-      if (!description) continue;
-      const [lng, lat] = f.geometry.coordinates;
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-      if (lat === 0 && lng === 0) continue;
-      results.push({
-        description,
-        place_id: String(f.properties.osm_id),
-        lat,
-        lng,
-      });
-    }
+    const results = (data.features || []).map((f) => ({
+      description: formatPhotonAddress(f.properties),
+      place_id: String(f.properties.osm_id),
+      lat: f.geometry.coordinates[1],
+      lng: f.geometry.coordinates[0],
+    }));
 
     if (results.length > 0) {
       await cacheSet(cacheKey, JSON.stringify(results), GEO_AUTOCOMPLETE_CACHE_TTL);
@@ -357,9 +268,6 @@ export async function geocode(params: {
   lat?: number;
   lng?: number;
   address?: string;
-  /** Optional proximity bias for forward geocode (passenger GPS). */
-  bias_lat?: number;
-  bias_lng?: number;
 }): Promise<GeocodeResult> {
   try {
     if (process.env.NODE_ENV === 'test') {
@@ -401,21 +309,16 @@ export async function geocode(params: {
           province: 'Buenos Aires',
         };
       }
-      // Forward address mocks keep BA only for known city queries used by maps tests.
-      if (addr.includes('buenos aires') || addr.includes('mendoza') || !addr) {
-        return {
-          lat: -34.6037,
-          lng: -58.3816,
-          formatted_address: params.address ?? 'Buenos Aires, Argentina',
-          city: 'Buenos Aires',
-          province: 'Buenos Aires',
-        };
-      }
-      throw new Error('No geocoding results');
+      return {
+        lat: -34.6037,
+        lng: -58.3816,
+        formatted_address: 'Buenos Aires, Argentina',
+        city: 'Buenos Aires',
+        province: 'Buenos Aires',
+      };
     }
 
     let url: URL;
-    let forwardQuery: string | undefined;
 
     if (params.lat !== undefined && params.lng !== undefined) {
       const reverseUrl = new URL(`${PHOTON_URL}/reverse`);
@@ -424,30 +327,23 @@ export async function geocode(params: {
       reverseUrl.searchParams.set('lang', 'default');
       url = reverseUrl;
     } else if (params.address) {
-      forwardQuery = params.address.trim();
-      const biasLat = params.bias_lat ?? GEO_DEFAULT_LAT;
-      const biasLng = params.bias_lng ?? GEO_DEFAULT_LNG;
       const forwardUrl = new URL(`${PHOTON_URL}/api/`);
-      forwardUrl.searchParams.set('q', forwardQuery);
-      forwardUrl.searchParams.set('limit', '5');
+      forwardUrl.searchParams.set('q', params.address);
+      forwardUrl.searchParams.set('limit', '1');
       forwardUrl.searchParams.set('lang', 'default');
-      if (biasLat != null && biasLng != null) {
-        forwardUrl.searchParams.set('lat', String(biasLat));
-        forwardUrl.searchParams.set('lon', String(biasLng));
-      }
       url = forwardUrl;
     } else {
-      throw new Error('No geocoding input');
+      return {
+        lat: -34.6037,
+        lng: -58.3816,
+        formatted_address: 'Buenos Aires, Argentina',
+        city: 'Buenos Aires',
+        province: 'Buenos Aires',
+      };
     }
 
     const data = await fetchPhoton(url);
-    let feature = data.features?.[0];
-    if (forwardQuery && data.features && data.features.length > 0) {
-      const biasLat = params.bias_lat ?? GEO_DEFAULT_LAT;
-      const biasLng = params.bias_lng ?? GEO_DEFAULT_LNG;
-      const ranked = rankPhotonPlaceFeatures(data.features, forwardQuery, biasLat, biasLng);
-      feature = ranked[0];
-    }
+    const feature = data.features?.[0];
     if (!feature) throw new Error('No geocoding results');
 
     const [lng, lat] = feature.geometry.coordinates;
@@ -470,8 +366,13 @@ export async function geocode(params: {
         province: null,
       };
     }
-    // Forward geocode: fail honestly — never invent Buenos Aires coords.
-    throw err instanceof Error ? err : new Error('No geocoding results');
+    return {
+      lat: -34.6037,
+      lng: -58.3816,
+      formatted_address: 'Buenos Aires, Argentina',
+      city: 'Buenos Aires',
+      province: 'Buenos Aires',
+    };
   }
 }
 

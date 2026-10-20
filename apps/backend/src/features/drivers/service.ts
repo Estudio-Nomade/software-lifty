@@ -39,7 +39,6 @@ import {
   buildMunicipalityResult,
   matchDistrict,
   parseLocalityFromFormatted,
-  tryHealWaitlistedMunicipality,
 } from './municipality';
 
 const VALID_DOC_TYPES: readonly string[] = CANONICAL_VALID_DOC_TYPES;
@@ -213,8 +212,6 @@ export const driversService = {
         created_at: drivers.created_at,
         municipality_status: drivers.municipality_status,
         address_line: drivers.address_line,
-        address_lat: drivers.address_lat,
-        address_lng: drivers.address_lng,
         address_resolved_city: drivers.address_resolved_city,
         address_resolved_province: drivers.address_resolved_province,
         intended_district_id: drivers.intended_district_id,
@@ -240,7 +237,6 @@ export const driversService = {
       };
     }
 
-    await this.maybeHealWaitlistedMunicipality(driver);
     const municipalityFields = await this.buildMunicipalityStatusFields(driver);
 
     const documentsPendingReview = driver.documents_pending_review;
@@ -1287,60 +1283,6 @@ export const driversService = {
     };
   },
 
-  /**
-   * Drivers stuck waitlisted after Photon county "Pedanía Dolores" re-match offline
-   * on status poll and persist operational when aliases/rules now hit Villa Dolores.
-   */
-  async maybeHealWaitlistedMunicipality(driver: {
-    id: string;
-    municipality_status: string | null;
-    address_line: string | null;
-    address_lat?: number | null;
-    address_lng?: number | null;
-    address_resolved_city: string | null;
-    address_resolved_province: string | null;
-    intended_district_id: string | null;
-  }) {
-    if (driver.municipality_status !== 'waitlisted') return;
-    if (!driver.address_line && !driver.address_resolved_city) return;
-
-    const activeDistricts = await db
-      .select({
-        id: districts.id,
-        name: districts.name,
-        province: districts.province,
-        status: districts.status,
-      })
-      .from(districts)
-      .where(eq(districts.status, 'active'));
-
-    const healed = tryHealWaitlistedMunicipality(
-      driver.address_line,
-      driver.address_resolved_city,
-      driver.address_resolved_province,
-      driver.address_lat ?? null,
-      driver.address_lng ?? null,
-      activeDistricts,
-    );
-    if (!healed || healed.municipality_status !== 'operational') return;
-
-    await db
-      .update(drivers)
-      .set({
-        municipality_status: healed.municipality_status,
-        intended_district_id: healed.intended_district_id,
-        address_resolved_city: healed.address_resolved_city,
-        address_resolved_province: healed.address_resolved_province,
-        updated_at: new Date(),
-      })
-      .where(eq(drivers.id, driver.id));
-
-    driver.municipality_status = healed.municipality_status;
-    driver.intended_district_id = healed.intended_district_id;
-    driver.address_resolved_city = healed.address_resolved_city;
-    driver.address_resolved_province = healed.address_resolved_province;
-  },
-
   async resolveMunicipalityFromAddress(input: {
     address_line: string;
     address_lat?: number;
@@ -1389,7 +1331,7 @@ export const driversService = {
       .from(districts)
       .where(eq(districts.status, 'active'));
 
-    const match = matchDistrict(city, province, activeDistricts, addressLine);
+    const match = matchDistrict(city, province, activeDistricts);
     return buildMunicipalityResult(addressLine, { lat, lng, city, province }, match);
   },
 };

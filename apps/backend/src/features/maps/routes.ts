@@ -23,14 +23,7 @@ export const mapsRoutes = new Elysia({ prefix: '/maps' })
     '/geocode',
     ({ query, set }) =>
       safeCall(
-        () =>
-          mapsService.geocode({
-            lat: query.lat,
-            lng: query.lng,
-            address: query.address,
-            bias_lat: query.bias_lat,
-            bias_lng: query.bias_lng,
-          }),
+        () => mapsService.geocode({ lat: query.lat, lng: query.lng, address: query.address }),
         set,
       ),
     { query: geocodeQuery, requireAuth: true },

@@ -1,7 +1,5 @@
-const mockReverseGeocode = jest.fn();
-
 jest.mock('../../api/passenger', () => ({
-  reverseGeocode: (...args: unknown[]) => mockReverseGeocode(...args),
+  reverseGeocode: jest.fn(),
 }));
 
 const mockRequestForegroundPermissionsAsync = jest.fn();
@@ -236,60 +234,5 @@ describe('resolveAddressLabel accuracy gate', () => {
       accuracy: MAX_LABEL_ACCURACY_M + 50,
     });
     expect(label).toBe('Mi ubicación actual');
-  });
-});
-
-describe('resolveAddressLabel native Photon fallback', () => {
-  const originalFetch = globalThis.fetch;
-  const originalOS = Platform.OS;
-
-  beforeEach(() => {
-    mockReverseGeocode.mockReset();
-    Object.defineProperty(Platform, 'OS', { value: 'ios', configurable: true });
-  });
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-    Object.defineProperty(Platform, 'OS', { value: originalOS, configurable: true });
-  });
-
-  it('uses Photon reverse on native when backend reverse fails (not only web)', async () => {
-    mockReverseGeocode.mockRejectedValue(new Error('Unauthorized'));
-    globalThis.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        features: [
-          {
-            properties: {
-              street: 'San Martín',
-              housenumber: '100',
-              city: 'Villa Dolores',
-              state: 'Córdoba',
-              country: 'Argentina',
-            },
-          },
-        ],
-      }),
-    }) as unknown as typeof fetch;
-
-    const label = await resolveAddressLabel(-31.945, -65.19, { accuracy: 25 });
-
-    expect(label).toMatch(/San Martín/);
-    expect(label).toMatch(/Villa Dolores/);
-    expect(label).not.toBe('Mi ubicación actual');
-    expect(globalThis.fetch).toHaveBeenCalled();
-  });
-
-  it('formats place/town name when Photon has no street (city-level reverse)', () => {
-    expect(
-      formatStreetLabel({
-        name: 'Villa Dolores',
-        osm_key: 'place',
-        osm_value: 'town',
-        type: 'city',
-        state: 'Córdoba',
-        country: 'Argentina',
-      }),
-    ).toBe('Villa Dolores, Córdoba, Argentina');
   });
 });

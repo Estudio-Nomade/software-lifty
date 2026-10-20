@@ -21,24 +21,15 @@ export interface PassengerMapProps {
   recenterKey?: number;
   style?: ViewStyle;
   onError?: () => void;
-  /**
-   * Lift MapLibre zoom (+/−) above floating chrome (search pill + tab bar).
-   * Pixels from the bottom of the map container.
-   */
-  bottomControlsOffset?: number;
 }
 
 export const DEFAULT_ZOOM = 15;
 
-export function generateMapHtml(
-  colors: { primary: string; lightGray: string },
-  options: { bottomControlsOffset?: number } = {},
-) {
+export function generateMapHtml(colors: { primary: string; lightGray: string }) {
   const r = Number.parseInt(colors.primary.slice(1, 3), 16);
   const g = Number.parseInt(colors.primary.slice(3, 5), 16);
   const b = Number.parseInt(colors.primary.slice(5, 7), 16);
   const primaryRgba = `rgba(${r}, ${g}, ${b}, 0.4)`;
-  const bottomOffset = Math.max(0, Math.round(options.bottomControlsOffset ?? 0));
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -52,11 +43,6 @@ export function generateMapHtml(
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body, #map { width: 100%; height: 100%; overflow: hidden; }
   body { background: ${colors.lightGray}; }
-  .maplibregl-ctrl-bottom-right {
-    bottom: ${bottomOffset}px !important;
-    margin-bottom: 8px;
-    margin-right: 8px;
-  }
   .marker-dot {
     width: 16px; height: 16px;
     border-radius: 50%;
@@ -161,8 +147,9 @@ export function generateMapHtml(
       style: 'https://tiles.openfreemap.org/styles/liberty',
       center: WAITING_CENTER,
       zoom: WAITING_ZOOM,
-      attributionControl: false,
+      attributionControl: true,
     });
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
   } catch (e) {
     postToHost(JSON.stringify({ type: 'error', message: (e && e.message) || 'Failed to initialize the map' }));
     throw e;
@@ -174,7 +161,6 @@ export function generateMapHtml(
   var pendingRoute = null;
   var lastUserLat = null;
   var lastUserLng = null;
-  var followRequested = false;
   var hasCenteredOnUser = false;
   // Architecture: host owns GPS (useLocation → locationStore).
   // This document only draws the pin from host userLocation / recenter messages.
@@ -213,8 +199,6 @@ export function generateMapHtml(
 
     var force = opts && opts.force;
     var fly = opts && opts.fly;
-    // First fix or forced recenter. With follow on, also re-center until user pans
-    // (host sends recenter after locate; continuous pan follow is first-fix only like driver).
     if (force || !hasCenteredOnUser) {
       if (fly) {
         map.flyTo({ center: [lng, lat], zoom: DEFAULT_ZOOM, duration: 600 });
@@ -337,7 +321,7 @@ export function generateMapHtml(
     try { return JSON.parse(data); } catch (e) { return null; }
   }
 
-  function onHostMessage(event) {
+  window.addEventListener('message', function (event) {
     var msg = parseMsg(event.data);
     if (!msg || !msg.type) return;
 
@@ -355,18 +339,8 @@ export function generateMapHtml(
           map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 600 });
         }
         break;
-      case 'followUser':
-        followRequested = !!msg.enabled;
-        if (followRequested) {
-          // Next userLocation may re-run initial center (driver parity).
-          hasCenteredOnUser = false;
-          if (lastUserLat != null && lastUserLng != null) {
-            setUserFix(lastUserLat, lastUserLng, null);
-          }
-        }
-        break;
       case 'userLocation':
-        // Host GPS → pin (web + native). Always draw pin when coords are real.
+        // Host GPS → pin (web + native).
         if (msg.lat != null && msg.lng != null) {
           setUserFix(Number(msg.lat), Number(msg.lng), null);
         }
@@ -379,11 +353,7 @@ export function generateMapHtml(
         }
         break;
     }
-  }
-
-  window.addEventListener('message', onHostMessage);
-  // RN WebView may deliver via document on some Android builds.
-  document.addEventListener('message', onHostMessage);
+  });
 
   window.addEventListener('error', function (e) {
     postToHost(JSON.stringify({ type: 'error', message: e.message || 'Unknown error' }));

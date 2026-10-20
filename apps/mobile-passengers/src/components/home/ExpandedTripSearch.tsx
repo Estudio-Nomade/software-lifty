@@ -22,8 +22,6 @@ interface ExpandedTripSearchProps {
   placesError: string | null;
   searchError: string | null;
   showUseMyLocation: boolean;
-  /** Resolved street under the GPS row (check that pickup is correct). */
-  gpsSubtitle?: string | null;
   onBack: () => void;
   onPickupChange: (text: string) => void;
   onDestChange: (text: string) => void;
@@ -56,7 +54,6 @@ export function ExpandedTripSearch({
   placesError,
   searchError,
   showUseMyLocation,
-  gpsSubtitle = null,
   onBack,
   onPickupChange,
   onDestChange,
@@ -72,15 +69,13 @@ export function ExpandedTripSearch({
   const destQuery = destAddress.trim();
   const pickupQuery = pickupAddress.trim();
   const activeQuery = focusedField === 'pickup' ? pickupQuery : destQuery;
-  // Only after the user typed a real search — never for GPS placeholder labels.
   const showEmptySuggestions =
     focusedField !== null &&
-    activeQuery.length >= 2 &&
+    activeQuery.length >= 3 &&
     suggestions.length === 0 &&
     !pickupLoading &&
     !placesLoading &&
-    !placesError &&
-    !(focusedField === 'dest' && destQuery.length === 0);
+    !placesError;
 
   return (
     <View style={styles.root}>
@@ -180,14 +175,7 @@ export function ExpandedTripSearch({
           <View style={styles.useLocationIcon}>
             <Ionicons name="locate" size={18} color={theme.colors.primary} />
           </View>
-          <View style={styles.useLocationTexts}>
-            <Text style={styles.useLocationText}>Usar mi ubicación actual</Text>
-            {gpsSubtitle ? (
-              <Text style={styles.useLocationSub} numberOfLines={2}>
-                {gpsSubtitle}
-              </Text>
-            ) : null}
-          </View>
+          <Text style={styles.useLocationText}>Usar mi ubicación actual</Text>
         </TouchableOpacity>
       ) : null}
 
@@ -236,7 +224,7 @@ export function ExpandedTripSearch({
 
       {showEmptySuggestions ? (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>No encontramos calles ni lugares. Probá otro nombre.</Text>
+          <Text style={styles.emptyText}>No encontramos lugares. Probá otra calle.</Text>
         </View>
       ) : null}
 
@@ -391,19 +379,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  useLocationTexts: {
-    flex: 1,
-    gap: 2,
-  },
   useLocationText: {
+    flex: 1,
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.medium,
     color: theme.colors.deepBlue,
-  },
-  useLocationSub: {
-    fontSize: theme.fontSize.xs,
-    fontFamily: theme.fontFamily.regular,
-    color: theme.colors.mediumGray,
   },
   suggestions: {
     backgroundColor: theme.colors.surface,
