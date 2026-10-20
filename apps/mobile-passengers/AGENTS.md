@@ -26,6 +26,14 @@
 
 **Excepción:** cambios puramente mecánicos (typo fix, formateo, dependency bump menor) no requieren BMAD pero sí commit con conventional commit.
 
+### Ley 1b — Cross-platform layout (iOS ↔ Android)
+
+> Cualquier fix de layout, chrome, safe-area, tab bar, mapa, teclado o “se ve bien en un OS y mal en el otro” **debe** cargar la skill `cross-platform-layout-safety`.
+
+- Path: `.agents/skills/cross-platform-layout-safety/SKILL.md`
+- Hecho = verificado en **iOS y Android** (o bloqueado a dual-check humano).
+- Prohibido: reescribir chrome compartido para complacer un solo OS; cascadas de parches de layout.
+
 ### Ley 2 — Reuso máximo de `apps/mobile` y `apps/backend`
 
 > Antes de escribir código nuevo, **revisar si ya existe** en `apps/mobile` (driver) o `apps/backend`. Si existe, adaptarlo — no duplicarlo.
