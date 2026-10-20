@@ -50,9 +50,15 @@ export const LoginCredentialsScreen: React.FC = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const setDriverStatus = useAuthStore((s) => s.setDriverStatus);
 
+  // Same dual-safe chrome as Navbar: inset owns status bar; sm keeps «← Volver» tappable.
+  // Avoid fixed height-only rows (padding+height can clip the back label under the notch).
   const headerStyle = [
     styles.header,
-    { paddingTop: insets.top, height: theme.dimensions.navbarHeight + insets.top },
+    {
+      paddingTop: insets.top + theme.spacing.sm,
+      paddingBottom: theme.spacing.sm,
+      minHeight: theme.dimensions.navbarHeight + insets.top,
+    },
   ];
 
   const login = useLogin();
@@ -352,7 +358,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   header: {
-    height: theme.dimensions.navbarHeight,
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',

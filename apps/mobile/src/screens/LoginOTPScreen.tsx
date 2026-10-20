@@ -78,7 +78,11 @@ export const LoginOTPScreen: React.FC = () => {
       <View
         style={[
           styles.header,
-          { paddingTop: insets.top, height: theme.dimensions.navbarHeight + insets.top },
+          {
+            paddingTop: insets.top + theme.spacing.sm,
+            paddingBottom: theme.spacing.sm,
+            minHeight: theme.dimensions.navbarHeight + insets.top,
+          },
         ]}
       >
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={8}>
@@ -127,7 +131,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    height: theme.dimensions.navbarHeight,
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',

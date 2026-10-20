@@ -185,13 +185,23 @@ export const RegisterScreen: React.FC = () => {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" />
-        <View style={[styles.header, { paddingTop: insets.top + theme.spacing.lg }]}>
+        <View
+          style={[
+            styles.header,
+            {
+              paddingTop: insets.top + theme.spacing.sm,
+              paddingBottom: theme.spacing.sm,
+              minHeight: theme.dimensions.navbarHeight + insets.top,
+            },
+          ]}
+        >
           <TouchableOpacity
             hitSlop={8}
             onPress={() => {
               setStep('form');
               setError(null);
             }}
+            style={styles.backButton}
           >
             <Text style={styles.backText}>← Volver</Text>
           </TouchableOpacity>
@@ -230,8 +240,17 @@ export const RegisterScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.lg }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top + theme.spacing.sm,
+            paddingBottom: theme.spacing.sm,
+            minHeight: theme.dimensions.navbarHeight + insets.top,
+          },
+        ]}
+      >
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8} style={styles.backButton}>
           <Text style={styles.backText}>← Volver</Text>
         </TouchableOpacity>
       </View>
@@ -349,8 +368,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.sm,
+  },
+  backButton: {
+    paddingVertical: theme.spacing.sm,
+    paddingRight: theme.spacing.md,
   },
   backText: {
     fontSize: theme.fontSize.md,

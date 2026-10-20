@@ -126,7 +126,16 @@ export const ForgotPasswordScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.lg }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top + theme.spacing.sm,
+            paddingBottom: theme.spacing.sm,
+            minHeight: theme.dimensions.navbarHeight + insets.top,
+          },
+        ]}
+      >
         <TouchableOpacity
           hitSlop={8}
           onPress={() => {
@@ -138,6 +147,7 @@ export const ForgotPasswordScreen: React.FC = () => {
               navigation.goBack();
             }
           }}
+          style={styles.backButton}
         >
           <Text style={styles.backText}>← Volver</Text>
         </TouchableOpacity>
@@ -264,8 +274,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: theme.spacing.lg,
-    paddingBottom: theme.spacing.sm,
+  },
+  backButton: {
+    paddingVertical: theme.spacing.sm,
+    paddingRight: theme.spacing.md,
   },
   backText: {
     fontSize: theme.fontSize.md,
