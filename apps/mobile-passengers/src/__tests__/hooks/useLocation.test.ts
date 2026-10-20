@@ -4,6 +4,7 @@ jest.mock('../../api/passenger', () => ({
 
 const mockRequestForegroundPermissionsAsync = jest.fn();
 const mockGetCurrentPositionAsync = jest.fn();
+const mockGetLastKnownPositionAsync = jest.fn();
 const mockWatchPositionAsync = jest.fn();
 
 jest.mock('expo-location', () => ({
@@ -18,10 +19,16 @@ jest.mock('expo-location', () => ({
   requestForegroundPermissionsAsync: (...args: unknown[]) =>
     mockRequestForegroundPermissionsAsync(...args),
   getCurrentPositionAsync: (...args: unknown[]) => mockGetCurrentPositionAsync(...args),
+  getLastKnownPositionAsync: (...args: unknown[]) => mockGetLastKnownPositionAsync(...args),
   watchPositionAsync: (...args: unknown[]) => mockWatchPositionAsync(...args),
 }));
 
-import { isValidLatLng, requestFreshPosition, toMapCoordinate } from '../../hooks/useLocation';
+import {
+  isValidLatLng,
+  nativeWatchOptions,
+  requestFreshPosition,
+  toMapCoordinate,
+} from '../../hooks/useLocation';
 import { useLocationStore } from '../../store/locationStore';
 import {
   MAX_LABEL_ACCURACY_M,
@@ -116,9 +123,31 @@ describe('locationStore.applyFix accuracy gate', () => {
   });
 });
 
+describe('nativeWatchOptions (Android cold start)', () => {
+  const originalOS = Platform.OS;
+
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { value: originalOS, configurable: true });
+  });
+
+  it('does not require movement on Android (distanceInterval 0)', () => {
+    Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+    const opts = nativeWatchOptions();
+    expect(opts.distanceInterval).toBe(0);
+    expect(opts.timeInterval).toBeGreaterThan(0);
+  });
+
+  it('keeps a small distance filter on iOS', () => {
+    Object.defineProperty(Platform, 'OS', { value: 'ios', configurable: true });
+    const opts = nativeWatchOptions();
+    expect(opts.distanceInterval).toBe(5);
+  });
+});
+
 describe('requestFreshPosition (native path)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetLastKnownPositionAsync.mockResolvedValue(null);
     useLocationStore.setState({
       current: null,
       permissionGranted: false,
@@ -140,6 +169,20 @@ describe('requestFreshPosition (native path)', () => {
     expect(fix).toEqual({ lat: -34.6037, lng: -58.3816, accuracy: 45 });
     expect(useLocationStore.getState().current?.lat).toBe(-34.6037);
     expect(mockGetCurrentPositionAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('seeds from last-known when fresh getCurrent times out', async () => {
+    mockRequestForegroundPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    mockGetLastKnownPositionAsync.mockResolvedValue({
+      coords: { latitude: -37.321, longitude: -59.133, accuracy: 80 },
+    });
+    mockGetCurrentPositionAsync.mockRejectedValue(new Error('timeout'));
+
+    const fix = await requestFreshPosition();
+
+    expect(fix).toEqual({ lat: -37.321, lng: -59.133, accuracy: 80 });
+    expect(useLocationStore.getState().current?.lat).toBe(-37.321);
+    expect(mockGetLastKnownPositionAsync).toHaveBeenCalled();
   });
 
   it('sets locationError when permission is denied', async () => {
