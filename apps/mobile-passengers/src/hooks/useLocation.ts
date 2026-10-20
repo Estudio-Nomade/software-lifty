@@ -341,10 +341,60 @@ async function getNativePositionOnce(
   }
 }
 
+/** Last OS cache — Android cold start often has this while getCurrent still hangs. */
+async function getNativeLastKnown(): Promise<GeoPositionLike | null> {
+  try {
+    const pos = await Location.getLastKnownPositionAsync({
+      maxAge: 5 * 60_000,
+      requiredAccuracy: 500,
+    });
+    if (!pos) return null;
+    return {
+      coords: {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+function toPositionFix(pos: GeoPositionLike): PositionFix | null {
+  const lat = pos.coords.latitude;
+  const lng = pos.coords.longitude;
+  if (!isValidLatLng(lat, lng)) return null;
+  const accuracy =
+    typeof pos.coords.accuracy === 'number' && Number.isFinite(pos.coords.accuracy)
+      ? pos.coords.accuracy
+      : Number.POSITIVE_INFINITY;
+  return { lat, lng, accuracy };
+}
+
+/**
+ * Watch options for native GPS.
+ * Android Fused Location often withholds the first update when distanceInterval > 0
+ * until the device moves — pin stays missing on a stationary cold start. iOS keeps 5m.
+ */
+export function nativeWatchOptions(): {
+  accuracy: Location.LocationAccuracy;
+  timeInterval: number;
+  distanceInterval: number;
+} {
+  return {
+    accuracy: Location.Accuracy.Balanced,
+    timeInterval: 3000,
+    // Android: 0 so the first fix arrives without requiring movement.
+    // iOS: 5m filter is fine and reduces noise.
+    distanceInterval: Platform.OS === 'android' ? 0 : 5,
+  };
+}
+
 /**
  * Best-effort position with accuracy.
  * Web waits for GPS warm-up; still may return coarse WiFi after timeout.
- * Native tries BestForNavigation then Balanced so a hung high-accuracy call cannot block.
+ * Native: last-known seed → BestForNavigation → Balanced → High.
  */
 export async function requestFreshPosition(): Promise<PositionFix | null> {
   if (isWebRuntime()) {
@@ -360,26 +410,33 @@ export async function requestFreshPosition(): Promise<PositionFix | null> {
     }
     useLocationStore.getState().setPermissionGranted(true);
 
+    // Seed store ASAP from cache so the map pin is not blank while GPS warms.
+    const lastKnown = await getNativeLastKnown();
+    if (lastKnown) {
+      const seed = toPositionFix(lastKnown);
+      if (seed) {
+        useLocationStore.getState().applyFix(seed, { force: false });
+      }
+    }
+
     const pos =
       (await getNativePositionOnce(Location.Accuracy.BestForNavigation)) ??
       (await getNativePositionOnce(Location.Accuracy.Balanced)) ??
-      (await getNativePositionOnce(Location.Accuracy.High));
+      (await getNativePositionOnce(Location.Accuracy.High)) ??
+      lastKnown;
 
     if (!pos) {
       setGeoError(LOCATION_DENIED_MSG);
       return null;
     }
 
-    const lat = pos.coords.latitude;
-    const lng = pos.coords.longitude;
-    if (!isValidLatLng(lat, lng)) {
+    const fix = toPositionFix(pos);
+    if (!fix) {
       setGeoError(LOCATION_DENIED_MSG);
       return null;
     }
-    const accuracy =
-      typeof pos.coords.accuracy === 'number' ? pos.coords.accuracy : Number.POSITIVE_INFINITY;
-    useLocationStore.getState().applyFix({ lat, lng, accuracy }, { force: true });
-    return { lat, lng, accuracy };
+    useLocationStore.getState().applyFix(fix, { force: true });
+    return fix;
   } catch {
     setGeoError(LOCATION_DENIED_MSG);
     return null;
@@ -473,27 +530,29 @@ export function useLocation() {
       }
       if (cancelled) return;
 
-      // Start watch first so a hung getCurrentPosition cannot leave current=null forever.
+      // Last-known first: Android cold start often has cache while getCurrent hangs.
+      if (!cancelled) {
+        const lastKnown = await getNativeLastKnown();
+        if (!cancelled && lastKnown) {
+          applyPosition(lastKnown, false);
+        }
+      }
+      if (cancelled) return;
+
+      // Start watch before one-shot so a hung getCurrent cannot leave current=null forever.
       try {
-        subscription = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.Balanced,
-            timeInterval: 3000,
-            distanceInterval: 5,
-          },
-          (loc) => {
-            applyPosition(
-              {
-                coords: {
-                  latitude: loc.coords.latitude,
-                  longitude: loc.coords.longitude,
-                  accuracy: loc.coords.accuracy,
-                },
+        subscription = await Location.watchPositionAsync(nativeWatchOptions(), (loc) => {
+          applyPosition(
+            {
+              coords: {
+                latitude: loc.coords.latitude,
+                longitude: loc.coords.longitude,
+                accuracy: loc.coords.accuracy,
               },
-              false,
-            );
-          },
-        );
+            },
+            false,
+          );
+        });
       } catch {
         // watch failed — still try one-shot below
       }

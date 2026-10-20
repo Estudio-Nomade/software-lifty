@@ -187,6 +187,8 @@ async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
     }
   }
 
+  // Concurrent first-auth requests (home + active trip) both miss the SELECT and
+  // race on INSERT. onConflictDoNothing + re-SELECT avoids users_pkey failures.
   const [created] = await db
     .insert(users)
     .values({
@@ -197,6 +199,7 @@ async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
       // Role is refined by deriveRole (driver profile / passenger profile).
       role: 'driver',
     })
+    .onConflictDoNothing({ target: users.id })
     .returning({
       id: users.id,
       email: users.email,
@@ -204,13 +207,35 @@ async function findOrCreateUser(supabaseUser: User): Promise<AuthUser | null> {
       role: users.role,
     });
 
-  if (!created) return null;
+  if (created) {
+    return {
+      id: created.id,
+      role: created.role,
+      email: created.email,
+      phone: created.phone,
+    };
+  }
 
+  const [raced] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      phone: users.phone,
+      full_name: users.full_name,
+    })
+    .from(users)
+    .where(eq(users.id, supabaseUser.id))
+    .limit(1);
+
+  if (!raced) return null;
+
+  await maybeBackfillFullName(raced.id, raced.full_name, fullName);
+  const role = await deriveRole(raced.id);
   return {
-    id: created.id,
-    role: created.role,
-    email: created.email,
-    phone: created.phone,
+    id: raced.id,
+    role,
+    email: raced.email,
+    phone: raced.phone,
   };
 }
 
