@@ -18,7 +18,11 @@ const PUBLIC_ROUTES = [
   'register',
   'forgot-password',
   'auth',
+  'auth-callback',
   'login-credentials',
+  'login-phone',
+  'login-otp',
+  'terms',
   'verify-email',
   'location-permissions',
 ];
