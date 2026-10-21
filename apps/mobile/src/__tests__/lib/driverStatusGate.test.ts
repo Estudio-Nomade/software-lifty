@@ -82,4 +82,17 @@ describe('welcomeEntryMode', () => {
       }),
     ).toBe('handoff');
   });
+
+  it('falls back to recovery when handoff times out on Welcome', () => {
+    expect(
+      welcomeEntryMode({
+        authLoading: false,
+        sessionRestored: true,
+        isAuthenticated: true,
+        driverStatus: 'approved',
+        onboardingStep: 'approved',
+        handoffTimedOut: true,
+      }),
+    ).toBe('recovery');
+  });
 });

@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import { useRouter } from 'expo-router';
+import { useRootNavigationState, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { InteractionManager, Platform } from 'react-native';
 import { apiClient } from '../api/client';
@@ -37,9 +37,11 @@ function SessionRestore() {
 
     const restore = async () => {
       try {
+        console.log('[SessionRestore] start');
         const { data } = await supabase.auth.getSession();
         if (cancelled) return;
         const token = data.session?.access_token ?? null;
+        console.log('[SessionRestore] getSession', { hasToken: !!token });
         if (!token) {
           // Drop stale zustand persist (isAuthenticated/token) so unauthenticated
           // users never get redirected into onboarding as if they had a session.
@@ -71,6 +73,7 @@ function SessionRestore() {
             if (parsed.success) {
               useAuthStore.getState().setDriverStatus(parsed.data.status);
               useAuthStore.getState().setOnboardingStep(parsed.data.step ?? null);
+              console.log('[SessionRestore] status', parsed.data.status, parsed.data.step);
             }
           } catch (statusErr: any) {
             console.log('[SessionRestore] /drivers/me/status ERROR:', statusErr?.message);
@@ -79,6 +82,7 @@ function SessionRestore() {
           console.log('[SessionRestore] /auth/me ERROR:', err?.message);
         } finally {
           markRestored();
+          console.log('[SessionRestore] done sessionRestored=true');
         }
       } catch (err: any) {
         console.log('[SessionRestore] getSession ERROR:', err?.message);
@@ -112,9 +116,17 @@ function ActiveTripRecovery() {
   routerRef.current = router;
   const navigatedRef = useRef(false);
   const [loading, setLoading] = useState(false);
+  const rootNavState = useRootNavigationState();
+  const navReady = rootNavState?.key != null;
 
   useEffect(() => {
-    if (!driverId || !sessionRestored || driverStatus !== 'approved' || navigatedRef.current)
+    if (
+      !navReady ||
+      !driverId ||
+      !sessionRestored ||
+      driverStatus !== 'approved' ||
+      navigatedRef.current
+    )
       return;
     let cancelled = false;
     const check = async () => {
@@ -160,7 +172,7 @@ function ActiveTripRecovery() {
     return () => {
       cancelled = true;
     };
-  }, [driverId, sessionRestored, driverStatus]);
+  }, [driverId, sessionRestored, driverStatus, navReady]);
 
   if (loading) {
     return <LoadingOverlay visible />;

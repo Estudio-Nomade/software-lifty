@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, StatusBar, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
@@ -10,8 +10,8 @@ import { Button } from '../components/Button';
 import { Text } from '../components/ui/Text';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { welcomeEntryMode } from '../lib/driverStatusGate';
-import { routeForDriverStatus } from '../lib/postAuthRouting';
+import { HANDOFF_TIMEOUT_MS, welcomeEntryMode } from '../lib/driverStatusGate';
+import { handoffScreenFromStore, routeForDriverStatus } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -29,6 +29,8 @@ export const WelcomeScreen: React.FC = () => {
   const [retrying, setRetrying] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [handoffTimedOut, setHandoffTimedOut] = useState(false);
+  const handoffAttempted = useRef(false);
 
   const mode = welcomeEntryMode({
     authLoading: loading,
@@ -36,7 +38,52 @@ export const WelcomeScreen: React.FC = () => {
     isAuthenticated,
     driverStatus,
     onboardingStep,
+    handoffTimedOut,
   });
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    console.log('[Welcome]', {
+      mode,
+      authLoading: loading,
+      sessionRestored,
+      isAuthenticated,
+      driverStatus,
+      onboardingStep,
+      handoffTimedOut,
+    });
+  }, [
+    mode,
+    loading,
+    sessionRestored,
+    isAuthenticated,
+    driverStatus,
+    onboardingStep,
+    handoffTimedOut,
+  ]);
+
+  // Self-navigate out of handoff so we don't depend solely on AuthRedirectWatcher
+  // (Android Expo Go can no-op watcher replace and leave BrandSplash forever).
+  useEffect(() => {
+    if (mode !== 'handoff') {
+      handoffAttempted.current = false;
+      return;
+    }
+    if (handoffAttempted.current) return;
+    handoffAttempted.current = true;
+
+    const screen = handoffScreenFromStore(driverStatus, onboardingStep);
+    if (screen) {
+      console.log('[Welcome] handoff replace →', screen);
+      navigation.replace(screen);
+    }
+
+    const id = setTimeout(() => {
+      console.log('[Welcome] handoff timeout → recovery UI');
+      setHandoffTimedOut(true);
+    }, HANDOFF_TIMEOUT_MS);
+    return () => clearTimeout(id);
+  }, [mode, driverStatus, onboardingStep, navigation]);
 
   const handleRetryStatus = useCallback(async () => {
     if (retrying) return;
