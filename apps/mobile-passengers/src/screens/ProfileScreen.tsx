@@ -257,7 +257,10 @@ export function ProfileScreen() {
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalScrollContent}
+              contentContainerStyle={[
+                styles.modalScrollContent,
+                { paddingBottom: Math.max(insets.bottom, theme.spacing.xl) },
+              ]}
             >
               <TouchableOpacity
                 style={styles.editAvatar}
@@ -398,7 +401,6 @@ const styles = StyleSheet.create({
   },
   modalScrollContent: {
     gap: theme.spacing.md,
-    paddingBottom: 40,
   },
   modalHeader: {
     flexDirection: 'row',
