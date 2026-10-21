@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatBackground } from '../components/ChatBackground';
 import { ChatBubble } from '../components/ChatBubble';
 import { Text } from '../components/ui/Text';
@@ -20,6 +21,7 @@ import { theme } from '../theme';
 
 export const ChatScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const [inputText, setInputText] = useState('');
   const chatScrollRef = useRef<ScrollView>(null);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,7 +50,7 @@ export const ChatScreen: React.FC = () => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + theme.spacing.sm }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Text style={styles.backText}>← Volver</Text>
         </TouchableOpacity>
@@ -77,7 +79,9 @@ export const ChatScreen: React.FC = () => {
           </ScrollView>
         </View>
 
-        <View style={styles.chatInputRow}>
+        <View
+          style={[styles.chatInputRow, { marginBottom: Math.max(insets.bottom, theme.spacing.lg) }]}
+        >
           <TextInput
             style={styles.chatInput}
             placeholder="Escribi un mensaje..."
@@ -108,7 +112,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 60,
     paddingBottom: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,
     backgroundColor: theme.colors.deepBlue,
@@ -151,7 +154,6 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.inputRadius,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     marginHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.lg,
     paddingHorizontal: theme.spacing.md,
     gap: theme.spacing.sm,
   },
