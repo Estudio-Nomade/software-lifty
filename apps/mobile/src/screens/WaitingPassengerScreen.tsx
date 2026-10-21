@@ -139,54 +139,55 @@ export const WaitingPassengerScreen: React.FC = () => {
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+  const otpModalInner = (
+    <ScrollView
+      contentContainerStyle={styles.modalScrollContent}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      showsVerticalScrollIndicator={false}
     >
+      <View style={styles.modal}>
+        <Text style={styles.modalTitle}>Código de verificación</Text>
+        <Text style={styles.modalText}>Pedile al pasajero el código de 4 dígitos</Text>
+        <OTPInput
+          length={4}
+          value={verificationCode}
+          onChange={(val) => {
+            setVerificationCode(val);
+            if (verificationError) setVerificationError('');
+          }}
+        />
+        {verificationError ? (
+          <Text style={styles.verificationError}>{verificationError}</Text>
+        ) : null}
+        <Button
+          title="CONFIRMAR"
+          variant="cta"
+          onPress={handleVerifyAndStart}
+          loading={verifying}
+          disabled={verificationCode.length !== 4}
+          style={styles.modalButton}
+        />
+        <Button
+          title="CANCELAR"
+          onPress={() => setShowVerificationModal(false)}
+          style={styles.modalButton}
+        />
+      </View>
+    </ScrollView>
+  );
+
+  return (
+    <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      {showVerificationModal && (
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <ScrollView
-            contentContainerStyle={styles.modalScrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.modal}>
-              <Text style={styles.modalTitle}>Código de verificación</Text>
-              <Text style={styles.modalText}>Pedile al pasajero el código de 4 dígitos</Text>
-              <OTPInput
-                length={4}
-                value={verificationCode}
-                onChange={(val) => {
-                  setVerificationCode(val);
-                  if (verificationError) setVerificationError('');
-                }}
-              />
-              {verificationError ? (
-                <Text style={styles.verificationError}>{verificationError}</Text>
-              ) : null}
-              <Button
-                title="CONFIRMAR"
-                variant="cta"
-                onPress={handleVerifyAndStart}
-                loading={verifying}
-                disabled={verificationCode.length !== 4}
-                style={styles.modalButton}
-              />
-              <Button
-                title="CANCELAR"
-                onPress={() => setShowVerificationModal(false)}
-                style={styles.modalButton}
-              />
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      )}
+      {showVerificationModal &&
+        (Platform.OS === 'ios' ? (
+          <KeyboardAvoidingView style={styles.modalOverlay} behavior="padding">
+            {otpModalInner}
+          </KeyboardAvoidingView>
+        ) : (
+          <View style={styles.modalOverlay}>{otpModalInner}</View>
+        ))}
 
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.sm }]}>
         <Text style={styles.arrivedLabel}>Llegaste</Text>
@@ -267,7 +268,7 @@ export const WaitingPassengerScreen: React.FC = () => {
         ) : null}
         <Button title="INICIAR VIAJE" onPress={handleStartTripPress} style={styles.button} />
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 

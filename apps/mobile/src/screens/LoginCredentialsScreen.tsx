@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StatusBar,
   StyleSheet,
   TouchableOpacity,
@@ -278,77 +279,104 @@ export const LoginCredentialsScreen: React.FC = () => {
     );
   }
 
+  const formBody = (
+    <View style={styles.content}>
+      <View style={styles.form}>
+        <Text style={styles.title}>Iniciar sesión</Text>
+        <Text style={styles.subtitle}>Ingresá tu email y contraseña</Text>
+
+        <Input
+          placeholder="Email"
+          value={username}
+          onChangeText={setUsername}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          containerStyle={styles.inputField}
+        />
+        <Input
+          placeholder="Contraseña"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry={!showPassword}
+          autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="password"
+          containerStyle={styles.inputField}
+          rightElement={
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={theme.colors.mediumGray}
+              />
+            </TouchableOpacity>
+          }
+        />
+
+        <Button
+          title="Iniciar sesión"
+          onPress={handleLogin}
+          loading={login.isPending}
+          disabled={isDisabled}
+          style={styles.button}
+        />
+        <Button
+          title={googleLoading ? '' : 'Continuar con Google'}
+          onPress={handleGoogle}
+          loading={googleLoading}
+          style={[styles.button, styles.googleButton]}
+          textStyle={styles.googleButtonText}
+        />
+        {error !== null && <Text style={styles.errorText}>{error}</Text>}
+        <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+          <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleSendOtp}>
+          <Text style={styles.otpLink}>
+            {sending ? 'Enviando código...' : 'Iniciar sesión sin contraseña'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <View style={headerStyle}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={8}>
           <Text style={styles.backText}>← Volver</Text>
         </TouchableOpacity>
       </View>
-
-      <View style={styles.content}>
-        <View style={styles.form}>
-          <Text style={styles.title}>Iniciar sesión</Text>
-          <Text style={styles.subtitle}>Ingresá tu email y contraseña</Text>
-
-          <Input
-            placeholder="Email"
-            value={username}
-            onChangeText={setUsername}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            containerStyle={styles.inputField}
-          />
-          <Input
-            placeholder="Contraseña"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="password"
-            containerStyle={styles.inputField}
-            rightElement={
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={8}>
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={theme.colors.mediumGray}
-                />
-              </TouchableOpacity>
-            }
-          />
-
-          <Button
-            title="Iniciar sesión"
-            onPress={handleLogin}
-            loading={login.isPending}
-            disabled={isDisabled}
-            style={styles.button}
-          />
-          <Button
-            title={googleLoading ? '' : 'Continuar con Google'}
-            onPress={handleGoogle}
-            loading={googleLoading}
-            style={[styles.button, styles.googleButton]}
-            textStyle={styles.googleButtonText}
-          />
-          {error !== null && <Text style={styles.errorText}>{error}</Text>}
-          <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
-            <Text style={styles.forgotPassword}>¿Olvidaste tu contraseña?</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleSendOtp}>
-            <Text style={styles.otpLink}>
-              {sending ? 'Enviando código...' : 'Iniciar sesión sin contraseña'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </KeyboardAvoidingView>
+      {/*
+        Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.
+        iOS: padding KAV + ScrollView.
+      */}
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          <ScrollView
+            style={styles.flex}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+            showsVerticalScrollIndicator={false}
+          >
+            {formBody}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
+          {formBody}
+        </ScrollView>
+      )}
+    </View>
   );
 };
 
@@ -356,6 +384,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  flex: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   header: {
     width: '100%',
@@ -373,7 +407,7 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.medium,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.xl,

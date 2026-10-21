@@ -123,6 +123,99 @@ export const ForgotPasswordScreen: React.FC = () => {
     );
   }
 
+  const formBody = (
+    <>
+      <View style={{ height: 16 }} />
+      {step === 'email' ? (
+        <>
+          <Text style={styles.title}>Recuperar contraseña</Text>
+          <Text style={styles.subtitle}>
+            Ingresa tu email y te enviamos un codigo para restablecerla
+          </Text>
+          <View style={{ height: 8 }} />
+          <Input
+            placeholder="Email"
+            value={email}
+            onChangeText={(t) => {
+              setEmail(t);
+              setError(null);
+            }}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            containerStyle={styles.inputField}
+          />
+          <View style={{ height: 8 }} />
+          <Button
+            title="ENVIAR CODIGO"
+            onPress={handleSendCode}
+            loading={forgotPassword.isPending}
+            disabled={!email.trim() || forgotPassword.isPending}
+            style={styles.button}
+          />
+        </>
+      ) : (
+        <>
+          <Text style={styles.title}>Restablecer contraseña</Text>
+          <Text style={styles.subtitle}>Te enviamos un codigo de 6 digitos a {email.trim()}</Text>
+          <View style={{ height: 16 }} />
+          <OTPInput length={6} value={code} onChange={setCode} />
+          <View style={{ height: 16 }} />
+          <Input
+            placeholder="Nueva contraseña"
+            value={password}
+            onChangeText={(t) => {
+              setPassword(t);
+              setError(null);
+            }}
+            secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="newPassword"
+            containerStyle={styles.inputField}
+          />
+          <Input
+            placeholder="Confirmar contraseña"
+            value={confirmPassword}
+            onChangeText={(t) => {
+              setConfirmPassword(t);
+              setError(null);
+            }}
+            secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="password"
+            containerStyle={styles.inputField}
+          />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <View style={styles.showPasswordRow}>
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={18}
+                color={theme.colors.mediumGray}
+              />
+              <Text style={styles.showPasswordText}>
+                {showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+          <View style={{ height: 8 }} />
+          <Button
+            title="RESTABLECER CONTRASEÑA"
+            onPress={handleReset}
+            loading={resetPassword.isPending}
+            disabled={code.length !== 6 || !password || !confirmPassword || resetPassword.isPending}
+            style={styles.button}
+          />
+          <TouchableOpacity onPress={handleResendCode} disabled={forgotPassword.isPending}>
+            <Text style={styles.resendLink}>Reenviar codigo</Text>
+          </TouchableOpacity>
+        </>
+      )}
+      {error !== null && <Text style={styles.errorText}>{error}</Text>}
+      {info !== null && <Text style={styles.infoText}>{info}</Text>}
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -152,109 +245,32 @@ export const ForgotPasswordScreen: React.FC = () => {
           <Text style={styles.backText}>← Volver</Text>
         </TouchableOpacity>
       </View>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {/*
+        Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.
+        iOS: padding KAV + ScrollView.
+      */}
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+            showsVerticalScrollIndicator={false}
+          >
+            {formBody}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ height: 16 }} />
-          {step === 'email' ? (
-            <>
-              <Text style={styles.title}>Recuperar contraseña</Text>
-              <Text style={styles.subtitle}>
-                Ingresa tu email y te enviamos un codigo para restablecerla
-              </Text>
-              <View style={{ height: 8 }} />
-              <Input
-                placeholder="Email"
-                value={email}
-                onChangeText={(t) => {
-                  setEmail(t);
-                  setError(null);
-                }}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                containerStyle={styles.inputField}
-              />
-              <View style={{ height: 8 }} />
-              <Button
-                title="ENVIAR CODIGO"
-                onPress={handleSendCode}
-                loading={forgotPassword.isPending}
-                disabled={!email.trim() || forgotPassword.isPending}
-                style={styles.button}
-              />
-            </>
-          ) : (
-            <>
-              <Text style={styles.title}>Restablecer contraseña</Text>
-              <Text style={styles.subtitle}>
-                Te enviamos un codigo de 6 digitos a {email.trim()}
-              </Text>
-              <View style={{ height: 16 }} />
-              <OTPInput length={6} value={code} onChange={setCode} />
-              <View style={{ height: 16 }} />
-              <Input
-                placeholder="Nueva contraseña"
-                value={password}
-                onChangeText={(t) => {
-                  setPassword(t);
-                  setError(null);
-                }}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                textContentType="newPassword"
-                containerStyle={styles.inputField}
-              />
-              <Input
-                placeholder="Confirmar contraseña"
-                value={confirmPassword}
-                onChangeText={(t) => {
-                  setConfirmPassword(t);
-                  setError(null);
-                }}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                textContentType="password"
-                containerStyle={styles.inputField}
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <View style={styles.showPasswordRow}>
-                  <Ionicons
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={18}
-                    color={theme.colors.mediumGray}
-                  />
-                  <Text style={styles.showPasswordText}>
-                    {showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-              <View style={{ height: 8 }} />
-              <Button
-                title="RESTABLECER CONTRASEÑA"
-                onPress={handleReset}
-                loading={resetPassword.isPending}
-                disabled={
-                  code.length !== 6 || !password || !confirmPassword || resetPassword.isPending
-                }
-                style={styles.button}
-              />
-              <TouchableOpacity onPress={handleResendCode} disabled={forgotPassword.isPending}>
-                <Text style={styles.resendLink}>Reenviar codigo</Text>
-              </TouchableOpacity>
-            </>
-          )}
-          {error !== null && <Text style={styles.errorText}>{error}</Text>}
-          {info !== null && <Text style={styles.infoText}>{info}</Text>}
+          {formBody}
         </ScrollView>
-      </KeyboardAvoidingView>
+      )}
     </View>
   );
 };
