@@ -198,6 +198,48 @@ export function ProfileScreen() {
 
   const previewUri = editPhotoUri ?? avatarUrl;
 
+  const editModalBody = (
+    <View style={styles.modalContent}>
+      <View style={styles.modalHeader}>
+        <Text style={styles.modalTitle}>Editar perfil</Text>
+        <TouchableOpacity onPress={() => setEditVisible(false)}>
+          <Ionicons name="close" size={24} color={theme.colors.mediumGray} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.modalScrollContent,
+          { paddingBottom: Math.max(insets.bottom, theme.spacing.xl) },
+        ]}
+      >
+        <TouchableOpacity style={styles.editAvatar} onPress={handlePickPhoto} activeOpacity={0.7}>
+          <Avatar uri={previewUri} name={editFullName || displayName} size={72} />
+          <Text style={styles.editAvatarLabel}>Cambiar foto</Text>
+        </TouchableOpacity>
+
+        <Input placeholder="Nombre" value={editFullName} onChangeText={setEditFullName} />
+        <Input
+          placeholder="Teléfono"
+          value={editPhone}
+          onChangeText={setEditPhone}
+          keyboardType="phone-pad"
+        />
+        <View style={styles.emailRow}>
+          <Text style={styles.emailLabel}>Email</Text>
+          <Text style={styles.emailValue}>{email ?? '—'}</Text>
+        </View>
+
+        <Button onPress={handleSave} loading={saving} disabled={saving}>
+          Guardar
+        </Button>
+      </ScrollView>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -242,53 +284,13 @@ export function ProfileScreen() {
       <BottomTabBar activeTab="profile" visible={visible} />
 
       <Modal visible={editVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Editar perfil</Text>
-              <TouchableOpacity onPress={() => setEditVisible(false)}>
-                <Ionicons name="close" size={24} color={theme.colors.mediumGray} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={[
-                styles.modalScrollContent,
-                { paddingBottom: Math.max(insets.bottom, theme.spacing.xl) },
-              ]}
-            >
-              <TouchableOpacity
-                style={styles.editAvatar}
-                onPress={handlePickPhoto}
-                activeOpacity={0.7}
-              >
-                <Avatar uri={previewUri} name={editFullName || displayName} size={72} />
-                <Text style={styles.editAvatarLabel}>Cambiar foto</Text>
-              </TouchableOpacity>
-
-              <Input placeholder="Nombre" value={editFullName} onChangeText={setEditFullName} />
-              <Input
-                placeholder="Teléfono"
-                value={editPhone}
-                onChangeText={setEditPhone}
-                keyboardType="phone-pad"
-              />
-              <View style={styles.emailRow}>
-                <Text style={styles.emailLabel}>Email</Text>
-                <Text style={styles.emailValue}>{email ?? '—'}</Text>
-              </View>
-
-              <Button onPress={handleSave} loading={saving} disabled={saving}>
-                Guardar
-              </Button>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
+        {Platform.OS === 'ios' ? (
+          <KeyboardAvoidingView style={styles.modalOverlay} behavior="padding">
+            {editModalBody}
+          </KeyboardAvoidingView>
+        ) : (
+          <View style={styles.modalOverlay}>{editModalBody}</View>
+        )}
       </Modal>
     </SafeAreaView>
   );
