@@ -177,7 +177,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         >
           <Text style={styles.sectionTitle}>VEHICULO</Text>
           {vehiclePlate !== '' && vehicleBrand !== '' ? (

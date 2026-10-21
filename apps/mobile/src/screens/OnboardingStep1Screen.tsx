@@ -231,7 +231,7 @@ export const OnboardingStep1Screen: React.FC = () => {
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         >
           <TouchableOpacity style={styles.avatarSection} onPress={pickImage} activeOpacity={0.7}>
             <View style={styles.avatarCircle}>
