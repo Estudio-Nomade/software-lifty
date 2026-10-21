@@ -1,6 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
 import { theme } from '../theme';
 import { Button } from './Button';
@@ -18,10 +25,19 @@ export function FavoriteEditor({ initial, onSave, onCancel }: FavoriteEditorProp
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
     initial?.lat != null && initial?.lng != null ? { lat: initial.lat, lng: initial.lng } : null,
   );
-  const { suggestions, loading, error } = usePlaceAutocomplete(address);
+  // Gate live search while a pick (or initial lat/lng) is locked — same idea as destPicked on Home.
+  // Any manual edit must clear coords first (handleAddressChange) or suggestions stay off and save would keep stale lat/lng.
+  const addressQuery = coords ? '' : address;
+  const { suggestions, loading, error } = usePlaceAutocomplete(addressQuery);
 
   const isEditing = initial != null && initial.address !== '';
   const canSave = label.trim().length > 0 && address.trim().length > 0;
+
+  const handleAddressChange = (text: string) => {
+    setAddress(text);
+    // Unlock autocomplete + drop stale pick coords when the user edits the label.
+    setCoords(null);
+  };
 
   const handleSave = () => {
     if (!canSave) return;
@@ -29,7 +45,14 @@ export function FavoriteEditor({ initial, onSave, onCancel }: FavoriteEditorProp
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      nestedScrollEnabled
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.header}>
         <TouchableOpacity onPress={onCancel} style={styles.backBtn} accessibilityLabel="Cancelar">
           <Ionicons name="arrow-back" size={22} color={theme.colors.deepBlue} />
@@ -44,10 +67,7 @@ export function FavoriteEditor({ initial, onSave, onCancel }: FavoriteEditorProp
       <Input
         placeholder="Escribí la dirección"
         value={address}
-        onChangeText={(text) => {
-          setAddress(text);
-          setCoords(null);
-        }}
+        onChangeText={handleAddressChange}
         autoFocus
       />
 
@@ -60,7 +80,7 @@ export function FavoriteEditor({ initial, onSave, onCancel }: FavoriteEditorProp
 
       {error && !loading ? <Text style={styles.errorText}>{error}</Text> : null}
 
-      {suggestions.length > 0 ? (
+      {suggestions.length > 0 && !loading ? (
         <View style={styles.suggestions}>
           {suggestions.map((suggestion) => (
             <TouchableOpacity
@@ -71,9 +91,13 @@ export function FavoriteEditor({ initial, onSave, onCancel }: FavoriteEditorProp
                 setCoords({ lat: suggestion.lat, lng: suggestion.lng });
               }}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={suggestion.description}
             >
-              <Ionicons name="location-outline" size={18} color={theme.colors.mediumGray} />
-              <Text style={styles.suggestionText} numberOfLines={1}>
+              <View style={styles.suggestionIcon}>
+                <Ionicons name="location" size={16} color={theme.colors.deepBlue} />
+              </View>
+              <Text style={styles.suggestionText} numberOfLines={2}>
                 {suggestion.description}
               </Text>
             </TouchableOpacity>
@@ -84,14 +108,18 @@ export function FavoriteEditor({ initial, onSave, onCancel }: FavoriteEditorProp
       <Button variant="primary" onPress={handleSave} disabled={!canSave} style={styles.saveBtn}>
         {isEditing ? 'Guardar cambios' : 'Agregar a favorito'}
       </Button>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flexGrow: 0,
+    marginTop: theme.spacing.md,
+  },
   container: {
     marginHorizontal: theme.spacing.md,
-    marginTop: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
   },
   header: {
     flexDirection: 'row',
@@ -136,25 +164,37 @@ const styles = StyleSheet.create({
     color: theme.colors.dangerRed,
   },
   suggestions: {
-    marginTop: theme.spacing.xs,
-    backgroundColor: theme.colors.white,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.lightGray,
+    marginTop: theme.spacing.sm,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(13, 43, 69, 0.06)',
     overflow: 'hidden',
+    ...theme.shadows.card,
   },
   suggestionItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
-    minHeight: 44,
+    minHeight: 52,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(13, 43, 69, 0.06)',
+  },
+  suggestionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.colors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   suggestionText: {
     flex: 1,
     fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
+    fontFamily: theme.fontFamily.medium,
     color: theme.colors.deepBlue,
+    paddingVertical: theme.spacing.sm,
   },
   saveBtn: {
     marginTop: theme.spacing.lg,
