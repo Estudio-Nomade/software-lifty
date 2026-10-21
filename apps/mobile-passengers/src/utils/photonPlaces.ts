@@ -214,13 +214,25 @@ export async function searchPhotonPlaces(
   const { signal: fetchSignal, cleanup } = mergeAbortSignals(signal, PHOTON_CLIENT_TIMEOUT_MS);
   try {
     const res = await fetch(url.toString(), { signal: fetchSignal });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      throw new Error(`Photon HTTP ${res.status}`);
+    }
     const data = (await res.json()) as PhotonResponse;
     return mapPhotonFeaturesToPlaces(data, { query: q, biasLat, biasLng });
   } catch (err) {
     const name = (err as { name?: string } | null)?.name;
-    if (name === 'AbortError' || signal?.aborted || fetchSignal.aborted) return [];
-    return [];
+    const isAbort = name === 'AbortError' || signal?.aborted || fetchSignal.aborted;
+    if (isAbort) {
+      // Caller cancelled (re-type) → AbortError so UI does not show false empty.
+      // Local timeout alone → network-style error (honest, not "no results").
+      if (signal?.aborted) {
+        const abortErr = err instanceof Error ? err : new Error('Aborted');
+        abortErr.name = 'AbortError';
+        throw abortErr;
+      }
+      throw new Error('Photon timeout');
+    }
+    throw err instanceof Error ? err : new Error('Photon request failed');
   } finally {
     cleanup();
   }

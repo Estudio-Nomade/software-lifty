@@ -29,15 +29,14 @@ export function usePlaceAutocomplete(query: string): PlaceAutocompleteResult {
       return;
     }
 
+    // Loading immediately so empty gate cannot flash "No encontramos…" during debounce.
+    setLoading(true);
+    setError(null);
+
     const controller = new AbortController();
     let cancelled = false;
-    let loadingTimer: ReturnType<typeof setTimeout> | undefined;
 
     const timeout = setTimeout(() => {
-      loadingTimer = setTimeout(() => {
-        if (!cancelled) setLoading(true);
-      }, 150);
-
       void (async () => {
         try {
           const results = await searchPlaces(trimmed, lat, lng, controller.signal);
@@ -55,7 +54,6 @@ export function usePlaceAutocomplete(query: string): PlaceAutocompleteResult {
           setError('No pudimos buscar calles ni lugares');
         } finally {
           if (!cancelled) setLoading(false);
-          if (loadingTimer) clearTimeout(loadingTimer);
         }
       })();
     }, DEBOUNCE_MS);
@@ -63,7 +61,6 @@ export function usePlaceAutocomplete(query: string): PlaceAutocompleteResult {
     return () => {
       cancelled = true;
       clearTimeout(timeout);
-      if (loadingTimer) clearTimeout(loadingTimer);
       controller.abort();
     };
   }, [query, lat, lng]);

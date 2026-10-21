@@ -122,6 +122,7 @@ export function ExpandedTripSearch({
                   value={pickupAddress}
                   onFocus={onPickupFocus}
                   onChangeText={onPickupChange}
+                  scrollEnabled
                   accessibilityLabel="Origen"
                 />
               )}
@@ -153,6 +154,7 @@ export function ExpandedTripSearch({
                 value={destAddress}
                 onFocus={onDestFocus}
                 onChangeText={onDestChange}
+                scrollEnabled
                 autoFocus
                 returnKeyType="search"
                 onSubmitEditing={onConfirm}
@@ -352,6 +354,8 @@ const styles = StyleSheet.create({
     color: theme.colors.deepBlue,
     padding: 0,
     minHeight: 28,
+    // Long street/POI labels: allow caret + horizontal scroll (iOS/Android/web).
+    overflow: 'scroll',
   },
   loadingRow: {
     flex: 1,
