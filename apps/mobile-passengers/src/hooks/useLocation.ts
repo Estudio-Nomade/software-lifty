@@ -82,7 +82,8 @@ function isJestRuntime(): boolean {
 const MAX_WAIT_MS = isJestRuntime() ? 80 : 16_000;
 const MIN_WAIT_MS = isJestRuntime() ? 0 : 2_500;
 /** Cap native getCurrentPosition so a hung BestForNavigation cannot block forever. */
-const NATIVE_FIX_TIMEOUT_MS = isJestRuntime() ? 200 : 8_000;
+/** Per-attempt ceiling — keep low so Origen label feels instant (lastKnown seeds first). */
+const NATIVE_FIX_TIMEOUT_MS = isJestRuntime() ? 200 : 2_500;
 
 function readBrowserGeo(): BrowserGeolocation | null {
   const g = globalThis as { navigator?: { geolocation?: BrowserGeolocation } };
@@ -394,7 +395,8 @@ export function nativeWatchOptions(): {
 /**
  * Best-effort position with accuracy.
  * Web waits for GPS warm-up; still may return coarse WiFi after timeout.
- * Native: last-known seed → BestForNavigation → Balanced → High.
+ * Native: last-known seed (instant) → Balanced → High → BestForNavigation.
+ * Prefer returning a usable fix fast for Origen label over waiting on BestForNavigation.
  */
 export async function requestFreshPosition(): Promise<PositionFix | null> {
   if (isWebRuntime()) {
@@ -410,19 +412,18 @@ export async function requestFreshPosition(): Promise<PositionFix | null> {
     }
     useLocationStore.getState().setPermissionGranted(true);
 
-    // Seed store ASAP from cache so the map pin is not blank while GPS warms.
+    // Seed store ASAP from cache so the map pin / Origen are not blank while GPS warms.
     const lastKnown = await getNativeLastKnown();
-    if (lastKnown) {
-      const seed = toPositionFix(lastKnown);
-      if (seed) {
-        useLocationStore.getState().applyFix(seed, { force: false });
-      }
+    const seed = lastKnown ? toPositionFix(lastKnown) : null;
+    if (seed) {
+      useLocationStore.getState().applyFix(seed, { force: false });
     }
 
+    // Balanced first (fast). BestForNavigation last — often slow on cold iOS.
     const pos =
-      (await getNativePositionOnce(Location.Accuracy.BestForNavigation)) ??
       (await getNativePositionOnce(Location.Accuracy.Balanced)) ??
       (await getNativePositionOnce(Location.Accuracy.High)) ??
+      (await getNativePositionOnce(Location.Accuracy.BestForNavigation)) ??
       lastKnown;
 
     if (!pos) {

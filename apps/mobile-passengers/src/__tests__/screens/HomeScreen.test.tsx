@@ -128,7 +128,7 @@ describe('HomeScreen address clear', () => {
 
   test('clearing GPS autofill origen stays empty (no re-fill loop)', async () => {
     mockRequestFresh.mockResolvedValue({ lat: -31.94, lng: -65.19, accuracy: 15 });
-    mockResolveLabel.mockResolvedValue('Mi ubicación actual');
+    mockResolveLabel.mockResolvedValue('San Martín 100, Villa Dolores');
     mockUseLocation.mockReturnValue({
       current: { lat: -31.94, lng: -65.19, accuracy: 15 },
       locationError: null,
@@ -139,12 +139,12 @@ describe('HomeScreen address clear', () => {
       await openSearch();
 
     await waitFor(() => {
-      expect(getByDisplayValue('Mi ubicación actual')).toBeTruthy();
+      expect(getByDisplayValue('San Martín 100, Villa Dolores')).toBeTruthy();
     });
 
     await fireEvent.press(getByLabelText('Borrar origen'));
 
-    expect(queryByDisplayValue('Mi ubicación actual')).toBeNull();
+    expect(queryByDisplayValue('San Martín 100, Villa Dolores')).toBeNull();
     // Locked GPS label must not show false "no results" empty.
     expect(queryByText(/No encontramos calles ni lugares/i)).toBeNull();
 
@@ -152,7 +152,27 @@ describe('HomeScreen address clear', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(queryByDisplayValue('Mi ubicación actual')).toBeNull();
+    expect(queryByDisplayValue('San Martín 100, Villa Dolores')).toBeNull();
+  });
+
+  test('Usar mi ubicacion actual writes street label into Origen', async () => {
+    mockRequestFresh.mockResolvedValue({ lat: -31.94, lng: -65.19, accuracy: 12 });
+    mockResolveLabel.mockResolvedValue('Belgrano 50, Villa Dolores');
+    mockUseLocation.mockReturnValue({
+      current: { lat: -31.94, lng: -65.19, accuracy: 12 },
+      locationError: null,
+      refresh: jest.fn().mockResolvedValue({ lat: -31.94, lng: -65.19, accuracy: 12 }),
+    });
+
+    const { getByPlaceholderText, getByLabelText, getByDisplayValue } = await openSearch();
+
+    await fireEvent.changeText(getByPlaceholderText('Desde'), 'Otra calle 9');
+    await fireEvent.press(getByLabelText('Usar mi ubicación actual'));
+
+    await waitFor(() => {
+      expect(getByDisplayValue('Belgrano 50, Villa Dolores')).toBeTruthy();
+    });
+    expect(mockResolveLabel).toHaveBeenCalled();
   });
 });
 

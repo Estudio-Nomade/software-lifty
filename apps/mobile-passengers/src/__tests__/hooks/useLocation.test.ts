@@ -271,11 +271,39 @@ describe('formatStreetLabel', () => {
   });
 });
 
-describe('resolveAddressLabel accuracy gate', () => {
-  it('does not invent a street when accuracy is coarse', async () => {
+describe('resolveAddressLabel reverse (all platforms)', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('falls back to generic only when reverse fails', async () => {
+    const { reverseGeocode } = jest.requireMock('../../api/passenger') as {
+      reverseGeocode: jest.Mock;
+    };
+    reverseGeocode.mockRejectedValueOnce(new Error('network'));
+    globalThis.fetch = jest.fn().mockRejectedValue(new Error('offline')) as unknown as typeof fetch;
+
     const label = await resolveAddressLabel(-37.32, -59.13, {
       accuracy: MAX_LABEL_ACCURACY_M + 50,
     });
     expect(label).toBe('Mi ubicación actual');
+  });
+
+  it('uses reverse street even with coarse accuracy (no hard gate)', async () => {
+    const { reverseGeocode } = jest.requireMock('../../api/passenger') as {
+      reverseGeocode: jest.Mock;
+    };
+    reverseGeocode.mockResolvedValueOnce({
+      lat: -37.32,
+      lng: -59.13,
+      formatted_address: 'San Martín 100, Tandil',
+    });
+
+    const label = await resolveAddressLabel(-37.32, -59.13, {
+      accuracy: MAX_LABEL_ACCURACY_M + 500,
+    });
+    expect(label).toBe('San Martín 100, Tandil');
   });
 });
