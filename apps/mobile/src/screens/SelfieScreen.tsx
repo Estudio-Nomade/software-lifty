@@ -1,5 +1,6 @@
 import type React from 'react';
 import { StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -7,12 +8,22 @@ import { theme } from '../theme';
 
 export const SelfieScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, theme.spacing.md) }]}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top + theme.spacing.sm,
+            paddingBottom: theme.spacing.sm,
+            minHeight: theme.dimensions.navbarHeight + insets.top,
+          },
+        ]}
+      >
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8}>
           <Text style={styles.closeButton}>✕ Cerrar</Text>
         </TouchableOpacity>
       </View>
@@ -44,7 +55,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    height: 56,
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
