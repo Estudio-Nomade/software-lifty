@@ -324,32 +324,42 @@ export const TripCompleteScreen: React.FC = () => {
     </>
   );
 
+  const scrollBody = (
+    <ScrollView
+      ref={scrollRef}
+      contentContainerStyle={[styles.scrollContent, { paddingBottom: contentPadBottom }]}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+      showsVerticalScrollIndicator={false}
+    >
+      <Animated.View
+        style={[
+          styles.content,
+          {
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }],
+          },
+        ]}
+      >
+        {step === 'collect' ? renderCollectStep() : renderRateStep()}
+      </Animated.View>
+    </ScrollView>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: contentPadBottom }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View
-            style={[
-              styles.content,
-              {
-                opacity: fadeAnim,
-                transform: [{ scale: scaleAnim }],
-              },
-            ]}
-          >
-            {step === 'collect' ? renderCollectStep() : renderRateStep()}
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      {/*
+        Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.
+        iOS: padding KAV + ScrollView.
+      */}
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          {scrollBody}
+        </KeyboardAvoidingView>
+      ) : (
+        scrollBody
+      )}
     </View>
   );
 };

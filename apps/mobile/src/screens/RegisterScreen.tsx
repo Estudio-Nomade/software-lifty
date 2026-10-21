@@ -237,6 +237,91 @@ export const RegisterScreen: React.FC = () => {
     );
   }
 
+  const formBody = (
+    <View style={styles.form}>
+      <Text style={styles.title}>Crear cuenta</Text>
+      <Text style={styles.subtitle}>Ingresá tu email y contraseña para registrarte</Text>
+      <Input
+        placeholder="Email"
+        value={email}
+        onChangeText={(t) => {
+          setEmail(t);
+          setError(null);
+        }}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        containerStyle={styles.inputField}
+      />
+      <Input
+        placeholder="Contraseña"
+        value={password}
+        onChangeText={(t) => {
+          setPassword(t);
+          setError(null);
+        }}
+        secureTextEntry={!showPassword}
+        autoCapitalize="none"
+        autoCorrect={false}
+        textContentType="newPassword"
+        containerStyle={styles.inputField}
+      />
+      <Input
+        placeholder="Confirmar contraseña"
+        value={confirmPassword}
+        onChangeText={(t) => {
+          setConfirmPassword(t);
+          setError(null);
+        }}
+        secureTextEntry={!showPassword}
+        autoCapitalize="none"
+        autoCorrect={false}
+        textContentType="password"
+        containerStyle={styles.inputField}
+      />
+      <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+        <View style={styles.showPasswordRow}>
+          <Ionicons
+            name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+            size={18}
+            color={theme.colors.mediumGray}
+          />
+          <Text style={styles.showPasswordText}>
+            {showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+          </Text>
+        </View>
+      </TouchableOpacity>
+      {passwordMismatch && <Text style={styles.mismatchText}>Las contraseñas no coinciden</Text>}
+      {passwordMatch && <Text style={styles.matchText}>✓ Las contraseñas coinciden</Text>}
+      <Button
+        title="Crear cuenta"
+        onPress={handleRegister}
+        loading={signUp.isPending}
+        disabled={!email.trim() || !password || !confirmPassword || signUp.isPending}
+        style={styles.button}
+      />
+      <Button
+        title={googleLoading ? '' : 'Continuar con Google'}
+        onPress={handleGoogle}
+        loading={googleLoading}
+        style={[styles.button, styles.googleButton]}
+        textStyle={styles.googleButtonText}
+      />
+      {error !== null && <Text style={styles.errorText}>{error}</Text>}
+      <TouchableOpacity
+        onPress={() => {
+          const trimmed = email.trim();
+          if (trimmed) {
+            navigation.navigate('LoginCredentials', { email: trimmed });
+          } else {
+            navigation.navigate('LoginCredentials');
+          }
+        }}
+      >
+        <Text style={styles.loginLink}>¿Ya tenés cuenta? Iniciá sesión</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -254,101 +339,32 @@ export const RegisterScreen: React.FC = () => {
           <Text style={styles.backText}>← Volver</Text>
         </TouchableOpacity>
       </View>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {/*
+        Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.
+        iOS: padding KAV + ScrollView.
+      */}
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+            showsVerticalScrollIndicator={false}
+          >
+            {formBody}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.form}>
-            <Text style={styles.title}>Crear cuenta</Text>
-            <Text style={styles.subtitle}>Ingresá tu email y contraseña para registrarte</Text>
-            <Input
-              placeholder="Email"
-              value={email}
-              onChangeText={(t) => {
-                setEmail(t);
-                setError(null);
-              }}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              containerStyle={styles.inputField}
-            />
-            <Input
-              placeholder="Contraseña"
-              value={password}
-              onChangeText={(t) => {
-                setPassword(t);
-                setError(null);
-              }}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="newPassword"
-              containerStyle={styles.inputField}
-            />
-            <Input
-              placeholder="Confirmar contraseña"
-              value={confirmPassword}
-              onChangeText={(t) => {
-                setConfirmPassword(t);
-                setError(null);
-              }}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              textContentType="password"
-              containerStyle={styles.inputField}
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <View style={styles.showPasswordRow}>
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={18}
-                  color={theme.colors.mediumGray}
-                />
-                <Text style={styles.showPasswordText}>
-                  {showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-            {passwordMismatch && (
-              <Text style={styles.mismatchText}>Las contraseñas no coinciden</Text>
-            )}
-            {passwordMatch && <Text style={styles.matchText}>✓ Las contraseñas coinciden</Text>}
-            <Button
-              title="Crear cuenta"
-              onPress={handleRegister}
-              loading={signUp.isPending}
-              disabled={!email.trim() || !password || !confirmPassword || signUp.isPending}
-              style={styles.button}
-            />
-            <Button
-              title={googleLoading ? '' : 'Continuar con Google'}
-              onPress={handleGoogle}
-              loading={googleLoading}
-              style={[styles.button, styles.googleButton]}
-              textStyle={styles.googleButtonText}
-            />
-            {error !== null && <Text style={styles.errorText}>{error}</Text>}
-            <TouchableOpacity
-              onPress={() => {
-                const trimmed = email.trim();
-                if (trimmed) {
-                  navigation.navigate('LoginCredentials', { email: trimmed });
-                } else {
-                  navigation.navigate('LoginCredentials');
-                }
-              }}
-            >
-              <Text style={styles.loginLink}>¿Ya tenés cuenta? Iniciá sesión</Text>
-            </TouchableOpacity>
-          </View>
+          {formBody}
         </ScrollView>
-      </KeyboardAvoidingView>
+      )}
     </View>
   );
 };

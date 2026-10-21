@@ -269,6 +269,64 @@ export const ProfileScreen: React.FC = () => {
   const yearsDisplay = formatTier(yearsActive, [1, 3, 5, 10]);
   const yearsLabel = yearsActive >= 1 ? 'Año' : 'Años';
 
+  const editModalBody = (
+    <View style={styles.modalContent}>
+      <View style={styles.modalHeader}>
+        <Text style={styles.modalTitle}>Editar perfil</Text>
+        <TouchableOpacity onPress={() => setEditVisible(false)}>
+          <Ionicons name="close" size={24} color={theme.colors.mediumGray} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.modalScrollContent,
+          { paddingBottom: Math.max(insets.bottom, theme.spacing.xl) },
+        ]}
+      >
+        <TouchableOpacity style={styles.editAvatar} onPress={handlePickPhoto}>
+          <Avatar
+            uri={editPhotoUri ?? profile?.avatar_url ?? null}
+            name={profile?.full_name ?? ''}
+            size={80}
+          />
+          <Text style={styles.editAvatarLabel}>Cambiar foto</Text>
+        </TouchableOpacity>
+
+        <Input
+          placeholder="Nombre"
+          value={editFirstName}
+          onChangeText={setEditFirstName}
+          containerStyle={styles.editInput}
+        />
+        <Input
+          placeholder="Apellido"
+          value={editLastName}
+          onChangeText={setEditLastName}
+          containerStyle={styles.editInput}
+        />
+        <Input
+          placeholder="Telefono"
+          value={editPhone}
+          onChangeText={setEditPhone}
+          keyboardType="phone-pad"
+          containerStyle={styles.editInput}
+        />
+
+        <Button
+          title="Guardar"
+          onPress={handleSave}
+          loading={saving}
+          disabled={saving}
+          style={styles.editButton}
+        />
+      </ScrollView>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
@@ -456,65 +514,13 @@ export const ProfileScreen: React.FC = () => {
       </ScrollView>
 
       <Modal visible={editVisible} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Editar perfil</Text>
-              <TouchableOpacity onPress={() => setEditVisible(false)}>
-                <Ionicons name="close" size={24} color={theme.colors.mediumGray} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={[
-                styles.modalScrollContent,
-                { paddingBottom: Math.max(insets.bottom, theme.spacing.xl) },
-              ]}
-            >
-              <TouchableOpacity style={styles.editAvatar} onPress={handlePickPhoto}>
-                <Avatar
-                  uri={editPhotoUri ?? profile?.avatar_url ?? null}
-                  name={profile?.full_name ?? ''}
-                  size={80}
-                />
-                <Text style={styles.editAvatarLabel}>Cambiar foto</Text>
-              </TouchableOpacity>
-
-              <Input
-                placeholder="Nombre"
-                value={editFirstName}
-                onChangeText={setEditFirstName}
-                containerStyle={styles.editInput}
-              />
-              <Input
-                placeholder="Apellido"
-                value={editLastName}
-                onChangeText={setEditLastName}
-                containerStyle={styles.editInput}
-              />
-              <Input
-                placeholder="Telefono"
-                value={editPhone}
-                onChangeText={setEditPhone}
-                keyboardType="phone-pad"
-                containerStyle={styles.editInput}
-              />
-
-              <Button
-                title="Guardar"
-                onPress={handleSave}
-                loading={saving}
-                disabled={saving}
-                style={styles.editButton}
-              />
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
+        {Platform.OS === 'ios' ? (
+          <KeyboardAvoidingView style={styles.modalOverlay} behavior="padding">
+            {editModalBody}
+          </KeyboardAvoidingView>
+        ) : (
+          <View style={styles.modalOverlay}>{editModalBody}</View>
+        )}
       </Modal>
     </View>
   );

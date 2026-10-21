@@ -165,124 +165,143 @@ export const OnboardingVehicleScreen: React.FC = () => {
     }
   };
 
+  const formBody = (
+    <>
+      <Text style={styles.sectionTitle}>VEHICULO</Text>
+      {vehiclePlate !== '' && vehicleBrand !== '' ? (
+        <Text style={styles.hint}>Datos guardados. Revisá y continuá.</Text>
+      ) : null}
+      <View style={styles.vehicleTypes}>
+        {VEHICLE_TYPES.map((type) => (
+          <TouchableOpacity
+            key={type}
+            style={[styles.vehicleType, vehicleType === type && styles.vehicleTypeSelected]}
+            onPress={() => setVehicleType(type)}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={[
+                styles.vehicleTypeText,
+                vehicleType === type && styles.vehicleTypeTextSelected,
+              ]}
+            >
+              {type}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Input
+        placeholder="Patente"
+        value={vehiclePlate}
+        onChangeText={(t) => {
+          setVehiclePlate(t.toUpperCase());
+          setError('vehiclePlate', undefined);
+        }}
+        onBlur={() => setError('vehiclePlate', validatePlate(vehiclePlate))}
+        error={errors.vehiclePlate}
+        containerStyle={styles.input}
+        autoCapitalize="characters"
+        maxLength={9}
+      />
+      <View style={styles.row}>
+        <Input
+          placeholder="Marca"
+          value={vehicleBrand}
+          onChangeText={(t) => {
+            setVehicleBrand(t);
+            setError('vehicleBrand', undefined);
+          }}
+          onBlur={() => setError('vehicleBrand', validateRequired(vehicleBrand))}
+          error={errors.vehicleBrand}
+          containerStyle={styles.halfInput}
+        />
+        <Input
+          placeholder="Modelo"
+          value={vehicleModel}
+          onChangeText={(t) => {
+            setVehicleModel(t);
+            setError('vehicleModel', undefined);
+          }}
+          onBlur={() => setError('vehicleModel', validateRequired(vehicleModel))}
+          error={errors.vehicleModel}
+          containerStyle={styles.halfInput}
+        />
+      </View>
+      <View style={styles.row}>
+        <Input
+          placeholder="Color"
+          value={vehicleColor}
+          onChangeText={(t) => {
+            setVehicleColor(t);
+            setError('vehicleColor', undefined);
+          }}
+          onBlur={() => setError('vehicleColor', validateRequired(vehicleColor))}
+          error={errors.vehicleColor}
+          containerStyle={styles.halfInput}
+        />
+        <Input
+          placeholder="Año"
+          value={vehicleYear}
+          onChangeText={(t) => {
+            const digits = t.replace(/\D/g, '').slice(0, 4);
+            setVehicleYear(digits);
+            // Show error live once they typed a full year (e.g. 2010).
+            setError('vehicleYear', digits.length === 4 ? validateYear(digits) : undefined);
+          }}
+          onBlur={() => setError('vehicleYear', validateYear(vehicleYear))}
+          error={errors.vehicleYear}
+          containerStyle={styles.halfInput}
+          keyboardType="numeric"
+          maxLength={4}
+        />
+      </View>
+
+      {submitError !== '' && <Text style={styles.submitError}>{submitError}</Text>}
+
+      <Button
+        title="CONTINUAR"
+        onPress={handleContinue}
+        disabled={
+          loadingProfile ||
+          !isFormValid(vehiclePlate, vehicleBrand, vehicleModel, vehicleColor, vehicleYear)
+        }
+        loading={loading || loadingProfile}
+        variant="cta"
+        style={styles.button}
+      />
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
       <Navbar title="Paso 2/3" onBack={() => navigation.goBack()} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {/*
+        Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.
+        iOS: padding KAV. Keep #406 dismiss modes.
+      */}
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          <ScrollView
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+          >
+            {formBody}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          keyboardDismissMode="on-drag"
         >
-          <Text style={styles.sectionTitle}>VEHICULO</Text>
-          {vehiclePlate !== '' && vehicleBrand !== '' ? (
-            <Text style={styles.hint}>Datos guardados. Revisá y continuá.</Text>
-          ) : null}
-          <View style={styles.vehicleTypes}>
-            {VEHICLE_TYPES.map((type) => (
-              <TouchableOpacity
-                key={type}
-                style={[styles.vehicleType, vehicleType === type && styles.vehicleTypeSelected]}
-                onPress={() => setVehicleType(type)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.vehicleTypeText,
-                    vehicleType === type && styles.vehicleTypeTextSelected,
-                  ]}
-                >
-                  {type}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Input
-            placeholder="Patente"
-            value={vehiclePlate}
-            onChangeText={(t) => {
-              setVehiclePlate(t.toUpperCase());
-              setError('vehiclePlate', undefined);
-            }}
-            onBlur={() => setError('vehiclePlate', validatePlate(vehiclePlate))}
-            error={errors.vehiclePlate}
-            containerStyle={styles.input}
-            autoCapitalize="characters"
-            maxLength={9}
-          />
-          <View style={styles.row}>
-            <Input
-              placeholder="Marca"
-              value={vehicleBrand}
-              onChangeText={(t) => {
-                setVehicleBrand(t);
-                setError('vehicleBrand', undefined);
-              }}
-              onBlur={() => setError('vehicleBrand', validateRequired(vehicleBrand))}
-              error={errors.vehicleBrand}
-              containerStyle={styles.halfInput}
-            />
-            <Input
-              placeholder="Modelo"
-              value={vehicleModel}
-              onChangeText={(t) => {
-                setVehicleModel(t);
-                setError('vehicleModel', undefined);
-              }}
-              onBlur={() => setError('vehicleModel', validateRequired(vehicleModel))}
-              error={errors.vehicleModel}
-              containerStyle={styles.halfInput}
-            />
-          </View>
-          <View style={styles.row}>
-            <Input
-              placeholder="Color"
-              value={vehicleColor}
-              onChangeText={(t) => {
-                setVehicleColor(t);
-                setError('vehicleColor', undefined);
-              }}
-              onBlur={() => setError('vehicleColor', validateRequired(vehicleColor))}
-              error={errors.vehicleColor}
-              containerStyle={styles.halfInput}
-            />
-            <Input
-              placeholder="Año"
-              value={vehicleYear}
-              onChangeText={(t) => {
-                const digits = t.replace(/\D/g, '').slice(0, 4);
-                setVehicleYear(digits);
-                // Show error live once they typed a full year (e.g. 2010).
-                setError('vehicleYear', digits.length === 4 ? validateYear(digits) : undefined);
-              }}
-              onBlur={() => setError('vehicleYear', validateYear(vehicleYear))}
-              error={errors.vehicleYear}
-              containerStyle={styles.halfInput}
-              keyboardType="numeric"
-              maxLength={4}
-            />
-          </View>
-
-          {submitError !== '' && <Text style={styles.submitError}>{submitError}</Text>}
-
-          <Button
-            title="CONTINUAR"
-            onPress={handleContinue}
-            disabled={
-              loadingProfile ||
-              !isFormValid(vehiclePlate, vehicleBrand, vehicleModel, vehicleColor, vehicleYear)
-            }
-            loading={loading || loadingProfile}
-            variant="cta"
-            style={styles.button}
-          />
+          {formBody}
         </ScrollView>
-      </KeyboardAvoidingView>
+      )}
     </View>
   );
 };

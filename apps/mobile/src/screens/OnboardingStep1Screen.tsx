@@ -219,127 +219,143 @@ export const OnboardingStep1Screen: React.FC = () => {
 
   const formOk = isFormValid(firstName, lastName, phoneDigits, addressLine, termsAccepted);
 
+  const formBody = (
+    <>
+      <TouchableOpacity style={styles.avatarSection} onPress={pickImage} activeOpacity={0.7}>
+        <View style={styles.avatarCircle}>
+          {photoUri ? (
+            <Image source={{ uri: photoUri }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarIcon}>📷</Text>
+          )}
+        </View>
+        <Text style={styles.avatarLabel}>Agregar foto</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.sectionTitle}>PERFIL</Text>
+      <Input
+        placeholder="Nombre"
+        value={firstName}
+        onChangeText={(t) => {
+          setFirstName(t);
+          setError('firstName', undefined);
+        }}
+        onBlur={() => setError('firstName', validateName(firstName))}
+        error={errors.firstName}
+        containerStyle={styles.input}
+        maxLength={100}
+      />
+      <Input
+        placeholder="Apellido"
+        value={lastName}
+        onChangeText={(t) => {
+          setLastName(t);
+          setError('lastName', undefined);
+        }}
+        onBlur={() => setError('lastName', validateName(lastName))}
+        error={errors.lastName}
+        containerStyle={styles.input}
+        maxLength={100}
+      />
+      <Input
+        leftElement={<Text style={styles.countryCode}>+54</Text>}
+        placeholder="9 XX XXXX-XXXX"
+        value={formatPhone(phoneDigits)}
+        onChangeText={(t) => setPhoneDigits(t.replace(/\D/g, '').slice(0, 11))}
+        keyboardType="phone-pad"
+        containerStyle={styles.input}
+      />
+
+      <View style={styles.addressBlock}>
+        <Input
+          placeholder="Domicilio (calle y altura, ciudad…)"
+          value={addressLine}
+          onChangeText={(t) => {
+            setAddressLine(t);
+            setSelectedPlace(null);
+            setShowSuggestions(true);
+            setError('address', undefined);
+          }}
+          onBlur={() => {
+            if (addressLine.trim().length > 0 && addressLine.trim().length < MIN_ADDRESS_CHARS) {
+              setError('address', 'Ingresá un domicilio más completo');
+            }
+          }}
+          onFocus={() => setShowSuggestions(true)}
+          error={errors.address}
+          containerStyle={styles.input}
+          maxLength={200}
+          autoCorrect={false}
+        />
+        {showSuggestions && suggestions.length > 0 && (
+          <View style={styles.suggestions}>
+            {suggestions.map((s) => (
+              <Pressable
+                key={`${s.place_id}-${s.description}`}
+                style={styles.suggestionRow}
+                onPress={() => handleSelectPlace(s)}
+              >
+                <Text style={styles.suggestionText} numberOfLines={2}>
+                  {s.description}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
+
+      <TouchableOpacity
+        style={styles.checkboxRow}
+        onPress={() => setTermsAccepted(!termsAccepted)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]} />
+        <Text style={styles.checkboxLabel}>Acepto los terminos y condiciones</Text>
+      </TouchableOpacity>
+
+      {submitError !== '' && <Text style={styles.submitError}>{submitError}</Text>}
+
+      <Button
+        title="CONTINUAR"
+        onPress={handleContinue}
+        disabled={!formOk}
+        loading={loading}
+        variant="cta"
+        style={styles.button}
+      />
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
       <Navbar title="Paso 1/3" onBack={() => navigation.goBack()} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {/*
+        Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.
+        iOS: padding KAV. Keep #406 dismiss modes.
+      */}
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          <ScrollView
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+          >
+            {formBody}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
         <ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          keyboardDismissMode="on-drag"
         >
-          <TouchableOpacity style={styles.avatarSection} onPress={pickImage} activeOpacity={0.7}>
-            <View style={styles.avatarCircle}>
-              {photoUri ? (
-                <Image source={{ uri: photoUri }} style={styles.avatarImage} />
-              ) : (
-                <Text style={styles.avatarIcon}>📷</Text>
-              )}
-            </View>
-            <Text style={styles.avatarLabel}>Agregar foto</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.sectionTitle}>PERFIL</Text>
-          <Input
-            placeholder="Nombre"
-            value={firstName}
-            onChangeText={(t) => {
-              setFirstName(t);
-              setError('firstName', undefined);
-            }}
-            onBlur={() => setError('firstName', validateName(firstName))}
-            error={errors.firstName}
-            containerStyle={styles.input}
-            maxLength={100}
-          />
-          <Input
-            placeholder="Apellido"
-            value={lastName}
-            onChangeText={(t) => {
-              setLastName(t);
-              setError('lastName', undefined);
-            }}
-            onBlur={() => setError('lastName', validateName(lastName))}
-            error={errors.lastName}
-            containerStyle={styles.input}
-            maxLength={100}
-          />
-          <Input
-            leftElement={<Text style={styles.countryCode}>+54</Text>}
-            placeholder="9 XX XXXX-XXXX"
-            value={formatPhone(phoneDigits)}
-            onChangeText={(t) => setPhoneDigits(t.replace(/\D/g, '').slice(0, 11))}
-            keyboardType="phone-pad"
-            containerStyle={styles.input}
-          />
-
-          <View style={styles.addressBlock}>
-            <Input
-              placeholder="Domicilio (calle y altura, ciudad…)"
-              value={addressLine}
-              onChangeText={(t) => {
-                setAddressLine(t);
-                setSelectedPlace(null);
-                setShowSuggestions(true);
-                setError('address', undefined);
-              }}
-              onBlur={() => {
-                if (
-                  addressLine.trim().length > 0 &&
-                  addressLine.trim().length < MIN_ADDRESS_CHARS
-                ) {
-                  setError('address', 'Ingresá un domicilio más completo');
-                }
-              }}
-              onFocus={() => setShowSuggestions(true)}
-              error={errors.address}
-              containerStyle={styles.input}
-              maxLength={200}
-              autoCorrect={false}
-            />
-            {showSuggestions && suggestions.length > 0 && (
-              <View style={styles.suggestions}>
-                {suggestions.map((s) => (
-                  <Pressable
-                    key={`${s.place_id}-${s.description}`}
-                    style={styles.suggestionRow}
-                    onPress={() => handleSelectPlace(s)}
-                  >
-                    <Text style={styles.suggestionText} numberOfLines={2}>
-                      {s.description}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-          </View>
-
-          <TouchableOpacity
-            style={styles.checkboxRow}
-            onPress={() => setTermsAccepted(!termsAccepted)}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]} />
-            <Text style={styles.checkboxLabel}>Acepto los terminos y condiciones</Text>
-          </TouchableOpacity>
-
-          {submitError !== '' && <Text style={styles.submitError}>{submitError}</Text>}
-
-          <Button
-            title="CONTINUAR"
-            onPress={handleContinue}
-            disabled={!formOk}
-            loading={loading}
-            variant="cta"
-            style={styles.button}
-          />
+          {formBody}
         </ScrollView>
-      </KeyboardAvoidingView>
+      )}
     </View>
   );
 };

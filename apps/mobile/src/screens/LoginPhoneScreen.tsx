@@ -51,6 +51,34 @@ export const LoginPhoneScreen: React.FC = () => {
     setLoading(false);
   };
 
+  const formBody = (
+    <>
+      <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
+      <Text style={styles.wordmark}>Lifty</Text>
+      <Text style={styles.title}>Ingresa tu telefono</Text>
+      <Text style={styles.subtitle}>Te enviaremos un codigo de verificacion por SMS</Text>
+      <Input
+        leftElement={<Text style={styles.countryCode}>+54</Text>}
+        value={displayPhone}
+        onChangeText={(t) => setPhone(t.replace(/\D/g, ''))}
+        placeholder="9 XX XXXX-XXXX"
+        keyboardType="phone-pad"
+        error={error ?? undefined}
+        containerStyle={styles.phoneInput}
+        testID="phone-input"
+      />
+      <Button
+        title="CONTINUAR"
+        onPress={handleContinue}
+        disabled={!isValid}
+        loading={loading}
+        variant="primary"
+        style={styles.button}
+      />
+      <Text style={styles.terms}>Al continuar aceptas los Terminos y Condiciones</Text>
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -60,44 +88,32 @@ export const LoginPhoneScreen: React.FC = () => {
         onBack={() => navigation.goBack()}
         backgroundColor={theme.colors.deepBlue}
       />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {/*
+        Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.
+        iOS: padding KAV + ScrollView.
+      */}
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+            showsVerticalScrollIndicator={false}
+          >
+            {formBody}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.wordmark}>Lifty</Text>
-          <Text style={styles.title}>Ingresa tu telefono</Text>
-          <Text style={styles.subtitle}>Te enviaremos un codigo de verificacion por SMS</Text>
-          <Input
-            leftElement={<Text style={styles.countryCode}>+54</Text>}
-            value={displayPhone}
-            onChangeText={(t) => setPhone(t.replace(/\D/g, ''))}
-            placeholder="9 XX XXXX-XXXX"
-            keyboardType="phone-pad"
-            error={error ?? undefined}
-            containerStyle={styles.phoneInput}
-            testID="phone-input"
-          />
-          <Button
-            title="CONTINUAR"
-            onPress={handleContinue}
-            disabled={!isValid}
-            loading={loading}
-            variant="primary"
-            style={styles.button}
-          />
-          <Text style={styles.terms}>Al continuar aceptas los Terminos y Condiciones</Text>
+          {formBody}
         </ScrollView>
-      </KeyboardAvoidingView>
+      )}
     </View>
   );
 };

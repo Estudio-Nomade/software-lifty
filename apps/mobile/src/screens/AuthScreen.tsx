@@ -5,6 +5,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StatusBar,
   StyleSheet,
   TouchableOpacity,
@@ -158,109 +159,131 @@ export const AuthScreen: React.FC = () => {
     setInfo(null);
   };
 
+  const formBody = (
+    <View style={styles.content}>
+      <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
+      <Text style={styles.wordmark}>Lifty</Text>
+
+      {step === 'method' && (
+        <>
+          <Text style={styles.tagline}>Conduci, gana en serio</Text>
+          <View style={styles.spacer} />
+          <Button
+            title={googleLoading ? '' : 'CONTINUAR CON GOOGLE'}
+            onPress={handleGoogle}
+            loading={googleLoading}
+            style={[styles.button, styles.googleButton]}
+            textStyle={styles.googleButtonText}
+          />
+          <Button
+            title="CONTINUAR CON EMAIL"
+            variant="secondary"
+            onPress={goToEmailEntry}
+            style={[styles.button, styles.emailButton]}
+            textStyle={styles.emailButtonText}
+          />
+          {error !== null && <Text style={styles.error}>{error}</Text>}
+          <View style={styles.spacerSmall} />
+          <Text style={styles.terms}>Al continuar aceptas los Terminos y Condiciones</Text>
+        </>
+      )}
+
+      {step === 'email' && (
+        <>
+          <Text style={styles.title}>Ingresa tu email</Text>
+          <Text style={styles.subtitle}>Te enviaremos un codigo de un solo uso.</Text>
+          <View style={styles.spacer} />
+          <Input
+            placeholder="tu@email.com"
+            value={email}
+            onChangeText={(t) => {
+              setEmail(t);
+              setError(null);
+            }}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            textContentType="emailAddress"
+            editable={!sending}
+            containerStyle={styles.inputField}
+          />
+          {error !== null && <Text style={styles.error}>{error}</Text>}
+          <View style={styles.spacerSmall} />
+          <Button
+            title="ENVIAR CODIGO"
+            onPress={handleSendCode}
+            loading={sending}
+            disabled={!email.trim() || sending}
+            style={styles.button}
+          />
+          <TouchableOpacity onPress={goToMethod} style={styles.linkRow}>
+            <Text style={styles.link}>Volver</Text>
+          </TouchableOpacity>
+        </>
+      )}
+
+      {step === 'otp' && (
+        <>
+          <Text style={styles.title}>Ingresa el codigo</Text>
+          <Text style={styles.subtitle}>Te enviamos un codigo a {email.trim()}</Text>
+          <View style={styles.spacer} />
+          <OTPInput length={6} value={otp} onChange={setOtp} />
+          <View style={styles.spacer} />
+          <TouchableOpacity onPress={handleResend} disabled={cooldown > 0 || sending}>
+            <Text style={[styles.resend, (cooldown > 0 || sending) && styles.resendDisabled]}>
+              {cooldown > 0 ? `Reenviar en ${cooldown}s` : 'No te llego? Reenviar'}
+            </Text>
+          </TouchableOpacity>
+          {info !== null && <Text style={styles.info}>{info}</Text>}
+          {error !== null && <Text style={styles.error}>{error}</Text>}
+          <View style={styles.spacerSmall} />
+          <Button
+            title="VERIFICAR CODIGO"
+            onPress={handleVerify}
+            loading={verifying}
+            disabled={otp.length !== 6 || verifying}
+            style={styles.button}
+          />
+          <TouchableOpacity onPress={goToEmailEntry} style={styles.linkRow}>
+            <Text style={styles.link}>Usar otro email</Text>
+          </TouchableOpacity>
+        </>
+      )}
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.content}>
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.wordmark}>Lifty</Text>
-
-          {step === 'method' && (
-            <>
-              <Text style={styles.tagline}>Conduci, gana en serio</Text>
-              <View style={styles.spacer} />
-              <Button
-                title={googleLoading ? '' : 'CONTINUAR CON GOOGLE'}
-                onPress={handleGoogle}
-                loading={googleLoading}
-                style={[styles.button, styles.googleButton]}
-                textStyle={styles.googleButtonText}
-              />
-              <Button
-                title="CONTINUAR CON EMAIL"
-                variant="secondary"
-                onPress={goToEmailEntry}
-                style={[styles.button, styles.emailButton]}
-                textStyle={styles.emailButtonText}
-              />
-              {error !== null && <Text style={styles.error}>{error}</Text>}
-              <View style={styles.spacerSmall} />
-              <Text style={styles.terms}>Al continuar aceptas los Terminos y Condiciones</Text>
-            </>
-          )}
-
-          {step === 'email' && (
-            <>
-              <Text style={styles.title}>Ingresa tu email</Text>
-              <Text style={styles.subtitle}>Te enviaremos un codigo de un solo uso.</Text>
-              <View style={styles.spacer} />
-              <Input
-                placeholder="tu@email.com"
-                value={email}
-                onChangeText={(t) => {
-                  setEmail(t);
-                  setError(null);
-                }}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="email"
-                textContentType="emailAddress"
-                editable={!sending}
-                containerStyle={styles.inputField}
-              />
-              {error !== null && <Text style={styles.error}>{error}</Text>}
-              <View style={styles.spacerSmall} />
-              <Button
-                title="ENVIAR CODIGO"
-                onPress={handleSendCode}
-                loading={sending}
-                disabled={!email.trim() || sending}
-                style={styles.button}
-              />
-              <TouchableOpacity onPress={goToMethod} style={styles.linkRow}>
-                <Text style={styles.link}>Volver</Text>
-              </TouchableOpacity>
-            </>
-          )}
-
-          {step === 'otp' && (
-            <>
-              <Text style={styles.title}>Ingresa el codigo</Text>
-              <Text style={styles.subtitle}>Te enviamos un codigo a {email.trim()}</Text>
-              <View style={styles.spacer} />
-              <OTPInput length={6} value={otp} onChange={setOtp} />
-              <View style={styles.spacer} />
-              <TouchableOpacity onPress={handleResend} disabled={cooldown > 0 || sending}>
-                <Text style={[styles.resend, (cooldown > 0 || sending) && styles.resendDisabled]}>
-                  {cooldown > 0 ? `Reenviar en ${cooldown}s` : 'No te llego? Reenviar'}
-                </Text>
-              </TouchableOpacity>
-              {info !== null && <Text style={styles.info}>{info}</Text>}
-              {error !== null && <Text style={styles.error}>{error}</Text>}
-              <View style={styles.spacerSmall} />
-              <Button
-                title="VERIFICAR CODIGO"
-                onPress={handleVerify}
-                loading={verifying}
-                disabled={otp.length !== 6 || verifying}
-                style={styles.button}
-              />
-              <TouchableOpacity onPress={goToEmailEntry} style={styles.linkRow}>
-                <Text style={styles.link}>Usar otro email</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      </KeyboardAvoidingView>
+      {/*
+        Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.
+        iOS: padding KAV + ScrollView.
+      */}
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          <ScrollView
+            style={styles.flex}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+            showsVerticalScrollIndicator={false}
+          >
+            {formBody}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
+          {formBody}
+        </ScrollView>
+      )}
       {googleLoading && step === 'method' && (
         <View style={styles.overlay} pointerEvents="none">
           <ActivityIndicator color={theme.colors.turquoise} size="large" />
@@ -278,8 +301,11 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  scrollContent: {
+    flexGrow: 1,
+  },
   content: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
