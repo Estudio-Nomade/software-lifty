@@ -7,7 +7,7 @@ import { useFonts } from 'expo-font';
 import { Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppInitializer } from '../src/components/AppInitializer';
@@ -60,6 +60,8 @@ function RouteSync() {
   return null;
 }
 
+const FONT_BOOT_TIMEOUT_MS = 2_500;
+
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
@@ -67,15 +69,35 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+  // Android Expo Go can leave useFonts pending forever (asset race). Without a
+  // timeout the whole tree never mounts → native/Brand splash stuck. iOS usually
+  // resolves quickly; timeout only fires if fonts still pending.
+  const [fontsTimedOut, setFontsTimedOut] = useState(false);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync().catch(() => {});
-    }
+    if (fontsLoaded || fontError) return;
+    const id = setTimeout(() => {
+      console.log('[RootLayout] font boot timeout — mounting app without waiting');
+      setFontsTimedOut(true);
+    }, FONT_BOOT_TIMEOUT_MS);
+    return () => clearTimeout(id);
   }, [fontsLoaded, fontError]);
 
+  const fontsReady = fontsLoaded || !!fontError || fontsTimedOut;
+
+  useEffect(() => {
+    if (!fontsReady) return;
+    console.log('[RootLayout] fontsReady', { fontsLoaded, fontError: !!fontError, fontsTimedOut });
+    // Android Expo Go sometimes needs a second hide after first paint.
+    SplashScreen.hideAsync().catch(() => {});
+    const t = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [fontsReady, fontsLoaded, fontError, fontsTimedOut]);
+
   // While fonts load, keep brand stack (matches native splash-brand.png).
-  if (!fontsLoaded && !fontError) {
+  if (!fontsReady) {
     return <BrandSplash />;
   }
 

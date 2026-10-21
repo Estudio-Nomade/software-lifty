@@ -3,6 +3,7 @@ process.env.DATABASE_URL =
   process.env.TEST_DATABASE_URL ?? 'postgresql://lifty:lifty@localhost:5433/lifty_test';
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
+import { eq } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 import { db } from '../db/client';
 import { users } from '../db/schema';
@@ -99,5 +100,28 @@ describe('authPlugin', () => {
     expect(res.user).not.toBeNull();
     expect(res.user.id).toBe(userId);
     expect(res.authStatus).toBe('authenticated');
+  });
+
+  test('concurrent insert on same users.id does not throw (onConflictDoNothing)', async () => {
+    const userId = '33333333-3333-4333-8333-333333333333';
+    const row = {
+      id: userId,
+      email: 'race@example.com',
+      phone: null as string | null,
+      full_name: 'Race User',
+      role: 'driver' as const,
+    };
+
+    const [a, b] = await Promise.all([
+      db.insert(users).values(row).onConflictDoNothing({ target: users.id }).returning(),
+      db.insert(users).values(row).onConflictDoNothing({ target: users.id }).returning(),
+    ]);
+
+    const winners = [...a, ...b];
+    expect(winners.length).toBe(1);
+    expect(winners[0]?.id).toBe(userId);
+
+    const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.id, userId));
+    expect(existing?.id).toBe(userId);
   });
 });

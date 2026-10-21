@@ -376,7 +376,8 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
     }));
   });
 
-  window.addEventListener('message', function (event) {
+  // RN WebView: iOS → window message; Android → document message.
+  function onHostMessage(event) {
     var msg;
     try {
       msg = JSON.parse(event.data);
@@ -437,7 +438,9 @@ function generateMapHtml(colors: { turquoise: string; lightGray: string; amber: 
         }
         break;
     }
-  });
+  }
+  window.addEventListener('message', onHostMessage);
+  document.addEventListener('message', onHostMessage);
 
   window.addEventListener('error', function (e) {
     window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -682,6 +685,7 @@ export const MapView: React.FC<MapViewProps> = ({
         ref={webViewRef}
         source={source}
         style={styles.webview}
+        originWhitelist={['*']}
         onLoadEnd={() => setIsLoaded(true)}
         onError={handleWebViewError}
         onMessage={handleMessage}
