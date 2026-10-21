@@ -1,4 +1,3 @@
-import * as Notifications from 'expo-notifications';
 import { useRootNavigationState, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { InteractionManager, Platform } from 'react-native';
@@ -8,6 +7,8 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { isLiveTrip } from '../lib/isLiveTrip';
 import { getCurrentPosition } from '../lib/location';
 import {
+  addNotificationResponseListener,
+  getLastNotificationResponse,
   handleNotificationResponse,
   registerForPush,
   setupNotificationHandler,
@@ -188,14 +189,24 @@ function NotificationSetup() {
   const coldStartHandled = useRef(false);
 
   useEffect(() => {
-    setupNotificationHandler();
+    let cancelled = false;
+    let subscription: { remove: () => void } | null = null;
 
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      handleNotificationResponse(response, navigate);
-    });
+    void (async () => {
+      await setupNotificationHandler();
+      if (cancelled) return;
+      subscription = await addNotificationResponseListener((response) => {
+        handleNotificationResponse(response, navigate);
+      });
+      if (cancelled) {
+        subscription?.remove();
+        subscription = null;
+      }
+    })();
 
     return () => {
-      subscription.remove();
+      cancelled = true;
+      subscription?.remove();
     };
   }, [navigate]);
 
@@ -218,14 +229,16 @@ function NotificationSetup() {
     // Wait for interactions so ActiveTripRecovery can restore the trip first.
     if (coldStartHandled.current) return;
     coldStartHandled.current = true;
-    Notifications.getLastNotificationResponseAsync()
+    void getLastNotificationResponse()
       .then((response) => {
         if (!response) return;
         InteractionManager.runAfterInteractions(() => {
           handleNotificationResponse(response, navigate);
         });
       })
-      .catch(() => {});
+      .catch(() => {
+        // best-effort: Expo Go / missing native module
+      });
   }, [sessionRestored, authToken, navigate]);
 
   return null;

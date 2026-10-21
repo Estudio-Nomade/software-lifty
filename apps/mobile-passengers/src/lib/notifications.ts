@@ -1,5 +1,5 @@
+import { isRunningInExpoGo } from 'expo';
 import Constants from 'expo-constants';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 interface PermStatus {
@@ -7,7 +7,40 @@ interface PermStatus {
   granted: boolean;
 }
 
-export function setupNotificationHandler(): void {
+/** Minimal shape for notification tap payloads — avoids static expo-notifications import. */
+export type NotificationResponseLike = {
+  notification: {
+    request: {
+      content: {
+        data?: Record<string, string | undefined>;
+      };
+    };
+  };
+};
+
+/**
+ * SDK 53+: Android remote push was removed from Expo Go and throws on import/use.
+ * Importing expo-notifications there can break root layout evaluation (stuck splash).
+ */
+export function isRemotePushAvailable(): boolean {
+  if (Platform.OS === 'web') return false;
+  if (Platform.OS === 'android' && isRunningInExpoGo()) return false;
+  return true;
+}
+
+async function loadNotifications(): Promise<typeof import('expo-notifications') | null> {
+  if (!isRemotePushAvailable()) return null;
+  try {
+    return await import('expo-notifications');
+  } catch {
+    return null;
+  }
+}
+
+export async function setupNotificationHandler(): Promise<void> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
+
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
@@ -19,8 +52,25 @@ export function setupNotificationHandler(): void {
   });
 }
 
+export async function addNotificationResponseListener(
+  listener: (response: NotificationResponseLike) => void,
+): Promise<{ remove: () => void } | null> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return null;
+
+  try {
+    // Listener only reads content.data; cast avoids coupling to full NotificationResponse.
+    return Notifications.addNotificationResponseReceivedListener(
+      listener as Parameters<typeof Notifications.addNotificationResponseReceivedListener>[0],
+    );
+  } catch {
+    return null;
+  }
+}
+
 export async function registerForPush(): Promise<string | null> {
-  if (Platform.OS === 'web') return null;
+  const Notifications = await loadNotifications();
+  if (!Notifications) return null;
 
   const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.expoConfig?.slug;
 
@@ -55,7 +105,7 @@ export async function registerForPush(): Promise<string | null> {
 }
 
 export function handleNotificationResponse(
-  response: Notifications.NotificationResponse,
+  response: NotificationResponseLike,
   navigate: (screen: string, params?: Record<string, string>) => void,
 ): void {
   const data = response.notification.request.content.data as
