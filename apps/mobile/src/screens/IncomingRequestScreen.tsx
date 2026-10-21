@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import type { Trip } from '../api/types';
 import { Avatar } from '../components/Avatar';
@@ -28,6 +29,7 @@ const formatDistance = (value: number | null | undefined) => {
 
 export const IncomingRequestScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const { setActiveTrip } = useTripStore();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [seconds, setSeconds] = useState(RESPONSE_SECONDS);
@@ -239,8 +241,8 @@ export const IncomingRequestScreen: React.FC = () => {
         centerCoordinate={lat != null && lng != null ? [lng, lat] : [0, 0]}
         userLocation={lat != null && lng != null ? [lng, lat] : null}
       />
-      <View style={styles.overlay}>
-        <View style={styles.spacer} />
+      <View style={[styles.overlay, { paddingBottom: Math.max(insets.bottom, theme.spacing.lg) }]}>
+        <View style={{ height: insets.top + theme.spacing.md }} />
         <Text style={styles.newRequest}>Nueva solicitud</Text>
 
         <View style={styles.timerCircle}>
@@ -345,9 +347,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     gap: theme.spacing.sm,
-  },
-  spacer: {
-    height: 56,
   },
   newRequest: {
     fontSize: theme.fontSize.sm,
