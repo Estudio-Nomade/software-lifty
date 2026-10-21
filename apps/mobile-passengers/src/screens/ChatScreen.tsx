@@ -53,6 +53,66 @@ export function ChatScreen() {
     scrollToEnd();
   };
 
+  const chatBody = (
+    <>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.chat}
+        contentContainerStyle={styles.chatContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        onContentSizeChange={scrollToEnd}
+        showsVerticalScrollIndicator={false}
+      >
+        {!tripId ? (
+          <View style={styles.emptyChat}>
+            <Ionicons name="alert-circle-outline" size={48} color={theme.colors.mediumGray} />
+            <Text style={styles.emptyText}>No hay un viaje activo para chatear</Text>
+          </View>
+        ) : messages.length === 0 ? (
+          <View style={styles.emptyChat}>
+            <Ionicons name="chatbubbles-outline" size={48} color={theme.colors.mediumGray} />
+            <Text style={styles.emptyText}>Envía un mensaje a tu conductor</Text>
+          </View>
+        ) : (
+          messages.map((msg) => (
+            <ChatBubble key={msg.id} message={msg.text} isMine={msg.sender_role === 'passenger'} />
+          ))
+        )}
+      </ScrollView>
+
+      <View
+        style={[
+          styles.inputBar,
+          {
+            paddingTop: theme.spacing.md,
+            paddingHorizontal: theme.spacing.md,
+            paddingBottom: theme.spacing.md + insets.bottom,
+          },
+        ]}
+      >
+        <TextInput
+          style={styles.input}
+          placeholder="Escribe un mensaje..."
+          placeholderTextColor={theme.colors.mediumGray}
+          value={message}
+          onChangeText={setMessage}
+          onSubmitEditing={handleSend}
+          returnKeyType="send"
+          editable={Boolean(tripId)}
+        />
+        <TouchableOpacity
+          style={[styles.sendBtn, !tripId && styles.sendBtnDisabled]}
+          onPress={handleSend}
+          disabled={!tripId}
+          accessibilityLabel="Enviar mensaje"
+        >
+          <Ionicons name="send" size={22} color={theme.colors.white} />
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
@@ -65,70 +125,13 @@ export function ChatScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
-        <ScrollView
-          ref={scrollRef}
-          style={styles.chat}
-          contentContainerStyle={styles.chatContent}
-          keyboardShouldPersistTaps="handled"
-          onContentSizeChange={scrollToEnd}
-          showsVerticalScrollIndicator={false}
-        >
-          {!tripId ? (
-            <View style={styles.emptyChat}>
-              <Ionicons name="alert-circle-outline" size={48} color={theme.colors.mediumGray} />
-              <Text style={styles.emptyText}>No hay un viaje activo para chatear</Text>
-            </View>
-          ) : messages.length === 0 ? (
-            <View style={styles.emptyChat}>
-              <Ionicons name="chatbubbles-outline" size={48} color={theme.colors.mediumGray} />
-              <Text style={styles.emptyText}>Envía un mensaje a tu conductor</Text>
-            </View>
-          ) : (
-            messages.map((msg) => (
-              <ChatBubble
-                key={msg.id}
-                message={msg.text}
-                isMine={msg.sender_role === 'passenger'}
-              />
-            ))
-          )}
-        </ScrollView>
-
-        <View
-          style={[
-            styles.inputBar,
-            {
-              paddingTop: theme.spacing.md,
-              paddingHorizontal: theme.spacing.md,
-              paddingBottom: theme.spacing.md + insets.bottom,
-            },
-          ]}
-        >
-          <TextInput
-            style={styles.input}
-            placeholder="Escribe un mensaje..."
-            placeholderTextColor={theme.colors.mediumGray}
-            value={message}
-            onChangeText={setMessage}
-            onSubmitEditing={handleSend}
-            returnKeyType="send"
-            editable={Boolean(tripId)}
-          />
-          <TouchableOpacity
-            style={[styles.sendBtn, !tripId && styles.sendBtnDisabled]}
-            onPress={handleSend}
-            disabled={!tripId}
-            accessibilityLabel="Enviar mensaje"
-          >
-            <Ionicons name="send" size={22} color={theme.colors.white} />
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.flex} behavior="padding" keyboardVerticalOffset={0}>
+          {chatBody}
+        </KeyboardAvoidingView>
+      ) : (
+        <View style={styles.flex}>{chatBody}</View>
+      )}
     </SafeAreaView>
   );
 }
