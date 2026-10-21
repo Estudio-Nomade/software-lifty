@@ -23,6 +23,7 @@ import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
+import { getFriendlyProfileError } from '../lib/profileErrors';
 import { buildSosWhatsAppUrl } from '../lib/supportContact';
 import { getTabBarReserve } from '../lib/tabBarLayout';
 import { useAuthStore } from '../store/authStore';
@@ -129,8 +130,11 @@ export function ProfileScreen() {
       if (updated.avatar_url) setAvatarUrl(updated.avatar_url);
       setEditVisible(false);
       setEditPhotoUri(null);
-    } catch {
-      Alert.alert('Error', 'No se pudo guardar el perfil. Revisá la conexión e intentá de nuevo.');
+    } catch (err) {
+      if (__DEV__) {
+        console.error('[ProfileScreen] handleSave failed', err);
+      }
+      Alert.alert('Error', getFriendlyProfileError(err));
     } finally {
       setSaving(false);
     }

@@ -1,14 +1,33 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { passengerProfiles, users } from '../../shared/db/schema';
-import { logger } from '../../shared/lib/logger';
+import { AppError } from '../../shared/lib/errors';
 import { type StorageProvider, supabaseStorage } from '../../shared/lib/storage';
 import type { AuthUser } from '../../shared/middleware/auth';
+
+const PHONE_MAX_LEN = 20;
 
 let _storage: StorageProvider = supabaseStorage;
 
 export function setStorageForTesting(sp: StorageProvider) {
   _storage = sp;
+}
+
+async function ensurePassengerProfile(userId: string, phone?: string | null) {
+  const [existing] = await db
+    .select()
+    .from(passengerProfiles)
+    .where(eq(passengerProfiles.user_id, userId))
+    .limit(1);
+
+  if (existing) return existing;
+
+  const [created] = await db
+    .insert(passengerProfiles)
+    .values({ user_id: userId, phone: phone ?? null })
+    .returning();
+
+  return created;
 }
 
 export const passengersService = {
@@ -43,33 +62,22 @@ export const passengersService = {
       }
     }
 
-    const [existing] = await db
-      .select()
-      .from(passengerProfiles)
-      .where(eq(passengerProfiles.user_id, userId))
-      .limit(1);
+    const existing = await ensurePassengerProfile(userId, phone ?? null);
 
-    if (existing) {
-      if (phone && !existing.phone) {
-        const [updated] = await db
-          .update(passengerProfiles)
-          .set({ phone })
-          .where(eq(passengerProfiles.user_id, userId))
-          .returning();
-        return updated;
-      }
-      return existing;
+    if (phone && !existing.phone) {
+      const [updated] = await db
+        .update(passengerProfiles)
+        .set({ phone })
+        .where(eq(passengerProfiles.user_id, userId))
+        .returning();
+      return updated;
     }
-
-    const [created] = await db
-      .insert(passengerProfiles)
-      .values({ user_id: userId, phone: phone ?? null })
-      .returning();
-
-    return created;
+    return existing;
   },
 
   async getProfile(user: AuthUser) {
+    await ensurePassengerProfile(user.id);
+
     const rows = await db
       .select({
         id: passengerProfiles.id,
@@ -97,6 +105,38 @@ export const passengersService = {
   },
 
   async updateProfile(user: AuthUser, data: { full_name?: string; phone?: string }) {
+    await ensurePassengerProfile(user.id);
+
+    let nextPhone: string | null = null;
+    if (data.phone !== undefined) {
+      const phone = data.phone.trim();
+      if (phone) {
+        if (phone.length > PHONE_MAX_LEN) {
+          throw new AppError(
+            'El teléfono es demasiado largo. Usá hasta 20 caracteres.',
+            400,
+            'PHONE_TOO_LONG',
+          );
+        }
+
+        const [existingPhoneOwner] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(and(eq(users.phone, phone), ne(users.id, user.id)))
+          .limit(1);
+
+        if (existingPhoneOwner) {
+          throw new AppError(
+            'Ese teléfono ya está registrado en otra cuenta. Probá con otro número.',
+            409,
+            'PHONE_TAKEN',
+          );
+        }
+
+        nextPhone = phone;
+      }
+    }
+
     if (data.full_name) {
       await db
         .update(users)
@@ -104,44 +144,32 @@ export const passengersService = {
         .where(eq(users.id, user.id));
     }
 
-    if (data.phone) {
-      const phone = data.phone.trim();
-
-      const [existingPhoneOwner] = await db
-        .select({ id: users.id })
+    if (nextPhone) {
+      const [currentUser] = await db
+        .select({ phone: users.phone })
         .from(users)
-        .where(and(eq(users.phone, phone), ne(users.id, user.id)))
+        .where(eq(users.id, user.id))
         .limit(1);
 
-      if (existingPhoneOwner) {
-        logger.warn(
-          `Phone ${phone} already belongs to user ${existingPhoneOwner.id}; skipping save for user ${user.id}`,
-        );
-      } else {
-        const [currentUser] = await db
-          .select({ phone: users.phone })
-          .from(users)
-          .where(eq(users.id, user.id))
-          .limit(1);
-
-        if (currentUser?.phone !== phone) {
-          await db
-            .update(users)
-            .set({ phone, updated_at: new Date() })
-            .where(eq(users.id, user.id));
-        }
-
+      if (currentUser?.phone !== nextPhone) {
         await db
-          .update(passengerProfiles)
-          .set({ phone, updated_at: new Date() })
-          .where(eq(passengerProfiles.user_id, user.id));
+          .update(users)
+          .set({ phone: nextPhone, updated_at: new Date() })
+          .where(eq(users.id, user.id));
       }
+
+      await db
+        .update(passengerProfiles)
+        .set({ phone: nextPhone, updated_at: new Date() })
+        .where(eq(passengerProfiles.user_id, user.id));
     }
 
     return this.getProfile(user);
   },
 
   async uploadAvatar(user: AuthUser, file: File) {
+    await ensurePassengerProfile(user.id);
+
     const [currentUser] = await db
       .select({ avatar_url: users.avatar_url })
       .from(users)

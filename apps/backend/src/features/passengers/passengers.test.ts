@@ -159,7 +159,8 @@ describe('Passenger Profile', () => {
       token,
     );
 
-    expect(status).toBe(200);
+    expect(status).toBe(409);
+    expect(data.error?.code).toBe('PHONE_TAKEN');
 
     const db = getDb();
     const [other] = await db
@@ -175,8 +176,7 @@ describe('Passenger Profile', () => {
       .where(eq(users.phone, phone))
       .limit(1);
     expect(me.phone).toBe(phone);
-    expect(me.full_name).toBe('Sigo Siendo Yo');
-    expect(data.full_name).toBe('Sigo Siendo Yo');
+    expect(me.full_name).toBe('Maria Lopez');
   });
 
   test('PUT /profile without auth returns 401', async () => {
@@ -186,6 +186,81 @@ describe('Passenger Profile', () => {
 
     expect(status).toBe(401);
     expect(data.error).toBe('Unauthorized');
+  });
+
+  test('GET /profile auto-creates passenger_profiles when missing', async () => {
+    const { token, userId } = await createPassengerUser('+5492614444444', 'Sin Profile');
+
+    const { status, data } = await request('GET', '/api/passenger/profile', undefined, token);
+
+    expect(status).toBe(200);
+    expect(data.full_name).toBe('Sin Profile');
+    expect(data.id).toBeString();
+
+    const db = getDb();
+    const [row] = await db
+      .select({ user_id: passengerProfiles.user_id })
+      .from(passengerProfiles)
+      .where(eq(passengerProfiles.user_id, userId))
+      .limit(1);
+    expect(row).toBeDefined();
+  });
+
+  test('PUT /profile without passenger_profiles row still saves phone and name', async () => {
+    const { token, userId } = await createPassengerUser('+5492615555555', 'Auth Only');
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/passenger/profile',
+      { full_name: 'Auth Only Fixed', phone: '+5492615555000' },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data).not.toBeNull();
+    expect(data.full_name).toBe('Auth Only Fixed');
+    expect(data.phone).toBe('+5492615555000');
+    expect(data.id).toBeString();
+
+    const db = getDb();
+    const [row] = await db
+      .select({ user_id: passengerProfiles.user_id, phone: passengerProfiles.phone })
+      .from(passengerProfiles)
+      .where(eq(passengerProfiles.user_id, userId))
+      .limit(1);
+    expect(row).toBeDefined();
+    expect(row.phone).toBe('+5492615555000');
+  });
+
+  test('PUT /profile duplicate phone returns 409 with clear message', async () => {
+    const { token } = await registerPassenger(phone);
+    await createPassengerUser('+5492612222222', 'Otro Usuario');
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/passenger/profile',
+      { phone: '+5492612222222' },
+      token,
+    );
+
+    expect(status).toBe(409);
+    expect(data.error?.code).toBe('PHONE_TAKEN');
+    expect(String(data.error?.message ?? '')).toMatch(/tel[eé]fono/i);
+  });
+
+  test('PUT /profile rejects phone longer than 20 chars', async () => {
+    const { token } = await registerPassenger(phone);
+    const longPhone = '+549261123456789012345';
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/passenger/profile',
+      { phone: longPhone },
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error?.code).toBe('PHONE_TOO_LONG');
   });
 
   test('POST /register persists full_name onto users', async () => {
