@@ -15,6 +15,7 @@ export const AUTH_FLOW_ROUTES = [
   'register',
   'forgot-password',
   'auth',
+  'auth-callback',
 ] as const;
 
 export function isAllowedWithoutSession(segment: string): boolean {
