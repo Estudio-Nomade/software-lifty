@@ -239,12 +239,14 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     fontSize: theme.fontSize['3xl'],
+    fontFamily: theme.fontFamily.bold,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
     letterSpacing: -0.8,
   },
   tagline: {
     fontSize: theme.fontSize.md,
+    fontFamily: theme.fontFamily.medium,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.mediumGray,
     textAlign: 'center',
@@ -252,6 +254,7 @@ const styles = StyleSheet.create({
   },
   recoveryTitle: {
     fontSize: theme.fontSize.lg,
+    fontFamily: theme.fontFamily.bold,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
     textAlign: 'center',
@@ -259,6 +262,7 @@ const styles = StyleSheet.create({
   },
   recoveryBody: {
     fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
     textAlign: 'center',
     maxWidth: 320,
@@ -266,6 +270,7 @@ const styles = StyleSheet.create({
   },
   recoveryError: {
     fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.dangerRed,
     textAlign: 'center',
     maxWidth: 320,
@@ -278,6 +283,7 @@ const styles = StyleSheet.create({
   },
   terms: {
     fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
     textAlign: 'center',
     marginTop: theme.spacing.sm,
