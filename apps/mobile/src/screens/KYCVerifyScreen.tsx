@@ -1,31 +1,14 @@
-import * as ImagePicker from 'expo-image-picker';
 import type React from 'react';
 import { useState } from 'react';
-import { Linking, PermissionsAndroid, Platform, StatusBar, StyleSheet, View } from 'react-native';
+import { Linking, StatusBar, StyleSheet, View } from 'react-native';
 import { apiClient } from '../api/client';
 import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { ensureDiditMediaPermissions } from '../lib/mediaPermissions';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
-
-async function ensureDiditMediaPermissions(): Promise<boolean> {
-  const camera = await ImagePicker.requestCameraPermissionsAsync();
-  if (camera.status !== 'granted') return false;
-
-  if (Platform.OS === 'android') {
-    const mic = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, {
-      title: 'Microfono',
-      message: 'Didit necesita el microfono para la verificacion biometrica.',
-      buttonPositive: 'Permitir',
-      buttonNegative: 'Cancelar',
-    });
-    if (mic !== PermissionsAndroid.RESULTS.GRANTED) return false;
-  }
-
-  return true;
-}
 
 export const KYCVerifyScreen: React.FC = () => {
   const navigation = useAppNavigation();

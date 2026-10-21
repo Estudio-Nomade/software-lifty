@@ -1,16 +1,7 @@
-import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams } from 'expo-router';
 import type React from 'react';
-import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Linking,
-  PermissionsAndroid,
-  Platform,
-  StatusBar,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Linking, StatusBar, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { WebViewErrorEvent, WebViewNavigation } from 'react-native-webview/lib/WebViewTypes';
 import { apiClient } from '../api/client';
@@ -20,6 +11,7 @@ import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { ensureDiditMediaPermissions } from '../lib/mediaPermissions';
 import { STEP_ROUTE, routeForDriverStatus } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
@@ -30,45 +22,27 @@ const CALLBACK_PREFIX = 'https://liftyviajes.com/kyc/callback';
 
 type MediaPermState = 'checking' | 'granted' | 'denied';
 
-/**
- * Didit getUserMedia only works in Android WebView if the *app* already holds
- * CAMERA (+ often RECORD_AUDIO). RNCWebChromeClient grants the web origin only
- * after those OS permissions are present.
- */
-async function ensureDiditMediaPermissions(): Promise<boolean> {
-  const camera = await ImagePicker.requestCameraPermissionsAsync();
-  if (camera.status !== 'granted') return false;
-
-  if (Platform.OS === 'android') {
-    const mic = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, {
-      title: 'Microfono',
-      message: 'Didit necesita el microfono para la verificacion biometrica.',
-      buttonPositive: 'Permitir',
-      buttonNegative: 'Cancelar',
-    });
-    if (mic !== PermissionsAndroid.RESULTS.GRANTED) return false;
-  }
-
-  return true;
-}
-
 export const KYCWebViewScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const { url } = useLocalSearchParams<{ url: string }>();
   const [loading, setLoading] = useState(true);
   const [done, setDone] = useState(false);
   const [mediaPerm, setMediaPerm] = useState<MediaPermState>('checking');
+  const mountedRef = useRef(true);
+
+  const checkMediaPermissions = useCallback(async () => {
+    setMediaPerm('checking');
+    const ok = await ensureDiditMediaPermissions();
+    if (mountedRef.current) setMediaPerm(ok ? 'granted' : 'denied');
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const ok = await ensureDiditMediaPermissions();
-      if (!cancelled) setMediaPerm(ok ? 'granted' : 'denied');
-    })();
+    mountedRef.current = true;
+    void checkMediaPermissions();
     return () => {
-      cancelled = true;
+      mountedRef.current = false;
     };
-  }, []);
+  }, [checkMediaPermissions]);
 
   /**
    * After Didit: refresh decision, then route by real status step.
@@ -177,13 +151,7 @@ export const KYCWebViewScreen: React.FC = () => {
           <Button
             title="Reintentar"
             variant="secondary"
-            onPress={() => {
-              setMediaPerm('checking');
-              void (async () => {
-                const ok = await ensureDiditMediaPermissions();
-                setMediaPerm(ok ? 'granted' : 'denied');
-              })();
-            }}
+            onPress={() => void checkMediaPermissions()}
             style={styles.settingsButton}
           />
         </View>
