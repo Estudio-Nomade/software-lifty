@@ -1,6 +1,5 @@
-import { useRouter, useSegments } from 'expo-router';
+import { useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
-import type { DriverStatus } from '../api/types';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
   AUTH_FLOW_ROUTES,
@@ -9,7 +8,7 @@ import {
 } from '../lib/authRouteGate';
 import { isDriverStatusUnresolved } from '../lib/driverStatusGate';
 import { hasActiveTrip } from '../lib/isLiveTrip';
-import { STEP_ROUTE, routeForDriverStatus } from '../lib/postAuthRouting';
+import { handoffScreenFromStore } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { useTripStore } from '../store/tripStore';
 
@@ -32,9 +31,15 @@ export function AuthRedirectWatcher() {
   const segments = useSegments();
   const { replace } = useAppNavigation();
   const trip = useTripStore((s) => s.trip);
+  // Android Expo Go often mounts effects before the root Stack is ready;
+  // replace() then no-ops and Welcome stays on BrandSplash (handoff) forever.
+  // iOS is usually ready already — this gate is a no-op when key exists.
+  const rootNavState = useRootNavigationState();
+  const navReady = rootNavState?.key != null;
 
   // After sign-out: leave private screens and land on welcome.
   useEffect(() => {
+    if (!navReady) return;
     if (needsRedirect) {
       resetRedirect();
       const current = segments[0] ?? '';
@@ -46,7 +51,7 @@ export function AuthRedirectWatcher() {
         router.replace('/');
       }
     }
-  }, [needsRedirect, resetRedirect, router, segments]);
+  }, [needsRedirect, resetRedirect, router, segments, navReady]);
 
   /**
    * Product rule: no session → never stay on onboarding/home/private.
@@ -55,38 +60,29 @@ export function AuthRedirectWatcher() {
    * Sign-out (`needsRedirect`) owns its own bounce — skip to avoid double replace.
    */
   useEffect(() => {
+    if (!navReady) return;
     if (!sessionRestored) return;
     if (needsRedirect) return;
     if (isAuthenticated) return;
     const current = segments[0] ?? '';
     if (isAllowedWithoutSession(current)) return;
     router.replace('/');
-  }, [sessionRestored, isAuthenticated, segments, router, needsRedirect]);
+  }, [sessionRestored, isAuthenticated, segments, router, needsRedirect, navReady]);
 
   // Authenticated on welcome/public entry → continue onboarding or home.
   // Auth without status/step (API/CORS fail after login) → stay; Welcome recovery UI.
   useEffect(() => {
+    if (!navReady) return;
     if (!sessionRestored) return;
     if (needsRedirect) return;
     if (!isAuthenticated || !(PUBLIC_ENTRY_ROUTES as readonly string[]).includes(segments[0] ?? ''))
       return;
     if (isDriverStatusUnresolved(isAuthenticated, driverStatus, onboardingStep)) return;
 
-    const fallback = routeForDriverStatus({
-      status: driverStatus ?? 'pending',
-      step: onboardingStep as DriverStatus['step'],
-    });
-    // Rejected/suspended short-circuit in routeForDriverStatus — prefer that over STEP_ROUTE
-    // (backend rejected still returns step=review which would map to Active).
-    const target =
-      driverStatus === 'rejected' || driverStatus === 'suspended'
-        ? undefined
-        : onboardingStep
-          ? STEP_ROUTE[onboardingStep]
-          : undefined;
-    const screen = target?.screen || fallback.screen || 'OnboardingStep1';
+    const screen = handoffScreenFromStore(driverStatus, onboardingStep) || 'OnboardingStep1';
     if (!screen) return;
 
+    console.log('[AuthRedirectWatcher] handoff replace →', screen);
     replace(screen);
   }, [
     sessionRestored,
@@ -96,9 +92,11 @@ export function AuthRedirectWatcher() {
     driverStatus,
     replace,
     needsRedirect,
+    navReady,
   ]);
 
   useEffect(() => {
+    if (!navReady) return;
     if (!sessionRestored) return;
     if (!isAuthenticated || driverStatus !== 'approved') return;
     const current = segments[0] ?? '';
@@ -109,7 +107,7 @@ export function AuthRedirectWatcher() {
     // any active status is authoritative regardless of its `updated_at` age.
     if (hasActiveTrip(trip)) return;
     replace('Active');
-  }, [sessionRestored, isAuthenticated, driverStatus, segments, trip, replace]);
+  }, [sessionRestored, isAuthenticated, driverStatus, segments, trip, replace, navReady]);
 
   return null;
 }

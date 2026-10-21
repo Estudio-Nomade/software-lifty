@@ -73,6 +73,28 @@ export function routeForDriverStatus(driverData: DriverStatus): {
   return { screen: 'OnboardingStep1', status: 'pending' };
 }
 
+/**
+ * Screen to leave Welcome when session is restored and status/step are known.
+ * Empty string = blocked (rejected/suspended message lives in routeForDriverStatus).
+ */
+export function handoffScreenFromStore(
+  driverStatus: DriverStatusValue,
+  onboardingStep: string | null,
+): ScreenName | '' {
+  if (driverStatus === 'rejected' || driverStatus === 'suspended') {
+    return routeForDriverStatus({
+      status: driverStatus,
+      step: onboardingStep as DriverStatus['step'],
+    }).screen;
+  }
+  const byStep = onboardingStep ? STEP_ROUTE[onboardingStep] : undefined;
+  if (byStep) return byStep.screen;
+  return routeForDriverStatus({
+    status: driverStatus ?? 'pending',
+    step: onboardingStep as DriverStatus['step'],
+  }).screen;
+}
+
 export interface PostAuthRoute {
   /** Target screen name (empty string when the account is blocked). */
   screen: ScreenName | '';

@@ -46,3 +46,7 @@ credentials.json
 
 # worktrees
 .worktrees/
+
+# Expo monorepo: never put app.json at repo root (breaks Metro entry rewrite)
+/app.json
+/eas.json
