@@ -122,6 +122,7 @@ export function TripCompleteScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView
+        style={styles.flex}
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -251,6 +252,8 @@ export function TripCompleteScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.white },
+  /** Fills SafeAreaView after KAV removal — keeps layout height stable. */
+  flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
     justifyContent: 'center',
