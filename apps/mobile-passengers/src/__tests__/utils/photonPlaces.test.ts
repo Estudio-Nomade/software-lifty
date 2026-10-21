@@ -3,6 +3,7 @@ import {
   formatPhotonPlaceLabel,
   mapPhotonFeaturesToPlaces,
   rankPhotonFeatures,
+  searchPhotonPlaces,
 } from '../../utils/photonPlaces';
 
 describe('formatPhotonPlaceLabel', () => {
@@ -141,5 +142,35 @@ describe('DEFAULT_PLACE_BIAS', () => {
   it('is Villa Dolores launch footprint (not BA / null island)', () => {
     expect(DEFAULT_PLACE_BIAS.lat).toBeCloseTo(-31.945, 2);
     expect(DEFAULT_PLACE_BIAS.lng).toBeCloseTo(-65.19, 2);
+  });
+});
+
+describe('searchPhotonPlaces timeout/abort', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it('returns [] when fetch aborts (timeout or caller signal)', async () => {
+    globalThis.fetch = jest.fn().mockImplementation((_url, init?: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        const onAbort = () => {
+          const err = new Error('The operation was aborted');
+          err.name = 'AbortError';
+          reject(err);
+        };
+        if (init?.signal?.aborted) {
+          onAbort();
+          return;
+        }
+        init?.signal?.addEventListener('abort', onAbort, { once: true });
+      });
+    }) as unknown as typeof fetch;
+
+    const controller = new AbortController();
+    const pending = searchPhotonPlaces('Dique', -31.9, -65.1, controller.signal);
+    controller.abort();
+    await expect(pending).resolves.toEqual([]);
   });
 });

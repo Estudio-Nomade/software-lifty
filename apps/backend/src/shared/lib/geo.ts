@@ -388,8 +388,12 @@ export async function geocode(params: {
           province: 'Buenos Aires',
         };
       }
+      // Empty forward query must fail like prod (no silent BA).
+      if (!addr) {
+        throw new Error('No geocoding results');
+      }
       // Forward address mocks keep BA only for known city queries used by maps tests.
-      if (addr.includes('buenos aires') || addr.includes('mendoza') || !addr) {
+      if (addr.includes('buenos aires') || addr.includes('mendoza')) {
         return {
           lat: -34.6037,
           lng: -58.3816,

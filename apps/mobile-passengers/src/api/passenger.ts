@@ -218,6 +218,17 @@ export async function sendTripMessage(tripId: string, text: string): Promise<Tri
   return (data as { data?: TripMessage })?.data ?? data;
 }
 
+function isAbortError(err: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true;
+  const e = err as { name?: string; code?: string } | null | undefined;
+  return (
+    e?.name === 'CanceledError' ||
+    e?.code === 'ERR_CANCELED' ||
+    e?.name === 'AbortError' ||
+    e?.code === 'ABORT_ERR'
+  );
+}
+
 export async function searchPlaces(
   input: string,
   lat?: number,
@@ -236,7 +247,7 @@ export async function searchPlaces(
     const list = Array.isArray(data) ? data : [];
     if (list.length > 0) return list;
   } catch (err) {
-    if (signal?.aborted) throw err;
+    if (isAbortError(err, signal)) throw err;
     // 401 / network / timeout — fall through to Photon
   }
 

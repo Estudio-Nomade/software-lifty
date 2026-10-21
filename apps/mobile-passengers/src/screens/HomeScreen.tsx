@@ -90,6 +90,11 @@ export function HomeScreen() {
   /** True while "Desde" still tracks live GPS (not user-edited). */
   const [pickupFromGps, setPickupFromGps] = useState(false);
   const [pickupLoading, setPickupLoading] = useState(false);
+  /**
+   * When true, opening search may GPS-autofill Origen.
+   * Clear / manual edit set false so ✕ stays empty until "Usar mi ubicación" or re-open.
+   */
+  const [pickupGpsAutofill, setPickupGpsAutofill] = useState(true);
   const lastGpsLabel = useRef<{ lat: number; lng: number; acc: number } | null>(null);
 
   const pickupAc = usePlaceAutocomplete(
@@ -103,6 +108,7 @@ export function HomeScreen() {
   // "Desde" autofill: wait for best GPS (not first coarse WiFi), then label.
   useEffect(() => {
     if (!searchExpanded) return;
+    if (!pickupGpsAutofill) return;
     if (pickupPicked || pickupAddress.trim()) return;
     let cancelled = false;
     setPickupLoading(true);
@@ -130,7 +136,7 @@ export function HomeScreen() {
       cancelled = true;
     };
     // Intentionally omit `current` — requestFreshPosition owns the wait.
-  }, [searchExpanded, pickupPicked, pickupAddress]);
+  }, [searchExpanded, pickupGpsAutofill, pickupPicked, pickupAddress]);
 
   // Refine "Desde" when GPS warm-up yields a much better / moved fix.
   useEffect(() => {
@@ -168,6 +174,7 @@ export function HomeScreen() {
 
   const handleOpenSearch = () => {
     setSearchError(null);
+    setPickupGpsAutofill(true);
     setSearchExpanded(true);
   };
 
@@ -180,6 +187,7 @@ export function HomeScreen() {
     setDestPicked(false);
     setPickupFromGps(false);
     setPickupLoading(false);
+    setPickupGpsAutofill(true);
     lastGpsLabel.current = null;
     setFocusedField('dest');
     setSearchError(null);
@@ -215,6 +223,7 @@ export function HomeScreen() {
 
   const handleUseMyLocation = () => {
     void (async () => {
+      setPickupGpsAutofill(true);
       setPickupLoading(true);
       setSearchError(null);
       const fix = await requestFreshPosition();
@@ -236,11 +245,13 @@ export function HomeScreen() {
   };
 
   const clearPickup = () => {
+    setPickupGpsAutofill(false);
     setPickupAddress('');
     setPickupCoord(null);
     setPickupPicked(false);
     setPickupFromGps(false);
     setPickupLoading(false);
+    lastGpsLabel.current = null;
     setFocusedField('pickup');
   };
 
@@ -311,6 +322,8 @@ export function HomeScreen() {
       destAddress={destAddress}
       focusedField={focusedField}
       pickupLoading={pickupLoading}
+      pickupPicked={pickupPicked}
+      destPicked={destPicked}
       suggestions={visibleSuggestions}
       placesLoading={placesLoading}
       placesError={placesError}
@@ -318,6 +331,7 @@ export function HomeScreen() {
       showUseMyLocation={showUseMyLocation}
       onBack={handleCloseSearch}
       onPickupChange={(text) => {
+        setPickupGpsAutofill(false);
         setPickupAddress(text);
         setPickupCoord(null);
         setPickupPicked(false);

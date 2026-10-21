@@ -17,6 +17,9 @@ interface ExpandedTripSearchProps {
   destAddress: string;
   focusedField: 'pickup' | 'dest' | null;
   pickupLoading: boolean;
+  /** Locked GPS/suggestion pick — no live autocomplete for that field. */
+  pickupPicked?: boolean;
+  destPicked?: boolean;
   suggestions: PlaceSuggestion[];
   placesLoading: boolean;
   placesError: string | null;
@@ -49,6 +52,8 @@ export function ExpandedTripSearch({
   destAddress,
   focusedField,
   pickupLoading,
+  pickupPicked = false,
+  destPicked = false,
   suggestions,
   placesLoading,
   placesError,
@@ -69,8 +74,12 @@ export function ExpandedTripSearch({
   const destQuery = destAddress.trim();
   const pickupQuery = pickupAddress.trim();
   const activeQuery = focusedField === 'pickup' ? pickupQuery : destQuery;
+  const fieldLocked =
+    (focusedField === 'pickup' && pickupPicked) || (focusedField === 'dest' && destPicked);
+  // Locked GPS/suggestion label is not a failed search — don't show false empty.
   const showEmptySuggestions =
     focusedField !== null &&
+    !fieldLocked &&
     activeQuery.length >= 2 &&
     suggestions.length === 0 &&
     !pickupLoading &&

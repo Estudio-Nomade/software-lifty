@@ -5,6 +5,34 @@ export const DEFAULT_PLACE_BIAS = { lat: -31.9456, lng: -65.1895 } as const;
 
 const PHOTON_API = 'https://photon.komoot.io/api/';
 const PHOTON_LIMIT = 10;
+/** Client-side ceiling so a hung Komoot host cannot spin the Destino spinner forever. */
+export const PHOTON_CLIENT_TIMEOUT_MS = 4000;
+
+function mergeAbortSignals(
+  external: AbortSignal | undefined,
+  timeoutMs: number,
+): { signal: AbortSignal; cleanup: () => void } {
+  const local = new AbortController();
+  const timer = setTimeout(() => local.abort(), timeoutMs);
+
+  const onExternalAbort = () => local.abort();
+  if (external) {
+    if (external.aborted) {
+      clearTimeout(timer);
+      local.abort();
+    } else {
+      external.addEventListener('abort', onExternalAbort, { once: true });
+    }
+  }
+
+  return {
+    signal: local.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      if (external) external.removeEventListener('abort', onExternalAbort);
+    },
+  };
+}
 
 export type PhotonProps = {
   osm_id?: number | string;
@@ -183,8 +211,17 @@ export async function searchPhotonPlaces(
   url.searchParams.set('lat', String(biasLat));
   url.searchParams.set('lon', String(biasLng));
 
-  const res = await fetch(url.toString(), { signal });
-  if (!res.ok) return [];
-  const data = (await res.json()) as PhotonResponse;
-  return mapPhotonFeaturesToPlaces(data, { query: q, biasLat, biasLng });
+  const { signal: fetchSignal, cleanup } = mergeAbortSignals(signal, PHOTON_CLIENT_TIMEOUT_MS);
+  try {
+    const res = await fetch(url.toString(), { signal: fetchSignal });
+    if (!res.ok) return [];
+    const data = (await res.json()) as PhotonResponse;
+    return mapPhotonFeaturesToPlaces(data, { query: q, biasLat, biasLng });
+  } catch (err) {
+    const name = (err as { name?: string } | null)?.name;
+    if (name === 'AbortError' || signal?.aborted || fetchSignal.aborted) return [];
+    return [];
+  } finally {
+    cleanup();
+  }
 }

@@ -110,4 +110,28 @@ describe('searchPlaces', () => {
     expect(url).toMatch(/lat=-31\.9/);
     expect(url).toMatch(/lon=-65\.1/);
   });
+
+  it('does not fall back to Photon when the request is aborted', async () => {
+    const abortErr = Object.assign(new Error('canceled'), {
+      name: 'CanceledError',
+      code: 'ERR_CANCELED',
+    });
+    mockGet.mockRejectedValue(abortErr);
+    globalThis.fetch = jest.fn() as unknown as typeof fetch;
+
+    await expect(searchPlaces('Belgrano', -31.9, -65.1)).rejects.toMatchObject({
+      name: 'CanceledError',
+    });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to Photon when AbortSignal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    mockGet.mockRejectedValue(new Error('aborted'));
+    globalThis.fetch = jest.fn() as unknown as typeof fetch;
+
+    await expect(searchPlaces('Belgrano', -31.9, -65.1, controller.signal)).rejects.toBeTruthy();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
 });
