@@ -8,6 +8,9 @@ export function getFriendlyProfileError(error: unknown): string {
   if (code === 'PHONE_TAKEN' || lower.includes('phone_taken')) {
     return 'Ese teléfono ya está en uso por otra cuenta. Probá con otro número.';
   }
+  if (code === 'PHONE_REQUIRED' || lower.includes('phone_required')) {
+    return 'Ingresá un número de teléfono válido.';
+  }
   if (code === 'PHONE_TOO_LONG' || lower.includes('phone_too_long')) {
     return 'El teléfono es demasiado largo. Usá hasta 20 caracteres.';
   }

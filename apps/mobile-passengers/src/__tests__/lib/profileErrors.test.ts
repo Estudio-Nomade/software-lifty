@@ -27,6 +27,16 @@ describe('getFriendlyProfileError', () => {
     expect(msg).toMatch(/largo|20/i);
   });
 
+  it('maps PHONE_REQUIRED', () => {
+    const msg = getFriendlyProfileError({
+      response: {
+        status: 400,
+        data: { error: { code: 'PHONE_REQUIRED', message: 'required' } },
+      },
+    });
+    expect(msg).toMatch(/tel[eé]fono/i);
+  });
+
   it('maps network errors to connection copy', () => {
     const msg = getFriendlyProfileError({ code: 'ERR_NETWORK', message: 'Network Error' });
     expect(msg.toLowerCase()).toMatch(/conexi[oó]n|internet/);

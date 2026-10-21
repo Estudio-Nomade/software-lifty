@@ -263,6 +263,42 @@ describe('Passenger Profile', () => {
     expect(data.error?.code).toBe('PHONE_TOO_LONG');
   });
 
+  test('PUT /profile rejects empty phone instead of silent no-op', async () => {
+    const { token } = await registerPassenger(phone);
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/passenger/profile',
+      { phone: '   ' },
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error?.code).toBe('PHONE_REQUIRED');
+
+    const db = getDb();
+    const [me] = await db
+      .select({ phone: users.phone })
+      .from(users)
+      .where(eq(users.phone, phone))
+      .limit(1);
+    expect(me.phone).toBe(phone);
+  });
+
+  test('concurrent GET /profile ensure does not 500 on race', async () => {
+    const { token } = await createPassengerUser('+5492616666666', 'Race User');
+
+    const [a, b] = await Promise.all([
+      request('GET', '/api/passenger/profile', undefined, token),
+      request('GET', '/api/passenger/profile', undefined, token),
+    ]);
+
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    expect(a.data.id).toBeString();
+    expect(b.data.id).toBe(a.data.id);
+  });
+
   test('POST /register persists full_name onto users', async () => {
     const db = getDb();
     const [user] = await db

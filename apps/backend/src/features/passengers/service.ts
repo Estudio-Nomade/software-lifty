@@ -22,12 +22,26 @@ async function ensurePassengerProfile(userId: string, phone?: string | null) {
 
   if (existing) return existing;
 
+  // Concurrent GET+PUT can both miss SELECT and race on INSERT.
+  // onConflictDoNothing + re-SELECT avoids unique user_id 500s.
   const [created] = await db
     .insert(passengerProfiles)
     .values({ user_id: userId, phone: phone ?? null })
+    .onConflictDoNothing({ target: passengerProfiles.user_id })
     .returning();
 
-  return created;
+  if (created) return created;
+
+  const [raced] = await db
+    .select()
+    .from(passengerProfiles)
+    .where(eq(passengerProfiles.user_id, userId))
+    .limit(1);
+
+  if (!raced) {
+    throw new AppError('No se pudo crear el perfil de pasajero', 500, 'INTERNAL_ERROR');
+  }
+  return raced;
 }
 
 export const passengersService = {
@@ -110,31 +124,32 @@ export const passengersService = {
     let nextPhone: string | null = null;
     if (data.phone !== undefined) {
       const phone = data.phone.trim();
-      if (phone) {
-        if (phone.length > PHONE_MAX_LEN) {
-          throw new AppError(
-            'El teléfono es demasiado largo. Usá hasta 20 caracteres.',
-            400,
-            'PHONE_TOO_LONG',
-          );
-        }
-
-        const [existingPhoneOwner] = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(and(eq(users.phone, phone), ne(users.id, user.id)))
-          .limit(1);
-
-        if (existingPhoneOwner) {
-          throw new AppError(
-            'Ese teléfono ya está registrado en otra cuenta. Probá con otro número.',
-            409,
-            'PHONE_TAKEN',
-          );
-        }
-
-        nextPhone = phone;
+      if (!phone) {
+        throw new AppError('Ingresá un número de teléfono válido.', 400, 'PHONE_REQUIRED');
       }
+      if (phone.length > PHONE_MAX_LEN) {
+        throw new AppError(
+          'El teléfono es demasiado largo. Usá hasta 20 caracteres.',
+          400,
+          'PHONE_TOO_LONG',
+        );
+      }
+
+      const [existingPhoneOwner] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.phone, phone), ne(users.id, user.id)))
+        .limit(1);
+
+      if (existingPhoneOwner) {
+        throw new AppError(
+          'Ese teléfono ya está registrado en otra cuenta. Probá con otro número.',
+          409,
+          'PHONE_TAKEN',
+        );
+      }
+
+      nextPhone = phone;
     }
 
     if (data.full_name) {
