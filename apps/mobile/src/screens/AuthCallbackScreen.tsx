@@ -4,10 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { BrandSplash } from '../components/BrandSplash';
 import { getFriendlyAuthError } from '../lib/authErrors';
+import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams';
 import { shouldTreatAuthCallbackAsSuccess } from '../lib/oauthSessionRecovery';
 import { createSessionFromUrl } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
 import { theme } from '../theme';
+
+const AUTH_SCHEME = 'lifty';
 
 function firstParam(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value[0];
@@ -36,6 +39,17 @@ function buildCallbackUrl(parts: {
   return null;
 }
 
+function paramsAttemptKey(parts: {
+  code?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  oauthError?: string;
+}): string | null {
+  const { code, accessToken, refreshToken, oauthError } = parts;
+  if (!code && !accessToken && !oauthError) return null;
+  return `p:${code ?? ''}|${accessToken ?? ''}|${refreshToken ?? ''}|${oauthError ?? ''}`;
+}
+
 /**
  * Absorbs `lifty://auth-callback` deep links on native APK.
  * Without this file, expo-router shows Unmatched Route + sitemap.
@@ -56,22 +70,40 @@ export function AuthCallbackScreen() {
   const oauthError = firstParam(routeParams.error);
   const oauthErrorDescription = firstParam(routeParams.error_description);
 
-  const handledRef = useRef(false);
+  const startedKeysRef = useRef<Set<string>>(new Set());
+  const noParamsBootRef = useRef(false);
+  const finishedOkRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (handledRef.current) return;
-    handledRef.current = true;
+    if (finishedOkRef.current) return;
+
+    const attemptKey = paramsAttemptKey({
+      code,
+      accessToken,
+      refreshToken,
+      oauthError,
+    });
+
+    if (attemptKey) {
+      if (startedKeysRef.current.has(attemptKey)) return;
+      startedKeysRef.current.add(attemptKey);
+    } else if (noParamsBootRef.current) {
+      return;
+    } else {
+      noParamsBootRef.current = true;
+    }
 
     let cancelled = false;
 
     const finishOk = () => {
       if (cancelled) return;
+      finishedOkRef.current = true;
       router.replace('/');
     };
 
     const finishErr = async (err: unknown) => {
-      if (cancelled) return;
+      if (cancelled || finishedOkRef.current) return;
       if (await shouldTreatAuthCallbackAsSuccess(() => supabase.auth.getSession())) {
         finishOk();
         return;
@@ -86,7 +118,7 @@ export function AuthCallbackScreen() {
       const msg = getFriendlyAuthError(err);
       setError(msg);
       setTimeout(() => {
-        if (!cancelled) {
+        if (!cancelled && !finishedOkRef.current) {
           router.replace({
             pathname: '/login-credentials',
             params: { authError: msg },
@@ -96,9 +128,15 @@ export function AuthCallbackScreen() {
     };
 
     const exchange = async (url: string) => {
+      const key = `url:${url}`;
+      if (startedKeysRef.current.has(key) && finishedOkRef.current) return;
+      startedKeysRef.current.add(key);
       await createSessionFromUrl(url);
       finishOk();
     };
+
+    const isCallbackPayload = (url: string) =>
+      isAuthCallbackUrl(url, AUTH_SCHEME) && hasOAuthCallbackPayload(url);
 
     const run = async () => {
       try {
@@ -115,12 +153,7 @@ export function AuthCallbackScreen() {
         }
 
         const initial = await Linking.getInitialURL();
-        if (
-          initial &&
-          (initial.includes('code=') ||
-            initial.includes('access_token') ||
-            initial.includes('error='))
-        ) {
+        if (initial && isCallbackPayload(initial)) {
           await exchange(initial);
           return;
         }
@@ -135,10 +168,10 @@ export function AuthCallbackScreen() {
         await new Promise<void>((resolve) => {
           setTimeout(resolve, 1200);
         });
-        if (cancelled) return;
+        if (cancelled || finishedOkRef.current) return;
 
         const again = await Linking.getInitialURL();
-        if (again && (again.includes('code=') || again.includes('access_token'))) {
+        if (again && isCallbackPayload(again)) {
           await exchange(again);
           return;
         }
@@ -156,14 +189,8 @@ export function AuthCallbackScreen() {
     };
 
     const sub = Linking.addEventListener('url', ({ url: eventUrl }) => {
-      if (cancelled) return;
-      if (
-        !eventUrl.includes('code=') &&
-        !eventUrl.includes('access_token') &&
-        !eventUrl.includes('error=')
-      ) {
-        return;
-      }
+      if (cancelled || finishedOkRef.current) return;
+      if (!isCallbackPayload(eventUrl)) return;
       exchange(eventUrl).catch((e) => {
         void finishErr(e);
       });
