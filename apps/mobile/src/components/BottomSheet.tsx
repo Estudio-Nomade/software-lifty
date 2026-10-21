@@ -10,8 +10,16 @@ interface BottomSheetProps {
   snapPoints: [number, number];
   /** Distance from screen bottom to sit on (tab bar + safe inset). Default 0. */
   bottomOffset?: number;
-  /** One-line invite shown under the handle while collapsed. */
+  /**
+   * Horizontal inset so the sheet reads as a floating card (match tab pill).
+   * Default 0 keeps edge-to-edge for any non-home callers.
+   */
+  horizontalInset?: number;
+  /** One-line invite shown under the handle while collapsed (fallback). */
   peekerLabel?: string;
+  /** Optional two-part peeker (e.g. "Ganaste hoy" + "$1.200"). Prefer over packing into peekerLabel. */
+  peekerTitle?: string;
+  peekerValue?: string;
   children: React.ReactNode;
   onSnapChange?: (index: number) => void;
 }
@@ -19,7 +27,10 @@ interface BottomSheetProps {
 export const BottomSheet: React.FC<BottomSheetProps> = ({
   snapPoints,
   bottomOffset = 0,
+  horizontalInset = 0,
   peekerLabel,
+  peekerTitle,
+  peekerValue,
   children,
   onSnapChange,
 }) => {
@@ -126,7 +137,13 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   }, [snapTo, notifySnap]);
 
   const collapsed = snapIndex === 0;
+  const title = peekerTitle?.trim() ?? '';
+  const value = peekerValue?.trim() ?? '';
+  const hasTwoPart = title.length > 0 || value.length > 0;
   const label = peekerLabel?.trim() || 'Deslizá para ver más';
+  const a11yLabel = hasTwoPart ? [title, value].filter(Boolean).join(' ').trim() || label : label;
+
+  const inset = Math.max(0, horizontalInset);
 
   return (
     <>
@@ -142,7 +159,10 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
       <Animated.View
         style={[
           styles.sheet,
+          inset > 0 ? styles.sheetFloating : null,
           {
+            left: inset,
+            right: inset,
             bottom: bottomOffset,
             height: expandedHeight,
             transform: [{ translateY }],
@@ -154,15 +174,34 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
           {...panResponder.panHandlers}
           accessibilityRole="adjustable"
           accessibilityLabel={
-            collapsed ? `${label}. Deslizá hacia arriba` : 'Deslizá hacia abajo para cerrar'
+            collapsed ? `${a11yLabel}. Deslizá hacia arriba` : 'Deslizá hacia abajo para cerrar'
           }
         >
           <View style={styles.handle} />
-          {collapsed && (
-            <Text style={styles.peekerText} numberOfLines={1}>
-              {label}
-            </Text>
-          )}
+          {collapsed &&
+            (hasTwoPart ? (
+              <View style={styles.peekerRow}>
+                {title.length > 0 ? (
+                  <Text style={styles.peekerTitle} numberOfLines={1}>
+                    {title}
+                  </Text>
+                ) : null}
+                {value.length > 0 ? (
+                  <Text
+                    style={styles.peekerValue}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.85}
+                  >
+                    {value}
+                  </Text>
+                ) : null}
+              </View>
+            ) : (
+              <Text style={styles.peekerText} numberOfLines={1}>
+                {label}
+              </Text>
+            ))}
         </View>
         <View
           style={[styles.body, collapsed && styles.bodyCollapsed]}
@@ -199,18 +238,31 @@ const styles = StyleSheet.create({
     zIndex: 30,
     overflow: 'hidden',
   },
+  /** Floating card: all-corner radius + softer lift off the map (matches pill). */
+  sheetFloating: {
+    borderRadius: theme.radius.xl,
+    borderTopLeftRadius: theme.radius.xl,
+    borderTopRightRadius: theme.radius.xl,
+    borderBottomLeftRadius: theme.radius.xl,
+    borderBottomRightRadius: theme.radius.xl,
+    shadowColor: '#0D2B45',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 12,
+  },
   grabber: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: theme.spacing.sm + 2,
     paddingBottom: theme.spacing.xs,
     paddingHorizontal: theme.spacing.md,
-    gap: 8,
+    gap: 6,
     minHeight: 48,
   },
   handle: {
-    width: 44,
-    height: 5,
+    width: 36,
+    height: 4,
     borderRadius: theme.radius.full,
     backgroundColor: theme.colors.surfaceMuted,
   },
@@ -220,6 +272,28 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.deepBlue,
+  },
+  peekerRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+    gap: theme.spacing.xs + 2,
+    paddingHorizontal: theme.spacing.xs,
+  },
+  peekerTitle: {
+    flexShrink: 1,
+    textAlign: 'center',
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.mediumGray,
+  },
+  peekerValue: {
+    flexShrink: 1,
+    textAlign: 'center',
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.primary,
   },
   body: {
     flex: 1,

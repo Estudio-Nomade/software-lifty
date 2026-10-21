@@ -46,15 +46,18 @@ import {
   isDistrictRequiredError,
   shouldOpenDistrictPicker,
 } from '../lib/shouldOpenDistrictPicker';
-import { getTabBarReserve } from '../lib/tabBarLayout';
+import { TAB_BAR_HORIZONTAL_INSET, getTabBarReserve } from '../lib/tabBarLayout';
 import { useLocationStore } from '../store/locationStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
 import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-/** Collapsed: handle + one peeker line above tabs (invite to pull up). */
-const SHEET_COLLAPSED = 56;
+/**
+ * Collapsed: handle + peeker (title+amount or one line) above floating tabs.
+ * Keep thin (not fat 168–220 panel); 64 fits two-part offline peeker.
+ */
+const SHEET_COLLAPSED = 64;
 /** Gap between GO+hint stack bottom and collapsed offline sheet top. */
 const GO_STACK_SHEET_GAP = theme.spacing.sm;
 
@@ -404,13 +407,15 @@ export const ActiveScreen: React.FC = () => {
         daysSinceApproval: driverStatus?.identification_days_since_approval,
         compact: true,
       })
-    : 'Resumen de hoy';
+    : undefined;
+  const onlinePeekerTitle = stickersReminder ? undefined : 'Resumen de hoy';
 
-  const offlinePeekerLabel = earningsLoading
-    ? 'Ganaste hoy'
+  const offlinePeekerTitle = 'Ganaste hoy';
+  const offlinePeekerValue = earningsLoading
+    ? undefined
     : earningsIsError
-      ? 'Ganaste hoy · reintentar'
-      : `Ganaste hoy ${earningsAmountLabel}`;
+      ? 'reintentar'
+      : earningsAmountLabel;
 
   const renderOfflineSheetBody = () => {
     if (!sheetExpanded) {
@@ -444,7 +449,7 @@ export const ActiveScreen: React.FC = () => {
         <Text style={styles.metricsTitle}>Ganaste hoy</Text>
         <Text style={styles.expandedAmount}>{earningsAmountLabel}</Text>
         {!earnings || earnings.total === 0 ? (
-          <Text style={styles.earningsSubtext}>Todavia no hiciste viajes hoy</Text>
+          <Text style={styles.earningsSubtext}>Todavía no hiciste viajes hoy</Text>
         ) : (
           <>
             <View style={styles.metricRow}>
@@ -638,7 +643,9 @@ export const ActiveScreen: React.FC = () => {
         <BottomSheet
           snapPoints={[collapsedHeight, expandedHeight]}
           bottomOffset={tabPad}
+          horizontalInset={TAB_BAR_HORIZONTAL_INSET}
           peekerLabel={onlinePeekerLabel}
+          peekerTitle={onlinePeekerTitle}
           onSnapChange={handleSnapChange}
         >
           <ScrollView
@@ -650,7 +657,7 @@ export const ActiveScreen: React.FC = () => {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.toggleRow}>
-              <Text style={styles.statusOnline}>Estas conectado</Text>
+              <Text style={styles.statusOnline}>Estás conectado</Text>
               <Toggle value={true} onToggle={handleToggle} />
             </View>
             <Text style={styles.statusOnlineTime}>{formatOnlineTime(onlineTime)}</Text>
@@ -676,6 +683,9 @@ export const ActiveScreen: React.FC = () => {
 
             <View style={styles.metricsContainer}>
               <Text style={styles.metricsTitle}>Resumen de hoy</Text>
+              {earnings ? (
+                <Text style={styles.expandedAmountInline}>{formatCurrency(earnings.total)}</Text>
+              ) : null}
 
               <View style={styles.metricRow}>
                 <Text style={styles.metricLabel}>Viajes completados</Text>
@@ -695,7 +705,7 @@ export const ActiveScreen: React.FC = () => {
               </View>
 
               <View style={styles.metricRow}>
-                <Text style={styles.metricLabel}>Tasa de aceptacion</Text>
+                <Text style={styles.metricLabel}>Tasa de aceptación</Text>
                 <Text style={[styles.metricValue, { color: theme.colors.mediumGray }]}>--</Text>
               </View>
 
@@ -713,7 +723,9 @@ export const ActiveScreen: React.FC = () => {
         <BottomSheet
           snapPoints={[collapsedHeight, expandedHeight]}
           bottomOffset={tabPad}
-          peekerLabel={offlinePeekerLabel}
+          horizontalInset={TAB_BAR_HORIZONTAL_INSET}
+          peekerTitle={offlinePeekerTitle}
+          peekerValue={offlinePeekerValue}
           onSnapChange={handleSnapChange}
         >
           <ScrollView
@@ -885,6 +897,14 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
     textAlign: 'center',
+    letterSpacing: -0.5,
+  },
+  expandedAmountInline: {
+    fontSize: theme.fontSize['2xl'],
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.deepBlue,
+    letterSpacing: -0.4,
+    marginBottom: theme.spacing.xs,
   },
   expandedSkeleton: {
     width: '100%',
@@ -921,16 +941,16 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   metricsTitle: {
-    fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.deepBlue,
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.mediumGray,
     marginBottom: theme.spacing.xs,
   },
   metricRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: theme.spacing.xs,
+    paddingVertical: theme.spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.surfaceMuted,
   },
@@ -940,7 +960,7 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: theme.fontWeight.semibold,
     color: theme.colors.deepBlue,
   },
   earningsButton: {
@@ -956,7 +976,7 @@ const styles = StyleSheet.create({
   earningsButtonText: {
     color: theme.colors.white,
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.bold,
+    fontWeight: theme.fontWeight.semibold,
   },
   recenterButton: {
     position: 'absolute',
