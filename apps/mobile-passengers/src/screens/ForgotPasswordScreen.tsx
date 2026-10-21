@@ -46,11 +46,13 @@ export function ForgotPasswordScreen() {
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+  const containerStyle = [
+    styles.container,
+    { paddingTop: insets.top, paddingBottom: insets.bottom },
+  ];
+
+  const tree = (
+    <>
       <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} style={styles.backButton} hitSlop={8}>
@@ -86,7 +88,16 @@ export function ForgotPasswordScreen() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       </View>
+    </>
+  );
+
+  // Android: no KAV — SO resize; KAV+height deja franja gris. iOS: padding.
+  return Platform.OS === 'ios' ? (
+    <KeyboardAvoidingView style={containerStyle} behavior="padding">
+      {tree}
     </KeyboardAvoidingView>
+  ) : (
+    <View style={containerStyle}>{tree}</View>
   );
 }
 
