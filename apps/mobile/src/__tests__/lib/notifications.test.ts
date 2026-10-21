@@ -1,5 +1,7 @@
-import type * as Notifications from 'expo-notifications';
-import { handleNotificationResponse } from '../../lib/notifications';
+import {
+  handleNotificationResponse,
+  type NotificationResponseLike,
+} from '../../lib/notifications';
 
 jest.mock('../../lib/postAuthRouting', () => ({
   resolvePostAuthRoute: jest.fn(async () => ({ screen: 'Active', status: 'approved' })),
@@ -19,7 +21,7 @@ jest.mock('../../store/authStore', () => ({
   },
 }));
 
-function makeResponse(type: string, extra?: Record<string, string>): Notifications.NotificationResponse {
+function makeResponse(type: string, extra?: Record<string, string>): NotificationResponseLike {
   return {
     notification: {
       request: {
@@ -28,7 +30,7 @@ function makeResponse(type: string, extra?: Record<string, string>): Notificatio
         },
       },
     },
-  } as unknown as Notifications.NotificationResponse;
+  };
 }
 
 describe('handleNotificationResponse driver review', () => {

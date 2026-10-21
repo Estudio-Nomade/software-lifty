@@ -1,4 +1,3 @@
-import * as Notifications from 'expo-notifications';
 import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { InteractionManager, Platform } from 'react-native';
@@ -6,6 +5,7 @@ import { api } from '../api/client';
 import { registerPassenger } from '../api/passenger';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
+  addNotificationResponseListener,
   handleNotificationResponse,
   registerForPush,
   setupNotificationHandler,
@@ -140,14 +140,24 @@ function NotificationSetup() {
   const sessionRestored = useAuthStore((s) => s.sessionRestored);
 
   useEffect(() => {
-    setupNotificationHandler();
+    let cancelled = false;
+    let subscription: { remove: () => void } | null = null;
 
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      handleNotificationResponse(response, navigate);
-    });
+    void (async () => {
+      await setupNotificationHandler();
+      if (cancelled) return;
+      subscription = await addNotificationResponseListener((response) => {
+        handleNotificationResponse(response, navigate);
+      });
+      if (cancelled) {
+        subscription?.remove();
+        subscription = null;
+      }
+    })();
 
     return () => {
-      subscription.remove();
+      cancelled = true;
+      subscription?.remove();
     };
   }, [navigate]);
 
