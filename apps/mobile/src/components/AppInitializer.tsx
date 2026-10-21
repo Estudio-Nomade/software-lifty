@@ -229,12 +229,16 @@ function NotificationSetup() {
     // Wait for interactions so ActiveTripRecovery can restore the trip first.
     if (coldStartHandled.current) return;
     coldStartHandled.current = true;
-    void getLastNotificationResponse().then((response) => {
-      if (!response) return;
-      InteractionManager.runAfterInteractions(() => {
-        handleNotificationResponse(response, navigate);
+    void getLastNotificationResponse()
+      .then((response) => {
+        if (!response) return;
+        InteractionManager.runAfterInteractions(() => {
+          handleNotificationResponse(response, navigate);
+        });
+      })
+      .catch(() => {
+        // best-effort: Expo Go / missing native module
       });
-    });
   }, [sessionRestored, authToken, navigate]);
 
   return null;

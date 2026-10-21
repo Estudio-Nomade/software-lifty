@@ -59,6 +59,7 @@ export async function addNotificationResponseListener(
   if (!Notifications) return null;
 
   try {
+    // Listener only reads content.data; cast avoids coupling to full NotificationResponse.
     return Notifications.addNotificationResponseReceivedListener(
       listener as Parameters<typeof Notifications.addNotificationResponseReceivedListener>[0],
     );
