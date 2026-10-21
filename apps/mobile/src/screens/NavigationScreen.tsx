@@ -11,6 +11,7 @@ import {
   StatusBar,
   StyleSheet,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,6 +32,13 @@ import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
+
+if (
+  Platform.OS === 'android' &&
+  typeof UIManager.setLayoutAnimationEnabledExperimental === 'function'
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 /** Cap the whole sheet (~48% of screen). Footer stays outside the scroll. */
