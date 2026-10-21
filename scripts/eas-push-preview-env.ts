@@ -33,7 +33,7 @@ const APPS: AppDef[] = [
   {
     id: 'passenger',
     dir: 'apps/mobile-passengers',
-    keys: ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY'],
+    keys: ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY'],
   },
 ];
 
