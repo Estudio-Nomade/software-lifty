@@ -1,8 +1,9 @@
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { geocodeAddress } from '../../api/passenger';
-import { useLocation } from '../../hooks/useLocation';
+import { useLocation, requestFreshPosition } from '../../hooks/useLocation';
 import { HomeScreen } from '../../screens/HomeScreen';
+import { resolveAddressLabel } from '../../utils/resolveAddressLabel';
 
 jest.mock('expo-router', () => ({
   useFocusEffect: jest.fn(),
@@ -53,6 +54,8 @@ jest.mock('../../hooks/useAppNavigation', () => ({
 
 const mockUseLocation = useLocation as unknown as jest.Mock;
 const mockGeocodeAddress = geocodeAddress as unknown as jest.Mock;
+const mockRequestFresh = requestFreshPosition as unknown as jest.Mock;
+const mockResolveLabel = resolveAddressLabel as unknown as jest.Mock;
 
 async function openSearch() {
   const utils = await render(<HomeScreen />);
@@ -63,6 +66,8 @@ async function openSearch() {
 describe('HomeScreen address clear', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRequestFresh.mockResolvedValue(null);
+    mockResolveLabel.mockResolvedValue('Mi ubicación actual');
     mockUseLocation.mockReturnValue({
       current: null,
       locationError: null,
@@ -120,11 +125,62 @@ describe('HomeScreen address clear', () => {
     expect(queryByDisplayValue('Mi casa')).toBeNull();
     expect(getByDisplayValue('Trabajo')).toBeTruthy();
   });
+
+  test('clearing GPS autofill origen stays empty (no re-fill loop)', async () => {
+    mockRequestFresh.mockResolvedValue({ lat: -31.94, lng: -65.19, accuracy: 15 });
+    mockResolveLabel.mockResolvedValue('San Martín 100, Villa Dolores');
+    mockUseLocation.mockReturnValue({
+      current: { lat: -31.94, lng: -65.19, accuracy: 15 },
+      locationError: null,
+      refresh: jest.fn().mockResolvedValue({ lat: -31.94, lng: -65.19, accuracy: 15 }),
+    });
+
+    const { getByLabelText, getByDisplayValue, queryByDisplayValue, queryByText } =
+      await openSearch();
+
+    await waitFor(() => {
+      expect(getByDisplayValue('San Martín 100, Villa Dolores')).toBeTruthy();
+    });
+
+    await fireEvent.press(getByLabelText('Borrar origen'));
+
+    expect(queryByDisplayValue('San Martín 100, Villa Dolores')).toBeNull();
+    // Locked GPS label must not show false "no results" empty.
+    expect(queryByText(/No encontramos calles ni lugares/i)).toBeNull();
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(queryByDisplayValue('San Martín 100, Villa Dolores')).toBeNull();
+  });
+
+  test('Usar mi ubicacion actual writes street label into Origen', async () => {
+    mockRequestFresh.mockResolvedValue({ lat: -31.94, lng: -65.19, accuracy: 12 });
+    mockResolveLabel.mockResolvedValue('Belgrano 50, Villa Dolores');
+    mockUseLocation.mockReturnValue({
+      current: { lat: -31.94, lng: -65.19, accuracy: 12 },
+      locationError: null,
+      refresh: jest.fn().mockResolvedValue({ lat: -31.94, lng: -65.19, accuracy: 12 }),
+    });
+
+    const { getByPlaceholderText, getByLabelText, getByDisplayValue } = await openSearch();
+
+    await fireEvent.changeText(getByPlaceholderText('Desde'), 'Otra calle 9');
+    await fireEvent.press(getByLabelText('Usar mi ubicación actual'));
+
+    await waitFor(() => {
+      expect(getByDisplayValue('Belgrano 50, Villa Dolores')).toBeTruthy();
+    });
+    expect(mockResolveLabel).toHaveBeenCalled();
+  });
 });
 
 describe('HomeScreen destination confirmation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRequestFresh.mockResolvedValue(null);
+    mockResolveLabel.mockResolvedValue('Mi ubicación actual');
     mockUseLocation.mockReturnValue({
       current: { lat: -34.5, lng: -58.4 },
       locationError: null,
@@ -146,7 +202,10 @@ describe('HomeScreen destination confirmation', () => {
       fireEvent.press(getByText('Continuar'));
     });
 
-    expect(mockGeocodeAddress).toHaveBeenCalledWith('Calle Falsa 123');
+    expect(mockGeocodeAddress).toHaveBeenCalledWith(
+      'Calle Falsa 123',
+      expect.objectContaining({ lat: expect.any(Number), lng: expect.any(Number) }),
+    );
     expect(mockNavigate).toHaveBeenCalledWith(
       'VehicleSelect',
       expect.objectContaining({
@@ -169,6 +228,8 @@ describe('HomeScreen destination confirmation', () => {
     });
 
     expect(mockNavigate).not.toHaveBeenCalled();
-    expect(getByText('No encontramos esa dirección. Revisá la dirección e intentá de nuevo.')).toBeTruthy();
+    expect(
+      getByText('No encontramos esa calle o lugar. Probá otra búsqueda o elegí una sugerencia.'),
+    ).toBeTruthy();
   });
 });

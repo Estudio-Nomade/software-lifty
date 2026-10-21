@@ -31,7 +31,7 @@ import { getTabBarReserve } from '../lib/tabBarLayout';
 import { useLocationStore } from '../store/locationStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
-import { resolveAddressLabel } from '../utils/resolveAddressLabel';
+import { MAX_LABEL_ACCURACY_M, resolveAddressLabel } from '../utils/resolveAddressLabel';
 
 /** Rough meters between two WGS84 points (good enough for GPS refine). */
 function metersBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -90,6 +90,11 @@ export function HomeScreen() {
   /** True while "Desde" still tracks live GPS (not user-edited). */
   const [pickupFromGps, setPickupFromGps] = useState(false);
   const [pickupLoading, setPickupLoading] = useState(false);
+  /**
+   * When true, opening search may GPS-autofill Origen.
+   * Clear / manual edit set false so ✕ stays empty until "Usar mi ubicación" or re-open.
+   */
+  const [pickupGpsAutofill, setPickupGpsAutofill] = useState(true);
   const lastGpsLabel = useRef<{ lat: number; lng: number; acc: number } | null>(null);
 
   const pickupAc = usePlaceAutocomplete(
@@ -100,37 +105,54 @@ export function HomeScreen() {
   const placesLoading = focusedField === 'pickup' ? pickupAc.loading : destAc.loading;
   const placesError = focusedField === 'pickup' ? pickupAc.error : destAc.error;
 
-  // "Desde" autofill: wait for best GPS (not first coarse WiFi), then label.
+  // "Desde" autofill: paint coords ASAP, reverse label in parallel (street via Photon).
   useEffect(() => {
     if (!searchExpanded) return;
+    if (!pickupGpsAutofill) return;
     if (pickupPicked || pickupAddress.trim()) return;
     let cancelled = false;
     setPickupLoading(true);
     (async () => {
-      const fix = await requestFreshPosition();
+      // Instant path: already-warm store fix (map may already have it).
+      const cached = useLocationStore.getState().current;
+      let fix =
+        cached && Number.isFinite(cached.lat) && Number.isFinite(cached.lng)
+          ? {
+              lat: cached.lat,
+              lng: cached.lng,
+              accuracy: cached.accuracy ?? Number.POSITIVE_INFINITY,
+            }
+          : null;
+
+      if (!fix) {
+        fix = await requestFreshPosition();
+      } else {
+        // Refresh in background; don't block first label.
+        void requestFreshPosition();
+      }
+
       if (cancelled) return;
       if (!fix) {
         setPickupLoading(false);
         return;
       }
 
-      const acc = fix.accuracy ?? Number.POSITIVE_INFINITY;
       setPickupCoord({ lat: fix.lat, lng: fix.lng });
-      // Coarse WiFi/IP must not freeze a wrong street name.
-      const label = await resolveAddressLabel(fix.lat, fix.lng, { accuracy: acc });
+      lastGpsLabel.current = { lat: fix.lat, lng: fix.lng, acc: fix.accuracy };
+
+      const label = await resolveAddressLabel(fix.lat, fix.lng, { accuracy: fix.accuracy });
       if (cancelled) return;
       setPickupAddress(label);
       setPickupPicked(true);
       setPickupFromGps(true);
       setPickupLoading(false);
-      lastGpsLabel.current = { lat: fix.lat, lng: fix.lng, acc };
+      lastGpsLabel.current = { lat: fix.lat, lng: fix.lng, acc: fix.accuracy };
     })();
 
     return () => {
       cancelled = true;
     };
-    // Intentionally omit `current` — requestFreshPosition owns the wait.
-  }, [searchExpanded, pickupPicked, pickupAddress]);
+  }, [searchExpanded, pickupGpsAutofill, pickupPicked, pickupAddress]);
 
   // Refine "Desde" when GPS warm-up yields a much better / moved fix.
   useEffect(() => {
@@ -141,7 +163,10 @@ export function HomeScreen() {
     const moved = metersBetween(prev, current);
     const muchBetter = acc <= TARGET_ACCURACY_M && acc < prev.acc * 0.5;
     const jumped = moved > 45 && acc <= Math.max(prev.acc, 80);
-    if (!muchBetter && !jumped) return;
+    // Also refine when we still show the generic fallback and accuracy improved.
+    const stillGeneric =
+      pickupAddress === 'Mi ubicación actual' && acc <= MAX_LABEL_ACCURACY_M && acc < prev.acc;
+    if (!muchBetter && !jumped && !stillGeneric) return;
 
     let cancelled = false;
     (async () => {
@@ -154,7 +179,7 @@ export function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [current?.lat, current?.lng, current?.accuracy, searchExpanded, pickupFromGps]);
+  }, [current?.lat, current?.lng, current?.accuracy, searchExpanded, pickupFromGps, pickupAddress]);
 
   const handleLocate = () => {
     void (async () => {
@@ -168,6 +193,7 @@ export function HomeScreen() {
 
   const handleOpenSearch = () => {
     setSearchError(null);
+    setPickupGpsAutofill(true);
     setSearchExpanded(true);
   };
 
@@ -180,6 +206,7 @@ export function HomeScreen() {
     setDestPicked(false);
     setPickupFromGps(false);
     setPickupLoading(false);
+    setPickupGpsAutofill(true);
     lastGpsLabel.current = null;
     setFocusedField('dest');
     setSearchError(null);
@@ -203,6 +230,7 @@ export function HomeScreen() {
       setPickupCoord({ lat: suggestion.lat, lng: suggestion.lng });
       setPickupPicked(true);
       setPickupFromGps(false);
+      setPickupGpsAutofill(false);
       setPickupLoading(false);
     } else {
       setDestAddress(suggestion.description);
@@ -215,32 +243,52 @@ export function HomeScreen() {
 
   const handleUseMyLocation = () => {
     void (async () => {
+      setPickupGpsAutofill(true);
       setPickupLoading(true);
       setSearchError(null);
-      const fix = await requestFreshPosition();
+      setPickupPicked(false);
+      setPickupFromGps(false);
+
+      const cached = useLocationStore.getState().current;
+      let fix =
+        cached && Number.isFinite(cached.lat) && Number.isFinite(cached.lng)
+          ? {
+              lat: cached.lat,
+              lng: cached.lng,
+              accuracy: cached.accuracy ?? Number.POSITIVE_INFINITY,
+            }
+          : null;
+      if (!fix) {
+        fix = await requestFreshPosition();
+      } else {
+        void requestFreshPosition();
+      }
+
       if (!fix) {
         setPickupLoading(false);
         return;
       }
-      const acc = fix.accuracy ?? Number.POSITIVE_INFINITY;
-      const label = await resolveAddressLabel(fix.lat, fix.lng, { accuracy: acc });
+
       setPickupCoord({ lat: fix.lat, lng: fix.lng });
+      const label = await resolveAddressLabel(fix.lat, fix.lng, { accuracy: fix.accuracy });
       setPickupAddress(label);
       setPickupPicked(true);
       setPickupFromGps(true);
       setPickupLoading(false);
-      lastGpsLabel.current = { lat: fix.lat, lng: fix.lng, acc };
+      lastGpsLabel.current = { lat: fix.lat, lng: fix.lng, acc: fix.accuracy };
       setFocusedField('dest');
       Keyboard.dismiss();
     })();
   };
 
   const clearPickup = () => {
+    setPickupGpsAutofill(false);
     setPickupAddress('');
     setPickupCoord(null);
     setPickupPicked(false);
     setPickupFromGps(false);
     setPickupLoading(false);
+    lastGpsLabel.current = null;
     setFocusedField('pickup');
   };
 
@@ -257,10 +305,15 @@ export function HomeScreen() {
     Keyboard.dismiss();
     setSearchError(null);
 
+    const bias =
+      current && Number.isFinite(current.lat) && Number.isFinite(current.lng)
+        ? { lat: current.lat, lng: current.lng }
+        : undefined;
+
     let resolvedPickup = pickupCoord;
     if (!resolvedPickup && pickupAddress.trim()) {
       try {
-        const g = await geocodeAddress(pickupAddress.trim());
+        const g = await geocodeAddress(pickupAddress.trim(), bias);
         resolvedPickup = { lat: g.lat, lng: g.lng };
       } catch {
         resolvedPickup = null;
@@ -273,7 +326,7 @@ export function HomeScreen() {
     let resolvedDest = destCoord;
     if (!resolvedDest) {
       try {
-        const g = await geocodeAddress(dest);
+        const g = await geocodeAddress(dest, bias);
         resolvedDest = { lat: g.lat, lng: g.lng };
       } catch {
         resolvedDest = null;
@@ -281,7 +334,9 @@ export function HomeScreen() {
     }
 
     if (!resolvedPickup || !resolvedDest) {
-      setSearchError('No encontramos esa dirección. Revisá la dirección e intentá de nuevo.');
+      setSearchError(
+        'No encontramos esa calle o lugar. Probá otra búsqueda o elegí una sugerencia.',
+      );
       return;
     }
 
@@ -304,6 +359,8 @@ export function HomeScreen() {
       destAddress={destAddress}
       focusedField={focusedField}
       pickupLoading={pickupLoading}
+      pickupPicked={pickupPicked}
+      destPicked={destPicked}
       suggestions={visibleSuggestions}
       placesLoading={placesLoading}
       placesError={placesError}
@@ -311,6 +368,7 @@ export function HomeScreen() {
       showUseMyLocation={showUseMyLocation}
       onBack={handleCloseSearch}
       onPickupChange={(text) => {
+        setPickupGpsAutofill(false);
         setPickupAddress(text);
         setPickupCoord(null);
         setPickupPicked(false);

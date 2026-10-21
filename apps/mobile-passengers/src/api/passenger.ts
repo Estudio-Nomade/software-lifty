@@ -1,3 +1,4 @@
+import { searchPhotonPlaces } from '../utils/photonPlaces';
 import { api } from './client';
 import type {
   DirectionsResult,
@@ -132,14 +133,20 @@ export async function getDirections(params: {
   };
 }
 
-export async function geocodeAddress(address: string): Promise<{
+export async function geocodeAddress(
+  address: string,
+  bias?: { lat?: number; lng?: number },
+): Promise<{
   lat: number;
   lng: number;
   formatted_address: string;
 }> {
+  const params: { address: string; bias_lat?: number; bias_lng?: number } = { address };
+  if (typeof bias?.lat === 'number' && Number.isFinite(bias.lat)) params.bias_lat = bias.lat;
+  if (typeof bias?.lng === 'number' && Number.isFinite(bias.lng)) params.bias_lng = bias.lng;
   const { data } = await api.get<{ lat: number; lng: number; formatted_address: string }>(
     '/maps/geocode',
-    { params: { address } },
+    { params },
   );
   return data;
 }
@@ -211,16 +218,59 @@ export async function sendTripMessage(tripId: string, text: string): Promise<Tri
   return (data as { data?: TripMessage })?.data ?? data;
 }
 
+/** Axios cancel, fetch AbortError, DOMException, or already-aborted signal. */
+export function isAbortError(err: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true;
+  if (err == null || typeof err !== 'object') return false;
+  const e = err as {
+    name?: string;
+    code?: string | number;
+    message?: string;
+    __CANCEL__?: boolean;
+  };
+  if (e.__CANCEL__ === true) return true;
+  if (e.name === 'CanceledError' || e.name === 'AbortError' || e.name === 'TimeoutError') {
+    return true;
+  }
+  if (e.code === 'ERR_CANCELED' || e.code === 'ABORT_ERR' || e.code === 20) return true;
+  const msg = typeof e.message === 'string' ? e.message.toLowerCase() : '';
+  if (msg.includes('aborted') || msg === 'canceled' || msg === 'cancelled') return true;
+  return false;
+}
+
 export async function searchPlaces(
   input: string,
   lat?: number,
   lng?: number,
   signal?: AbortSignal,
 ): Promise<PlaceSuggestion[]> {
-  const { data } = await api.get<PlaceSuggestion[]>('/maps/places/autocomplete', {
-    params: { input, lat, lng },
-    timeout: 5000,
-    signal,
-  });
-  return data;
+  const q = input.trim();
+  if (q.length < 2) return [];
+
+  try {
+    const { data } = await api.get<PlaceSuggestion[]>('/maps/places/autocomplete', {
+      params: { input: q, lat, lng },
+      timeout: 5000,
+      signal,
+    });
+    const list = Array.isArray(data) ? data : [];
+    if (list.length > 0) return list;
+  } catch (err) {
+    if (isAbortError(err, signal)) throw err;
+    // 401 / network / timeout — fall through to Photon
+  }
+
+  if (signal?.aborted) {
+    const abortErr = new Error('Aborted');
+    abortErr.name = 'AbortError';
+    throw abortErr;
+  }
+
+  try {
+    return await searchPhotonPlaces(q, lat, lng, signal);
+  } catch (err) {
+    if (isAbortError(err, signal)) throw err;
+    // Photon soft-fail path should return []; any unexpected throw → empty, not sticky error.
+    return [];
+  }
 }

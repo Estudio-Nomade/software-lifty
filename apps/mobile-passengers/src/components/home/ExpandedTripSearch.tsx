@@ -17,6 +17,9 @@ interface ExpandedTripSearchProps {
   destAddress: string;
   focusedField: 'pickup' | 'dest' | null;
   pickupLoading: boolean;
+  /** Locked GPS/suggestion pick — no live autocomplete for that field. */
+  pickupPicked?: boolean;
+  destPicked?: boolean;
   suggestions: PlaceSuggestion[];
   placesLoading: boolean;
   placesError: string | null;
@@ -49,6 +52,8 @@ export function ExpandedTripSearch({
   destAddress,
   focusedField,
   pickupLoading,
+  pickupPicked = false,
+  destPicked = false,
   suggestions,
   placesLoading,
   placesError,
@@ -69,9 +74,13 @@ export function ExpandedTripSearch({
   const destQuery = destAddress.trim();
   const pickupQuery = pickupAddress.trim();
   const activeQuery = focusedField === 'pickup' ? pickupQuery : destQuery;
+  const fieldLocked =
+    (focusedField === 'pickup' && pickupPicked) || (focusedField === 'dest' && destPicked);
+  // Locked GPS/suggestion label is not a failed search — don't show false empty.
   const showEmptySuggestions =
     focusedField !== null &&
-    activeQuery.length >= 3 &&
+    !fieldLocked &&
+    activeQuery.length >= 2 &&
     suggestions.length === 0 &&
     !pickupLoading &&
     !placesLoading &&
@@ -113,6 +122,7 @@ export function ExpandedTripSearch({
                   value={pickupAddress}
                   onFocus={onPickupFocus}
                   onChangeText={onPickupChange}
+                  scrollEnabled
                   accessibilityLabel="Origen"
                 />
               )}
@@ -144,6 +154,7 @@ export function ExpandedTripSearch({
                 value={destAddress}
                 onFocus={onDestFocus}
                 onChangeText={onDestChange}
+                scrollEnabled
                 autoFocus
                 returnKeyType="search"
                 onSubmitEditing={onConfirm}
@@ -224,7 +235,7 @@ export function ExpandedTripSearch({
 
       {showEmptySuggestions ? (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>No encontramos lugares. Probá otra calle.</Text>
+          <Text style={styles.emptyText}>No encontramos calles ni lugares. Probá otro nombre.</Text>
         </View>
       ) : null}
 
@@ -343,6 +354,8 @@ const styles = StyleSheet.create({
     color: theme.colors.deepBlue,
     padding: 0,
     minHeight: 28,
+    // Long street/POI labels: allow caret + horizontal scroll (iOS/Android/web).
+    overflow: 'scroll',
   },
   loadingRow: {
     flex: 1,
