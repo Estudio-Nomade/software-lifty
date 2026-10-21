@@ -1,6 +1,7 @@
+import * as ImagePicker from 'expo-image-picker';
 import type React from 'react';
 import { useState } from 'react';
-import { StatusBar, StyleSheet, View } from 'react-native';
+import { Linking, PermissionsAndroid, Platform, StatusBar, StyleSheet, View } from 'react-native';
 import { apiClient } from '../api/client';
 import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
@@ -8,6 +9,23 @@ import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
+
+async function ensureDiditMediaPermissions(): Promise<boolean> {
+  const camera = await ImagePicker.requestCameraPermissionsAsync();
+  if (camera.status !== 'granted') return false;
+
+  if (Platform.OS === 'android') {
+    const mic = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, {
+      title: 'Microfono',
+      message: 'Didit necesita el microfono para la verificacion biometrica.',
+      buttonPositive: 'Permitir',
+      buttonNegative: 'Cancelar',
+    });
+    if (mic !== PermissionsAndroid.RESULTS.GRANTED) return false;
+  }
+
+  return true;
+}
 
 export const KYCVerifyScreen: React.FC = () => {
   const navigation = useAppNavigation();
@@ -20,6 +38,15 @@ export const KYCVerifyScreen: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      const mediaOk = await ensureDiditMediaPermissions();
+      if (!mediaOk) {
+        setError(
+          'Necesitamos camara y microfono para Didit. Activalos en Ajustes e intenta de nuevo.',
+        );
+        void Linking.openSettings();
+        return;
+      }
+
       const { data } = await apiClient.get('/kyc/me/session');
       if (!data?.session_url) throw new Error('No se pudo iniciar la verificacion');
       setKycSessionId(data.session_id ?? null);

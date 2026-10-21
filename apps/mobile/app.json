@@ -14,7 +14,9 @@
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true
-        }
+        },
+        "NSCameraUsageDescription": "Lifty necesita la camara para verificar tu identidad con Didit.",
+        "NSMicrophoneUsageDescription": "Lifty necesita el microfono para la verificacion biometrica de Didit."
       }
     },
     "android": {
@@ -25,6 +27,7 @@
       "package": "com.lifty.conductor",
       "versionCode": 3,
       "usesCleartextTraffic": true,
+      "permissions": ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"],
       "navigationBar": {
         "backgroundColor": "#FFFFFF",
         "barStyle": "dark-content"
@@ -48,6 +51,14 @@
       ],
       "expo-router",
       "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Lifty necesita la camara para verificar tu identidad y subir documentos.",
+          "microphonePermission": "Lifty necesita el microfono para la verificacion biometrica de Didit.",
+          "photosPermission": "Lifty necesita acceso a tus fotos para subir documentos."
+        }
+      ],
       [
         "expo-splash-screen",
         {

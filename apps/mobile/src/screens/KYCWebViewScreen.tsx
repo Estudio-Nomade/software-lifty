@@ -1,12 +1,22 @@
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams } from 'expo-router';
 import type React from 'react';
-import { useState } from 'react';
-import { ActivityIndicator, StatusBar, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Linking,
+  PermissionsAndroid,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { WebViewErrorEvent, WebViewNavigation } from 'react-native-webview/lib/WebViewTypes';
 import { apiClient } from '../api/client';
 import type { DriverStatus } from '../api/types';
 import { driverStatusSchema } from '../api/types';
+import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -18,11 +28,47 @@ import { theme } from '../theme';
 // hosted flow here (with ?status=&verificationSessionId=) when it finishes.
 const CALLBACK_PREFIX = 'https://liftyviajes.com/kyc/callback';
 
+type MediaPermState = 'checking' | 'granted' | 'denied';
+
+/**
+ * Didit getUserMedia only works in Android WebView if the *app* already holds
+ * CAMERA (+ often RECORD_AUDIO). RNCWebChromeClient grants the web origin only
+ * after those OS permissions are present.
+ */
+async function ensureDiditMediaPermissions(): Promise<boolean> {
+  const camera = await ImagePicker.requestCameraPermissionsAsync();
+  if (camera.status !== 'granted') return false;
+
+  if (Platform.OS === 'android') {
+    const mic = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, {
+      title: 'Microfono',
+      message: 'Didit necesita el microfono para la verificacion biometrica.',
+      buttonPositive: 'Permitir',
+      buttonNegative: 'Cancelar',
+    });
+    if (mic !== PermissionsAndroid.RESULTS.GRANTED) return false;
+  }
+
+  return true;
+}
+
 export const KYCWebViewScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const { url } = useLocalSearchParams<{ url: string }>();
   const [loading, setLoading] = useState(true);
   const [done, setDone] = useState(false);
+  const [mediaPerm, setMediaPerm] = useState<MediaPermState>('checking');
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const ok = await ensureDiditMediaPermissions();
+      if (!cancelled) setMediaPerm(ok ? 'granted' : 'denied');
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /**
    * After Didit: refresh decision, then route by real status step.
@@ -101,6 +147,50 @@ export const KYCWebViewScreen: React.FC = () => {
     );
   }
 
+  if (mediaPerm === 'checking') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+        <Navbar title="Verificacion" onBack={() => navigation.goBack()} />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.turquoise} />
+        </View>
+      </View>
+    );
+  }
+
+  if (mediaPerm === 'denied') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+        <Navbar title="Verificacion" onBack={() => navigation.goBack()} />
+        <View style={styles.center}>
+          <Text style={styles.errorText}>
+            Necesitamos camara y microfono para la verificacion. Activalos en Ajustes e intenta de
+            nuevo.
+          </Text>
+          <Button
+            title="Abrir ajustes"
+            onPress={() => void Linking.openSettings()}
+            style={styles.settingsButton}
+          />
+          <Button
+            title="Reintentar"
+            variant="secondary"
+            onPress={() => {
+              setMediaPerm('checking');
+              void (async () => {
+                const ok = await ensureDiditMediaPermissions();
+                setMediaPerm(ok ? 'granted' : 'denied');
+              })();
+            }}
+            style={styles.settingsButton}
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
@@ -117,6 +207,7 @@ export const KYCWebViewScreen: React.FC = () => {
         domStorageEnabled
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
+        mediaCapturePermissionGrantType="grant"
         style={styles.webview}
       />
       {loading && (
@@ -140,11 +231,16 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
   errorText: {
     fontSize: theme.fontSize.md,
     color: theme.colors.dangerRed,
     textAlign: 'center',
+  },
+  settingsButton: {
+    width: 280,
   },
   loadingOverlay: {
     ...(StyleSheet.absoluteFill as object),
