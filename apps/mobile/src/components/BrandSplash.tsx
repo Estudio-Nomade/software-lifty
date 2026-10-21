@@ -36,12 +36,14 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     fontSize: theme.fontSize['3xl'],
+    fontFamily: theme.fontFamily.bold,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
     letterSpacing: -0.8,
   },
   tagline: {
     fontSize: theme.fontSize.md,
+    fontFamily: theme.fontFamily.medium,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.mediumGray,
     textAlign: 'center',
