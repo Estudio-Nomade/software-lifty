@@ -20,14 +20,28 @@ export async function registerPassenger(
   return data;
 }
 
+function assertProfilePayload(data: unknown, action: string): PassengerProfile {
+  if (data && typeof data === 'object' && 'error' in data && (data as { error?: unknown }).error) {
+    const err = (data as { error: { message?: string; code?: string } }).error;
+    throw Object.assign(new Error(err.message || err.code || `No se pudo ${action}`), {
+      response: { data },
+    });
+  }
+  const profile = data as PassengerProfile | null;
+  if (!profile || typeof profile !== 'object' || !profile.id) {
+    throw new Error(`Respuesta inválida al ${action}`);
+  }
+  return profile;
+}
+
 export async function getProfile(): Promise<PassengerProfile> {
   const { data } = await api.get<PassengerProfile>('/passenger/profile');
-  return data;
+  return assertProfilePayload(data, 'obtener el perfil');
 }
 
 export async function updateProfile(profile: Partial<PassengerProfile>): Promise<PassengerProfile> {
   const { data } = await api.put<PassengerProfile>('/passenger/profile', profile);
-  return data;
+  return assertProfilePayload(data, 'guardar el perfil');
 }
 
 export async function uploadProfilePhoto(
@@ -38,15 +52,38 @@ export async function uploadProfilePhoto(
   const formData = new FormData();
   formData.append('file', { uri, type: mimeType, name: fileName } as unknown as Blob);
 
-  const { data } = await api.post<{ file_url: string; avatar_url: string }>(
+  // Drop default application/json so the runtime can set multipart boundary.
+  const { data } = await api.post<{ file_url: string; avatar_url: string } | { error?: unknown }>(
     '/passenger/profile/photo',
     formData,
     {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      transformRequest: [
+        (body, headers) => {
+          if (headers && typeof headers === 'object') {
+            const h = headers as Record<string, unknown>;
+            h['Content-Type'] = undefined;
+            h['content-type'] = undefined;
+          }
+          return body;
+        },
+      ],
     },
   );
 
-  return data;
+  if (data && typeof data === 'object' && 'error' in data && data.error) {
+    const err = data.error as { message?: string; code?: string };
+    throw Object.assign(new Error(err.message || err.code || 'No se pudo subir la foto'), {
+      response: { data },
+    });
+  }
+  const result = data as { file_url?: string; avatar_url?: string };
+  if (!result?.file_url && !result?.avatar_url) {
+    throw new Error('Respuesta inválida al subir la foto');
+  }
+  return {
+    file_url: result.file_url ?? result.avatar_url ?? '',
+    avatar_url: result.avatar_url ?? result.file_url ?? '',
+  };
 }
 
 export async function estimateFare(params: {

@@ -12,6 +12,17 @@ jest.mock('../../context/AuthContext', () => ({
   useAuth: () => ({ signOut: jest.fn() }),
 }));
 
+const mockUpdateProfile = jest.fn().mockResolvedValue({
+  id: 'p1',
+  full_name: 'Nuevo Nombre',
+  phone: '+5492611111111',
+  email: 'maria@example.com',
+});
+const mockUploadProfilePhoto = jest.fn().mockResolvedValue({
+  file_url: 'https://example.com/a.jpg',
+  avatar_url: 'https://example.com/a.jpg',
+});
+
 jest.mock('../../api/passenger', () => ({
   getProfile: jest.fn().mockResolvedValue({
     id: 'p1',
@@ -19,12 +30,12 @@ jest.mock('../../api/passenger', () => ({
     phone: '+5492611111111',
     email: 'maria@example.com',
   }),
-  updateProfile: jest.fn().mockResolvedValue({
-    id: 'p1',
-    full_name: 'Nuevo Nombre',
-    phone: '+5492611111111',
-    email: 'maria@example.com',
-  }),
+  updateProfile: (...args: unknown[]) => mockUpdateProfile(...args),
+  uploadProfilePhoto: (...args: unknown[]) => mockUploadProfilePhoto(...args),
+}));
+
+jest.mock('../../utils/image', () => ({
+  compressImage: jest.fn(async (uri: string) => ({ uri })),
 }));
 
 describe('ProfileScreen', () => {
@@ -77,5 +88,33 @@ describe('ProfileScreen', () => {
     const url = openUrl.mock.calls[0][0];
     expect(url.startsWith('https://wa.me/2266515776?text=')).toBe(true);
     expect(decodeURIComponent(url)).toContain('SOS LIFTY');
+  });
+
+  test('save failure shows friendly phone-taken message, not connection lie', async () => {
+    mockUpdateProfile.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          error: {
+            code: 'PHONE_TAKEN',
+            message: 'Ese teléfono ya está registrado en otra cuenta.',
+          },
+        },
+      },
+    });
+
+    const { getByText } = await render(<ProfileScreen />);
+
+    await act(async () => {
+      fireEvent.press(getByText('Editar perfil'));
+    });
+    await act(async () => {
+      fireEvent.press(getByText('Guardar'));
+    });
+
+    expect(Alert.alert).toHaveBeenCalled();
+    const [, message] = (Alert.alert as jest.Mock).mock.calls.at(-1) as [string, string];
+    expect(message).toMatch(/tel[eé]fono/i);
+    expect(message.toLowerCase()).not.toContain('conexión');
   });
 });
