@@ -5,11 +5,11 @@ import { createClient } from '@supabase/supabase-js';
 import { AppState } from 'react-native';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-// Prefer legacy anon JWT when present — some Expo Go / older clients mishandle
-// sb_publishable_* keys and hang on getSession (Android splash stuck).
+// Prefer publishable key — project uses sb_* keys; legacy anon JWTs may be rotated/disabled
+// and surface as "Invalid API key" from GoTrue.
 const supabaseKey =
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
   process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
   '';
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
