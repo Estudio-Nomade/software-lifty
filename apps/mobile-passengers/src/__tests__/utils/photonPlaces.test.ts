@@ -174,17 +174,17 @@ describe('searchPhotonPlaces timeout/abort', () => {
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 
-  it('throws on non-OK Photon HTTP so callers can show network error (not false empty)', async () => {
+  it('returns [] on non-OK Photon HTTP (soft fail; searchPlaces decides total-network error)', async () => {
     globalThis.fetch = jest.fn().mockResolvedValue({
       ok: false,
       status: 503,
       json: async () => ({}),
     }) as unknown as typeof fetch;
 
-    await expect(searchPhotonPlaces('Dique', -31.9, -65.1)).rejects.toThrow(/Photon/i);
+    await expect(searchPhotonPlaces('Dique', -31.9, -65.1)).resolves.toEqual([]);
   });
 
-  it('throws timeout error (not silent []) when local deadline fires without caller abort', async () => {
+  it('returns [] on local timeout without caller abort (soft fail, not sticky UI error)', async () => {
     jest.useFakeTimers();
     globalThis.fetch = jest.fn().mockImplementation((_url, init?: RequestInit) => {
       return new Promise((_resolve, reject) => {
@@ -201,9 +201,8 @@ describe('searchPhotonPlaces timeout/abort', () => {
     }) as unknown as typeof fetch;
 
     const pending = searchPhotonPlaces('Dique', -31.9, -65.1);
-    const assertion = expect(pending).rejects.toThrow(/Photon timeout/i);
     await jest.advanceTimersByTimeAsync(4000);
-    await assertion;
+    await expect(pending).resolves.toEqual([]);
     jest.useRealTimers();
   });
 });

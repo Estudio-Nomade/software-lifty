@@ -218,15 +218,24 @@ export async function sendTripMessage(tripId: string, text: string): Promise<Tri
   return (data as { data?: TripMessage })?.data ?? data;
 }
 
-function isAbortError(err: unknown, signal?: AbortSignal): boolean {
+/** Axios cancel, fetch AbortError, DOMException, or already-aborted signal. */
+export function isAbortError(err: unknown, signal?: AbortSignal): boolean {
   if (signal?.aborted) return true;
-  const e = err as { name?: string; code?: string } | null | undefined;
-  return (
-    e?.name === 'CanceledError' ||
-    e?.code === 'ERR_CANCELED' ||
-    e?.name === 'AbortError' ||
-    e?.code === 'ABORT_ERR'
-  );
+  if (err == null || typeof err !== 'object') return false;
+  const e = err as {
+    name?: string;
+    code?: string | number;
+    message?: string;
+    __CANCEL__?: boolean;
+  };
+  if (e.__CANCEL__ === true) return true;
+  if (e.name === 'CanceledError' || e.name === 'AbortError' || e.name === 'TimeoutError') {
+    return true;
+  }
+  if (e.code === 'ERR_CANCELED' || e.code === 'ABORT_ERR' || e.code === 20) return true;
+  const msg = typeof e.message === 'string' ? e.message.toLowerCase() : '';
+  if (msg.includes('aborted') || msg === 'canceled' || msg === 'cancelled') return true;
+  return false;
 }
 
 export async function searchPlaces(
@@ -251,5 +260,17 @@ export async function searchPlaces(
     // 401 / network / timeout — fall through to Photon
   }
 
-  return searchPhotonPlaces(q, lat, lng, signal);
+  if (signal?.aborted) {
+    const abortErr = new Error('Aborted');
+    abortErr.name = 'AbortError';
+    throw abortErr;
+  }
+
+  try {
+    return await searchPhotonPlaces(q, lat, lng, signal);
+  } catch (err) {
+    if (isAbortError(err, signal)) throw err;
+    // Photon soft-fail path should return []; any unexpected throw → empty, not sticky error.
+    return [];
+  }
 }

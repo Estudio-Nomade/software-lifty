@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { searchPlaces } from '../api/passenger';
+import { useEffect, useRef, useState } from 'react';
+import { isAbortError, searchPlaces } from '../api/passenger';
 import type { PlaceSuggestion } from '../api/types';
 import { useLocationStore } from '../store/locationStore';
 
@@ -18,6 +18,7 @@ export function usePlaceAutocomplete(query: string): PlaceAutocompleteResult {
   const [error, setError] = useState<string | null>(null);
   const lat = current?.lat;
   const lng = current?.lng;
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -34,26 +35,26 @@ export function usePlaceAutocomplete(query: string): PlaceAutocompleteResult {
     setError(null);
 
     const controller = new AbortController();
+    const requestId = ++requestIdRef.current;
     let cancelled = false;
+
+    const isStale = () =>
+      cancelled || controller.signal.aborted || requestId !== requestIdRef.current;
 
     const timeout = setTimeout(() => {
       void (async () => {
         try {
           const results = await searchPlaces(trimmed, lat, lng, controller.signal);
-          if (cancelled || controller.signal.aborted) return;
+          if (isStale()) return;
           setSuggestions(results);
           setError(null);
         } catch (err) {
-          if (cancelled || controller.signal.aborted) return;
-          const isAbort =
-            (err as { name?: string; code?: string })?.name === 'CanceledError' ||
-            (err as { name?: string; code?: string })?.code === 'ERR_CANCELED' ||
-            (err as { name?: string })?.name === 'AbortError';
-          if (isAbort) return;
+          if (isStale()) return;
+          if (isAbortError(err, controller.signal)) return;
           setSuggestions([]);
           setError('No pudimos buscar calles ni lugares');
         } finally {
-          if (!cancelled) setLoading(false);
+          if (!isStale()) setLoading(false);
         }
       })();
     }, DEBOUNCE_MS);

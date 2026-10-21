@@ -134,4 +134,21 @@ describe('searchPlaces', () => {
     await expect(searchPlaces('Belgrano', -31.9, -65.1, controller.signal)).rejects.toBeTruthy();
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
+
+  it('returns Photon hits when backend fails and does not surface Photon soft-fail as throw when empty', async () => {
+    mockGet.mockRejectedValue(new Error('Unauthorized'));
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ features: [] }),
+    }) as unknown as typeof fetch;
+
+    await expect(searchPlaces('Nada', -31.9, -65.1)).resolves.toEqual([]);
+  });
+
+  it('returns [] when backend and Photon both fail (empty UI, not sticky abort-style error)', async () => {
+    mockGet.mockRejectedValue(new Error('network'));
+    globalThis.fetch = jest.fn().mockRejectedValue(new Error('Photon request failed'));
+
+    await expect(searchPlaces('Belgrano', -31.9, -65.1)).resolves.toEqual([]);
+  });
 });

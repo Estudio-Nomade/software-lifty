@@ -215,7 +215,8 @@ export async function searchPhotonPlaces(
   try {
     const res = await fetch(url.toString(), { signal: fetchSignal });
     if (!res.ok) {
-      throw new Error(`Photon HTTP ${res.status}`);
+      // Soft-fail: searchPlaces treats empty as "no hits", not sticky UI error.
+      return [];
     }
     const data = (await res.json()) as PhotonResponse;
     return mapPhotonFeaturesToPlaces(data, { query: q, biasLat, biasLng });
@@ -223,16 +224,16 @@ export async function searchPhotonPlaces(
     const name = (err as { name?: string } | null)?.name;
     const isAbort = name === 'AbortError' || signal?.aborted || fetchSignal.aborted;
     if (isAbort) {
-      // Caller cancelled (re-type) → AbortError so UI does not show false empty.
-      // Local timeout alone → network-style error (honest, not "no results").
+      // Caller cancelled (re-type) → AbortError so hook does not setError / false empty.
       if (signal?.aborted) {
         const abortErr = err instanceof Error ? err : new Error('Aborted');
         abortErr.name = 'AbortError';
         throw abortErr;
       }
-      throw new Error('Photon timeout');
+      // Local 4s deadline alone → soft empty (not «No pudimos buscar»).
+      return [];
     }
-    throw err instanceof Error ? err : new Error('Photon request failed');
+    return [];
   } finally {
     cleanup();
   }
