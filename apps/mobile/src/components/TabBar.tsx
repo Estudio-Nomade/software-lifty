@@ -144,11 +144,11 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 11,
-    fontWeight: theme.fontWeight.medium,
+    fontFamily: theme.fontFamily.medium,
   },
   activeLabel: {
     color: theme.colors.primary,
-    fontWeight: theme.fontWeight.semibold,
+    fontFamily: theme.fontFamily.semibold,
   },
   inactiveLabel: {
     color: theme.colors.mediumGray,

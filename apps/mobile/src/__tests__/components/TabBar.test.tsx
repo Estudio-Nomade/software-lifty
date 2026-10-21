@@ -64,4 +64,12 @@ describe('TabBar', () => {
     expect(getByText('Viajes')).toBeTruthy();
     expect(getByText('Perfil')).toBeTruthy();
   });
+
+  test('tab labels use theme.fontFamily (active semibold, inactive medium)', async () => {
+    const { getByText } = await render(wrap(<TabBar activeTab="home" onTabPress={() => {}} />));
+    const active = flattenStyle(getByText('Inicio').props.style);
+    const inactive = flattenStyle(getByText('Cobros').props.style);
+    expect(active.fontFamily).toBe('Inter_600SemiBold');
+    expect(inactive.fontFamily).toBe('Inter_500Medium');
+  });
 });
