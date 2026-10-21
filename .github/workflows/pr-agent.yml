@@ -1,0 +1,33 @@
+name: PR Agent
+
+on:
+  issue_comment:
+    types: [created, edited]
+
+jobs:
+  pr_agent_job:
+    if: >-
+      github.event.sender.type != 'Bot' &&
+      github.event.issue.pull_request &&
+      (
+        startsWith(github.event.comment.body, '/review') ||
+        startsWith(github.event.comment.body, '/ask') ||
+        startsWith(github.event.comment.body, '/improve')
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    name: PR Agent (slash commands)
+    steps:
+      - name: PR Agent
+        uses: the-pr-agent/pr-agent@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEEPSEEK.KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          config.model: deepseek/deepseek-chat
+          config.fallback_models: '["deepseek/deepseek-chat"]'
+          github_action_config.auto_review: "false"
+          github_action_config.auto_describe: "false"
+          github_action_config.auto_improve: "false"
