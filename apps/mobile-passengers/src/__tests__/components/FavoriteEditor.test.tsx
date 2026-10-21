@@ -109,4 +109,63 @@ describe('FavoriteEditor', () => {
     // Hook gated with empty query once coords are set (no re-search thrash).
     expect(mockUsePlaceAutocomplete).toHaveBeenCalledWith('');
   });
+
+  test('editing address after pick clears coords and unlocks autocomplete', async () => {
+    mockUsePlaceAutocomplete.mockImplementation((query: string) => ({
+      suggestions:
+        query.trim().length >= 2
+          ? [
+              {
+                place_id: 'photon:1',
+                description: 'Dique La Florida, Villa Dolores',
+                lat: -31.95,
+                lng: -65.19,
+              },
+              {
+                place_id: 'photon:2',
+                description: 'Calle San Martín 100, Villa Dolores',
+                lat: -31.94,
+                lng: -65.18,
+              },
+            ]
+          : [],
+      loading: false,
+      error: null,
+    }));
+
+    const onSave = jest.fn();
+    const { getByPlaceholderText, getByText, queryByText } = await render(
+      <FavoriteEditor
+        initial={{ label: 'Casa', address: '' }}
+        onSave={onSave}
+        onCancel={jest.fn()}
+      />,
+    );
+
+    const addressInput = getByPlaceholderText('Escribí la dirección');
+    await fireEvent.changeText(addressInput, 'Di');
+    await fireEvent.press(getByText('Dique La Florida, Villa Dolores'));
+    expect(mockUsePlaceAutocomplete).toHaveBeenCalledWith('');
+
+    // Manual edit after pick must clear locked coords (PR-Agent stale-coords finding).
+    await fireEvent.changeText(addressInput, 'Calle San');
+    expect(mockUsePlaceAutocomplete).toHaveBeenCalledWith('Calle San');
+    expect(getByText('Calle San Martín 100, Villa Dolores')).toBeTruthy();
+    expect(queryByText('Dique La Florida, Villa Dolores')).toBeTruthy();
+
+    await fireEvent.press(getByText('Calle San Martín 100, Villa Dolores'));
+    await fireEvent.press(getByText('Agregar a favorito'));
+    expect(onSave).toHaveBeenCalledWith(
+      'Casa',
+      'Calle San Martín 100, Villa Dolores',
+      -31.94,
+      -65.18,
+    );
+    expect(onSave).not.toHaveBeenCalledWith(
+      'Casa',
+      'Calle San Martín 100, Villa Dolores',
+      -31.95,
+      -65.19,
+    );
+  });
 });

@@ -25,11 +25,19 @@ export function FavoriteEditor({ initial, onSave, onCancel }: FavoriteEditorProp
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
     initial?.lat != null && initial?.lng != null ? { lat: initial.lat, lng: initial.lng } : null,
   );
-  // Stop live search once a suggestion is picked (same idea as destPicked on Home).
-  const { suggestions, loading, error } = usePlaceAutocomplete(coords ? '' : address);
+  // Gate live search while a pick (or initial lat/lng) is locked — same idea as destPicked on Home.
+  // Any manual edit must clear coords first (handleAddressChange) or suggestions stay off and save would keep stale lat/lng.
+  const addressQuery = coords ? '' : address;
+  const { suggestions, loading, error } = usePlaceAutocomplete(addressQuery);
 
   const isEditing = initial != null && initial.address !== '';
   const canSave = label.trim().length > 0 && address.trim().length > 0;
+
+  const handleAddressChange = (text: string) => {
+    setAddress(text);
+    // Unlock autocomplete + drop stale pick coords when the user edits the label.
+    setCoords(null);
+  };
 
   const handleSave = () => {
     if (!canSave) return;
@@ -59,10 +67,7 @@ export function FavoriteEditor({ initial, onSave, onCancel }: FavoriteEditorProp
       <Input
         placeholder="Escribí la dirección"
         value={address}
-        onChangeText={(text) => {
-          setAddress(text);
-          setCoords(null);
-        }}
+        onChangeText={handleAddressChange}
         autoFocus
       />
 
