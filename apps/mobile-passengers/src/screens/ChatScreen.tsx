@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatBubble } from '../components/ChatBubble';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTripChat } from '../hooks/useTripChat';
@@ -19,6 +19,7 @@ import { theme } from '../theme';
 
 export function ChatScreen() {
   const { goBack } = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const trip = useRideStore((s) => s.activeTrip);
   const [message, setMessage] = useState('');
   const scrollRef = useRef<ScrollView>(null);
@@ -53,7 +54,7 @@ export function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} accessibilityLabel="Volver">
           <Ionicons name="arrow-back" size={24} color={theme.colors.deepBlue} />
@@ -98,7 +99,16 @@ export function ChatScreen() {
           )}
         </ScrollView>
 
-        <View style={styles.inputBar}>
+        <View
+          style={[
+            styles.inputBar,
+            {
+              paddingTop: theme.spacing.md,
+              paddingHorizontal: theme.spacing.md,
+              paddingBottom: theme.spacing.md + insets.bottom,
+            },
+          ]}
+        >
           <TextInput
             style={styles.input}
             placeholder="Escribe un mensaje..."
@@ -159,7 +169,6 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: theme.spacing.md,
     borderTopWidth: 1,
     borderTopColor: theme.colors.lightGray,
     gap: theme.spacing.sm,
