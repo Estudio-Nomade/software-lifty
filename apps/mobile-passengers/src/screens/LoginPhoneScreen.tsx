@@ -44,48 +44,67 @@ export function LoginPhoneScreen() {
     }
   };
 
+  const formBody = (
+    <>
+      <View style={styles.header}>
+        <Text style={styles.close} onPress={goBack}>
+          ← Volver
+        </Text>
+      </View>
+
+      <View style={styles.body}>
+        <Text style={styles.title}>Ingresa tu celular</Text>
+        <Text style={styles.subtitle}>
+          Te enviaremos un código por SMS para verificar tu número.
+        </Text>
+
+        <View style={styles.row}>
+          <View style={styles.countryCode}>
+            <Text style={styles.flag}>🇦🇷</Text>
+            <Text style={styles.code}>+54</Text>
+          </View>
+          <View style={styles.phoneInput}>
+            <Input
+              placeholder="11 1234 5678"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              error={error ?? undefined}
+              autoFocus
+            />
+          </View>
+        </View>
+
+        <Button variant="primary" onPress={handleSend} loading={loading} disabled={!isValid}>
+          Enviar código
+        </Button>
+      </View>
+    </>
+  );
+
+  // Android: no KAV — SO resize; KAV+height deja franja gris. iOS: padding + insets.
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <Text style={styles.close} onPress={goBack}>
-              ← Volver
-            </Text>
-          </View>
-
-          <View style={styles.body}>
-            <Text style={styles.title}>Ingresa tu celular</Text>
-            <Text style={styles.subtitle}>
-              Te enviaremos un código por SMS para verificar tu número.
-            </Text>
-
-            <View style={styles.row}>
-              <View style={styles.countryCode}>
-                <Text style={styles.flag}>🇦🇷</Text>
-                <Text style={styles.code}>+54</Text>
-              </View>
-              <View style={styles.phoneInput}>
-                <Input
-                  placeholder="11 1234 5678"
-                  value={phone}
-                  onChangeText={setPhone}
-                  keyboardType="phone-pad"
-                  error={error ?? undefined}
-                  autoFocus
-                />
-              </View>
-            </View>
-
-            <Button variant="primary" onPress={handleSend} loading={loading} disabled={!isValid}>
-              Enviar código
-            </Button>
-          </View>
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+          >
+            {formBody}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          {formBody}
         </ScrollView>
-      </KeyboardAvoidingView>
+      )}
     </SafeAreaView>
   );
 }

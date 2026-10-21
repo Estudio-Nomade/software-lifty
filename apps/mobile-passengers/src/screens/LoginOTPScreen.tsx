@@ -74,47 +74,66 @@ export function LoginOTPScreen() {
     }
   };
 
+  const formBody = (
+    <>
+      <View style={styles.header}>
+        <Text style={styles.back} onPress={goBack}>
+          ← Volver
+        </Text>
+      </View>
+
+      <View style={styles.body}>
+        <Text style={styles.title}>Verificación</Text>
+        <Text style={styles.subtitle}>
+          Ingresa el código de 6 dígitos que enviamos a{'\n'}
+          <Text style={styles.phone}>{phone}</Text>
+        </Text>
+
+        <OTPInput value={code} onChange={setCode} autoFocus />
+
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        <Button
+          variant="primary"
+          onPress={handleVerify}
+          loading={loading}
+          disabled={code.length !== 6}
+        >
+          Verificar
+        </Button>
+
+        <Text style={styles.resend} onPress={handleResend}>
+          {resendCooldown > 0
+            ? `Reenviar en ${resendCooldown}s`
+            : '¿No recibiste el código? Reenviar'}
+        </Text>
+      </View>
+    </>
+  );
+
+  // Android: no KAV — SO resize; KAV+height deja franja gris. iOS: padding + insets.
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <Text style={styles.back} onPress={goBack}>
-              ← Volver
-            </Text>
-          </View>
-
-          <View style={styles.body}>
-            <Text style={styles.title}>Verificación</Text>
-            <Text style={styles.subtitle}>
-              Ingresa el código de 6 dígitos que enviamos a{'\n'}
-              <Text style={styles.phone}>{phone}</Text>
-            </Text>
-
-            <OTPInput value={code} onChange={setCode} autoFocus />
-
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-
-            <Button
-              variant="primary"
-              onPress={handleVerify}
-              loading={loading}
-              disabled={code.length !== 6}
-            >
-              Verificar
-            </Button>
-
-            <Text style={styles.resend} onPress={handleResend}>
-              {resendCooldown > 0
-                ? `Reenviar en ${resendCooldown}s`
-                : '¿No recibiste el código? Reenviar'}
-            </Text>
-          </View>
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+          >
+            {formBody}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          {formBody}
         </ScrollView>
-      </KeyboardAvoidingView>
+      )}
     </SafeAreaView>
   );
 }
