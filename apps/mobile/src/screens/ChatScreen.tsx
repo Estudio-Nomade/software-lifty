@@ -46,6 +46,44 @@ export const ChatScreen: React.FC = () => {
     scrollToEnd();
   };
 
+  const chatBody = (
+    <>
+      <View style={styles.chatArea}>
+        <ChatBackground />
+        <ScrollView
+          ref={chatScrollRef}
+          style={styles.chatScroll}
+          contentContainerStyle={styles.chatContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          onContentSizeChange={scrollToEnd}
+          showsVerticalScrollIndicator={false}
+        >
+          {messages.map((msg) => (
+            <ChatBubble key={msg.id} message={msg.text} isDriver={msg.sender_role === 'driver'} />
+          ))}
+        </ScrollView>
+      </View>
+
+      <View
+        style={[styles.chatInputRow, { marginBottom: Math.max(insets.bottom, theme.spacing.lg) }]}
+      >
+        <TextInput
+          style={styles.chatInput}
+          placeholder="Escribi un mensaje..."
+          placeholderTextColor={theme.colors.mediumGray}
+          value={inputText}
+          onChangeText={setInputText}
+          onSubmitEditing={handleSend}
+          returnKeyType="send"
+        />
+        <TouchableOpacity onPress={handleSend}>
+          <Text style={styles.sendIcon}>→</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -58,44 +96,13 @@ export const ChatScreen: React.FC = () => {
         <View style={styles.headerSpacer} />
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
-        <View style={styles.chatArea}>
-          <ChatBackground />
-          <ScrollView
-            ref={chatScrollRef}
-            style={styles.chatScroll}
-            contentContainerStyle={styles.chatContent}
-            keyboardShouldPersistTaps="handled"
-            onContentSizeChange={scrollToEnd}
-            showsVerticalScrollIndicator={false}
-          >
-            {messages.map((msg) => (
-              <ChatBubble key={msg.id} message={msg.text} isDriver={msg.sender_role === 'driver'} />
-            ))}
-          </ScrollView>
-        </View>
-
-        <View
-          style={[styles.chatInputRow, { marginBottom: Math.max(insets.bottom, theme.spacing.lg) }]}
-        >
-          <TextInput
-            style={styles.chatInput}
-            placeholder="Escribi un mensaje..."
-            placeholderTextColor={theme.colors.mediumGray}
-            value={inputText}
-            onChangeText={setInputText}
-            onSubmitEditing={handleSend}
-            returnKeyType="send"
-          />
-          <TouchableOpacity onPress={handleSend}>
-            <Text style={styles.sendIcon}>→</Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView style={styles.flex} behavior="padding" keyboardVerticalOffset={0}>
+          {chatBody}
+        </KeyboardAvoidingView>
+      ) : (
+        <View style={styles.flex}>{chatBody}</View>
+      )}
     </View>
   );
 };
