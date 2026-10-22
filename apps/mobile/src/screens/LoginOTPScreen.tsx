@@ -113,13 +113,15 @@ export const LoginOTPScreen: React.FC = () => {
       <View style={styles.spacerBottom} />
 
       {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
-      <Button
-        title="VERIFICAR CODIGO"
-        onPress={handleVerify}
-        disabled={!isOTPComplete}
-        loading={verifyEmail.isPending}
-        style={styles.button}
-      />
+      <View style={styles.ctaWrap}>
+        <Button
+          title="VERIFICAR CODIGO"
+          onPress={handleVerify}
+          disabled={!isOTPComplete}
+          loading={verifyEmail.isPending}
+          style={styles.button}
+        />
+      </View>
     </View>
   );
 };
@@ -181,9 +183,15 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
     paddingHorizontal: theme.spacing.xl,
   },
-  button: {
-    alignSelf: 'stretch',
-    marginHorizontal: theme.spacing.lg,
+  ctaWrap: {
+    width: '100%',
     maxWidth: 480,
+    alignSelf: 'center',
+    paddingHorizontal: theme.spacing.lg,
+  },
+  button: {
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
 });
