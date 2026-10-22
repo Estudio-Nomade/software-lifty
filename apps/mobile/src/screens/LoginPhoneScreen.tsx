@@ -159,10 +159,14 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.medium,
   },
   phoneInput: {
-    width: 327,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   button: {
-    width: 327,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   terms: {
     fontSize: theme.fontSize.xs,
