@@ -645,7 +645,7 @@ describe('Trip State Machine', () => {
     expect(driver.platform_debt).toBeGreaterThan(0);
   });
 
-  test('15. collect transfer trip sets is_collected and does NOT accumulate platform_debt', async () => {
+  test('15. collect transfer trip sets is_collected and accumulates platform_debt when fee > 0', async () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);
 
@@ -675,7 +675,7 @@ describe('Trip State Machine', () => {
 
     const db = getDb();
     const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
-    expect(driver.platform_debt).toBe(0);
+    expect(driver.platform_debt).toBeGreaterThan(0);
   });
 
   test('16. collect already collected trip returns error', async () => {
@@ -760,13 +760,13 @@ describe('Trip State Machine', () => {
     expect(driver.platform_debt).toBe(200);
   });
 
-  test('cap-3. rate > 0 + cash that would exceed 6000 returns DEBT_CAP_REACHED', async () => {
+  test('cap-3. collect cash still allowed when debt would exceed cap (online gate only)', async () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);
 
     const { tripId } = await completeTrip(token);
     const db = getDb();
-    await db.update(drivers).set({ platform_debt: 5900 }).where(eq(drivers.id, driverId));
+    await db.update(drivers).set({ platform_debt: 10001 }).where(eq(drivers.id, driverId));
     await db.update(trips).set({ platform_fee: 200 }).where(eq(trips.id, tripId));
 
     const { status, data } = await request(
@@ -776,22 +776,21 @@ describe('Trip State Machine', () => {
       token,
     );
 
-    expect(status).toBe(409);
-    expect(data.error.code).toBe('DEBT_CAP_REACHED');
+    expect(status).toBe(200);
+    expect(data.is_collected).toBe(true);
 
-    const [tripAfter] = await db.select().from(trips).where(eq(trips.id, tripId));
-    expect(tripAfter.is_collected).toBe(false);
     const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
-    expect(driver.platform_debt).toBe(5900);
+    expect(driver.platform_debt).toBe(10201);
   });
 
-  test('cap-4. rate > 0 + transfer does not change platform_debt', async () => {
+  test('cap-4. rate > 0 + transfer with fee accrues platform_debt', async () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);
 
     const { tripId } = await completeTrip(token);
     const db = getDb();
     await db.update(drivers).set({ platform_debt: 1200 }).where(eq(drivers.id, driverId));
+    await db.update(trips).set({ platform_fee: 150 }).where(eq(trips.id, tripId));
 
     const { status, data } = await request(
       'PUT',
@@ -804,16 +803,16 @@ describe('Trip State Machine', () => {
     expect(data.is_collected).toBe(true);
 
     const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
-    expect(driver.platform_debt).toBe(1200);
+    expect(driver.platform_debt).toBe(1350);
   });
 
-  test('cap-5. debt + fee exactly at cap is allowed', async () => {
+  test('cap-5. debt + fee exactly at default cap still allowed on collect', async () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);
 
     const { tripId } = await completeTrip(token);
     const db = getDb();
-    await db.update(drivers).set({ platform_debt: 5800 }).where(eq(drivers.id, driverId));
+    await db.update(drivers).set({ platform_debt: 9800 }).where(eq(drivers.id, driverId));
     await db.update(trips).set({ platform_fee: 200 }).where(eq(trips.id, tripId));
 
     const { status, data } = await request(
@@ -827,7 +826,7 @@ describe('Trip State Machine', () => {
     expect(data.is_collected).toBe(true);
 
     const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId));
-    expect(driver.platform_debt).toBe(6000);
+    expect(driver.platform_debt).toBe(10000);
   });
 
   test('17. accept endpoint enforces rate limit (5 req/min)', async () => {

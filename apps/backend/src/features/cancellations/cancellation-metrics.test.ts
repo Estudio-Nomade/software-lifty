@@ -124,8 +124,8 @@ describe('GET /api/drivers/me/cancellation-metrics', () => {
     expect(data.payouts_pending_ars).toBe(0);
     expect(data.payouts_paid_ars).toBe(0);
     expect(data.platform_debt).toBe(0);
-    expect(data.debt_cap_ars).toBe(6000);
-    expect(data.debt_remaining_ars).toBe(6000);
+    expect(data.debt_cap_ars).toBe(10000);
+    expect(data.debt_remaining_ars).toBe(10000);
     expect(data.commission_active).toBe(true);
   });
 

@@ -1,5 +1,5 @@
 import { and, count, eq, ne } from 'drizzle-orm';
-import { db } from '../../shared/db/client';
+import { db, getDb } from '../../shared/db/client';
 import {
   districts,
   driverDocuments,
@@ -9,6 +9,7 @@ import {
   users,
   vehicles,
 } from '../../shared/db/schema';
+import { getDebtCapArs } from '../../shared/lib/commission';
 import {
   VALID_DOC_TYPES as CANONICAL_VALID_DOC_TYPES,
   DOC_TYPES,
@@ -16,6 +17,7 @@ import {
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
 import { logger } from '../../shared/lib/logger';
+import { sendPushToUser } from '../../shared/lib/push';
 import {
   type StorageProvider,
   buildDriverAvatarPath,
@@ -450,6 +452,7 @@ export const driversService = {
         approved_at: drivers.approved_at,
         admin_reviewed_at: drivers.admin_reviewed_at,
         created_at: drivers.created_at,
+        platform_debt: drivers.platform_debt,
       })
       .from(drivers)
       .where(eq(drivers.user_id, user.id))
@@ -515,6 +518,36 @@ export const driversService = {
           'STICKERS_PICKUP_OVERDUE',
         );
       }
+
+      const debt = Number(driver.platform_debt ?? 0);
+      const cap = await getDebtCapArs(getDb());
+      if (debt > cap) {
+        if (driver.is_online) {
+          await db
+            .update(drivers)
+            .set({ is_online: false, last_heartbeat: null, updated_at: new Date() })
+            .where(eq(drivers.id, driver.id));
+        }
+        void sendPushToUser(user.id, {
+          title: 'Deuda de comisión con Lifty',
+          body: `Alcanzaste el límite de $${cap}. Debés $${Math.round(debt)}. Transferí el total y subí el comprobante para volver a conectarte.`,
+          data: {
+            type: 'driver:commission_debt_block',
+            debt_cap_ars: String(cap),
+            platform_debt: String(Math.round(debt)),
+          },
+          channelId: 'account',
+        }).catch((err) => {
+          logger.error('[drivers] commission debt block push failed', {
+            error: (err as Error).message,
+          });
+        });
+        throw new AppError(
+          `Alcanzaste el límite de $${cap} de deuda de comisión con Lifty (debés $${Math.round(debt)}). Transferí el total a Lifty y subí el comprobante para volver a conectarte.`,
+          409,
+          'COMMISSION_DEBT_CAP',
+        );
+      }
     }
 
     await db
@@ -544,6 +577,7 @@ export const driversService = {
         approved_at: drivers.approved_at,
         admin_reviewed_at: drivers.admin_reviewed_at,
         created_at: drivers.created_at,
+        platform_debt: drivers.platform_debt,
       })
       .from(drivers)
       .where(eq(drivers.user_id, user.id))
@@ -571,6 +605,36 @@ export const driversService = {
         409,
         identification.phase === 'revoked' ? 'STICKERS_REVOKED' : 'STICKERS_PICKUP_OVERDUE',
       );
+    }
+
+    if (driver.is_online) {
+      const debt = Number(driver.platform_debt ?? 0);
+      const cap = await getDebtCapArs(getDb());
+      if (debt > cap) {
+        await db
+          .update(drivers)
+          .set({ is_online: false, last_heartbeat: null, updated_at: new Date() })
+          .where(eq(drivers.id, driver.id));
+        void sendPushToUser(user.id, {
+          title: 'Deuda de comisión con Lifty',
+          body: `Alcanzaste el límite de $${cap}. Debés $${Math.round(debt)}. Transferí el total y subí el comprobante para volver a conectarte.`,
+          data: {
+            type: 'driver:commission_debt_block',
+            debt_cap_ars: String(cap),
+            platform_debt: String(Math.round(debt)),
+          },
+          channelId: 'account',
+        }).catch((err) => {
+          logger.error('[drivers] commission debt block push failed', {
+            error: (err as Error).message,
+          });
+        });
+        throw new AppError(
+          `Alcanzaste el límite de $${cap} de deuda de comisión con Lifty (debés $${Math.round(debt)}). Transferí el total a Lifty y subí el comprobante para volver a conectarte.`,
+          409,
+          'COMMISSION_DEBT_CAP',
+        );
+      }
     }
 
     const now = new Date();

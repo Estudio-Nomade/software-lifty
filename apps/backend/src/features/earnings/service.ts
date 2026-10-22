@@ -1,7 +1,8 @@
 import { type SQL, and, count, desc, eq, gte, inArray, lte, sql, sum } from 'drizzle-orm';
-import { db } from '../../shared/db/client';
+import { db, getDb } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
 import { drivers, trips } from '../../shared/db/schema';
+import { getDebtCapArs } from '../../shared/lib/commission';
 import { AppError } from '../../shared/lib/errors';
 import type { AuthUser } from '../../shared/middleware/auth';
 
@@ -33,6 +34,9 @@ export const earningsService = {
       .from(drivers)
       .where(eq(drivers.id, driverId))
       .limit(1);
+
+    const debt = Number(driver?.platform_debt ?? 0);
+    const cap = await getDebtCapArs(getDb());
 
     const todayTrips = await db
       .select({
@@ -86,7 +90,9 @@ export const earningsService = {
       week: Number(weekResult?.total ?? 0),
       week_platform_fee: Number(weekResult?.platform_fee ?? 0),
       week_total_fare: Number(weekResult?.total_fare ?? 0),
-      platform_debt: Number(driver?.platform_debt ?? 0),
+      platform_debt: debt,
+      debt_cap_ars: cap,
+      debt_blocks_online: debt > cap,
     };
   },
 
@@ -98,6 +104,9 @@ export const earningsService = {
       .from(drivers)
       .where(eq(drivers.id, driverId))
       .limit(1);
+
+    const debt = Number(driver?.platform_debt ?? 0);
+    const cap = await getDebtCapArs(getDb());
 
     const [todayEarnings, weekEarnings, monthEarnings, totalEarnings] = await Promise.all([
       sumDriverEarnings(driverId, today),
@@ -111,7 +120,9 @@ export const earningsService = {
       week: { earnings: weekEarnings, withdrawals: 0 },
       month: { earnings: monthEarnings, withdrawals: 0 },
       available_balance: totalEarnings,
-      platform_debt: Number(driver?.platform_debt ?? 0),
+      platform_debt: debt,
+      debt_cap_ars: cap,
+      debt_blocks_online: debt > cap,
     };
   },
 
