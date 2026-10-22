@@ -135,6 +135,8 @@ const styles = StyleSheet.create({
   },
   button: {
     width: 343,
+    maxWidth: '100%',
+    alignSelf: 'center',
   },
   error: {
     fontSize: theme.fontSize.sm,

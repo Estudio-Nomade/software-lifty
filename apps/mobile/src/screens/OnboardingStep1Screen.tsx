@@ -309,8 +309,10 @@ export const OnboardingStep1Screen: React.FC = () => {
         onPress={() => setTermsAccepted(!termsAccepted)}
         activeOpacity={0.7}
       >
-        <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]} />
-        <Text style={styles.checkboxLabel}>Acepto los terminos y condiciones</Text>
+        <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
+          {termsAccepted ? <Text style={styles.checkmark}>✓</Text> : null}
+        </View>
+        <Text style={styles.checkboxLabel}>Acepto los términos y condiciones</Text>
       </TouchableOpacity>
 
       {submitError !== '' && <Text style={styles.submitError}>{submitError}</Text>}
@@ -446,15 +448,24 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
   },
   checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 1,
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
     borderColor: theme.colors.mediumGray,
+    backgroundColor: theme.colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   checkboxChecked: {
     backgroundColor: theme.colors.turquoise,
     borderColor: theme.colors.turquoise,
+  },
+  checkmark: {
+    color: theme.colors.white,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 16,
   },
   checkboxLabel: {
     fontSize: theme.fontSize.sm,
@@ -468,6 +479,8 @@ const styles = StyleSheet.create({
   },
   button: {
     width: 343,
+    maxWidth: '100%',
+    alignSelf: 'center',
     marginTop: theme.spacing.md,
   },
 });
