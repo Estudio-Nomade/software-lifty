@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -14,6 +14,7 @@ export function PaymentMethodScreen() {
   const addTransfer = usePaymentStore((s) => s.addTransfer);
   const removeTransfer = usePaymentStore((s) => s.removeTransfer);
   const setDefault = usePaymentStore((s) => s.setDefault);
+  const insets = useSafeAreaInsets();
 
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState<PaymentMethodType>('transfer');
@@ -94,7 +95,13 @@ export function PaymentMethodScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(insets.bottom, theme.spacing['2xl']) },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {methods.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="card-outline" size={48} color={theme.colors.mediumGray} />
@@ -211,7 +218,8 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    padding: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
     gap: theme.spacing.md,
   },
   list: {
