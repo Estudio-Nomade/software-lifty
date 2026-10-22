@@ -4,6 +4,7 @@ import { InteractionManager, Platform } from 'react-native';
 import { api } from '../api/client';
 import { registerPassenger } from '../api/passenger';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { shouldKickAuthedUserToHome } from '../lib/authRouteGate';
 import {
   addNotificationResponseListener,
   handleNotificationResponse,
@@ -12,20 +13,6 @@ import {
 } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
-
-const PUBLIC_ROUTES = [
-  '',
-  'register',
-  'forgot-password',
-  'auth',
-  'auth-callback',
-  'login-credentials',
-  'login-phone',
-  'login-otp',
-  'terms',
-  'verify-email',
-  'location-permissions',
-];
 
 const SESSION_RESTORE_TIMEOUT_MS = 8_000;
 
@@ -113,7 +100,7 @@ function AuthRedirectWatcher() {
     if (!isAuthenticated) return;
 
     const current = segments[0] ?? '';
-    if (PUBLIC_ROUTES.includes(current) || current === '') {
+    if (shouldKickAuthedUserToHome(current)) {
       router.replace('/home');
     }
   }, [sessionRestored, isAuthenticated, segments, router]);
