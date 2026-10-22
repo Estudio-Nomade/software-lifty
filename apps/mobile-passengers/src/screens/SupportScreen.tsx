@@ -1,13 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import {
-  Linking,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
   SUPPORT_EMAIL,
@@ -47,7 +40,7 @@ export function SupportScreen() {
   const { goBack } = useAppNavigation();
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} hitSlop={8}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.deepBlue} />

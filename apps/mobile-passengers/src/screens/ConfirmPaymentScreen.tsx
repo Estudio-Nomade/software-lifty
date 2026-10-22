@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { requestRide } from '../api/passenger';
 import { Button } from '../components/Button';
 import { RequestBlockedCard } from '../components/RequestBlockedCard';
@@ -114,7 +115,7 @@ export function ConfirmPaymentScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} accessibilityLabel="Volver">
           <Ionicons name="arrow-back" size={24} color={theme.colors.deepBlue} />
