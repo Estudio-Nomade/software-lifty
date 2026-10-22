@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { estimateFare, getDirections, requestRide } from '../api/passenger';
 import type { FareEstimate } from '../api/types';
 import { Button } from '../components/Button';
@@ -54,6 +54,7 @@ function paramText(value: string | string[] | undefined): string {
 
 export function VehicleSelectScreen() {
   const { goBack, replace, navigate } = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const methods = usePaymentStore((s) => s.methods);
   const setDefault = usePaymentStore((s) => s.setDefault);
   const defaultMethod = methods.find((m) => m.isDefault) ?? methods[0];
@@ -268,7 +269,12 @@ export function VehicleSelectScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingBottom: Math.max(insets.bottom, theme.spacing.xl) + theme.spacing.md,
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -438,7 +444,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
     gap: theme.spacing.sm,
   },
   sectionTitle: {
