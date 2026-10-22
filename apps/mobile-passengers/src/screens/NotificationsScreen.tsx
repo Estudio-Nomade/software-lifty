@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { type PassengerNotification, useNotificationsStore } from '../store/notificationsStore';
 import { theme } from '../theme';
@@ -10,6 +10,7 @@ export function NotificationsScreen() {
   const { goBack } = useAppNavigation();
   const items = useNotificationsStore((s) => s.items);
   const markAllRead = useNotificationsStore((s) => s.markAllRead);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     markAllRead();
@@ -38,7 +39,13 @@ export function NotificationsScreen() {
         <View style={styles.backBtn} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(insets.bottom, theme.spacing['2xl']) },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {items.length === 0 ? (
           <View style={styles.empty}>
             <View style={styles.emptyIconCircle}>
