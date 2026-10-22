@@ -10,6 +10,7 @@ const SCREEN_TO_ROUTE = {
   LoginCredentials: '/login-credentials',
   ForgotPassword: '/forgot-password',
   VerifyEmail: '/verify-email',
+  AuthCallback: '/auth-callback',
   Terms: '/terms',
   Home: '/home',
   LocationPermissions: '/location-permissions',
