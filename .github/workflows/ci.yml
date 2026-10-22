@@ -19,6 +19,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run lint
+      - name: Guard no RN-core SafeAreaView imports
+        run: bun run check:safe-area
 
   typecheck:
     runs-on: ubuntu-latest

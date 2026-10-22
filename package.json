@@ -22,6 +22,7 @@
     "test": "turbo test --filter=@lifty/backend",
     "typecheck": "turbo typecheck",
     "lint": "biome check .",
+    "check:safe-area": "node scripts/check-no-rn-safeareaview.mjs",
     "format": "biome format --write .",
     "check": "bun run lint && bun run typecheck",
     "clean": "turbo clean"
