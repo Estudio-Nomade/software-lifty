@@ -334,7 +334,9 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: theme.spacing.sm,
-    width: 327,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   errorText: {
     fontSize: theme.fontSize.sm,

@@ -201,6 +201,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
   },
   button: {
-    width: 327,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
 });

@@ -343,7 +343,9 @@ const styles = StyleSheet.create({
     height: theme.spacing.xs,
   },
   button: {
-    width: 327,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   googleButton: {
     backgroundColor: theme.colors.surface,
@@ -360,7 +362,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   inputField: {
-    width: 327,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   resend: {
     fontSize: theme.fontSize.sm,
