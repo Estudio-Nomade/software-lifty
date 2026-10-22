@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { requestRide } from '../api/passenger';
 import { Button } from '../components/Button';
 import { RequestBlockedCard } from '../components/RequestBlockedCard';
@@ -34,6 +34,7 @@ const OPTIONS: {
 
 export function ConfirmPaymentScreen() {
   const { goBack, navigate } = useAppNavigation();
+  const insets = useSafeAreaInsets();
   const defaultMethod = usePaymentStore((s) => s.methods.find((m) => m.isDefault)?.type ?? 'cash');
   const methods = usePaymentStore((s) => s.methods);
   const setDefault = usePaymentStore((s) => s.setDefault);
@@ -170,7 +171,7 @@ export function ConfirmPaymentScreen() {
           })}
         </View>
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, theme.spacing.lg) }]}>
           {blocked ? (
             <RequestBlockedCard
               info={blocked}
