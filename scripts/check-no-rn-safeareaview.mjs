@@ -7,14 +7,12 @@
  * Roots: apps/mobile-passengers, apps/mobile (src + app).
  */
 import fs from 'node:fs';
-import path from 'node:path';
 import { createRequire } from 'node:module';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
-const { findIllegalSafeAreaViewImports } = require(
-  './lib/find-illegal-rn-safeareaview.cjs',
-);
+const { findIllegalSafeAreaViewImports } = require('./lib/find-illegal-rn-safeareaview.cjs');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -69,23 +67,17 @@ function main() {
     process.exit(0);
   }
 
-  console.error(
-    'check-no-rn-safeareaview: illegal SafeAreaView import(s) from react-native:\n',
-  );
+  console.error('check-no-rn-safeareaview: illegal SafeAreaView import(s) from react-native:\n');
   for (const h of allHits) {
     console.error(`  ${h.file}:${h.line} (${h.kind})`);
   }
-  console.error(
-    '\nUse SafeAreaView from react-native-safe-area-context instead.',
-  );
+  console.error('\nUse SafeAreaView from react-native-safe-area-context instead.');
   process.exit(1);
 }
 
 export { findIllegalSafeAreaViewImports };
 
-const isMain =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
 if (isMain) {
   main();
