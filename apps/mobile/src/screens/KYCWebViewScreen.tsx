@@ -1,15 +1,17 @@
 import { useLocalSearchParams } from 'expo-router';
 import type React from 'react';
-import { useState } from 'react';
-import { ActivityIndicator, StatusBar, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Linking, StatusBar, StyleSheet, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { WebViewErrorEvent, WebViewNavigation } from 'react-native-webview/lib/WebViewTypes';
 import { apiClient } from '../api/client';
 import type { DriverStatus } from '../api/types';
 import { driverStatusSchema } from '../api/types';
+import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { ensureDiditMediaPermissions } from '../lib/mediaPermissions';
 import { STEP_ROUTE, routeForDriverStatus } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
@@ -18,11 +20,29 @@ import { theme } from '../theme';
 // hosted flow here (with ?status=&verificationSessionId=) when it finishes.
 const CALLBACK_PREFIX = 'https://liftyviajes.com/kyc/callback';
 
+type MediaPermState = 'checking' | 'granted' | 'denied';
+
 export const KYCWebViewScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const { url } = useLocalSearchParams<{ url: string }>();
   const [loading, setLoading] = useState(true);
   const [done, setDone] = useState(false);
+  const [mediaPerm, setMediaPerm] = useState<MediaPermState>('checking');
+  const mountedRef = useRef(true);
+
+  const checkMediaPermissions = useCallback(async () => {
+    setMediaPerm('checking');
+    const ok = await ensureDiditMediaPermissions();
+    if (mountedRef.current) setMediaPerm(ok ? 'granted' : 'denied');
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    void checkMediaPermissions();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [checkMediaPermissions]);
 
   /**
    * After Didit: refresh decision, then route by real status step.
@@ -101,6 +121,44 @@ export const KYCWebViewScreen: React.FC = () => {
     );
   }
 
+  if (mediaPerm === 'checking') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+        <Navbar title="Verificacion" onBack={() => navigation.goBack()} />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.colors.turquoise} />
+        </View>
+      </View>
+    );
+  }
+
+  if (mediaPerm === 'denied') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+        <Navbar title="Verificacion" onBack={() => navigation.goBack()} />
+        <View style={styles.center}>
+          <Text style={styles.errorText}>
+            Necesitamos camara y microfono para la verificacion. Activalos en Ajustes e intenta de
+            nuevo.
+          </Text>
+          <Button
+            title="Abrir ajustes"
+            onPress={() => void Linking.openSettings()}
+            style={styles.settingsButton}
+          />
+          <Button
+            title="Reintentar"
+            variant="secondary"
+            onPress={() => void checkMediaPermissions()}
+            style={styles.settingsButton}
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
@@ -117,6 +175,7 @@ export const KYCWebViewScreen: React.FC = () => {
         domStorageEnabled
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
+        mediaCapturePermissionGrantType="grant"
         style={styles.webview}
       />
       {loading && (
@@ -140,11 +199,16 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
   errorText: {
     fontSize: theme.fontSize.md,
     color: theme.colors.dangerRed,
     textAlign: 'center',
+  },
+  settingsButton: {
+    width: 280,
   },
   loadingOverlay: {
     ...(StyleSheet.absoluteFill as object),

@@ -1,11 +1,12 @@
 import type React from 'react';
 import { useState } from 'react';
-import { StatusBar, StyleSheet, View } from 'react-native';
+import { Linking, StatusBar, StyleSheet, View } from 'react-native';
 import { apiClient } from '../api/client';
 import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { ensureDiditMediaPermissions } from '../lib/mediaPermissions';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -20,6 +21,15 @@ export const KYCVerifyScreen: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      const mediaOk = await ensureDiditMediaPermissions();
+      if (!mediaOk) {
+        setError(
+          'Necesitamos camara y microfono para Didit. Activalos en Ajustes e intenta de nuevo.',
+        );
+        void Linking.openSettings();
+        return;
+      }
+
       const { data } = await apiClient.get('/kyc/me/session');
       if (!data?.session_url) throw new Error('No se pudo iniciar la verificacion');
       setKycSessionId(data.session_id ?? null);
