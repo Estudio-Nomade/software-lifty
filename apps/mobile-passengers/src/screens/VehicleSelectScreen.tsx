@@ -1,15 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { estimateFare, getDirections, requestRide } from '../api/passenger';
 import type { FareEstimate } from '../api/types';
 import { Button } from '../components/Button';
@@ -237,7 +230,7 @@ export function VehicleSelectScreen() {
   })();
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.navbar}>
         <TouchableOpacity onPress={goBack} style={styles.navBtn}>
           <Ionicons name="close" size={24} color={theme.colors.primary} />

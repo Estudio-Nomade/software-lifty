@@ -1,14 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import {
-  Alert,
-  Linking,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { cancelRide, getActiveRide, getCancelPreview, getProfile } from '../api/passenger';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
@@ -210,7 +203,7 @@ export function TripInProgressScreen() {
   const showVerificationCode = Boolean(trip?.verification_code);
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.mapArea}>
         <PassengerMap
           centerCoordinate={driverCoord ?? passengerCoord ?? [0, 0]}

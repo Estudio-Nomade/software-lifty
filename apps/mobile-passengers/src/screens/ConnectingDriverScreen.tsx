@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { cancelRide, getRideDetails, retryRide } from '../api/passenger';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -117,7 +118,7 @@ export function ConnectingDriverScreen() {
 
   if (timedOut || noDrivers) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.center}>
           <Text style={styles.title}>No encontramos conductor cerca</Text>
           <Text style={styles.subtitle}>Podés volver a buscar o cancelar.</Text>
@@ -133,7 +134,7 @@ export function ConnectingDriverScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.center}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
         <Text style={styles.title}>Buscando conductor…</Text>
