@@ -60,6 +60,14 @@
         }
       ],
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Lifty necesita tu ubicacion para mostrarte en el mapa, navegar viajes y conectarte con pasajeros cercanos.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#EEF7F6",
