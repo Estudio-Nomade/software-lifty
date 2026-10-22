@@ -8,7 +8,13 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+
+const require = createRequire(import.meta.url);
+const { findIllegalSafeAreaViewImports } = require(
+  './lib/find-illegal-rn-safeareaview.cjs',
+);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -32,13 +38,6 @@ const SKIP_DIR = new Set([
   '__mocks__',
 ]);
 
-/** Named or default import of SafeAreaView from 'react-native' / "react-native" (multi-line). */
-const ILLEGAL_IMPORT_RE =
-  /import\s+(?:(?:type\s+)?(?:\{[\s\S]*?\bSafeAreaView\b[\s\S]*?\}|\*\s+as\s+\w+|SafeAreaView(?:\s*,\s*\{[\s\S]*?\})?)\s+from\s+['"]react-native['"]|\{[\s\S]*?\bSafeAreaView\b[\s\S]*?\}\s+from\s+['"]react-native['"])/;
-
-const ILLEGAL_REQUIRE_RE =
-  /(?:const|let|var)\s+\{[\s\S]*?\bSafeAreaView\b[\s\S]*?\}\s*=\s*require\s*\(\s*['"]react-native['"]\s*\)/;
-
 function walk(dir, out = []) {
   if (!fs.existsSync(dir)) return out;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -54,49 +53,13 @@ function walk(dir, out = []) {
   return out;
 }
 
-function lineOf(source, index) {
-  return source.slice(0, index).split('\n').length;
-}
-
-/**
- * @param {string} filePath
- * @param {string} source
- * @returns {{ file: string, line: number, kind: string }[]}
- */
-export function findIllegalSafeAreaViewImports(filePath, source) {
-  const hits = [];
-  const rel = path.relative(REPO_ROOT, filePath);
-
-  for (const match of source.matchAll(
-    new RegExp(ILLEGAL_IMPORT_RE.source, 'g'),
-  )) {
-    hits.push({
-      file: rel,
-      line: lineOf(source, match.index ?? 0),
-      kind: 'import',
-    });
-  }
-
-  for (const match of source.matchAll(
-    new RegExp(ILLEGAL_REQUIRE_RE.source, 'g'),
-  )) {
-    hits.push({
-      file: rel,
-      line: lineOf(source, match.index ?? 0),
-      kind: 'require',
-    });
-  }
-
-  return hits;
-}
-
 function main() {
   const files = ROOTS.flatMap((root) => walk(root));
   const allHits = [];
 
   for (const file of files) {
     const source = fs.readFileSync(file, 'utf8');
-    allHits.push(...findIllegalSafeAreaViewImports(file, source));
+    allHits.push(...findIllegalSafeAreaViewImports(file, source, REPO_ROOT));
   }
 
   if (allHits.length === 0) {
@@ -117,6 +80,8 @@ function main() {
   );
   process.exit(1);
 }
+
+export { findIllegalSafeAreaViewImports };
 
 const isMain =
   process.argv[1] &&
