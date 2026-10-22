@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome format --write .",
+    "check:safe-area": "node ../../scripts/check-no-rn-safeareaview.mjs",
     "test": "jest"
   },
   "dependencies": {
