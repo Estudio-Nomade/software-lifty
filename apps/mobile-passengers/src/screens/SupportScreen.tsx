@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
   SUPPORT_EMAIL,
@@ -38,6 +38,7 @@ const FAQ: { question: string; answer: string }[] = [
 
 export function SupportScreen() {
   const { goBack } = useAppNavigation();
+  const insets = useSafeAreaInsets();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -49,7 +50,13 @@ export function SupportScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: Math.max(insets.bottom, theme.spacing['2xl']) },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.sectionTitle}>Contacto</Text>
         <View style={styles.actions}>
           <TouchableOpacity
@@ -115,7 +122,6 @@ const styles = StyleSheet.create({
   content: {
     padding: theme.spacing.md,
     gap: theme.spacing.md,
-    paddingBottom: theme.spacing['2xl'],
   },
   sectionTitle: {
     fontSize: theme.fontSize.sm,
