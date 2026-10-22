@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { rateRide, setTripPaymentMethod } from '../api/passenger';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -53,6 +53,7 @@ export function TripCompleteScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [rated, setRated] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
 
   const handleConfirmPayment = async () => {
     if (!trip?.id || confirmingPayment) return;
@@ -116,7 +117,10 @@ export function TripCompleteScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
         style={styles.flex}
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingBottom: Math.max(insets.bottom, theme.spacing['2xl']) },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
