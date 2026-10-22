@@ -17,21 +17,18 @@ export const PUBLIC_ROUTES = [
 ] as const;
 
 /**
- * Rutas de las que un user autenticado debe salir → /home.
- * NO incluir dual-use post-login (terms: onboarding + lectura desde Perfil).
+ * Public routes an authed user may stay on (read mode / dual-use).
+ * Add here when a new PUBLIC route is also valid post-login.
  */
-export const AUTHED_KICK_TO_HOME_ROUTES = [
-  '',
-  'register',
-  'forgot-password',
-  'auth',
-  'auth-callback',
-  'login-credentials',
-  'login-phone',
-  'login-otp',
-  'verify-email',
-  'location-permissions',
-] as const;
+export const DUAL_USE_ROUTES = ['terms'] as const;
+
+const DUAL_USE_SET = new Set<string>(DUAL_USE_ROUTES);
+
+/**
+ * Rutas de las que un user autenticado debe salir → /home.
+ * Derived from PUBLIC_ROUTES minus dual-use so lists cannot drift.
+ */
+export const AUTHED_KICK_TO_HOME_ROUTES = PUBLIC_ROUTES.filter((route) => !DUAL_USE_SET.has(route));
 
 const AUTHED_KICK_SET = new Set<string>(AUTHED_KICK_TO_HOME_ROUTES);
 

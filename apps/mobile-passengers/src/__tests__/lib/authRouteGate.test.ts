@@ -1,5 +1,6 @@
 import {
   AUTHED_KICK_TO_HOME_ROUTES,
+  DUAL_USE_ROUTES,
   PUBLIC_ROUTES,
   shouldKickAuthedUserToHome,
 } from '../../lib/authRouteGate';
@@ -32,7 +33,11 @@ describe('route lists', () => {
     expect(PUBLIC_ROUTES).toContain('terms');
   });
 
-  it('excludes terms from authed kick list', () => {
+  it('marks terms as dual-use and derives kick list without it', () => {
+    expect(DUAL_USE_ROUTES).toContain('terms');
     expect(AUTHED_KICK_TO_HOME_ROUTES).not.toContain('terms');
+    expect(AUTHED_KICK_TO_HOME_ROUTES).toEqual(
+      PUBLIC_ROUTES.filter((r) => r !== 'terms'),
+    );
   });
 });
