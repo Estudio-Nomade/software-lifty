@@ -7,14 +7,13 @@ import {
   Linking,
   Modal,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getProfile, updateProfile, uploadProfilePhoto } from '../api/passenger';
 import { Avatar } from '../components/Avatar';
 import { BottomTabBar } from '../components/BottomTabBar';
@@ -241,7 +240,7 @@ export function ProfileScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} hitSlop={8}>
           <Ionicons name="arrow-back" size={24} color={theme.colors.deepBlue} />
