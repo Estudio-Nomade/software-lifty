@@ -53,12 +53,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
     alignItems: 'center',
+    paddingHorizontal: theme.spacing.md,
   },
   header: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: theme.spacing.md,
   },
   closeButton: {
     color: theme.colors.white,
@@ -73,7 +73,9 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.bold,
     textAlign: 'center',
-    width: 327,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   viewfinder: {
     width: 260,
@@ -101,7 +103,9 @@ const styles = StyleSheet.create({
     height: 24,
   },
   button: {
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     marginBottom: theme.spacing.md,
   },
   brand: {

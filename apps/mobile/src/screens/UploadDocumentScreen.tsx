@@ -325,7 +325,9 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
   },
   sideSection: {
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     gap: theme.spacing.sm,
   },
   sideTitle: {
@@ -334,7 +336,9 @@ const styles = StyleSheet.create({
     color: theme.colors.deepBlue,
   },
   preview: {
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     height: 140,
     borderRadius: theme.radius.md,
     backgroundColor: theme.colors.surfaceMuted,
@@ -366,7 +370,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   options: {
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     gap: theme.spacing.sm,
   },
   option: {
@@ -382,6 +388,8 @@ const styles = StyleSheet.create({
     color: theme.colors.deepBlue,
   },
   button: {
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
 });
