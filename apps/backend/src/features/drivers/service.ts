@@ -66,6 +66,59 @@ function missingRequiredDocTypes(uploaded: { doc_type: string }[]): string[] {
 }
 
 /**
+ * Blocks online when platform_debt > debt cap.
+ * Force-offlines if currently online. Push only once per enforcement call
+ * (toggle GO attempt, or heartbeat online→offline transition) — not on every
+ * subsequent heartbeat while already offline.
+ */
+async function enforceCommissionDebtCap(params: {
+  driverId: string;
+  userId: string;
+  platformDebt: number;
+  isOnline: boolean;
+  /** When true, always notify (driver tried to go online). When false, only if force-offline flipped a row. */
+  notifyOnBlock: boolean;
+}): Promise<void> {
+  const debt = Number(params.platformDebt ?? 0);
+  const cap = await getDebtCapArs(getDb());
+  if (debt <= cap) return;
+
+  let forcedOffline = false;
+  if (params.isOnline) {
+    // Only rows still online: concurrent heartbeats lose the race → no duplicate push.
+    const flipped = await db
+      .update(drivers)
+      .set({ is_online: false, last_heartbeat: null, updated_at: new Date() })
+      .where(and(eq(drivers.id, params.driverId), eq(drivers.is_online, true)))
+      .returning({ id: drivers.id });
+    forcedOffline = flipped.length > 0;
+  }
+
+  if (params.notifyOnBlock || forcedOffline) {
+    void sendPushToUser(params.userId, {
+      title: 'Deuda de comisión con Lifty',
+      body: `Alcanzaste el límite de $${cap}. Debés $${Math.round(debt)}. Transferí el total y subí el comprobante para volver a conectarte.`,
+      data: {
+        type: 'driver:commission_debt_block',
+        debt_cap_ars: String(cap),
+        platform_debt: String(Math.round(debt)),
+      },
+      channelId: 'account',
+    }).catch((err) => {
+      logger.error('[drivers] commission debt block push failed', {
+        error: (err as Error).message,
+      });
+    });
+  }
+
+  throw new AppError(
+    `Alcanzaste el límite de $${cap} de deuda de comisión con Lifty (debés $${Math.round(debt)}). Transferí el total a Lifty y subí el comprobante para volver a conectarte.`,
+    409,
+    'COMMISSION_DEBT_CAP',
+  );
+}
+
+/**
  * Idempotent: if all required docs are present (non-superseded, non-rejected),
  * set status=review + admin_review_status=pending and notify admins once on transition.
  * Also re-enters review from rejected after the driver fixes missing/bad docs.
@@ -519,35 +572,13 @@ export const driversService = {
         );
       }
 
-      const debt = Number(driver.platform_debt ?? 0);
-      const cap = await getDebtCapArs(getDb());
-      if (debt > cap) {
-        if (driver.is_online) {
-          await db
-            .update(drivers)
-            .set({ is_online: false, last_heartbeat: null, updated_at: new Date() })
-            .where(eq(drivers.id, driver.id));
-        }
-        void sendPushToUser(user.id, {
-          title: 'Deuda de comisión con Lifty',
-          body: `Alcanzaste el límite de $${cap}. Debés $${Math.round(debt)}. Transferí el total y subí el comprobante para volver a conectarte.`,
-          data: {
-            type: 'driver:commission_debt_block',
-            debt_cap_ars: String(cap),
-            platform_debt: String(Math.round(debt)),
-          },
-          channelId: 'account',
-        }).catch((err) => {
-          logger.error('[drivers] commission debt block push failed', {
-            error: (err as Error).message,
-          });
-        });
-        throw new AppError(
-          `Alcanzaste el límite de $${cap} de deuda de comisión con Lifty (debés $${Math.round(debt)}). Transferí el total a Lifty y subí el comprobante para volver a conectarte.`,
-          409,
-          'COMMISSION_DEBT_CAP',
-        );
-      }
+      await enforceCommissionDebtCap({
+        driverId: driver.id,
+        userId: user.id,
+        platformDebt: Number(driver.platform_debt ?? 0),
+        isOnline: Boolean(driver.is_online),
+        notifyOnBlock: true,
+      });
     }
 
     await db
@@ -608,33 +639,13 @@ export const driversService = {
     }
 
     if (driver.is_online) {
-      const debt = Number(driver.platform_debt ?? 0);
-      const cap = await getDebtCapArs(getDb());
-      if (debt > cap) {
-        await db
-          .update(drivers)
-          .set({ is_online: false, last_heartbeat: null, updated_at: new Date() })
-          .where(eq(drivers.id, driver.id));
-        void sendPushToUser(user.id, {
-          title: 'Deuda de comisión con Lifty',
-          body: `Alcanzaste el límite de $${cap}. Debés $${Math.round(debt)}. Transferí el total y subí el comprobante para volver a conectarte.`,
-          data: {
-            type: 'driver:commission_debt_block',
-            debt_cap_ars: String(cap),
-            platform_debt: String(Math.round(debt)),
-          },
-          channelId: 'account',
-        }).catch((err) => {
-          logger.error('[drivers] commission debt block push failed', {
-            error: (err as Error).message,
-          });
-        });
-        throw new AppError(
-          `Alcanzaste el límite de $${cap} de deuda de comisión con Lifty (debés $${Math.round(debt)}). Transferí el total a Lifty y subí el comprobante para volver a conectarte.`,
-          409,
-          'COMMISSION_DEBT_CAP',
-        );
-      }
+      await enforceCommissionDebtCap({
+        driverId: driver.id,
+        userId: user.id,
+        platformDebt: Number(driver.platform_debt ?? 0),
+        isOnline: true,
+        notifyOnBlock: false,
+      });
     }
 
     const now = new Date();
