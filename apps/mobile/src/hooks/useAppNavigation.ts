@@ -32,6 +32,7 @@ const SCREEN_TO_ROUTE = {
   TripCancelled: '/trip-cancelled',
   TripComplete: '/trip-complete',
   Earnings: '/earnings',
+  PayCommissionDebt: '/pay-commission-debt',
   Profile: '/profile',
   CancellationPolicy: '/cancellation-policy',
   PaymentMethod: '/payment-method',
@@ -66,6 +67,7 @@ const BACK_FALLBACK: Record<string, string> = {
   support: 'Profile',
   terms: 'Profile',
   'cancellation-policy': 'Profile',
+  'pay-commission-debt': 'Earnings',
 };
 
 export function useAppNavigation() {

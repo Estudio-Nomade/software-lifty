@@ -155,10 +155,18 @@ export const EarningsScreen: React.FC = () => {
                     <View style={styles.debtBlockBanner}>
                       <Text style={styles.debtBlockBannerText}>
                         No podés conectarte hasta regularizar la deuda de comisión. Transferí el
-                        total a Lifty y subí el comprobante (próximamente en app).
+                        total a Lifty y subí el comprobante.
                       </Text>
                     </View>
                   ) : null}
+                  <TouchableOpacity
+                    style={styles.payDebtBtn}
+                    onPress={() => navigation.navigate('PayCommissionDebt')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Pagar o subir comprobante de comisión"
+                  >
+                    <Text style={styles.payDebtBtnText}>Pagar / subir comprobante</Text>
+                  </TouchableOpacity>
                 </>
               ) : null}
             </Card>
@@ -327,10 +335,18 @@ export const EarningsScreen: React.FC = () => {
                   <View style={styles.debtBlockBanner}>
                     <Text style={styles.debtBlockBannerText}>
                       No podés conectarte hasta regularizar la deuda de comisión. Transferí el total
-                      a Lifty y subí el comprobante (próximamente en app).
+                      a Lifty y subí el comprobante.
                     </Text>
                   </View>
                 ) : null}
+                <TouchableOpacity
+                  style={styles.payDebtBtn}
+                  onPress={() => navigation.navigate('PayCommissionDebt')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Pagar o subir comprobante de comisión"
+                >
+                  <Text style={styles.payDebtBtnText}>Pagar / subir comprobante</Text>
+                </TouchableOpacity>
               </Card>
             ) : null}
 
@@ -613,5 +629,18 @@ const styles = StyleSheet.create({
     color: theme.colors.dangerRed,
     fontWeight: theme.fontWeight.medium,
     lineHeight: 18,
+  },
+  payDebtBtn: {
+    marginTop: theme.spacing.sm,
+    backgroundColor: theme.colors.turquoise,
+    borderRadius: theme.radius.sm,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    alignItems: 'center',
+  },
+  payDebtBtnText: {
+    color: theme.colors.white,
+    fontWeight: theme.fontWeight.bold,
+    fontSize: theme.fontSize.sm,
   },
 });

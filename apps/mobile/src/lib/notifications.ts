@@ -243,7 +243,7 @@ export function handleNotificationResponse(
       navigate('Earnings');
       break;
     case 'driver:commission_debt_block':
-      navigate('Earnings');
+      navigate('PayCommissionDebt');
       break;
     case 'trip:message': {
       // Chat reads the active trip from the store (restored by ActiveTripRecovery).

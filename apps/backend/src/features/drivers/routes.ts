@@ -3,6 +3,7 @@ import { rateLimit } from '../../shared/middleware/ratelimit';
 import { authGuard } from '../../shared/middleware/require-auth';
 import {
   addDocumentBody,
+  commissionReceiptBody,
   driverIdParams,
   heartbeatBody,
   reuploadDocBody,
@@ -103,4 +104,20 @@ export const driversRoutes = new Elysia({ prefix: '/drivers' })
     ({ user, body, set }) =>
       safeCall(() => driversService.setDistrict(user, body.district_id), set),
     { body: setDistrictBody, requireAuth: true },
+  )
+  .get(
+    '/me/payout-info',
+    ({ user, set }) => safeCall(() => driversService.getPayoutInfo(user), set),
+    { requireAuth: true },
+  )
+  .get(
+    '/me/commission-receipts',
+    ({ user, set }) => safeCall(() => driversService.listCommissionReceipts(user), set),
+    { requireAuth: true },
+  )
+  .post(
+    '/me/commission-receipts',
+    ({ user, body, set }) =>
+      safeCall(() => driversService.submitCommissionReceipt(user, body.file, body.amount_ars), set),
+    { body: commissionReceiptBody, requireAuth: true },
   );

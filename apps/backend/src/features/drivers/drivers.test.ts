@@ -9,10 +9,21 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
-import { districts, driverDocuments, driverLocations, drivers, users, vehicles } from '../../shared/db/schema';
+import {
+  districts,
+  driverCommissionReceipts,
+  driverDocuments,
+  driverLocations,
+  drivers,
+  platformConfig,
+  users,
+  vehicles,
+} from '../../shared/db/schema';
+import { setConfig } from '../../shared/lib/commission';
 import { DOC_TYPES } from '../../shared/lib/documents';
 import { getRedis } from '../../shared/lib/redis';
 import {
+  buildCommissionReceiptPath,
   buildDriverAvatarPath,
   buildDriverDocumentPath,
   contentTypeForFile,
@@ -61,10 +72,17 @@ let baseStorage: TestStorage;
 
 async function truncateTables() {
   const db = getDb();
+  await db.delete(driverCommissionReceipts);
   await db.delete(driverDocuments);
   await db.delete(vehicles);
   await db.delete(drivers);
   await db.delete(users);
+  await db
+    .delete(platformConfig)
+    .where(eq(platformConfig.key, 'platform.lifty_payout_alias'));
+  await db.delete(platformConfig).where(eq(platformConfig.key, 'platform.lifty_payout_cvu'));
+  await db.delete(platformConfig).where(eq(platformConfig.key, 'platform.lifty_payout_holder'));
+  await db.delete(platformConfig).where(eq(platformConfig.key, 'platform.lifty_payout_bank'));
 }
 
 async function request(method: string, path: string, body?: object, token?: string) {
@@ -1466,5 +1484,279 @@ describe('reuploadDocument storage flow', () => {
     });
     const res = await app.handle(req);
     expect(res.status).toBe(401);
+  });
+});
+
+describe('commission receipt upload', () => {
+  const phone = '+5492618888001';
+  const password = 'testPass123';
+
+  async function seedPayoutConfig() {
+    const db = getDb();
+    await setConfig(db, 'platform.lifty_payout_alias', 'lifty.cobros');
+    await setConfig(db, 'platform.lifty_payout_cvu', '0000003100010000000001');
+    await setConfig(db, 'platform.lifty_payout_holder', 'Lifty Viajes SA');
+    await setConfig(db, 'platform.lifty_payout_bank', 'Banco Galicia');
+  }
+
+  async function approveForOnline(driverId: string, debt = 5000) {
+    const db = getDb();
+    const [district] = await db
+      .select({ id: districts.id })
+      .from(districts)
+      .orderBy(districts.name)
+      .limit(1);
+    await db
+      .update(drivers)
+      .set({
+        status: 'approved',
+        district_id: district.id,
+        identification_status: 'issued',
+        identification_issued_at: new Date(),
+        platform_debt: debt,
+        commission_fraud_block: false,
+        is_online: false,
+      })
+      .where(eq(drivers.id, driverId));
+  }
+
+  async function postReceipt(token: string, amount: string | number, fileName = 'receipt.jpg') {
+    const formData = new FormData();
+    formData.append('file', new Blob(['jpeg-bytes'], { type: 'image/jpeg' }), fileName);
+    formData.append('amount_ars', String(amount));
+    const res = await app.handle(
+      new Request('http://localhost/api/drivers/me/commission-receipts', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      }),
+    );
+    const data = await res.json();
+    return { status: res.status, data };
+  }
+
+  test('buildCommissionReceiptPath uses commission-receipts prefix', () => {
+    const path = buildCommissionReceiptPath({
+      fullName: 'Juan Perez',
+      driverId: 'abcdef12-3456-7890-abcd-ef1234567890',
+      file: { type: 'image/jpeg', name: 'x.jpg' },
+      now: 1700000000000,
+    });
+    expect(path).toMatch(/^commission-receipts\/Juan Perez_abcdef12\/1700000000000\.jpg$/);
+  });
+
+  test('GET /me/payout-info returns config + debt', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await seedPayoutConfig();
+    await approveForOnline(driverId, 4200);
+
+    const { status, data } = await request('GET', '/api/drivers/me/payout-info', undefined, token);
+    expect(status).toBe(200);
+    expect(data.alias).toBe('lifty.cobros');
+    expect(data.cvu).toBe('0000003100010000000001');
+    expect(data.holder).toBe('Lifty Viajes SA');
+    expect(data.bank).toBe('Banco Galicia');
+    expect(data.platform_debt).toBe(4200);
+    expect(typeof data.debt_cap_ars).toBe('number');
+  });
+
+  test('happy path: amount >= debt clears balance and creates pending receipt', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await seedPayoutConfig();
+    await approveForOnline(driverId, 5000);
+    const testStorage = createTestStorage();
+    setStorageForTesting(testStorage);
+
+    const { status, data } = await postReceipt(token, 5000);
+    expect(status).toBe(200);
+    expect(data.platform_debt).toBe(0);
+    expect(data.receipt.status).toBe('pending_review');
+    expect(data.receipt.amount_ars).toBe(5000);
+    expect(data.receipt.debt_before_ars).toBe(5000);
+    expect(data.receipt.file_url).toContain('commission-receipts/');
+    expect(testStorage.lastUploadOptions[0]?.path).toContain('commission-receipts/');
+
+    const db = getDb();
+    const [driver] = await db
+      .select({
+        platform_debt: drivers.platform_debt,
+        commission_fraud_block: drivers.commission_fraud_block,
+      })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(Number(driver.platform_debt)).toBe(0);
+    expect(driver.commission_fraud_block).toBe(false);
+
+    const { status: listStatus, data: listData } = await request(
+      'GET',
+      '/api/drivers/me/commission-receipts',
+      undefined,
+      token,
+    );
+    expect(listStatus).toBe(200);
+    expect(Array.isArray(listData)).toBe(true);
+    expect(listData.length).toBe(1);
+    expect(listData[0].status).toBe('pending_review');
+  });
+
+  test('amount below debt returns 400 AMOUNT_BELOW_DEBT', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await seedPayoutConfig();
+    await approveForOnline(driverId, 5000);
+    setStorageForTesting(createTestStorage());
+
+    const { status, data } = await postReceipt(token, 4999);
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('AMOUNT_BELOW_DEBT');
+  });
+
+  test('no debt returns 400 NO_COMMISSION_DEBT', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await seedPayoutConfig();
+    await approveForOnline(driverId, 0);
+    setStorageForTesting(createTestStorage());
+
+    const { status, data } = await postReceipt(token, 1000);
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('NO_COMMISSION_DEBT');
+  });
+
+  test('second pending receipt returns 409 RECEIPT_PENDING', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await seedPayoutConfig();
+    await approveForOnline(driverId, 5000);
+    setStorageForTesting(createTestStorage());
+
+    const first = await postReceipt(token, 5000);
+    expect(first.status).toBe(200);
+
+    const db = getDb();
+    await db.update(drivers).set({ platform_debt: 3000 }).where(eq(drivers.id, driverId));
+
+    const second = await postReceipt(token, 3000);
+    expect(second.status).toBe(409);
+    expect(second.data.error.code).toBe('RECEIPT_PENDING');
+  });
+
+  test('missing payout config returns 503 PAYOUT_ACCOUNT_NOT_CONFIGURED', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await approveForOnline(driverId, 5000);
+    setStorageForTesting(createTestStorage());
+
+    const { status, data } = await postReceipt(token, 5000);
+    expect(status).toBe(503);
+    expect(data.error.code).toBe('PAYOUT_ACCOUNT_NOT_CONFIGURED');
+  });
+
+  test('after clear, PUT /me/online succeeds under other gates', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await seedPayoutConfig();
+    await approveForOnline(driverId, 12000);
+    setStorageForTesting(createTestStorage());
+
+    const blocked = await request(
+      'PUT',
+      '/api/drivers/me/online',
+      { is_online: true },
+      token,
+    );
+    expect(blocked.status).toBe(409);
+    expect(blocked.data.error.code).toBe('COMMISSION_DEBT_CAP');
+
+    const posted = await postReceipt(token, 12000);
+    expect(posted.status).toBe(200);
+
+    const online = await request(
+      'PUT',
+      '/api/drivers/me/online',
+      { is_online: true },
+      token,
+    );
+    expect(online.status).toBe(200);
+    expect(online.data.is_online).toBe(true);
+  });
+
+  test('commission_fraud_block returns 409 COMMISSION_FRAUD_BLOCK', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await approveForOnline(driverId, 0);
+    const db = getDb();
+    await db
+      .update(drivers)
+      .set({ commission_fraud_block: true })
+      .where(eq(drivers.id, driverId));
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me/online',
+      { is_online: true },
+      token,
+    );
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('COMMISSION_FRAUD_BLOCK');
+  });
+
+  test('receipt upload does not clear commission_fraud_block', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await seedPayoutConfig();
+    await approveForOnline(driverId, 5000);
+    const db = getDb();
+    await db
+      .update(drivers)
+      .set({ commission_fraud_block: true })
+      .where(eq(drivers.id, driverId));
+    setStorageForTesting(createTestStorage());
+
+    const { status } = await postReceipt(token, 5000);
+    expect(status).toBe(200);
+
+    const [driver] = await db
+      .select({
+        platform_debt: drivers.platform_debt,
+        commission_fraud_block: drivers.commission_fraud_block,
+      })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(Number(driver.platform_debt)).toBe(0);
+    expect(driver.commission_fraud_block).toBe(true);
+
+    const online = await request(
+      'PUT',
+      '/api/drivers/me/online',
+      { is_online: true },
+      token,
+    );
+    expect(online.status).toBe(409);
+    expect(online.data.error.code).toBe('COMMISSION_FRAUD_BLOCK');
+  });
+
+  test('failed tx after upload deletes orphaned storage object', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await seedPayoutConfig();
+    await approveForOnline(driverId, 5000);
+    const db = getDb();
+    const base = createTestStorage();
+    // Simulate race: another request wins the pending slot after our upload.
+    const raceStorage: TestStorage = {
+      ...base,
+      async uploadFile(file, path, options) {
+        const url = await base.uploadFile(file, path, options);
+        await db.insert(driverCommissionReceipts).values({
+          driver_id: driverId,
+          amount_ars: 1,
+          debt_before_ars: 1,
+          file_url: 'https://example.supabase.co/storage/v1/object/public/driver-documents/race.jpg',
+          status: 'pending_review',
+        });
+        return url;
+      },
+    };
+    setStorageForTesting(raceStorage);
+
+    const { status, data } = await postReceipt(token, 5000);
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('RECEIPT_PENDING');
+    expect(base.deleted.length).toBeGreaterThanOrEqual(1);
   });
 });
