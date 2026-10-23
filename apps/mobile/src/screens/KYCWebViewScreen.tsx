@@ -124,7 +124,7 @@ export const KYCWebViewScreen: React.FC = () => {
   if (mediaPerm === 'checking') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+        <StatusBar barStyle="light-content" />
         <Navbar title="Verificacion" onBack={() => navigation.goBack()} />
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.colors.turquoise} />
@@ -136,7 +136,7 @@ export const KYCWebViewScreen: React.FC = () => {
   if (mediaPerm === 'denied') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+        <StatusBar barStyle="light-content" />
         <Navbar title="Verificacion" onBack={() => navigation.goBack()} />
         <View style={styles.center}>
           <Text style={styles.errorText}>
@@ -161,7 +161,7 @@ export const KYCWebViewScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+      <StatusBar barStyle="light-content" />
       <Navbar title="Verificacion" onBack={() => navigation.goBack()} />
       <WebView
         source={{ uri: url }}

@@ -14,7 +14,7 @@ const fontFamilyByWeight: Record<string, string> = {
 
 function resolveFontFamily(style: TextProps['style']): string {
   if (!style) return theme.fontFamily.regular;
-  const flattened = StyleSheet.flatten(style);
+  const flattened = StyleSheet.flatten(style) ?? {};
   const weight = flattened.fontWeight;
   if (weight === undefined) return theme.fontFamily.regular;
   if (typeof weight === 'string') return fontFamilyByWeight[weight] ?? theme.fontFamily.regular;

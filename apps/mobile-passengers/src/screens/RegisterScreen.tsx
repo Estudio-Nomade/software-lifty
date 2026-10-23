@@ -116,7 +116,7 @@ export function RegisterScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <Text style={styles.back} onPress={goBack}>
           ← Volver

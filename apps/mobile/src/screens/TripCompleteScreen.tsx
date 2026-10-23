@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import React, { useRef, useEffect } from 'react';
+import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -28,7 +28,7 @@ const formatCurrency = (value: number) => `$${value.toLocaleString('es-AR')}`;
 
 type Step = 'collect' | 'rate';
 
-export const TripCompleteScreen: React.FC = () => {
+export function TripCompleteScreen() {
   const navigation = useAppNavigation();
   const insets = useSafeAreaInsets();
   const activeTripId = useTripStore((s) => s.activeTripId);
@@ -40,16 +40,16 @@ export const TripCompleteScreen: React.FC = () => {
     trip?.payment_method === 'transfer' || trip?.payment_method === 'cash'
       ? trip.payment_method
       : null;
-  const [step, setStep] = React.useState<Step>('collect');
-  const [collecting, setCollecting] = React.useState(false);
-  const [collectingTransfer, setCollectingTransfer] = React.useState(false);
-  const [rating, setRating] = React.useState(0);
-  const [comment, setComment] = React.useState('');
-  const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
-  const [submitting, setSubmitting] = React.useState(false);
-  const [rated, setRated] = React.useState(false);
+  const [step, setStep] = useState<Step>('collect');
+  const [collecting, setCollecting] = useState(false);
+  const [collectingTransfer, setCollectingTransfer] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [rated, setRated] = useState(false);
   const submitLock = useRef(false);
-  const [metrics, setMetrics] = React.useState<{
+  const [metrics, setMetrics] = useState<{
     commission_active: boolean;
     debt_remaining_ars: number;
   } | null>(null);
@@ -72,7 +72,7 @@ export const TripCompleteScreen: React.FC = () => {
 
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
 
   useEffect(() => {
     Animated.parallel([
@@ -362,7 +362,7 @@ export const TripCompleteScreen: React.FC = () => {
       )}
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

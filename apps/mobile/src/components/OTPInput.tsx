@@ -1,7 +1,9 @@
 import type React from 'react';
-import { useRef } from 'react';
+import { type ComponentRef, useRef } from 'react';
 import { TextInput as RNTextInput, StyleSheet, View } from 'react-native';
 import { theme } from '../theme';
+
+type TextInputRef = ComponentRef<typeof RNTextInput>;
 
 interface OTPInputProps {
   length?: number;
@@ -10,7 +12,7 @@ interface OTPInputProps {
 }
 
 export const OTPInput: React.FC<OTPInputProps> = ({ length = 4, value, onChange }) => {
-  const refs = useRef<RNTextInput[]>([]);
+  const refs = useRef<Array<TextInputRef | null>>([]);
 
   const handleChange = (text: string, index: number) => {
     const char = text.slice(-1);
@@ -36,7 +38,7 @@ export const OTPInput: React.FC<OTPInputProps> = ({ length = 4, value, onChange 
         <View key={index} style={[styles.box, value[index] ? styles.boxFilled : null]}>
           <RNTextInput
             ref={(ref) => {
-              if (ref) refs.current[index] = ref;
+              refs.current[index] = ref;
             }}
             style={styles.input}
             value={value[index] || ''}

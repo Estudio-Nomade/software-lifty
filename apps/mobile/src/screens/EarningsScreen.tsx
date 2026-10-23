@@ -63,7 +63,7 @@ export const EarningsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <StatusBar barStyle="dark-content" />
       <Navbar title="Cobros" showBack={false} variant="light" />
 
       <ScrollView

@@ -274,7 +274,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+      <StatusBar barStyle="light-content" />
       <Navbar title="Paso 2/3" onBack={() => navigation.goBack()} />
       {/*
         Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.

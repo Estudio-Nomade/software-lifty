@@ -84,7 +84,7 @@ export function VerifyEmailScreen() {
 
   const tree = (
     <>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} hitSlop={8}>
           <Text style={styles.back}>← Volver</Text>

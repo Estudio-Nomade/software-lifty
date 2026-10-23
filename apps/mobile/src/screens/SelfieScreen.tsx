@@ -12,7 +12,7 @@ export const SelfieScreen: React.FC = () => {
 
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, theme.spacing.md) }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <StatusBar barStyle="light-content" />
       <View
         style={[
           styles.header,

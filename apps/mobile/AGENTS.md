@@ -1,7 +1,7 @@
 # Lifty — Frontend (Expo SDK 57)
 
 ## Stack
-- **Expo SDK 57**, React 19.2, React Native 0.86, TypeScript 6.0 strict
+- **Expo SDK 58**, React 19.3, React Native 0.88, TypeScript 6.0 strict
 - **expo-router** (file-based routing)
 - React Compiler enabled (`experiments.reactCompiler: true` in app.json)
 - Entry: `expo-router/entry` in `package.json` main → `App.tsx` re-exports `expo-router/entry`

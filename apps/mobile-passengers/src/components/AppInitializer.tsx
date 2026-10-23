@@ -1,6 +1,6 @@
 import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { InteractionManager, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { api } from '../api/client';
 import { registerPassenger } from '../api/passenger';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -13,6 +13,21 @@ import {
 } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
+
+/**
+ * RN 0.88 removed InteractionManager.
+ * Prefer next frame + macrotask (not requestIdleCallback — can stall under load).
+ */
+function runAfterInteractions(task: () => void): void {
+  const raf = globalThis.requestAnimationFrame?.bind(globalThis);
+  if (typeof raf === 'function') {
+    raf(() => {
+      setTimeout(task, 0);
+    });
+    return;
+  }
+  setTimeout(task, 0);
+}
 
 const SESSION_RESTORE_TIMEOUT_MS = 8_000;
 
@@ -117,7 +132,7 @@ function ActiveTripRecovery() {
   useEffect(() => {
     if (!sessionRestored || !isAuthenticated || navigatedRef.current) return;
     navigatedRef.current = true;
-    InteractionManager.runAfterInteractions(() => {
+    runAfterInteractions(() => {
       router.replace('/home');
     });
   }, [sessionRestored, isAuthenticated, router]);

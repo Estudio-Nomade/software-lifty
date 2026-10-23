@@ -7,7 +7,7 @@ const MARK_L = require('../../assets/lifty-mark-l.png');
 export function BrandSplash() {
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <StatusBar barStyle="dark-content" />
       <View style={styles.brand}>
         <Image source={MARK_L} style={styles.mark} resizeMode="contain" />
         <Text style={styles.wordmark}>Lifty</Text>

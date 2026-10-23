@@ -1,6 +1,6 @@
 import { useRootNavigationState, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { InteractionManager, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { apiClient } from '../api/client';
 import { driverStatusSchema } from '../api/types';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -19,6 +19,22 @@ import { useTripStore } from '../store/tripStore';
 import { AuthRedirectWatcher } from './AuthRedirectWatcher';
 import { DriverRealtimeProvider } from './DriverRealtimeProvider';
 import { LoadingOverlay } from './feedback/LoadingOverlay';
+
+/**
+ * RN 0.88 removed InteractionManager.
+ * Prefer next frame + macrotask (not requestIdleCallback — can stall under load
+ * and delay trip recovery / navigation on cold start).
+ */
+function runAfterInteractions(task: () => void): void {
+  const raf = globalThis.requestAnimationFrame?.bind(globalThis);
+  if (typeof raf === 'function') {
+    raf(() => {
+      setTimeout(task, 0);
+    });
+    return;
+  }
+  setTimeout(task, 0);
+}
 
 const SESSION_RESTORE_TIMEOUT_MS = 8_000;
 
@@ -139,7 +155,7 @@ function ActiveTripRecovery() {
         if (trip && isLiveTrip(trip)) {
           useTripStore.getState().setActiveTrip(trip);
           navigatedRef.current = true;
-          InteractionManager.runAfterInteractions(() => {
+          runAfterInteractions(() => {
             if (cancelled) return;
             switch (trip.status) {
               case 'request_received':
@@ -232,7 +248,7 @@ function NotificationSetup() {
     void getLastNotificationResponse()
       .then((response) => {
         if (!response) return;
-        InteractionManager.runAfterInteractions(() => {
+        runAfterInteractions(() => {
           handleNotificationResponse(response, navigate);
         });
       })
