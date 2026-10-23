@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ne } from 'drizzle-orm';
+import { and, count, desc, eq, ne, sql } from 'drizzle-orm';
 import { db, getDb } from '../../shared/db/client';
 import {
   districts,
@@ -96,7 +96,7 @@ async function enforceCommissionDebtCap(params: {
     if (params.notifyOnBlock || forcedOffline) {
       void sendPushToUser(params.userId, {
         title: 'Cuenta bloqueada por comisión',
-        body: 'Tu cuenta está bloqueada por revisión de comisión. Contactá a soporte o subí un comprobante válido.',
+        body: 'Tu cuenta está bloqueada por revisión de comisión. Contactá a soporte Lifty.',
         data: {
           type: 'driver:commission_debt_block',
           reason: 'fraud_block',
@@ -110,7 +110,7 @@ async function enforceCommissionDebtCap(params: {
     }
 
     throw new AppError(
-      'Tu cuenta está bloqueada por revisión de comisión. Contactá a soporte o subí un comprobante válido para desbloquear.',
+      'Tu cuenta está bloqueada por revisión de comisión. Contactá a soporte Lifty.',
       409,
       'COMMISSION_FRAUD_BLOCK',
     );
@@ -1538,15 +1538,16 @@ export const driversService = {
 
     if (!driver) throw new NotFoundError('Onboarding not started');
 
-    const debt = Math.round(Number(driver.platform_debt ?? 0));
-    if (debt <= 0) {
+    // Fast-fail validations (re-checked under row lock inside the tx).
+    const debtHint = Math.round(Number(driver.platform_debt ?? 0));
+    if (debtHint <= 0) {
       throw new AppError('No tenés deuda de comisión pendiente.', 400, 'NO_COMMISSION_DEBT');
     }
 
     const amount = parseAmountArs(amountRaw);
-    if (amount < debt) {
+    if (amount < debtHint) {
       throw new AppError(
-        `El monto debe ser al menos $${debt} (tu deuda actual).`,
+        `El monto debe ser al menos $${debtHint} (tu deuda actual).`,
         400,
         'AMOUNT_BELOW_DEBT',
       );
@@ -1603,14 +1604,46 @@ export const driversService = {
     });
     const fileUrl = await _storage.uploadFile(file, path, { contentType });
 
+    const cleanupUpload = async () => {
+      try {
+        const storagePath = _storage.extractStoragePath(fileUrl) ?? path;
+        await _storage.deleteFile(storagePath);
+      } catch (cleanupErr) {
+        logger.warn('[drivers] commission receipt orphan cleanup failed', {
+          path,
+          error: (cleanupErr as Error).message,
+        });
+      }
+    };
+
     try {
       const receipt = await db.transaction(async (tx) => {
+        // Lock driver row so concurrent collect cannot raise debt under us.
+        const locked = await tx.execute<{ platform_debt: number | string }>(
+          sql`SELECT platform_debt FROM drivers WHERE id = ${driver.id} FOR UPDATE`,
+        );
+        const lockedRows =
+          (locked as { rows?: Array<{ platform_debt: number | string }> }).rows ??
+          (Array.isArray(locked) ? (locked as Array<{ platform_debt: number | string }>) : []);
+        const lockedDebt = Math.round(Number(lockedRows[0]?.platform_debt ?? 0));
+
+        if (lockedDebt <= 0) {
+          throw new AppError('No tenés deuda de comisión pendiente.', 400, 'NO_COMMISSION_DEBT');
+        }
+        if (amount < lockedDebt) {
+          throw new AppError(
+            `El monto debe ser al menos $${lockedDebt} (tu deuda actual).`,
+            400,
+            'AMOUNT_BELOW_DEBT',
+          );
+        }
+
         const [row] = await tx
           .insert(driverCommissionReceipts)
           .values({
             driver_id: driver.id,
             amount_ars: amount,
-            debt_before_ars: debt,
+            debt_before_ars: lockedDebt,
             file_url: fileUrl,
             status: 'pending_review',
           })
@@ -1623,11 +1656,12 @@ export const driversService = {
             file_url: driverCommissionReceipts.file_url,
           });
 
+        // Clear debt only after amount ≥ locked debt. Never clear commission_fraud_block
+        // here — pack 4 / admin must lift fraud after review.
         await tx
           .update(drivers)
           .set({
             platform_debt: 0,
-            commission_fraud_block: false,
             updated_at: new Date(),
           })
           .where(eq(drivers.id, driver.id));
@@ -1647,6 +1681,8 @@ export const driversService = {
         platform_debt: 0,
       };
     } catch (err) {
+      await cleanupUpload();
+      if (err instanceof AppError) throw err;
       if (isUniqueViolation(err)) {
         throw new AppError(
           'Ya tenés un comprobante pendiente de revisión.',

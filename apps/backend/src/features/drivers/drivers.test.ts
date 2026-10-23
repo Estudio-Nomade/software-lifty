@@ -1695,4 +1695,68 @@ describe('commission receipt upload', () => {
     expect(status).toBe(409);
     expect(data.error.code).toBe('COMMISSION_FRAUD_BLOCK');
   });
+
+  test('receipt upload does not clear commission_fraud_block', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await seedPayoutConfig();
+    await approveForOnline(driverId, 5000);
+    const db = getDb();
+    await db
+      .update(drivers)
+      .set({ commission_fraud_block: true })
+      .where(eq(drivers.id, driverId));
+    setStorageForTesting(createTestStorage());
+
+    const { status } = await postReceipt(token, 5000);
+    expect(status).toBe(200);
+
+    const [driver] = await db
+      .select({
+        platform_debt: drivers.platform_debt,
+        commission_fraud_block: drivers.commission_fraud_block,
+      })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(Number(driver.platform_debt)).toBe(0);
+    expect(driver.commission_fraud_block).toBe(true);
+
+    const online = await request(
+      'PUT',
+      '/api/drivers/me/online',
+      { is_online: true },
+      token,
+    );
+    expect(online.status).toBe(409);
+    expect(online.data.error.code).toBe('COMMISSION_FRAUD_BLOCK');
+  });
+
+  test('failed tx after upload deletes orphaned storage object', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    await seedPayoutConfig();
+    await approveForOnline(driverId, 5000);
+    const db = getDb();
+    const base = createTestStorage();
+    // Simulate race: another request wins the pending slot after our upload.
+    const raceStorage: TestStorage = {
+      ...base,
+      async uploadFile(file, path, options) {
+        const url = await base.uploadFile(file, path, options);
+        await db.insert(driverCommissionReceipts).values({
+          driver_id: driverId,
+          amount_ars: 1,
+          debt_before_ars: 1,
+          file_url: 'https://example.supabase.co/storage/v1/object/public/driver-documents/race.jpg',
+          status: 'pending_review',
+        });
+        return url;
+      },
+    };
+    setStorageForTesting(raceStorage);
+
+    const { status, data } = await postReceipt(token, 5000);
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('RECEIPT_PENDING');
+    expect(base.deleted.length).toBeGreaterThanOrEqual(1);
+  });
 });
