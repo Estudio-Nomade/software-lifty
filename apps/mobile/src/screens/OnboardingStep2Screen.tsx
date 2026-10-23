@@ -509,7 +509,9 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   rejectBanner: {
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     borderRadius: theme.radius.lg,
     backgroundColor: theme.colors.surfaceMuted,
     borderWidth: 1,
@@ -527,7 +529,9 @@ const styles = StyleSheet.create({
     color: theme.colors.deepBlue,
   },
   uploadBlock: {
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     gap: theme.spacing.sm,
     alignItems: 'center',
     borderWidth: 1,
@@ -625,10 +629,14 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
     textAlign: 'center',
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   button: {
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     marginTop: theme.spacing.md,
   },
 });

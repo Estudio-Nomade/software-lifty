@@ -332,12 +332,15 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
-    alignSelf: 'flex-start',
-    width: 343,
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 480,
     marginBottom: theme.spacing.xs,
   },
   input: {
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   halfInput: {
     flex: 1,
@@ -345,7 +348,9 @@ const styles = StyleSheet.create({
   vehicleTypes: {
     flexDirection: 'row',
     gap: theme.spacing.md,
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   vehicleType: {
     flex: 1,
@@ -372,16 +377,22 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: theme.spacing.md,
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   submitError: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
     textAlign: 'center',
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   button: {
-    width: 343,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     marginTop: theme.spacing.md,
   },
 });

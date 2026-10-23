@@ -134,8 +134,8 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   button: {
-    width: 343,
-    maxWidth: '100%',
+    width: '100%',
+    maxWidth: 480,
     alignSelf: 'center',
   },
   error: {
