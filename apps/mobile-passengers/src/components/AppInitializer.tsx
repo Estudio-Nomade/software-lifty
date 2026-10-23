@@ -14,12 +14,16 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 
-/** RN 0.88 removed InteractionManager — schedule after paint/idle. */
+/**
+ * RN 0.88 removed InteractionManager.
+ * Prefer next frame + macrotask (not requestIdleCallback — can stall under load).
+ */
 function runAfterInteractions(task: () => void): void {
-  const ric = (globalThis as { requestIdleCallback?: (cb: () => void) => void })
-    .requestIdleCallback;
-  if (typeof ric === 'function') {
-    ric(task);
+  const raf = globalThis.requestAnimationFrame?.bind(globalThis);
+  if (typeof raf === 'function') {
+    raf(() => {
+      setTimeout(task, 0);
+    });
     return;
   }
   setTimeout(task, 0);

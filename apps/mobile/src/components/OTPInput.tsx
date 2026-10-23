@@ -1,9 +1,9 @@
 import type React from 'react';
 import { type ComponentRef, useRef } from 'react';
 import { TextInput as RNTextInput, StyleSheet, View } from 'react-native';
+import { theme } from '../theme';
 
 type TextInputRef = ComponentRef<typeof RNTextInput>;
-import { theme } from '../theme';
 
 interface OTPInputProps {
   length?: number;

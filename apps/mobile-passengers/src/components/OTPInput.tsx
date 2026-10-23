@@ -64,16 +64,18 @@ export function OTPInput({ length = 6, value, onChange, autoFocus }: OTPInputPro
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    justifyContent: 'center',
     gap: theme.spacing.sm,
+    justifyContent: 'center',
+    width: '100%',
   },
   box: {
-    width: 44,
-    height: 52,
+    flex: 1,
+    maxWidth: 52,
+    height: 56,
     borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surfaceMuted,
     borderWidth: StyleSheet.hairlineWidth * 2,
     borderColor: 'transparent',
-    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -83,10 +85,10 @@ const styles = StyleSheet.create({
   },
   cell: {
     width: '100%',
-    height: '100%',
-    textAlign: 'center',
+    fontFamily: theme.fontFamily.bold,
     fontSize: theme.fontSize.xl,
     color: theme.colors.deepBlue,
+    textAlign: 'center',
     padding: 0,
   },
 });

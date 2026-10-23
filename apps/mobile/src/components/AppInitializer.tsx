@@ -20,12 +20,17 @@ import { AuthRedirectWatcher } from './AuthRedirectWatcher';
 import { DriverRealtimeProvider } from './DriverRealtimeProvider';
 import { LoadingOverlay } from './feedback/LoadingOverlay';
 
-/** RN 0.88 removed InteractionManager — schedule after paint/idle. */
+/**
+ * RN 0.88 removed InteractionManager.
+ * Prefer next frame + macrotask (not requestIdleCallback — can stall under load
+ * and delay trip recovery / navigation on cold start).
+ */
 function runAfterInteractions(task: () => void): void {
-  const ric = (globalThis as { requestIdleCallback?: (cb: () => void) => void })
-    .requestIdleCallback;
-  if (typeof ric === 'function') {
-    ric(task);
+  const raf = globalThis.requestAnimationFrame?.bind(globalThis);
+  if (typeof raf === 'function') {
+    raf(() => {
+      setTimeout(task, 0);
+    });
     return;
   }
   setTimeout(task, 0);
