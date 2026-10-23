@@ -12,7 +12,7 @@ import { Text } from '../components/ui/Text';
 import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
-import { shouldShowPlatformDebt } from '../lib/commission';
+import { formatDebtCapLabel, shouldShowPlatformDebt } from '../lib/commission';
 import { getTabBarReserve } from '../lib/tabBarLayout';
 import { theme } from '../theme';
 
@@ -120,15 +120,42 @@ export const EarningsScreen: React.FC = () => {
                   {formatCurrency(earnings.total)}
                 </Text>
               </View>
-              {shouldShowPlatformDebt(earnings.platform_debt) ? (
-                <View style={styles.row}>
-                  <Text style={[styles.rowLabel, { color: theme.colors.dangerRed }]}>
-                    Deuda pendiente
-                  </Text>
-                  <Text style={[styles.rowValue, { color: theme.colors.dangerRed }]}>
-                    -{formatCurrency(earnings.platform_debt)}
-                  </Text>
-                </View>
+              {shouldShowPlatformDebt(earnings.platform_debt, {
+                debtBlocksOnline: earnings.debt_blocks_online,
+              }) ? (
+                <>
+                  <View style={styles.row}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.rowLabel, { color: theme.colors.dangerRed }]}>
+                        Deuda pendiente
+                      </Text>
+                      {formatDebtCapLabel(earnings.debt_cap_ars) ? (
+                        <Text
+                          style={[
+                            styles.rowLabel,
+                            {
+                              color: theme.colors.mediumGray,
+                              fontSize: theme.fontSize.sm,
+                            },
+                          ]}
+                        >
+                          {formatDebtCapLabel(earnings.debt_cap_ars)}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text style={[styles.rowValue, { color: theme.colors.dangerRed }]}>
+                      -{formatCurrency(earnings.platform_debt)}
+                    </Text>
+                  </View>
+                  {earnings.debt_blocks_online === true ? (
+                    <View style={styles.debtBlockBanner}>
+                      <Text style={styles.debtBlockBannerText}>
+                        No podés conectarte hasta regularizar la deuda de comisión. Transferí el
+                        total a Lifty y subí el comprobante (próximamente en app).
+                      </Text>
+                    </View>
+                  ) : null}
+                </>
               ) : null}
             </Card>
 
@@ -263,6 +290,45 @@ export const EarningsScreen: React.FC = () => {
               <Text style={[styles.totalAmount, { color: theme.colors.mediumGray }]}>$0</Text>
               <Text style={styles.emptySubtext}>Todavia no registras ganancias</Text>
             </Card>
+
+            {earnings &&
+            shouldShowPlatformDebt(earnings.platform_debt, {
+              debtBlocksOnline: earnings.debt_blocks_online,
+            }) ? (
+              <Card>
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rowLabel, { color: theme.colors.dangerRed }]}>
+                      Deuda pendiente
+                    </Text>
+                    {formatDebtCapLabel(earnings.debt_cap_ars) ? (
+                      <Text
+                        style={[
+                          styles.rowLabel,
+                          {
+                            color: theme.colors.mediumGray,
+                            fontSize: theme.fontSize.sm,
+                          },
+                        ]}
+                      >
+                        {formatDebtCapLabel(earnings.debt_cap_ars)}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={[styles.rowValue, { color: theme.colors.dangerRed }]}>
+                    -{formatCurrency(earnings.platform_debt)}
+                  </Text>
+                </View>
+                {earnings.debt_blocks_online === true ? (
+                  <View style={styles.debtBlockBanner}>
+                    <Text style={styles.debtBlockBannerText}>
+                      No podés conectarte hasta regularizar la deuda de comisión. Transferí el total
+                      a Lifty y subí el comprobante (próximamente en app).
+                    </Text>
+                  </View>
+                ) : null}
+              </Card>
+            ) : null}
 
             <Card>
               <Text style={styles.cardTitle}>Tus ganancias</Text>
@@ -531,5 +597,17 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.turquoise,
+  },
+  debtBlockBanner: {
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+  },
+  debtBlockBannerText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.dangerRed,
+    fontWeight: theme.fontWeight.medium,
+    lineHeight: 18,
   },
 });

@@ -34,7 +34,7 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
 import { usePayoutMethodGate } from '../hooks/usePayoutMethodGate';
-import { shouldShowPlatformDebt } from '../lib/commission';
+import { formatDebtCapLabel, shouldShowPlatformDebt } from '../lib/commission';
 import {
   type ConnectBlockedFeedback,
   feedbackForConnectBlock,
@@ -460,11 +460,20 @@ export const ActiveScreen: React.FC = () => {
               <Text style={styles.metricLabel}>Transferencia</Text>
               <Text style={styles.metricValue}>{formatCurrency(earnings.transfer)}</Text>
             </View>
-            {shouldShowPlatformDebt(earnings.platform_debt) ? (
+            {shouldShowPlatformDebt(earnings.platform_debt, {
+              debtBlocksOnline: earnings.debt_blocks_online,
+            }) ? (
               <View style={styles.metricRow}>
-                <Text style={[styles.metricLabel, { color: theme.colors.dangerRed }]}>
-                  Deuda pendiente
-                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.metricLabel, { color: theme.colors.dangerRed }]}>
+                    Deuda pendiente
+                  </Text>
+                  {formatDebtCapLabel(earnings.debt_cap_ars) ? (
+                    <Text style={[styles.metricLabel, { color: theme.colors.mediumGray }]}>
+                      {formatDebtCapLabel(earnings.debt_cap_ars)}
+                    </Text>
+                  ) : null}
+                </View>
                 <Text style={[styles.metricValue, { color: theme.colors.dangerRed }]}>
                   -{formatCurrency(earnings.platform_debt)}
                 </Text>
@@ -566,6 +575,13 @@ export const ActiveScreen: React.FC = () => {
             disabled={!hasLocation || connectBlocked || needsPayoutMethod || connecting}
             embedded
           />
+          {earnings?.debt_blocks_online === true && (
+            <View style={styles.goHint} pointerEvents="none">
+              <Text style={styles.errorText}>
+                No podés conectarte hasta regularizar la deuda de comisión
+              </Text>
+            </View>
+          )}
           {municipalityWaitlisted && (
             <View style={styles.goHint} pointerEvents="none">
               <Text style={styles.reviewBannerTitle}>Municipio no habilitado</Text>
