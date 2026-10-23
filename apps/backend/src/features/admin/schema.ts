@@ -49,3 +49,25 @@ export const adminTripsQuery = t.Object({
 export const tripIdParams = t.Object({
   trip_id: t.String(),
 });
+
+export const updatePayoutAccountSchema = t.Object({
+  alias: t.Optional(t.String({ maxLength: 120 })),
+  cvu: t.Optional(t.String({ maxLength: 40 })),
+  holder: t.Optional(t.String({ maxLength: 120 })),
+  bank: t.Optional(t.String({ maxLength: 120 })),
+});
+
+export const commissionReceiptsQuery = t.Object({
+  status: t.Optional(t.String()),
+  driver_id: t.Optional(t.String()),
+  limit: t.Optional(t.String()),
+  offset: t.Optional(t.String()),
+});
+
+export const receiptIdParams = t.Object({
+  id: t.String(),
+});
+
+export const rejectFraudBody = t.Object({
+  note: t.Optional(t.String({ maxLength: 500 })),
+});
