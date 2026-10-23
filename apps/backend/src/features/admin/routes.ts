@@ -121,14 +121,16 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
         limit?: string;
         offset?: string;
       };
+      const limitNum = q.limit !== undefined && q.limit !== '' ? Number(q.limit) : undefined;
+      const offsetNum = q.offset !== undefined && q.offset !== '' ? Number(q.offset) : undefined;
       return safeCall(
         () =>
           adminService.listDrivers({
             q: q.q,
             status: q.status,
             identification_status: q.identification_status,
-            limit: q.limit ? Number(q.limit) : undefined,
-            offset: q.offset ? Number(q.offset) : undefined,
+            limit: Number.isFinite(limitNum) ? limitNum : undefined,
+            offset: Number.isFinite(offsetNum) ? offsetNum : undefined,
           }),
         set,
       );
