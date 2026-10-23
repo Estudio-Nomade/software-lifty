@@ -58,7 +58,7 @@ export function TripCompleteScreen() {
   const [rated, setRated] = useState(false);
   const submitLock = useRef(false);
   const [metrics, setMetrics] = useState<{
-    commission_active: boolean;
+    commission_active?: boolean;
     platform_debt?: number;
     debt_cap_ars?: number;
     debt_remaining_ars?: number;
@@ -225,15 +225,17 @@ export function TripCompleteScreen() {
         </Text>
       </View>
 
-      {metrics && Number(metrics.platform_debt ?? 0) > 0 ? (
-        <Text style={styles.debtWarning}>
-          {`Deuda comisión: ${formatCurrency(Number(metrics.platform_debt))}${
-            metrics.debt_cap_ars != null && Number.isFinite(metrics.debt_cap_ars)
-              ? ` / tope ${formatCurrency(Number(metrics.debt_cap_ars))}`
-              : ''
-          }`}
-        </Text>
-      ) : null}
+      {(() => {
+        const debt = Number(metrics?.platform_debt ?? 0);
+        if (!Number.isFinite(debt) || debt <= 0) return null;
+        const cap = Number(metrics?.debt_cap_ars);
+        const capLabel = Number.isFinite(cap) && cap > 0 ? ` / tope ${formatCurrency(cap)}` : '';
+        return (
+          <Text
+            style={styles.debtWarning}
+          >{`Deuda comisión: ${formatCurrency(debt)}${capLabel}`}</Text>
+        );
+      })()}
       {preferredMethod ? (
         <Text style={styles.preferredMethod}>
           El pasajero eligió: {preferredMethod === 'cash' ? 'Efectivo' : 'Transferencia'}

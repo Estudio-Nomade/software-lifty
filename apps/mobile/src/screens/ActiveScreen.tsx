@@ -34,7 +34,11 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useHeatmapPolling } from '../hooks/useHeatmapPolling';
 import { usePayoutMethodGate } from '../hooks/usePayoutMethodGate';
-import { formatDebtCapLabel, shouldShowPlatformDebt } from '../lib/commission';
+import {
+  formatDebtCapLabel,
+  normalizePlatformDebt,
+  shouldShowPlatformDebt,
+} from '../lib/commission';
 import {
   type ConnectBlockedFeedback,
   feedbackForConnectBlock,
@@ -475,7 +479,7 @@ export const ActiveScreen: React.FC = () => {
                   ) : null}
                 </View>
                 <Text style={[styles.metricValue, { color: theme.colors.dangerRed }]}>
-                  -{formatCurrency(earnings.platform_debt)}
+                  -{formatCurrency(normalizePlatformDebt(earnings.platform_debt))}
                 </Text>
               </View>
             ) : null}

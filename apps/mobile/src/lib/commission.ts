@@ -11,11 +11,15 @@ export type PlatformDebtVisibilityOpts = {
 export function shouldShowPlatformDebt(
   platformDebt: number | undefined,
   opts?: PlatformDebtVisibilityOpts,
-): platformDebt is number {
+): boolean {
   if (opts?.debtBlocksOnline) return true;
-  const debt = Number(platformDebt ?? 0);
-  if (debt > 0) return true;
-  return false;
+  return normalizePlatformDebt(platformDebt) > 0;
+}
+
+/** Safe amount for display when debt may be missing under a hard-block flag. */
+export function normalizePlatformDebt(platformDebt: number | undefined): number {
+  const n = Number(platformDebt ?? 0);
+  return Number.isFinite(n) ? n : 0;
 }
 
 /** @deprecated obsolete phase-one hide; do not use — server SoT for commission rate */

@@ -1,4 +1,8 @@
-import { formatDebtCapLabel, shouldShowPlatformDebt } from '../../lib/commission';
+import {
+  formatDebtCapLabel,
+  normalizePlatformDebt,
+  shouldShowPlatformDebt,
+} from '../../lib/commission';
 
 describe('shouldShowPlatformDebt', () => {
   it('hides when debt is 0 or missing', () => {
@@ -13,6 +17,17 @@ describe('shouldShowPlatformDebt', () => {
   it('shows when debt_blocks_online even if debt is 0', () => {
     expect(shouldShowPlatformDebt(0, { debtBlocksOnline: true })).toBe(true);
     expect(shouldShowPlatformDebt(undefined, { debtBlocksOnline: true })).toBe(true);
+  });
+});
+
+describe('normalizePlatformDebt', () => {
+  it('falls back to 0 for missing or non-finite values', () => {
+    expect(normalizePlatformDebt(undefined)).toBe(0);
+    expect(normalizePlatformDebt(Number.NaN)).toBe(0);
+  });
+
+  it('returns finite debt amounts', () => {
+    expect(normalizePlatformDebt(12500)).toBe(12500);
   });
 });
 

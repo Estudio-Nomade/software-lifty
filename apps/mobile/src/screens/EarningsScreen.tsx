@@ -12,7 +12,11 @@ import { Text } from '../components/ui/Text';
 import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
-import { formatDebtCapLabel, shouldShowPlatformDebt } from '../lib/commission';
+import {
+  formatDebtCapLabel,
+  normalizePlatformDebt,
+  shouldShowPlatformDebt,
+} from '../lib/commission';
 import { getTabBarReserve } from '../lib/tabBarLayout';
 import { theme } from '../theme';
 
@@ -144,7 +148,7 @@ export const EarningsScreen: React.FC = () => {
                       ) : null}
                     </View>
                     <Text style={[styles.rowValue, { color: theme.colors.dangerRed }]}>
-                      -{formatCurrency(earnings.platform_debt)}
+                      -{formatCurrency(normalizePlatformDebt(earnings.platform_debt))}
                     </Text>
                   </View>
                   {earnings.debt_blocks_online === true ? (
@@ -316,7 +320,7 @@ export const EarningsScreen: React.FC = () => {
                     ) : null}
                   </View>
                   <Text style={[styles.rowValue, { color: theme.colors.dangerRed }]}>
-                    -{formatCurrency(earnings.platform_debt)}
+                    -{formatCurrency(normalizePlatformDebt(earnings.platform_debt))}
                   </Text>
                 </View>
                 {earnings.debt_blocks_online === true ? (
