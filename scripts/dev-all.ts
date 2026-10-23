@@ -19,6 +19,11 @@
  * We only print QRs after Metro answers `/status`, and we pre-warm the Android
  * bundle so the first Expo Go scan does not time out on a cold transform.
  *
+ * On ~8GB hosts dual Expo cold-start races CPU/RAM: passenger often binds
+ * `/status` first while driver (heavier plugins) lands past 90s. We wait longer,
+ * stagger passenger spawn, soft-fail then late-retry, and pre-warm the real
+ * monorepo `expo-router/entry` path (not bare `/index.bundle`, which 404s).
+ *
  * Idempotent: any leftover process still holding one of our three ports is
  * terminated before starting, so `bun run dev` can be re-run freely. Cleanup
  * is scoped to our own ports — no blanket `pkill`.
@@ -33,8 +38,13 @@ const BACKEND_PORT = 3001;
 const DRIVER_PORT = 8081;
 const PASSENGER_PORT = 8083;
 const PORTS = [BACKEND_PORT, DRIVER_PORT, PASSENGER_PORT];
-const METRO_READY_TIMEOUT_MS = 90_000;
+/** First wait — covers slow driver cold start on low-RAM hosts. */
+const METRO_READY_TIMEOUT_MS = 180_000;
+/** After soft fail, keep polling so a late-ready Metro still gets a QR. */
+const METRO_LATE_RETRY_MS = 120_000;
 const METRO_POLL_MS = 400;
+/** Let driver bind before passenger steals CPU on dual cold start. */
+const PASSENGER_SPAWN_STAGGER_MS = 5_000;
 
 const C = {
   reset: '\x1b[0m',
@@ -77,22 +87,38 @@ function pad(label: string, width = 11): string {
   return label.length >= width ? label : label.padEnd(width);
 }
 
-/** Best-effort LAN IPv4 address (same WiFi as Expo Go). Skips docker/loopback. */
+/**
+ * Best-effort LAN IPv4 for Expo Go on the phone.
+ * Prefer real wifi/ethernet ifaces; skip waydroid/docker/bridges and the
+ * Waydroid default 192.168.240.0/24 (not reachable from home Wi-Fi).
+ */
 function lanIp(): string {
-  const candidates: string[] = [];
-  for (const ifaces of Object.values(networkInterfaces())) {
+  type Cand = { address: string; name: string };
+  const preferred: Cand[] = [];
+  const others: Cand[] = [];
+
+  for (const [name, ifaces] of Object.entries(networkInterfaces())) {
+    if (/^(waydroid|docker|br-|lxcbr|veth|virbr|vmnet|vboxnet)/i.test(name)) {
+      continue;
+    }
+    const isWifiOrEth = /^(wlan|wlp|wl|eth|en)/i.test(name);
     for (const iface of ifaces ?? []) {
       if (iface.family !== 'IPv4' || iface.internal) continue;
+      if (iface.address.startsWith('192.168.240.')) continue;
       if (/^(127\.|169\.254\.|172\.1[7-9]\.|172\.2\d\.|172\.3[01]\.)/.test(iface.address)) {
         continue;
       }
-      candidates.push(iface.address);
+      const cand = { address: iface.address, name };
+      if (isWifiOrEth) preferred.push(cand);
+      else others.push(cand);
     }
   }
+
+  const pool = [...preferred, ...others];
   return (
-    candidates.find((ip) => ip.startsWith('192.168.')) ??
-    candidates.find((ip) => ip.startsWith('10.')) ??
-    candidates[0] ??
+    pool.find((c) => c.address.startsWith('192.168.'))?.address ??
+    pool.find((c) => c.address.startsWith('10.'))?.address ??
+    pool[0]?.address ??
     'localhost'
   );
 }
@@ -222,12 +248,17 @@ async function probeMetro(host: string, port: number): Promise<boolean> {
   }
 }
 
-async function waitForMetro(port: number, label: string, host: string): Promise<boolean> {
+async function waitForMetro(
+  port: number,
+  label: string,
+  host: string,
+  timeoutMs: number,
+): Promise<boolean> {
   // Probe LAN first (QR host), then loopback — covers bind-only-localhost misconfig.
   const hosts = host === '127.0.0.1' || host === 'localhost' ? [host] : [host, '127.0.0.1'];
-  const deadline = Date.now() + METRO_READY_TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
   process.stdout.write(
-    `${C.dim}${pad(label)}${C.reset} waiting for Metro on ${hosts.map((h) => `${h}:${port}`).join(' | ')}...\n`,
+    `${C.dim}${pad(label)}${C.reset} waiting for Metro on ${hosts.map((h) => `${h}:${port}`).join(' | ')} (${timeoutMs / 1000}s)...\n`,
   );
   while (Date.now() < deadline) {
     for (const h of hosts) {
@@ -241,9 +272,17 @@ async function waitForMetro(port: number, label: string, host: string): Promise<
     await Bun.sleep(METRO_POLL_MS);
   }
   process.stdout.write(
-    `${C.red}${pad(label)}${C.reset} Metro not ready after ${METRO_READY_TIMEOUT_MS / 1000}s\n`,
+    `${C.yellow}${pad(label)}${C.reset} Metro not ready after ${timeoutMs / 1000}s (will late-retry if still booting)\n`,
   );
   return false;
+}
+
+/** Soft-fail path: keep polling so a late driver still prints QR. */
+async function waitForMetroLate(port: number, label: string, host: string): Promise<boolean> {
+  process.stdout.write(
+    `${C.dim}${pad(label)}${C.reset} late-retry Metro up to ${METRO_LATE_RETRY_MS / 1000}s more...\n`,
+  );
+  return waitForMetro(port, label, host, METRO_LATE_RETRY_MS);
 }
 
 function reportMetroFailure(label: string, name: string, port: number, host: string): void {
@@ -261,14 +300,21 @@ function reportMetroFailure(label: string, name: string, port: number, host: str
   dumpRecentLogs(label);
 }
 
-/** Pre-warm the Android Hermes bundle so Expo Go's first scan does not time out. */
-async function prewarmBundle(port: number, label: string, host: string): Promise<void> {
-  const url = `http://${host}:${port}/index.bundle?platform=android&dev=true&minify=false&hot=false&lazy=true&transform.engine=hermes&transform.bytecode=1&transform.routerRoot=app&unstable_transformProfile=hermes-stable`;
+/**
+ * Pre-warm the real monorepo expo-router entry (bare /index.bundle 404s under
+ * workspace Metro serverRoot). Hit loopback so LAN firewall does not matter.
+ */
+async function prewarmBundle(
+  port: number,
+  label: string,
+  appSlug: 'mobile' | 'mobile-passengers',
+): Promise<void> {
+  const entryPath = `apps/${appSlug}/node_modules/expo-router/entry.bundle`;
+  const url = `http://127.0.0.1:${port}/${entryPath}?platform=android&dev=true&hot=false&lazy=true&minify=false`;
   process.stdout.write(`${C.dim}${pad(label)}${C.reset} pre-warming Android bundle...\n`);
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(120_000) });
-    // Drain body so Metro finishes the transform even if the entry path 404s
-    // (Expo resolves the real entry via the manifest; a warm cache still helps).
+    const res = await fetch(url, { signal: AbortSignal.timeout(180_000) });
+    // Drain body so Metro finishes the transform.
     await res.arrayBuffer().catch(() => null);
     process.stdout.write(
       `${C.green}${pad(label)}${C.reset} bundle warm-up done (HTTP ${res.status})\n`,
@@ -365,8 +411,10 @@ async function main(): Promise<void> {
     EXPO_DEVTOOLS_LISTEN_ADDRESS: '0.0.0.0',
   };
 
-  // Backend first (its predev brings up docker Postgres/Redis), Expo apps in parallel.
+  // Backend first (its predev brings up docker Postgres/Redis).
   spawn(['bun', 'run', 'dev'], join(ROOT, 'apps', 'backend'), '[backend]', C.yellow);
+
+  // Driver Metro first — heavier cold start (image-picker/location plugins).
   spawn(
     ['node_modules/.bin/expo', 'start', '--lan', '--port', String(DRIVER_PORT)],
     join(ROOT, 'apps', 'mobile'),
@@ -374,6 +422,12 @@ async function main(): Promise<void> {
     C.cyan,
     expoEnv,
   );
+
+  process.stdout.write(
+    `${C.dim}${pad('[pasajeros]')}${C.reset} staggering ${PASSENGER_SPAWN_STAGGER_MS / 1000}s so conductor binds first...\n`,
+  );
+  await Bun.sleep(PASSENGER_SPAWN_STAGGER_MS);
+
   spawn(
     ['node_modules/.bin/expo', 'start', '--lan', '--port', String(PASSENGER_PORT)],
     join(ROOT, 'apps', 'mobile-passengers'),
@@ -382,11 +436,23 @@ async function main(): Promise<void> {
     expoEnv,
   );
 
-  // Wait for both Metros, warm bundles, THEN print QRs (so a scan never races a cold start).
-  const [driverReady, passengerReady] = await Promise.all([
-    waitForMetro(DRIVER_PORT, '[conductor]', host),
-    waitForMetro(PASSENGER_PORT, '[pasajeros]', host),
+  // Wait for both Metros (long first window), late-retry soft fails, warm, THEN QRs.
+  let [driverReady, passengerReady] = await Promise.all([
+    waitForMetro(DRIVER_PORT, '[conductor]', host, METRO_READY_TIMEOUT_MS),
+    waitForMetro(PASSENGER_PORT, '[pasajeros]', host, METRO_READY_TIMEOUT_MS),
   ]);
+
+  // Late-retry both soft-fails in parallel so worst case stays +120s, not +240s.
+  if (!driverReady || !passengerReady) {
+    const [driverLate, passengerLate] = await Promise.all([
+      driverReady ? Promise.resolve(true) : waitForMetroLate(DRIVER_PORT, '[conductor]', host),
+      passengerReady
+        ? Promise.resolve(true)
+        : waitForMetroLate(PASSENGER_PORT, '[pasajeros]', host),
+    ]);
+    driverReady = driverLate;
+    passengerReady = passengerLate;
+  }
 
   if (!driverReady) {
     reportMetroFailure('[conductor]', 'Conductor (driver)', DRIVER_PORT, host);
@@ -396,8 +462,10 @@ async function main(): Promise<void> {
   }
 
   await Promise.all([
-    driverReady ? prewarmBundle(DRIVER_PORT, '[conductor]', host) : Promise.resolve(),
-    passengerReady ? prewarmBundle(PASSENGER_PORT, '[pasajeros]', host) : Promise.resolve(),
+    driverReady ? prewarmBundle(DRIVER_PORT, '[conductor]', 'mobile') : Promise.resolve(),
+    passengerReady
+      ? prewarmBundle(PASSENGER_PORT, '[pasajeros]', 'mobile-passengers')
+      : Promise.resolve(),
   ]);
 
   if (driverReady) {
