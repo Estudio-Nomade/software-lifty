@@ -316,6 +316,64 @@ describe('Admin', () => {
     expect(byDni.data.items.some((d: { id: string }) => d.id === driverId)).toBe(true);
   });
 
+  test('GET /drivers returns 200 for bare driver without vehicle or district', async () => {
+    const adminToken = await createAdminToken();
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({
+        phone: '+5492617777001',
+        full_name: 'Bare Driver',
+        role: 'driver',
+        kyc_status: 'pending',
+      })
+      .returning({ id: users.id });
+    const [driver] = await db
+      .insert(drivers)
+      .values({
+        user_id: user.id,
+        status: 'step1',
+        district_id: null,
+        approved_at: null,
+        admin_reviewed_at: null,
+      })
+      .returning({ id: drivers.id });
+
+    const all = await request('GET', '/api/admin/drivers?limit=100', undefined, adminToken);
+    expect(all.status).toBe(200);
+    expect(all.data.items).toBeArray();
+    expect(Number.isFinite(all.data.limit)).toBe(true);
+    expect(Number.isFinite(all.data.offset)).toBe(true);
+    expect(typeof all.data.total).toBe('number');
+    const row = all.data.items.find((d: { id: string }) => d.id === driver.id);
+    expect(row).toBeDefined();
+    expect(row.plate).toBeNull();
+    expect(row.vehicle_type).toBeNull();
+    expect(row.district_id).toBeNull();
+    expect(row.district_name).toBeNull();
+    expect(row.registry_id).toBeTruthy();
+    expect(row).toHaveProperty('identification_phase');
+
+    const byStatus = await request(
+      'GET',
+      '/api/admin/drivers?status=step1&identification_status=pending_pickup',
+      undefined,
+      adminToken,
+    );
+    expect(byStatus.status).toBe(200);
+    expect(byStatus.data.items.some((d: { id: string }) => d.id === driver.id)).toBe(true);
+
+    const badLimit = await request(
+      'GET',
+      '/api/admin/drivers?limit=abc&offset=nope',
+      undefined,
+      adminToken,
+    );
+    expect(badLimit.status).toBe(200);
+    expect(Number.isFinite(badLimit.data.limit)).toBe(true);
+    expect(Number.isFinite(badLimit.data.offset)).toBe(true);
+  });
+
   test('POST /drivers/:id/review approve', async () => {
     const adminToken = await createAdminToken();
     const { driverId } = await createReviewDriver();

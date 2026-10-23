@@ -32,6 +32,13 @@ function escapeIlike(raw: string): string {
   return raw.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
+/** Coerce query pagination to a finite int; invalid/NaN → fallback. */
+function pageInt(value: number | undefined, fallback: number, min: number, max: number): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(Math.max(Math.trunc(n), min), max);
+}
+
 const NOT_PENDING_QUEUE = new Set(['review', 'approved', 'suspended']);
 
 export const adminService = {
@@ -92,14 +99,16 @@ export const adminService = {
     limit?: number;
     offset?: number;
   }) {
-    const limit = Math.min(Math.max(opts?.limit ?? 100, 1), 200);
-    const offset = Math.max(opts?.offset ?? 0, 0);
+    const limit = pageInt(opts?.limit, 100, 1, 200);
+    const offset = pageInt(opts?.offset, 0, 0, 1_000_000);
     const q = opts?.q?.trim();
+    const status = opts?.status?.trim() || undefined;
+    const identificationStatus = opts?.identification_status?.trim() || undefined;
 
     const filters = [];
-    if (opts?.status) filters.push(eq(drivers.status, opts.status));
-    if (opts?.identification_status) {
-      filters.push(eq(drivers.identification_status, opts.identification_status));
+    if (status) filters.push(eq(drivers.status, status));
+    if (identificationStatus) {
+      filters.push(eq(drivers.identification_status, identificationStatus));
     }
     if (q) {
       const pattern = `%${escapeIlike(q)}%`;
@@ -168,12 +177,13 @@ export const adminService = {
         admin_reviewed_at: row.admin_reviewed_at,
         created_at: row.created_at,
       });
+      const id = row.id ?? '';
       return {
         ...row,
         /** Ops-facing ID: DNI if known, else last4, else short driver uuid. */
         registry_id:
           row.document_number?.trim() ||
-          (row.document_number_last4 ? `****${row.document_number_last4}` : row.id.slice(0, 8)),
+          (row.document_number_last4 ? `****${row.document_number_last4}` : id.slice(0, 8) || id),
         identification_phase: identification.phase,
         identification_blocks_online: identification.blocks_online,
         identification_days_until_pause: identification.days_until_pause,
@@ -182,14 +192,15 @@ export const adminService = {
       };
     });
 
-    const [{ count }] = await db
+    const countRows = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(drivers)
       .innerJoin(users, eq(drivers.user_id, users.id))
       .leftJoin(districts, eq(drivers.district_id, districts.id))
       .where(whereClause);
+    const total = Number(countRows[0]?.count ?? 0);
 
-    return { items: enriched, total: count, limit, offset };
+    return { items: enriched, total, limit, offset };
   },
 
   async getDriverDetail(driverId: string) {
