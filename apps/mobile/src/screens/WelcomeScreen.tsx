@@ -151,7 +151,12 @@ export const WelcomeScreen: React.FC = () => {
       >
         <StatusBar barStyle="dark-content" />
         <View style={styles.hero}>
-          <Image source={MARK_L} style={styles.mark} resizeMode="contain" />
+          <Image
+            source={MARK_L}
+            style={styles.mark}
+            resizeMode="contain"
+            accessibilityLabel="Lifty"
+          />
           <Text style={styles.recoveryTitle}>No pudimos cargar tu cuenta</Text>
           <Text style={styles.recoveryBody}>
             Hay sesión, pero el servidor no respondió. Reintentá o cerrá sesión para volver al
@@ -185,7 +190,12 @@ export const WelcomeScreen: React.FC = () => {
       <StatusBar barStyle="dark-content" />
       <View style={styles.main}>
         <View style={styles.brand}>
-          <Image source={MARK_L} style={styles.mark} resizeMode="contain" />
+          <Image
+            source={MARK_L}
+            style={styles.mark}
+            resizeMode="contain"
+            accessibilityLabel="Lifty"
+          />
           <Text style={styles.wordmark}>Lifty</Text>
           <Text style={styles.tagline}>Movilidad que te eleva</Text>
         </View>
@@ -235,6 +245,7 @@ const styles = StyleSheet.create({
   mark: {
     width: 148,
     height: 182,
+    resizeMode: 'contain',
     marginBottom: theme.spacing.xs,
   },
   wordmark: {

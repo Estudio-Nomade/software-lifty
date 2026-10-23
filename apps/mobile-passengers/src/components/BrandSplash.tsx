@@ -9,7 +9,12 @@ export function BrandSplash() {
     <View style={styles.root}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.brand}>
-        <Image source={MARK_L} style={styles.mark} resizeMode="contain" />
+        <Image
+          source={MARK_L}
+          style={styles.mark}
+          resizeMode="contain"
+          accessibilityLabel="Lifty"
+        />
         <Text style={styles.wordmark}>Lifty</Text>
         <Text style={styles.tagline}>Movilidad que te eleva</Text>
       </View>
@@ -32,6 +37,7 @@ const styles = StyleSheet.create({
   mark: {
     width: 148,
     height: 182,
+    resizeMode: 'contain',
     marginBottom: theme.spacing.xs,
   },
   wordmark: {
