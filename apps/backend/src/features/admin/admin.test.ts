@@ -248,6 +248,21 @@ describe('Admin', () => {
     expect(typeof data.commission_fraud_block).toBe('boolean');
   });
 
+  test('isMissingDriverDetailRelationError detects undeployed commission_fraud_block', async () => {
+    const { isMissingDriverDetailRelationError } = await import('./service');
+    expect(
+      isMissingDriverDetailRelationError(
+        new Error('column drivers.commission_fraud_block does not exist'),
+      ),
+    ).toBe(true);
+    expect(
+      isMissingDriverDetailRelationError(
+        new Error('relation "driver_commission_receipts" does not exist'),
+      ),
+    ).toBe(true);
+    expect(isMissingDriverDetailRelationError(new Error('connection refused'))).toBe(false);
+  });
+
   test('GET /drivers/:id heals rejected+complete into review queue', async () => {
     const adminToken = await createAdminToken();
     const { driverId } = await createReviewDriver();

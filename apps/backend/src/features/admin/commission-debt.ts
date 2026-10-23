@@ -148,51 +148,66 @@ export const adminCommissionDebtService = {
           ? conditions[0]
           : and(...conditions);
 
-    const baseQuery = db
-      .select({
-        id: driverCommissionReceipts.id,
-        driver_id: driverCommissionReceipts.driver_id,
-        amount_ars: driverCommissionReceipts.amount_ars,
-        debt_before_ars: driverCommissionReceipts.debt_before_ars,
-        status: driverCommissionReceipts.status,
-        file_url: driverCommissionReceipts.file_url,
-        created_at: driverCommissionReceipts.created_at,
-        reviewed_at: driverCommissionReceipts.reviewed_at,
-        reviewed_by: driverCommissionReceipts.reviewed_by,
-        note: driverCommissionReceipts.note,
-        driver_name: users.full_name,
-        driver_email: users.email,
-        driver_phone: users.phone,
-      })
-      .from(driverCommissionReceipts)
-      .innerJoin(drivers, eq(driverCommissionReceipts.driver_id, drivers.id))
-      .innerJoin(users, eq(drivers.user_id, users.id));
+    try {
+      const baseQuery = db
+        .select({
+          id: driverCommissionReceipts.id,
+          driver_id: driverCommissionReceipts.driver_id,
+          amount_ars: driverCommissionReceipts.amount_ars,
+          debt_before_ars: driverCommissionReceipts.debt_before_ars,
+          status: driverCommissionReceipts.status,
+          file_url: driverCommissionReceipts.file_url,
+          created_at: driverCommissionReceipts.created_at,
+          reviewed_at: driverCommissionReceipts.reviewed_at,
+          reviewed_by: driverCommissionReceipts.reviewed_by,
+          note: driverCommissionReceipts.note,
+          driver_name: users.full_name,
+          driver_email: users.email,
+          driver_phone: users.phone,
+        })
+        .from(driverCommissionReceipts)
+        .innerJoin(drivers, eq(driverCommissionReceipts.driver_id, drivers.id))
+        .innerJoin(users, eq(drivers.user_id, users.id));
 
-    const itemsQuery = where
-      ? baseQuery
-          .where(where)
-          .orderBy(desc(driverCommissionReceipts.created_at))
-          .limit(limit)
-          .offset(offset)
-      : baseQuery.orderBy(desc(driverCommissionReceipts.created_at)).limit(limit).offset(offset);
+      const itemsQuery = where
+        ? baseQuery
+            .where(where)
+            .orderBy(desc(driverCommissionReceipts.created_at))
+            .limit(limit)
+            .offset(offset)
+        : baseQuery.orderBy(desc(driverCommissionReceipts.created_at)).limit(limit).offset(offset);
 
-    const countBase = db
-      .select({ total: count() })
-      .from(driverCommissionReceipts)
-      .innerJoin(drivers, eq(driverCommissionReceipts.driver_id, drivers.id))
-      .innerJoin(users, eq(drivers.user_id, users.id));
+      const countBase = db
+        .select({ total: count() })
+        .from(driverCommissionReceipts)
+        .innerJoin(drivers, eq(driverCommissionReceipts.driver_id, drivers.id))
+        .innerJoin(users, eq(drivers.user_id, users.id));
 
-    const countQuery = where ? countBase.where(where) : countBase;
+      const countQuery = where ? countBase.where(where) : countBase;
 
-    const [rows, totalRows] = await Promise.all([itemsQuery, countQuery]);
-    const total = Number(totalRows[0]?.total ?? 0);
+      const [rows, totalRows] = await Promise.all([itemsQuery, countQuery]);
+      const total = Number(totalRows[0]?.total ?? 0);
 
-    return {
-      items: rows.map(mapReceiptRow),
-      total,
-      limit,
-      offset,
-    };
+      return {
+        items: rows.map(mapReceiptRow),
+        total,
+        limit,
+        offset,
+      };
+    } catch (err) {
+      const msg = String((err as Error)?.message ?? err ?? '');
+      if (
+        /driver_commission_receipts/i.test(msg) ||
+        /does not exist/i.test(msg) ||
+        /42703/.test(msg)
+      ) {
+        logger.warn('[admin] listReceipts schema drift — empty list until migration 0048', {
+          message: (err as Error).message,
+        });
+        return { items: [], total: 0, limit, offset };
+      }
+      throw err;
+    }
   },
 
   async getReceipt(id: string) {

@@ -41,6 +41,110 @@ function pageInt(value: number | undefined, fallback: number, min: number, max: 
 
 const NOT_PENDING_QUEUE = new Set(['review', 'approved', 'suspended']);
 
+type DriverDetailRow = {
+  id: string;
+  user_id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  status: string;
+  kyc_status: string | null;
+  verified_name: string | null;
+  document_number: string | null;
+  document_number_last4: string | null;
+  admin_review_status: string;
+  admin_reviewed_at: Date | string | null;
+  admin_review_notes: string | null;
+  documents_pending_review: boolean | null;
+  identification_status: string | null;
+  identification_issued_at: Date | string | null;
+  identification_external_ref: string | null;
+  approved_at: Date | string | null;
+  is_online: boolean | null;
+  platform_debt: number | string | null;
+  commission_fraud_block: boolean | null;
+  district_id: string | null;
+  district_name: string | null;
+  district_province: string | null;
+  created_at: Date | string;
+  total_trips: number | null;
+};
+
+/** Exported for unit coverage of schema-drift detection (prod wabdd missing 0048). */
+export function isMissingDriverDetailRelationError(err: unknown): boolean {
+  const msg = String((err as Error)?.message ?? err ?? '');
+  return (
+    /commission_fraud_block/i.test(msg) ||
+    /driver_commission_receipts/i.test(msg) ||
+    (/does not exist/i.test(msg) && /drivers|relation/i.test(msg)) ||
+    /42703/.test(msg)
+  );
+}
+
+/**
+ * Load admin driver ficha row. Prefer full select (incl. commission_fraud_block).
+ * If cloud DB lacks migration 0048 (`commission_fraud_block` / receipts), fall back
+ * so GET /admin/drivers/:id still 200 instead of safeCall 500.
+ */
+async function loadDriverDetailRow(driverId: string): Promise<DriverDetailRow | null> {
+  const baseSelect = {
+    id: drivers.id,
+    user_id: drivers.user_id,
+    full_name: users.full_name,
+    email: users.email,
+    phone: users.phone,
+    status: drivers.status,
+    kyc_status: users.kyc_status,
+    verified_name: users.verified_name,
+    document_number: users.document_number,
+    document_number_last4: users.document_number_last4,
+    admin_review_status: drivers.admin_review_status,
+    admin_reviewed_at: drivers.admin_reviewed_at,
+    admin_review_notes: drivers.admin_review_notes,
+    documents_pending_review: drivers.documents_pending_review,
+    identification_status: drivers.identification_status,
+    identification_issued_at: drivers.identification_issued_at,
+    identification_external_ref: drivers.identification_external_ref,
+    approved_at: drivers.approved_at,
+    is_online: drivers.is_online,
+    platform_debt: drivers.platform_debt,
+    district_id: drivers.district_id,
+    district_name: districts.name,
+    district_province: districts.province,
+    created_at: drivers.created_at,
+    total_trips: drivers.total_trips,
+  };
+
+  try {
+    const [row] = await db
+      .select({
+        ...baseSelect,
+        commission_fraud_block: drivers.commission_fraud_block,
+      })
+      .from(drivers)
+      .innerJoin(users, eq(drivers.user_id, users.id))
+      .leftJoin(districts, eq(drivers.district_id, districts.id))
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    return row ?? null;
+  } catch (err) {
+    if (!isMissingDriverDetailRelationError(err)) throw err;
+    logger.warn('[admin] getDriverDetail schema drift — retry without commission_fraud_block', {
+      driverId: driverId.slice(0, 8),
+      message: (err as Error).message,
+    });
+    const [row] = await db
+      .select(baseSelect)
+      .from(drivers)
+      .innerJoin(users, eq(drivers.user_id, users.id))
+      .leftJoin(districts, eq(drivers.district_id, districts.id))
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    if (!row) return null;
+    return { ...row, commission_fraud_block: false };
+  }
+}
+
 export const adminService = {
   /**
    * Heal stuck drivers (docs complete, status still pending/step1/… or rejected
@@ -208,41 +312,7 @@ export const adminService = {
     // appear without a separate requeue endpoint.
     await ensureDriverEnteredReview(driverId);
 
-    const [driver] = await db
-      .select({
-        id: drivers.id,
-        user_id: drivers.user_id,
-        full_name: users.full_name,
-        email: users.email,
-        phone: users.phone,
-        status: drivers.status,
-        kyc_status: users.kyc_status,
-        verified_name: users.verified_name,
-        document_number: users.document_number,
-        document_number_last4: users.document_number_last4,
-        admin_review_status: drivers.admin_review_status,
-        admin_reviewed_at: drivers.admin_reviewed_at,
-        admin_review_notes: drivers.admin_review_notes,
-        documents_pending_review: drivers.documents_pending_review,
-        identification_status: drivers.identification_status,
-        identification_issued_at: drivers.identification_issued_at,
-        identification_external_ref: drivers.identification_external_ref,
-        approved_at: drivers.approved_at,
-        is_online: drivers.is_online,
-        platform_debt: drivers.platform_debt,
-        commission_fraud_block: drivers.commission_fraud_block,
-        district_id: drivers.district_id,
-        district_name: districts.name,
-        district_province: districts.province,
-        created_at: drivers.created_at,
-        total_trips: drivers.total_trips,
-      })
-      .from(drivers)
-      .innerJoin(users, eq(drivers.user_id, users.id))
-      .leftJoin(districts, eq(drivers.district_id, districts.id))
-      .where(eq(drivers.id, driverId))
-      .limit(1);
-
+    const driver = await loadDriverDetailRow(driverId);
     if (!driver) throw new NotFoundError('Driver not found');
 
     const vehicleRows = await db
