@@ -26,6 +26,14 @@ import { theme } from '../theme';
 
 const formatCurrency = (value: number) => `$${value.toLocaleString('es-AR')}`;
 
+function collectErrorMessage(err: unknown): string {
+  if (err instanceof ApiError && err.code === 'DEBT_CAP_REACHED') {
+    return 'No se pudo registrar el cobro por límite de deuda. Si el viaje sigue abierto, reintentá o contactá soporte.';
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return 'No se pudo registrar el cobro.';
+}
+
 type Step = 'collect' | 'rate';
 
 export function TripCompleteScreen() {
@@ -50,8 +58,10 @@ export function TripCompleteScreen() {
   const [rated, setRated] = useState(false);
   const submitLock = useRef(false);
   const [metrics, setMetrics] = useState<{
-    commission_active: boolean;
-    debt_remaining_ars: number;
+    commission_active?: boolean;
+    platform_debt?: number;
+    debt_cap_ars?: number;
+    debt_remaining_ars?: number;
   } | null>(null);
 
   const { amount, commission, driverEarnings, tipAmount } = useLocalSearchParams<{
@@ -65,10 +75,6 @@ export function TripCompleteScreen() {
   const tripCommission = commission != null ? Number(commission) : 0;
   const tripDriverEarnings = driverEarnings != null ? Number(driverEarnings) : 0;
   const tip = tipAmount != null ? Number(tipAmount) : 0;
-
-  const platformFee = Number(trip?.platform_fee ?? 0);
-  const cashBlocked =
-    metrics?.commission_active === true && (metrics?.debt_remaining_ars ?? 0) < platformFee;
 
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -116,13 +122,7 @@ export function TripCompleteScreen() {
       await apiClient.put(`/trips/${activeTripId}/collect`, { payment_method: 'cash' });
       setStep('rate');
     } catch (err: unknown) {
-      const message =
-        err instanceof ApiError && err.code === 'DEBT_CAP_REACHED'
-          ? 'Alcanzaste el límite de $6000 de deuda con Lifty. Regularizá tu saldo o cobrá por transferencia.'
-          : err instanceof Error
-            ? err.message
-            : 'No se pudo registrar el cobro.';
-      Alert.alert('Error', message);
+      Alert.alert('Error', collectErrorMessage(err));
     } finally {
       setCollecting(false);
     }
@@ -135,8 +135,7 @@ export function TripCompleteScreen() {
       await apiClient.put(`/trips/${activeTripId}/collect`, { payment_method: 'transfer' });
       setStep('rate');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'No se pudo registrar el cobro.';
-      Alert.alert('Error', message);
+      Alert.alert('Error', collectErrorMessage(err));
     } finally {
       setCollectingTransfer(false);
     }
@@ -226,12 +225,17 @@ export function TripCompleteScreen() {
         </Text>
       </View>
 
-      {cashBlocked ? (
-        <Text style={styles.debtWarning}>
-          Alcanzaste el límite de $6000 de deuda con Lifty. Regularizá tu saldo o cobrá por
-          transferencia.
-        </Text>
-      ) : null}
+      {(() => {
+        const debt = Number(metrics?.platform_debt ?? 0);
+        if (!Number.isFinite(debt) || debt <= 0) return null;
+        const cap = Number(metrics?.debt_cap_ars);
+        const capLabel = Number.isFinite(cap) && cap > 0 ? ` / tope ${formatCurrency(cap)}` : '';
+        return (
+          <Text
+            style={styles.debtWarning}
+          >{`Deuda comisión: ${formatCurrency(debt)}${capLabel}`}</Text>
+        );
+      })()}
       {preferredMethod ? (
         <Text style={styles.preferredMethod}>
           El pasajero eligió: {preferredMethod === 'cash' ? 'Efectivo' : 'Transferencia'}
@@ -241,7 +245,6 @@ export function TripCompleteScreen() {
         title="Cobre en efectivo"
         onPress={handleCollect}
         loading={collecting}
-        disabled={cashBlocked}
         variant={preferredMethod === 'cash' ? 'cta' : 'primary'}
         style={styles.button}
       />

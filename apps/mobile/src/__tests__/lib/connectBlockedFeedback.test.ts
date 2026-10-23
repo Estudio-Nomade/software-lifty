@@ -68,4 +68,21 @@ describe('connectBlockedFeedback', () => {
     expect(feedback.title).toBe('Elegí tu municipio');
     expect(feedback.tone).toBe('warning');
   });
+
+  it('maps COMMISSION_DEBT_CAP with server message preferred', () => {
+    const err = new ApiError({
+      error: {
+        code: 'COMMISSION_DEBT_CAP',
+        message:
+          'Alcanzaste el límite de deuda de comisión ($10000). Debés transferir $12500 a Lifty para volver a conectarte.',
+        status: 409,
+      },
+      meta: { timestamp: new Date().toISOString() },
+    });
+    const feedback = feedbackFromConnectError(err);
+    expect(feedback.title).toBe('Deuda de comisión con Lifty');
+    expect(feedback.message).toMatch(/límite|debés|10000|12500/i);
+    expect(feedback.tone).toBe('error');
+  });
 });
+

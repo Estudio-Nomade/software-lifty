@@ -67,4 +67,11 @@ describe('handleNotificationResponse driver review', () => {
     });
     expect(navigate).not.toHaveBeenCalledWith('WaitingApproval');
   });
+
+  it('routes driver:commission_debt_block to Earnings', () => {
+    const navigate = jest.fn();
+    handleNotificationResponse(makeResponse('driver:commission_debt_block'), navigate);
+    expect(navigate).toHaveBeenCalledWith('Earnings');
+  });
 });
+

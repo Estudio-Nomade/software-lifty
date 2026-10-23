@@ -57,6 +57,12 @@ const BY_CODE: Record<string, ConnectBlockedFeedback> = {
       'Tu domicilio figura en una zona donde Lifty todavía no habilita viajes. Te avisamos cuando abramos tu zona.',
     tone: 'warning',
   },
+  COMMISSION_DEBT_CAP: {
+    title: 'Deuda de comisión con Lifty',
+    message:
+      'Alcanzaste el límite de deuda de comisión. Transferí el total a Lifty y subí el comprobante para volver a conectarte.',
+    tone: 'error',
+  },
 };
 
 export function feedbackForConnectBlock(
@@ -80,6 +86,13 @@ export function feedbackForConnectBlock(
 
 export function feedbackFromConnectError(err: unknown): ConnectBlockedFeedback {
   if (err instanceof ApiError) {
+    if (err.code === 'COMMISSION_DEBT_CAP') {
+      return {
+        title: BY_CODE.COMMISSION_DEBT_CAP.title,
+        message: polishConnectMessage(err.message) || BY_CODE.COMMISSION_DEBT_CAP.message,
+        tone: 'error',
+      };
+    }
     const mapped = BY_CODE[err.code];
     if (mapped) return mapped;
     if (err.status === 403 || err.status === 409) {

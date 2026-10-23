@@ -242,6 +242,9 @@ export function handleNotificationResponse(
     case 'payment:deposited':
       navigate('Earnings');
       break;
+    case 'driver:commission_debt_block':
+      navigate('Earnings');
+      break;
     case 'trip:message': {
       // Chat reads the active trip from the store (restored by ActiveTripRecovery).
       // Pass trip_id so deep-links stay explicit if the route ever needs it.
