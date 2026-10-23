@@ -327,7 +327,9 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xs,
     paddingHorizontal: theme.spacing.sm,
     gap: theme.spacing.xs,
-    width: 327,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   instructionsLabel: {
     fontSize: theme.fontSize.sm,

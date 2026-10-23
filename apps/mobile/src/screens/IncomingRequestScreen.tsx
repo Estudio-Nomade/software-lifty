@@ -455,7 +455,9 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
   },
   button: {
-    width: 327,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
   },
   rejectLink: {
     fontSize: theme.fontSize.md,
