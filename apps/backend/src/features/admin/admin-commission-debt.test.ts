@@ -208,6 +208,12 @@ describe('Admin commission debt', () => {
     expect(drv!.commission_fraud_block).toBe(false);
     expect(Number(drv!.platform_debt)).toBe(0);
 
+    // Re-block after a later fraud decision, then re-approve old receipt must NOT clear it.
+    await db
+      .update(drivers)
+      .set({ commission_fraud_block: true })
+      .where(eq(drivers.id, driverId));
+
     const second = await request(
       'POST',
       `/api/admin/commission/receipts/${receipt.id}/approve`,
@@ -216,11 +222,15 @@ describe('Admin commission debt', () => {
     );
     expect(second.status).toBe(200);
     expect(second.data.status).toBe('approved');
+
+    const [drvAfter] = await db.select().from(drivers).where(eq(drivers.id, driverId)).limit(1);
+    expect(drvAfter!.commission_fraud_block).toBe(true);
   });
 
-  test('reject-fraud restores debt, sets fraud_block, force offline', async () => {
+  test('reject-fraud adds debt_before to current debt, sets fraud_block, force offline', async () => {
     const admin = await createAdmin();
-    const { driverId } = await createDriver({ debt: 0, fraud: false, online: true });
+    // Accrued after upload cleared debt_before — must not wipe the 1500.
+    const { driverId } = await createDriver({ debt: 1500, fraud: false, online: true });
     const receipt = await insertReceipt(driverId, { debt_before_ars: 8200, amount_ars: 8200 });
 
     const res = await request(
@@ -236,7 +246,7 @@ describe('Admin commission debt', () => {
     const db = getDb();
     const [drv] = await db.select().from(drivers).where(eq(drivers.id, driverId)).limit(1);
     expect(drv!.commission_fraud_block).toBe(true);
-    expect(Number(drv!.platform_debt)).toBe(8200);
+    expect(Number(drv!.platform_debt)).toBe(9700);
     expect(drv!.is_online).toBe(false);
   });
 

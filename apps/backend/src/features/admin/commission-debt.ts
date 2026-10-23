@@ -1,4 +1,4 @@
-import { and, count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, sql } from 'drizzle-orm';
 import { db, getDb } from '../../shared/db/client';
 import { driverCommissionReceipts, drivers, users } from '../../shared/db/schema';
 import { getConfig, getDebtCapArs, setConfig } from '../../shared/lib/commission';
@@ -234,19 +234,10 @@ export const adminCommissionDebtService = {
 
     if (!existing) throw new NotFoundError('Commission receipt not found');
 
+    // Already approved: pure no-op — do not touch fraud_block (a later receipt may have
+    // re-blocked the driver; re-approve must not clear that).
     if (existing.status === 'approved') {
-      await db
-        .update(drivers)
-        .set({
-          commission_fraud_block: false,
-          updated_at: new Date(),
-        })
-        .where(eq(drivers.id, existing.driver_id));
-
-      return mapReceiptRow({
-        ...existing,
-        status: 'approved',
-      });
+      return mapReceiptRow(existing);
     }
 
     if (existing.status !== 'pending_review') {
@@ -258,40 +249,45 @@ export const adminCommissionDebtService = {
     }
 
     const now = new Date();
-    const [updated] = await db
-      .update(driverCommissionReceipts)
-      .set({
-        status: 'approved',
-        reviewed_at: now,
-        reviewed_by: adminUser.id,
-      })
-      .where(
-        and(
-          eq(driverCommissionReceipts.id, id),
-          eq(driverCommissionReceipts.status, 'pending_review'),
-        ),
-      )
-      .returning();
+    const updated = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(driverCommissionReceipts)
+        .set({
+          status: 'approved',
+          reviewed_at: now,
+          reviewed_by: adminUser.id,
+        })
+        .where(
+          and(
+            eq(driverCommissionReceipts.id, id),
+            eq(driverCommissionReceipts.status, 'pending_review'),
+          ),
+        )
+        .returning();
 
-    if (!updated) {
-      const [again] = await db
-        .select()
-        .from(driverCommissionReceipts)
-        .where(eq(driverCommissionReceipts.id, id))
-        .limit(1);
-      if (again?.status === 'approved') {
-        return mapReceiptRow(again);
+      if (!row) {
+        const [again] = await tx
+          .select()
+          .from(driverCommissionReceipts)
+          .where(eq(driverCommissionReceipts.id, id))
+          .limit(1);
+        if (again?.status === 'approved') {
+          return again;
+        }
+        throw new AppError('Receipt could not be approved', 409, 'RECEIPT_NOT_PENDING');
       }
-      throw new AppError('Receipt could not be approved', 409, 'RECEIPT_NOT_PENDING');
-    }
 
-    await db
-      .update(drivers)
-      .set({
-        commission_fraud_block: false,
-        updated_at: new Date(),
-      })
-      .where(eq(drivers.id, existing.driver_id));
+      // Only clear fraud on first transition pending → approved.
+      await tx
+        .update(drivers)
+        .set({
+          commission_fraud_block: false,
+          updated_at: now,
+        })
+        .where(eq(drivers.id, existing.driver_id));
+
+      return row;
+    });
 
     return mapReceiptRow(updated);
   },
@@ -317,7 +313,7 @@ export const adminCommissionDebtService = {
       );
     }
 
-    const debtRestore = Math.round(Number(existing.debt_before_ars ?? 0));
+    const debtBefore = Math.round(Number(existing.debt_before_ars ?? 0));
     const now = new Date();
     const trimmedNote = note?.trim() || null;
 
@@ -342,30 +338,58 @@ export const adminCommissionDebtService = {
         throw new AppError('Receipt could not be rejected', 409, 'RECEIPT_NOT_PENDING');
       }
 
-      const [driver] = await tx
-        .select({
-          id: drivers.id,
-          user_id: drivers.user_id,
-          is_online: drivers.is_online,
-        })
-        .from(drivers)
-        .where(eq(drivers.id, existing.driver_id))
-        .limit(1);
-
+      // Lock driver so concurrent collect/upload cannot race the debt restore.
+      const locked = await tx.execute<{
+        id: string;
+        user_id: string;
+        is_online: boolean;
+        platform_debt: number | string;
+      }>(
+        sql`SELECT id, user_id, is_online, platform_debt FROM drivers WHERE id = ${existing.driver_id} FOR UPDATE`,
+      );
+      const lockedRows =
+        (
+          locked as {
+            rows?: Array<{
+              id: string;
+              user_id: string;
+              is_online: boolean;
+              platform_debt: number | string;
+            }>;
+          }
+        ).rows ??
+        (Array.isArray(locked)
+          ? (locked as Array<{
+              id: string;
+              user_id: string;
+              is_online: boolean;
+              platform_debt: number | string;
+            }>)
+          : []);
+      const driver = lockedRows[0];
       if (!driver) throw new NotFoundError('Driver not found');
+
+      // Upload cleared debt_before; new trips may have accrued since. Add snapshot back
+      // instead of overwriting current balance.
+      const currentDebt = Math.round(Number(driver.platform_debt ?? 0));
+      const restoredDebt = currentDebt + debtBefore;
 
       await tx
         .update(drivers)
         .set({
           commission_fraud_block: true,
-          platform_debt: debtRestore,
+          platform_debt: restoredDebt,
           is_online: false,
           last_heartbeat: null,
           updated_at: now,
         })
         .where(eq(drivers.id, driver.id));
 
-      return { receipt: updated, userId: driver.user_id, wasOnline: driver.is_online };
+      return {
+        receipt: updated,
+        userId: driver.user_id,
+        restoredDebt,
+      };
     });
 
     void sendPushToUser(result.userId, {
@@ -375,7 +399,7 @@ export const adminCommissionDebtService = {
         type: 'driver:commission_fraud_block',
         reason: 'rejected_fraud',
         receipt_id: id,
-        platform_debt: String(debtRestore),
+        platform_debt: String(result.restoredDebt),
       },
       channelId: 'account',
     }).catch((err) => {
