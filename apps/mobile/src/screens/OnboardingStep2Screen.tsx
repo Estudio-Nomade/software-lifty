@@ -335,7 +335,7 @@ export const OnboardingStep2Screen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+      <StatusBar barStyle="light-content" />
       <Navbar title="Paso 3/3" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Subi tus documentos</Text>

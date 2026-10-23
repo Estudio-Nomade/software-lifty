@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -40,7 +40,7 @@ export const WaitingPassengerScreen: React.FC = () => {
   const [verificationError, setVerificationError] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [displayAddress, setDisplayAddress] = useState<string | null>(null);
-  const chatScrollRef = useRef<ScrollView>(null);
+  const chatScrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
 
   const activeTripId = useTripStore((s) => s.activeTripId);
   const clearTrip = useTripStore((s) => s.clearTrip);

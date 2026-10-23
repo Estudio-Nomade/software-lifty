@@ -201,7 +201,7 @@ export const CancellationPolicyScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+      <StatusBar barStyle="light-content" />
       <Navbar title="Cancelaciones" onBack={() => navigation.goBack()} />
 
       <ScrollView

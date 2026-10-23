@@ -249,7 +249,7 @@ export function LoginCredentialsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
         <TouchableOpacity onPress={goBack} style={styles.backButton} hitSlop={8}>
           <Text style={styles.backText}>← Volver</Text>

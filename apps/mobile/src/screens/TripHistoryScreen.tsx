@@ -211,7 +211,7 @@ export const TripHistoryScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <StatusBar barStyle="dark-content" />
       <Navbar title="Historial" onBack={() => navigation.goBack()} showBack variant="light" />
       <View style={{ flex: 1 }}>{renderContent()}</View>
     </View>

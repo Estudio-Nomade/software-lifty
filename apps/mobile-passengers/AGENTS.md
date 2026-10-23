@@ -133,7 +133,7 @@ Desarrollar la aplicacion de pasajeros para Lifty, un servicio de ride-hailing q
 
 | Herramienta | Version | Proposito |
 |---|---|---|
-| Expo | SDK 57 | Framework React Native |
+| Expo | SDK 58 | Framework React Native |
 | React | 19.2 | UI Library |
 | React Native | 0.86 | Mobile framework |
 | expo-router | ~57.0.22 | File-based routing |

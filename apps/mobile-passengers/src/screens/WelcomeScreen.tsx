@@ -25,7 +25,7 @@ export function WelcomeScreen() {
     <View
       style={[styles.container, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 20 }]}
     >
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <StatusBar barStyle="dark-content" />
       <View style={styles.main}>
         <View style={styles.brand}>
           <Image source={MARK_L} style={styles.mark} resizeMode="contain" />

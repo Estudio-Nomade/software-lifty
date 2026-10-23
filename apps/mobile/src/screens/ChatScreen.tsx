@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useRef, useState } from 'react';
+import { type ComponentRef, useCallback, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -23,7 +23,7 @@ export const ChatScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const insets = useSafeAreaInsets();
   const [inputText, setInputText] = useState('');
-  const chatScrollRef = useRef<ScrollView>(null);
+  const chatScrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeTripId = useTripStore((s) => s.activeTripId);

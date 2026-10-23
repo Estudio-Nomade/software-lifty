@@ -149,7 +149,7 @@ export const WelcomeScreen: React.FC = () => {
           { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 },
         ]}
       >
-        <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+        <StatusBar barStyle="dark-content" />
         <View style={styles.hero}>
           <Image source={MARK_L} style={styles.mark} resizeMode="contain" />
           <Text style={styles.recoveryTitle}>No pudimos cargar tu cuenta</Text>
@@ -182,7 +182,7 @@ export const WelcomeScreen: React.FC = () => {
     <View
       style={[styles.container, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 20 }]}
     >
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <StatusBar barStyle="dark-content" />
       <View style={styles.main}>
         <View style={styles.brand}>
           <Image source={MARK_L} style={styles.mark} resizeMode="contain" />

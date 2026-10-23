@@ -56,7 +56,7 @@ export function LocationPermissionsScreen() {
 
   return (
     <View style={[styles.safe, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <StatusBar barStyle="dark-content" />
       <TouchableOpacity onPress={handleSkip} style={styles.skipButton} hitSlop={8}>
         <Ionicons name="arrow-forward" size={22} color={theme.colors.deepBlue} />
       </TouchableOpacity>

@@ -255,7 +255,7 @@ export const AuthScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={theme.colors.deepBlue} />
+      <StatusBar barStyle="light-content" />
       {/*
         Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.
         iOS: padding KAV + ScrollView.
