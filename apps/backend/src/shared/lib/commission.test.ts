@@ -4,7 +4,12 @@ process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://lifty:
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { getDb, resetDb } from '../db/client';
 import { commissionPhases, platformConfig } from '../db/schema';
-import { getCommissionRate, getCommissionConfig } from './commission';
+import {
+  DEFAULT_DEBT_CAP_ARS,
+  getCommissionConfig,
+  getCommissionRate,
+  getDebtCapArs,
+} from './commission';
 
 const DAY_SEED = [
   { name: 'Lanzamiento', day_start: 1, day_end: 7, base_rate: 0.0 },
@@ -30,6 +35,22 @@ beforeEach(async () => {
 
 afterAll(() => {
   resetDb();
+});
+
+describe('getDebtCapArs', () => {
+  test('defaults to 10000 when config missing', async () => {
+    expect(DEFAULT_DEBT_CAP_ARS).toBe(10000);
+    const db = getDb();
+    const cap = await getDebtCapArs(db);
+    expect(cap).toBe(10000);
+  });
+
+  test('reads platform.debt_cap_ars from config', async () => {
+    const db = getDb();
+    await db.insert(platformConfig).values({ key: 'platform.debt_cap_ars', value: '7500' });
+    const cap = await getDebtCapArs(db);
+    expect(cap).toBe(7500);
+  });
 });
 
 describe('getCommissionRate', () => {

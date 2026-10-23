@@ -2,6 +2,7 @@ process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://lifty:lifty@localhost:5433/lifty_test';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
 import {
@@ -122,6 +123,44 @@ describe('Earnings + Stats + TVF', () => {
     expect(data.month.earnings).toBe(0);
     expect(data.month.withdrawals).toBe(0);
     expect(data.available_balance).toBe(0);
+  });
+
+  test('GET /daily exposes debt_cap_ars and debt_blocks_online', async () => {
+    const token = await registerAndGetToken(phone, password);
+    const driverId = await createDriverRow(token);
+    const db = getDb();
+    await db.update(drivers).set({ platform_debt: 10001 }).where(eq(drivers.id, driverId));
+
+    const { status, data } = await request(
+      'GET',
+      '/api/drivers/me/earnings/daily',
+      undefined,
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.platform_debt).toBe(10001);
+    expect(data.debt_cap_ars).toBe(10000);
+    expect(data.debt_blocks_online).toBe(true);
+  });
+
+  test('GET /daily debt_blocks_online false when under cap', async () => {
+    const token = await registerAndGetToken(phone, password);
+    const driverId = await createDriverRow(token);
+    const db = getDb();
+    await db.update(drivers).set({ platform_debt: 5000 }).where(eq(drivers.id, driverId));
+
+    const { status, data } = await request(
+      'GET',
+      '/api/drivers/me/earnings/daily',
+      undefined,
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.platform_debt).toBe(5000);
+    expect(data.debt_cap_ars).toBe(10000);
+    expect(data.debt_blocks_online).toBe(false);
   });
 
   test('GET /summary returns earnings after completed trip', async () => {

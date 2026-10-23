@@ -295,6 +295,119 @@ describe('Driver Profile', () => {
     expect(driver.is_online).toBe(false);
   });
 
+  test('PUT /me/online with platform_debt over cap returns 409 COMMISSION_DEBT_CAP', async () => {
+    const { token, userId } = await registerAndGetToken(phone, password);
+    await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Test',
+        address_line: 'San Martín 100, Villa Dolores, Córdoba',
+      },
+      token,
+    );
+    const db = getDb();
+    const [district] = await db
+      .select({ id: districts.id })
+      .from(districts)
+      .orderBy(districts.name)
+      .limit(1);
+    await db
+      .update(drivers)
+      .set({
+        status: 'approved',
+        district_id: district.id,
+        identification_status: 'issued',
+        identification_issued_at: new Date(),
+        platform_debt: 10001,
+      })
+      .where(eq(drivers.user_id, userId));
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me/online',
+      { is_online: true },
+      token,
+    );
+
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('COMMISSION_DEBT_CAP');
+    expect(data.error.message).toContain('10000');
+    expect(data.error.message).toContain('10001');
+  });
+
+  test('PUT /me/online with platform_debt under cap succeeds', async () => {
+    const { token, userId } = await registerAndGetToken(phone, password);
+    await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Test',
+        address_line: 'San Martín 100, Villa Dolores, Córdoba',
+      },
+      token,
+    );
+    const db = getDb();
+    const [district] = await db
+      .select({ id: districts.id })
+      .from(districts)
+      .orderBy(districts.name)
+      .limit(1);
+    await db
+      .update(drivers)
+      .set({
+        status: 'approved',
+        district_id: district.id,
+        identification_status: 'issued',
+        identification_issued_at: new Date(),
+        platform_debt: 9999,
+      })
+      .where(eq(drivers.user_id, userId));
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me/online',
+      { is_online: true },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.is_online).toBe(true);
+  });
+
+  test('PUT /me/heartbeat force-offlines when debt over cap while online', async () => {
+    const { token, driverId } = await fullOnboarding(phone, password);
+    const db = getDb();
+    const [district] = await db
+      .select({ id: districts.id })
+      .from(districts)
+      .orderBy(districts.name)
+      .limit(1);
+    await db
+      .update(drivers)
+      .set({
+        status: 'approved',
+        is_online: true,
+        district_id: district.id,
+        identification_status: 'issued',
+        identification_issued_at: new Date(),
+        platform_debt: 10001,
+      })
+      .where(eq(drivers.id, driverId));
+
+    const { status, data } = await request('PUT', '/api/drivers/me/heartbeat', {}, token);
+
+    expect(status).toBe(409);
+    expect(data.error.code).toBe('COMMISSION_DEBT_CAP');
+
+    const [driver] = await db
+      .select({ is_online: drivers.is_online })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(driver.is_online).toBe(false);
+  });
+
   test('PUT /me/online without auth returns 401', async () => {
     const { status, data } = await request('PUT', '/api/drivers/me/online', { is_online: true });
     expect(status).toBe(401);
