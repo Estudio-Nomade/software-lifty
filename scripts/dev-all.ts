@@ -442,11 +442,16 @@ async function main(): Promise<void> {
     waitForMetro(PASSENGER_PORT, '[pasajeros]', host, METRO_READY_TIMEOUT_MS),
   ]);
 
-  if (!driverReady) {
-    driverReady = await waitForMetroLate(DRIVER_PORT, '[conductor]', host);
-  }
-  if (!passengerReady) {
-    passengerReady = await waitForMetroLate(PASSENGER_PORT, '[pasajeros]', host);
+  // Late-retry both soft-fails in parallel so worst case stays +120s, not +240s.
+  if (!driverReady || !passengerReady) {
+    const [driverLate, passengerLate] = await Promise.all([
+      driverReady ? Promise.resolve(true) : waitForMetroLate(DRIVER_PORT, '[conductor]', host),
+      passengerReady
+        ? Promise.resolve(true)
+        : waitForMetroLate(PASSENGER_PORT, '[pasajeros]', host),
+    ]);
+    driverReady = driverLate;
+    passengerReady = passengerLate;
   }
 
   if (!driverReady) {
