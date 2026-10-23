@@ -42,6 +42,7 @@ export const drivers = pgTable('drivers', {
   approval_token: text('approval_token').unique(),
   approved_at: timestamp('approved_at'),
   platform_debt: doublePrecision('platform_debt').default(0).notNull(),
+  commission_fraud_block: boolean('commission_fraud_block').notNull().default(false),
   last_heartbeat: timestamp('last_heartbeat', { withTimezone: true }),
   identification_status: varchar('identification_status', { length: 30 })
     .notNull()

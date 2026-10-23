@@ -580,11 +580,17 @@ export const ActiveScreen: React.FC = () => {
             embedded
           />
           {earnings?.debt_blocks_online === true && (
-            <View style={styles.goHint} pointerEvents="none">
+            <TouchableOpacity
+              style={styles.goHint}
+              onPress={() => navigation.navigate('PayCommissionDebt')}
+              accessibilityRole="button"
+              accessibilityLabel="Pagar deuda de comisión"
+            >
               <Text style={styles.errorText}>
-                No podés conectarte hasta regularizar la deuda de comisión
+                No podés conectarte hasta regularizar la deuda de comisión. Tocá para pagar / subir
+                comprobante.
               </Text>
-            </View>
+            </TouchableOpacity>
           )}
           {municipalityWaitlisted && (
             <View style={styles.goHint} pointerEvents="none">

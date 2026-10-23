@@ -1,7 +1,8 @@
-import { and, count, eq, ne } from 'drizzle-orm';
+import { and, count, desc, eq, ne } from 'drizzle-orm';
 import { db, getDb } from '../../shared/db/client';
 import {
   districts,
+  driverCommissionReceipts,
   driverDocuments,
   driverLocations,
   drivers,
@@ -9,7 +10,7 @@ import {
   users,
   vehicles,
 } from '../../shared/db/schema';
-import { getDebtCapArs } from '../../shared/lib/commission';
+import { getConfig, getDebtCapArs } from '../../shared/lib/commission';
 import {
   VALID_DOC_TYPES as CANONICAL_VALID_DOC_TYPES,
   DOC_TYPES,
@@ -20,6 +21,7 @@ import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
 import {
   type StorageProvider,
+  buildCommissionReceiptPath,
   buildDriverAvatarPath,
   buildDriverDocumentPath,
   contentTypeForFile,
@@ -66,7 +68,7 @@ function missingRequiredDocTypes(uploaded: { doc_type: string }[]): string[] {
 }
 
 /**
- * Blocks online when platform_debt > debt cap.
+ * Blocks online when platform_debt > debt cap OR commission_fraud_block.
  * Force-offlines if currently online. Push only once per enforcement call
  * (toggle GO attempt, or heartbeat online→offline transition) — not on every
  * subsequent heartbeat while already offline.
@@ -75,10 +77,45 @@ async function enforceCommissionDebtCap(params: {
   driverId: string;
   userId: string;
   platformDebt: number;
+  commissionFraudBlock?: boolean;
   isOnline: boolean;
   /** When true, always notify (driver tried to go online). When false, only if force-offline flipped a row. */
   notifyOnBlock: boolean;
 }): Promise<void> {
+  if (params.commissionFraudBlock === true) {
+    let forcedOffline = false;
+    if (params.isOnline) {
+      const flipped = await db
+        .update(drivers)
+        .set({ is_online: false, last_heartbeat: null, updated_at: new Date() })
+        .where(and(eq(drivers.id, params.driverId), eq(drivers.is_online, true)))
+        .returning({ id: drivers.id });
+      forcedOffline = flipped.length > 0;
+    }
+
+    if (params.notifyOnBlock || forcedOffline) {
+      void sendPushToUser(params.userId, {
+        title: 'Cuenta bloqueada por comisión',
+        body: 'Tu cuenta está bloqueada por revisión de comisión. Contactá a soporte o subí un comprobante válido.',
+        data: {
+          type: 'driver:commission_debt_block',
+          reason: 'fraud_block',
+        },
+        channelId: 'account',
+      }).catch((err) => {
+        logger.error('[drivers] commission fraud block push failed', {
+          error: (err as Error).message,
+        });
+      });
+    }
+
+    throw new AppError(
+      'Tu cuenta está bloqueada por revisión de comisión. Contactá a soporte o subí un comprobante válido para desbloquear.',
+      409,
+      'COMMISSION_FRAUD_BLOCK',
+    );
+  }
+
   const debt = Number(params.platformDebt ?? 0);
   const cap = await getDebtCapArs(getDb());
   if (debt <= cap) return;
@@ -116,6 +153,19 @@ async function enforceCommissionDebtCap(params: {
     409,
     'COMMISSION_DEBT_CAP',
   );
+}
+
+function parseAmountArs(raw: number | string): number {
+  const n = typeof raw === 'number' ? raw : Number.parseInt(String(raw).trim(), 10);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 1) {
+    throw new AppError('El monto debe ser un entero mayor o igual a 1.', 400, 'INVALID_AMOUNT');
+  }
+  return n;
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; cause?: { code?: string }; message?: string };
+  return e?.code === '23505' || e?.cause?.code === '23505' || /unique/i.test(e?.message ?? '');
 }
 
 /**
@@ -506,6 +556,7 @@ export const driversService = {
         admin_reviewed_at: drivers.admin_reviewed_at,
         created_at: drivers.created_at,
         platform_debt: drivers.platform_debt,
+        commission_fraud_block: drivers.commission_fraud_block,
       })
       .from(drivers)
       .where(eq(drivers.user_id, user.id))
@@ -576,6 +627,7 @@ export const driversService = {
         driverId: driver.id,
         userId: user.id,
         platformDebt: Number(driver.platform_debt ?? 0),
+        commissionFraudBlock: Boolean(driver.commission_fraud_block),
         isOnline: Boolean(driver.is_online),
         notifyOnBlock: true,
       });
@@ -609,6 +661,7 @@ export const driversService = {
         admin_reviewed_at: drivers.admin_reviewed_at,
         created_at: drivers.created_at,
         platform_debt: drivers.platform_debt,
+        commission_fraud_block: drivers.commission_fraud_block,
       })
       .from(drivers)
       .where(eq(drivers.user_id, user.id))
@@ -643,6 +696,7 @@ export const driversService = {
         driverId: driver.id,
         userId: user.id,
         platformDebt: Number(driver.platform_debt ?? 0),
+        commissionFraudBlock: Boolean(driver.commission_fraud_block),
         isOnline: true,
         notifyOnBlock: false,
       });
@@ -1408,5 +1462,199 @@ export const driversService = {
 
     const match = matchDistrict(city, province, activeDistricts);
     return buildMunicipalityResult(addressLine, { lat, lng, city, province }, match);
+  },
+
+  async getPayoutInfo(user: AuthUser) {
+    const [driver] = await db
+      .select({
+        platform_debt: drivers.platform_debt,
+      })
+      .from(drivers)
+      .where(eq(drivers.user_id, user.id))
+      .limit(1);
+
+    if (!driver) throw new NotFoundError('Onboarding not started');
+
+    const database = getDb();
+    const [alias, cvu, holder, bank, debtCap] = await Promise.all([
+      getConfig(database, 'platform.lifty_payout_alias'),
+      getConfig(database, 'platform.lifty_payout_cvu'),
+      getConfig(database, 'platform.lifty_payout_holder'),
+      getConfig(database, 'platform.lifty_payout_bank'),
+      getDebtCapArs(database),
+    ]);
+
+    return {
+      alias: alias || null,
+      cvu: cvu || null,
+      holder: holder || null,
+      bank: bank || null,
+      platform_debt: Math.round(Number(driver.platform_debt ?? 0)),
+      debt_cap_ars: debtCap,
+    };
+  },
+
+  async listCommissionReceipts(user: AuthUser) {
+    const [driver] = await db
+      .select({ id: drivers.id })
+      .from(drivers)
+      .where(eq(drivers.user_id, user.id))
+      .limit(1);
+
+    if (!driver) throw new NotFoundError('Onboarding not started');
+
+    const rows = await db
+      .select({
+        id: driverCommissionReceipts.id,
+        amount_ars: driverCommissionReceipts.amount_ars,
+        debt_before_ars: driverCommissionReceipts.debt_before_ars,
+        status: driverCommissionReceipts.status,
+        created_at: driverCommissionReceipts.created_at,
+        file_url: driverCommissionReceipts.file_url,
+      })
+      .from(driverCommissionReceipts)
+      .where(eq(driverCommissionReceipts.driver_id, driver.id))
+      .orderBy(desc(driverCommissionReceipts.created_at));
+
+    return rows.map((r) => ({
+      id: r.id,
+      amount_ars: r.amount_ars,
+      debt_before_ars: r.debt_before_ars,
+      status: r.status,
+      created_at: r.created_at?.toISOString?.() ?? r.created_at,
+      file_url: r.file_url,
+    }));
+  },
+
+  async submitCommissionReceipt(user: AuthUser, file: File, amountRaw: number | string) {
+    const [driver] = await db
+      .select({
+        id: drivers.id,
+        platform_debt: drivers.platform_debt,
+      })
+      .from(drivers)
+      .where(eq(drivers.user_id, user.id))
+      .limit(1);
+
+    if (!driver) throw new NotFoundError('Onboarding not started');
+
+    const debt = Math.round(Number(driver.platform_debt ?? 0));
+    if (debt <= 0) {
+      throw new AppError('No tenés deuda de comisión pendiente.', 400, 'NO_COMMISSION_DEBT');
+    }
+
+    const amount = parseAmountArs(amountRaw);
+    if (amount < debt) {
+      throw new AppError(
+        `El monto debe ser al menos $${debt} (tu deuda actual).`,
+        400,
+        'AMOUNT_BELOW_DEBT',
+      );
+    }
+
+    const [pending] = await db
+      .select({ id: driverCommissionReceipts.id })
+      .from(driverCommissionReceipts)
+      .where(
+        and(
+          eq(driverCommissionReceipts.driver_id, driver.id),
+          eq(driverCommissionReceipts.status, 'pending_review'),
+        ),
+      )
+      .limit(1);
+
+    if (pending) {
+      throw new AppError('Ya tenés un comprobante pendiente de revisión.', 409, 'RECEIPT_PENDING');
+    }
+
+    const database = getDb();
+    const [alias, cvu] = await Promise.all([
+      getConfig(database, 'platform.lifty_payout_alias'),
+      getConfig(database, 'platform.lifty_payout_cvu'),
+    ]);
+    if (!alias.trim() && !cvu.trim()) {
+      throw new AppError(
+        'Lifty todavía no configuró la cuenta de cobro. Probá más tarde.',
+        503,
+        'PAYOUT_ACCOUNT_NOT_CONFIGURED',
+      );
+    }
+
+    const contentType = contentTypeForFile(file);
+    const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+    if (!allowed.has(contentType)) {
+      throw new AppError(
+        'Formato no soportado. Usá foto (JPEG/PNG/WebP) o PDF.',
+        400,
+        'INVALID_FILE_TYPE',
+      );
+    }
+
+    const [userRow] = await db
+      .select({ full_name: users.full_name })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+
+    const path = buildCommissionReceiptPath({
+      fullName: userRow?.full_name,
+      driverId: driver.id,
+      file,
+    });
+    const fileUrl = await _storage.uploadFile(file, path, { contentType });
+
+    try {
+      const receipt = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .insert(driverCommissionReceipts)
+          .values({
+            driver_id: driver.id,
+            amount_ars: amount,
+            debt_before_ars: debt,
+            file_url: fileUrl,
+            status: 'pending_review',
+          })
+          .returning({
+            id: driverCommissionReceipts.id,
+            amount_ars: driverCommissionReceipts.amount_ars,
+            debt_before_ars: driverCommissionReceipts.debt_before_ars,
+            status: driverCommissionReceipts.status,
+            created_at: driverCommissionReceipts.created_at,
+            file_url: driverCommissionReceipts.file_url,
+          });
+
+        await tx
+          .update(drivers)
+          .set({
+            platform_debt: 0,
+            commission_fraud_block: false,
+            updated_at: new Date(),
+          })
+          .where(eq(drivers.id, driver.id));
+
+        return row;
+      });
+
+      return {
+        receipt: {
+          id: receipt.id,
+          amount_ars: receipt.amount_ars,
+          debt_before_ars: receipt.debt_before_ars,
+          status: receipt.status,
+          created_at: receipt.created_at?.toISOString?.() ?? receipt.created_at,
+          file_url: receipt.file_url,
+        },
+        platform_debt: 0,
+      };
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        throw new AppError(
+          'Ya tenés un comprobante pendiente de revisión.',
+          409,
+          'RECEIPT_PENDING',
+        );
+      }
+      throw err;
+    }
   },
 };

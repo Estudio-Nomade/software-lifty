@@ -2,6 +2,7 @@ export { users } from './users';
 export { drivers } from './drivers';
 export { vehicles } from './vehicles';
 export { driverDocuments } from './driver-documents';
+export { driverCommissionReceipts } from './driver-commission-receipts';
 export { payoutMethods } from './payout-methods';
 export { trips } from './trips';
 export { tripEvents } from './trip-events';

@@ -106,6 +106,19 @@ export function buildDriverAvatarPath(opts: {
   return `avatars/${folder}_${shortId}-${ts}.${ext}`;
 }
 
+export function buildCommissionReceiptPath(opts: {
+  fullName: string | null | undefined;
+  driverId: string;
+  file: { type?: string; name?: string };
+  now?: number;
+}): string {
+  const folder = sanitizeDriverFolderName(opts.fullName);
+  const shortId = opts.driverId.slice(0, 8);
+  const ext = extensionForMime(contentTypeForFile(opts.file));
+  const ts = opts.now ?? Date.now();
+  return `commission-receipts/${folder}_${shortId}/${ts}.${ext}`;
+}
+
 export type UploadFileOptions = {
   contentType?: string;
 };

@@ -344,6 +344,13 @@
       "when": 1788200000000,
       "tag": "0047_commission_phases_day_duration",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1788300000000,
+      "tag": "0048_driver_commission_receipts",
+      "breakpoints": true
     }
   ]
 }

@@ -90,3 +90,20 @@ export async function uploadPhotoToBackend(
 
   return data;
 }
+
+export async function uploadCommissionReceipt(
+  uri: string,
+  fileName: string,
+  mimeType: string,
+  amountArs: number,
+): Promise<{ receipt: { id: string; status: string }; platform_debt: number }> {
+  const formData = new FormData();
+  formData.append('file', { uri, type: mimeType, name: fileName } as any);
+  formData.append('amount_ars', String(amountArs));
+
+  const { data } = await apiClient.post('/drivers/me/commission-receipts', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+
+  return data;
+}

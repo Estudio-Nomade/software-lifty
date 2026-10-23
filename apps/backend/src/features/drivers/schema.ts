@@ -40,6 +40,11 @@ export const uploadDocBody = t.Object({
   doc_type: t.String({ minLength: 1 }),
 });
 
+export const commissionReceiptBody = t.Object({
+  file: t.File({ maxSize: 10 * 1024 * 1024 }),
+  amount_ars: t.Union([t.Number(), t.String()]),
+});
+
 export const reuploadDocBody = t.Object({
   file: t.File({ maxSize: 10 * 1024 * 1024 }),
   doc_type: t.String({ minLength: 1 }),
