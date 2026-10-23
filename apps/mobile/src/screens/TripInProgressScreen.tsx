@@ -383,7 +383,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.turquoise,
   },
   button: {
-    width: 327,
+    width: '100%',
+    maxWidth: 480,
     alignSelf: 'center',
     marginTop: theme.spacing.sm,
   },
