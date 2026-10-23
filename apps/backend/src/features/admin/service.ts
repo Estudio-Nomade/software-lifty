@@ -218,6 +218,8 @@ export const adminService = {
         identification_external_ref: drivers.identification_external_ref,
         approved_at: drivers.approved_at,
         is_online: drivers.is_online,
+        platform_debt: drivers.platform_debt,
+        commission_fraud_block: drivers.commission_fraud_block,
         district_id: drivers.district_id,
         district_name: districts.name,
         district_province: districts.province,
@@ -275,6 +277,8 @@ export const adminService = {
 
     return {
       ...driver,
+      platform_debt: Math.round(Number(driver.platform_debt ?? 0)),
+      commission_fraud_block: Boolean(driver.commission_fraud_block),
       registry_id:
         driver.document_number?.trim() ||
         (driver.document_number_last4

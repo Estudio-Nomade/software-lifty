@@ -6,15 +6,20 @@ import { authGuard } from '../../shared/middleware/require-auth';
 import { clearBlock } from '../cancellations/blocks';
 import { cancellationService, getCancellationConfig } from '../cancellations/service';
 import { approveDriver } from './approve';
+import { adminCommissionDebtService } from './commission-debt';
 import { adminDashboardService } from './dashboard';
 import { adminPushService } from './push-service';
 import {
   adminTripsQuery,
+  commissionReceiptsQuery,
   dashboardSummaryQuery,
   driverIdParams,
   driverTripsQuery,
+  receiptIdParams,
+  rejectFraudBody,
   reviewBody,
   tripIdParams,
+  updatePayoutAccountSchema,
   updatePhaseSchema,
   updateStartDateSchema,
 } from './schema';
@@ -220,6 +225,80 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
       return safeCall(() => adminService.getCurrentCommission(), set);
     },
     { requireAuth: true },
+  )
+  .get(
+    '/commission/payout-account',
+    ({ user, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminCommissionDebtService.getPayoutAccount(), set);
+    },
+    { requireAuth: true },
+  )
+  .put(
+    '/commission/payout-account',
+    ({ user, body, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminCommissionDebtService.updatePayoutAccount(body), set);
+    },
+    { body: updatePayoutAccountSchema, requireAuth: true },
+  )
+  .get(
+    '/commission/receipts',
+    ({ user, set, query }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      const q = query as {
+        status?: string;
+        driver_id?: string;
+        limit?: string;
+        offset?: string;
+      };
+      return safeCall(
+        () =>
+          adminCommissionDebtService.listReceipts({
+            status: q.status,
+            driver_id: q.driver_id,
+            limit: q.limit ? Number(q.limit) : undefined,
+            offset: q.offset ? Number(q.offset) : undefined,
+          }),
+        set,
+      );
+    },
+    { query: commissionReceiptsQuery, requireAuth: true },
+  )
+  .get(
+    '/commission/receipts/:id',
+    ({ user, params, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminCommissionDebtService.getReceipt(params.id), set);
+    },
+    { params: receiptIdParams, requireAuth: true },
+  )
+  .post(
+    '/commission/receipts/:id/approve',
+    ({ user, params, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminCommissionDebtService.approveReceipt(user, params.id), set);
+    },
+    { params: receiptIdParams, requireAuth: true },
+  )
+  .post(
+    '/commission/receipts/:id/reject-fraud',
+    ({ user, params, body, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(
+        () => adminCommissionDebtService.rejectFraud(user, params.id, body?.note),
+        set,
+      );
+    },
+    { params: receiptIdParams, body: rejectFraudBody, requireAuth: true },
+  )
+  .post(
+    '/drivers/:driver_id/clear-commission-fraud',
+    ({ user, params, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminCommissionDebtService.clearCommissionFraud(params.driver_id), set);
+    },
+    { params: driverIdParams, requireAuth: true },
   )
   .get(
     '/cancellations/config',

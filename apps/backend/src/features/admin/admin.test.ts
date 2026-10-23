@@ -242,6 +242,10 @@ describe('Admin', () => {
     expect(data).toHaveProperty('missing_doc_types');
     expect(data.missing_doc_types).toEqual([]);
     expect(data.vehicles[0].vehicle_type).toBeDefined();
+    expect(data).toHaveProperty('platform_debt');
+    expect(typeof data.platform_debt).toBe('number');
+    expect(data).toHaveProperty('commission_fraud_block');
+    expect(typeof data.commission_fraud_block).toBe('boolean');
   });
 
   test('GET /drivers/:id heals rejected+complete into review queue', async () => {
