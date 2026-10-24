@@ -35,7 +35,7 @@ interface ValidationErrors {
 }
 
 const PLATE_REGEX = /^[A-Z]{2,3}[0-9]{3}[A-Z]{0,2}$/;
-const VEHICLE_TYPES: VehicleTypeUi[] = ['Auto', 'Moto', 'Camioneta'];
+const VEHICLE_TYPES: VehicleTypeUi[] = ['Auto', 'Moto'];
 
 const normalizePlate = (value: string) => value.replace(/\s+/g, '').toUpperCase();
 
