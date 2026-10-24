@@ -17,6 +17,7 @@ import { getValidated } from '../api/client';
 import { ApiError, documentSchema, driverStatusSchema } from '../api/types';
 import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
+import { OnboardingCard, OnboardingChrome } from '../components/OnboardingChrome';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
@@ -68,10 +69,10 @@ function badgeFor(state: HydratedSideState): { label: string; color: string } | 
     return { label: 'Rehacer', color: theme.colors.dangerRed };
   }
   if (state.serverStatus === 'approved' && !state.replacedInSession) {
-    return { label: 'OK', color: theme.colors.turquoise };
+    return { label: 'OK', color: theme.colors.primary };
   }
   if (state.serverStatus === 'pending_review' && !state.replacedInSession) {
-    return { label: 'En revisión', color: theme.colors.turquoise };
+    return { label: 'En revisión', color: theme.colors.primary };
   }
   return null;
 }
@@ -335,11 +336,15 @@ export const OnboardingStep2Screen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <Navbar title="Paso 3/3" onBack={() => navigation.goBack()} />
+      <StatusBar barStyle="dark-content" />
+      <Navbar title="Documentos" onBack={() => navigation.goBack()} variant="light" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Subi tus documentos</Text>
-        <Text style={styles.subtitle}>Los necesitamos para habilitar tu cuenta</Text>
+        <OnboardingChrome
+          step={3}
+          kicker="Documentos"
+          title="Subí tus documentos"
+          subtitle="Los necesitamos para habilitar tu cuenta."
+        />
 
         {rejectReason || driverStatus === 'rejected' || partialFix ? (
           <View style={styles.rejectBanner}>
@@ -356,19 +361,21 @@ export const OnboardingStep2Screen: React.FC = () => {
         ) : null}
 
         {hydrating ? (
-          <ActivityIndicator size="large" color={theme.colors.turquoise} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         ) : (
           DOCS.map((doc) => (
-            <View key={doc.type} style={styles.uploadBlock}>
-              <View style={styles.uploadIcon}>
-                <Ionicons
-                  name="document-text-outline"
-                  size={24}
-                  color={theme.colors.mediumGray}
-                  accessibilityLabel="Subir documento"
-                />
+            <OnboardingCard key={doc.type} style={styles.docCard}>
+              <View style={styles.docHeader}>
+                <View style={styles.uploadIcon}>
+                  <Ionicons
+                    name="document-text-outline"
+                    size={22}
+                    color={theme.colors.primary}
+                    accessibilityLabel="Subir documento"
+                  />
+                </View>
+                <Text style={styles.uploadTitle}>{doc.label}</Text>
               </View>
-              <Text style={styles.uploadTitle}>{doc.label}</Text>
               {doc.type === 'vehicle_insurance' ? (
                 <Text style={styles.hintText}>
                   Alcanza un archivo o foto del seguro (PDF o imagen). No hace falta dorso.
@@ -392,7 +399,7 @@ export const OnboardingStep2Screen: React.FC = () => {
                     {showSideLabel ? <Text style={styles.sideLabel}>{label}</Text> : null}
 
                     {state.uploading ? (
-                      <ActivityIndicator size="small" color={theme.colors.turquoise} />
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
                     ) : showAsOk ? (
                       <View style={styles.uploadedRow}>
                         <Ionicons
@@ -401,7 +408,7 @@ export const OnboardingStep2Screen: React.FC = () => {
                           color={
                             state.needsReplace && !state.replacedInSession
                               ? theme.colors.dangerRed
-                              : theme.colors.turquoise
+                              : theme.colors.primary
                           }
                           accessibilityLabel="Documento subido"
                         />
@@ -437,7 +444,7 @@ export const OnboardingStep2Screen: React.FC = () => {
                           onPress={() => handlePick(doc.type, side, 'gallery')}
                           activeOpacity={0.7}
                         >
-                          <Text style={styles.optionText}>Subir de galeria</Text>
+                          <Text style={styles.optionText}>Subir de galería</Text>
                         </TouchableOpacity>
                         {allowsPdf(doc.type) ? (
                           <TouchableOpacity
@@ -462,17 +469,18 @@ export const OnboardingStep2Screen: React.FC = () => {
                   </View>
                 );
               })}
-            </View>
+            </OnboardingCard>
           ))
         )}
 
         {verifyError ? <Text style={styles.verifyError}>{verifyError}</Text> : null}
 
         <Button
-          title={verifying ? 'VERIFICANDO…' : 'ENVIAR DOCUMENTOS'}
+          title={verifying ? 'Verificando…' : 'Enviar documentos'}
           onPress={handleVerify}
           style={styles.button}
           disabled={!allUploaded || verifying || hydrating}
+          variant="cta"
         />
       </ScrollView>
     </View>
@@ -493,99 +501,92 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   content: {
-    alignItems: 'center',
-    padding: theme.spacing.md,
-    paddingBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing['2xl'],
     gap: theme.spacing.md,
-  },
-  title: {
-    fontSize: theme.fontSize.xl,
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.deepBlue,
-  },
-  subtitle: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.mediumGray,
-    marginBottom: theme.spacing.md,
   },
   rejectBanner: {
     width: '100%',
     maxWidth: 480,
     alignSelf: 'center',
     borderRadius: theme.radius.lg,
-    backgroundColor: theme.colors.surfaceMuted,
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: theme.colors.dangerRed,
+    borderColor: 'rgba(229, 57, 53, 0.35)',
     padding: theme.spacing.md,
     gap: theme.spacing.xs,
+    ...theme.shadows.card,
   },
   rejectTitle: {
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.bold,
+    fontFamily: theme.fontFamily.bold,
     color: theme.colors.dangerRed,
   },
   rejectBody: {
     fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.deepBlue,
   },
-  uploadBlock: {
-    width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
+  docCard: {
     gap: theme.spacing.sm,
+  },
+  docHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: theme.colors.mediumGray,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+    width: '100%',
   },
   uploadIcon: {
-    width: 48,
-    height: 48,
+    width: 40,
+    height: 40,
     borderRadius: theme.radius.full,
     backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
   uploadTitle: {
+    flex: 1,
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
+    fontFamily: theme.fontFamily.semibold,
     color: theme.colors.deepBlue,
   },
   hintText: {
     fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
-    textAlign: 'center',
     width: '100%',
+    lineHeight: 18,
   },
   sideBlock: {
     width: '100%',
     gap: theme.spacing.sm,
-    alignItems: 'center',
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: theme.colors.lightGray,
     paddingTop: theme.spacing.sm,
   },
   sideLabel: {
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.medium,
+    fontFamily: theme.fontFamily.medium,
     color: theme.colors.deepBlue,
-    alignSelf: 'flex-start',
   },
   uploadOptions: {
     width: '100%',
     gap: theme.spacing.sm,
   },
   uploadOption: {
-    height: 40,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
+    minHeight: 44,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1.5,
     borderColor: theme.colors.mediumGray,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
   },
   optionText: {
     fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.semibold,
     color: theme.colors.deepBlue,
   },
   uploadedRow: {
@@ -593,40 +594,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.sm,
     paddingVertical: theme.spacing.xs,
+    minHeight: 44,
   },
   fileName: {
     fontSize: theme.fontSize.sm,
-    color: theme.colors.turquoise,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.primary,
     flexShrink: 1,
+    flex: 1,
   },
   fileNameReject: {
     color: theme.colors.dangerRed,
   },
   badge: {
     fontSize: theme.fontSize.xs,
-    fontWeight: theme.fontWeight.medium,
+    fontFamily: theme.fontFamily.semibold,
   },
   rehacerHint: {
     fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.medium,
     color: theme.colors.dangerRed,
-    alignSelf: 'flex-start',
   },
   errorRow: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: theme.spacing.xs,
   },
   errorText: {
     fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.dangerRed,
-    textAlign: 'center',
   },
   retryText: {
     fontSize: theme.fontSize.xs,
-    color: theme.colors.turquoise,
-    fontWeight: theme.fontWeight.medium,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.primary,
   },
   verifyError: {
     fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.dangerRed,
     textAlign: 'center',
     width: '100%',
@@ -637,6 +642,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 480,
     alignSelf: 'center',
-    marginTop: theme.spacing.md,
+    marginTop: theme.spacing.sm,
   },
 });

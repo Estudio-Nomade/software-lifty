@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AuthFormCard, AuthFormChrome } from '../components/AuthFormChrome';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
@@ -65,37 +66,46 @@ export function RegisterScreen() {
 
   const form = (
     <View style={styles.form}>
-      <View style={styles.brandBlock}>
-        <Text style={styles.brand}>Lifty</Text>
-        <Text style={styles.title}>Creá tu cuenta</Text>
-        <Text style={styles.subtitle}>Empezá a viajar hoy</Text>
-      </View>
+      <AuthFormChrome brand="Lifty" title="Creá tu cuenta" subtitle="Empezá a viajar hoy" />
 
-      <Input placeholder="Nombre" value={name} onChangeText={setName} autoFocus />
-      <Input placeholder="Apellido" value={surname} onChangeText={setSurname} />
-
-      <Pressable style={styles.termsRow} onPress={() => setAccepted(!accepted)}>
-        <View style={[styles.checkbox, accepted && styles.checkboxChecked]}>
-          {accepted ? <Text style={styles.checkmark}>✓</Text> : null}
+      <AuthFormCard>
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Nombre</Text>
+          <Input placeholder="Nombre" value={name} onChangeText={setName} autoFocus />
         </View>
-        <Text style={styles.termsText}>
-          Acepto{' '}
-          <Text style={styles.termsLink} onPress={() => navigate('Terms')}>
-            términos y condiciones
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Apellido</Text>
+          <Input placeholder="Apellido" value={surname} onChangeText={setSurname} />
+        </View>
+
+        <Pressable
+          style={styles.termsRow}
+          onPress={() => setAccepted(!accepted)}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: accepted }}
+        >
+          <View style={[styles.checkbox, accepted && styles.checkboxChecked]}>
+            {accepted ? <Text style={styles.checkmark}>✓</Text> : null}
+          </View>
+          <Text style={styles.termsText}>
+            Acepto{' '}
+            <Text style={styles.termsLink} onPress={() => navigate('Terms')}>
+              términos y condiciones
+            </Text>
           </Text>
-        </Text>
-      </Pressable>
+        </Pressable>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <Button
-        variant="primary"
-        onPress={handleSubmit}
-        loading={loading}
-        disabled={!isValid || googleLoading}
-      >
-        Continuar
-      </Button>
+        <Button
+          variant="primary"
+          onPress={handleSubmit}
+          loading={loading}
+          disabled={!isValid || googleLoading}
+        >
+          Continuar
+        </Button>
+      </AuthFormCard>
 
       <Text style={styles.orDivider}>o</Text>
 
@@ -184,43 +194,29 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.md,
-  },
-  brandBlock: {
-    gap: theme.spacing.xs,
-    alignItems: 'center',
-    marginBottom: theme.spacing.sm,
-  },
-  brand: {
-    fontSize: theme.fontSize['2xl'],
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.primary,
-    letterSpacing: -0.4,
-  },
-  title: {
-    fontSize: theme.fontSize['2xl'],
-    fontFamily: theme.fontFamily.bold,
-    color: theme.colors.deepBlue,
-    letterSpacing: -0.4,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.mediumGray,
-    fontFamily: theme.fontFamily.regular,
-    textAlign: 'center',
   },
   form: {
     width: '100%',
-    maxWidth: 420,
+    maxWidth: 480,
     alignSelf: 'center',
     gap: theme.spacing.md,
+  },
+  fieldGroup: {
+    width: '100%',
+    gap: theme.spacing.xs,
+  },
+  fieldLabel: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.deepBlue,
   },
   termsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
+    minHeight: 44,
   },
   checkbox: {
     width: 22,
