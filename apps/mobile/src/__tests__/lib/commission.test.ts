@@ -1,4 +1,6 @@
 import {
+  formatCommissionReceiptDate,
+  formatCommissionReceiptStatus,
   formatDebtCapLabel,
   normalizePlatformDebt,
   shouldShowPlatformDebt,
@@ -39,5 +41,31 @@ describe('formatDebtCapLabel', () => {
 
   it('formats positive cap without inventing a fixed amount', () => {
     expect(formatDebtCapLabel(10000)).toMatch(/tope \$10[.\s]?000/);
+  });
+});
+
+describe('formatCommissionReceiptStatus', () => {
+  it('maps known statuses to Spanish labels', () => {
+    expect(formatCommissionReceiptStatus('pending_review')).toBe('En revisión');
+    expect(formatCommissionReceiptStatus('approved')).toBe('Aprobado');
+    expect(formatCommissionReceiptStatus('rejected_fraud')).toBe('Rechazado');
+  });
+
+  it('falls back for unknown or empty status', () => {
+    expect(formatCommissionReceiptStatus('weird')).toBe('Desconocido');
+    expect(formatCommissionReceiptStatus('')).toBe('Desconocido');
+  });
+});
+
+describe('formatCommissionReceiptDate', () => {
+  it('returns dash for missing or invalid', () => {
+    expect(formatCommissionReceiptDate(undefined)).toBe('—');
+    expect(formatCommissionReceiptDate('not-a-date')).toBe('—');
+  });
+
+  it('formats ISO dates for es-AR', () => {
+    const label = formatCommissionReceiptDate('2026-03-15T18:30:00.000Z');
+    expect(label).not.toBe('—');
+    expect(label.length).toBeGreaterThan(8);
   });
 });

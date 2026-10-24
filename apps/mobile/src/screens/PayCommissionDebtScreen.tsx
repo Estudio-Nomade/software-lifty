@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   ScrollView,
   Share,
   StatusBar,
@@ -21,6 +22,7 @@ import { Card } from '../components/Card';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { formatCommissionReceiptDate, formatCommissionReceiptStatus } from '../lib/commission';
 import { theme } from '../theme';
 import { uploadCommissionReceipt } from '../utils/upload';
 
@@ -33,11 +35,36 @@ type PayoutInfo = {
   debt_cap_ars: number;
 };
 
+type CommissionReceipt = {
+  id: string;
+  amount_ars: number;
+  debt_before_ars: number;
+  status: string;
+  created_at: string;
+  file_url: string;
+};
+
 type SelectedFile = {
   uri: string;
   name: string;
   mimeType: string;
 };
+
+function unwrapListPayload(raw: unknown): CommissionReceipt[] {
+  if (Array.isArray(raw)) return raw as CommissionReceipt[];
+  if (raw && typeof raw === 'object' && Array.isArray((raw as { data?: unknown }).data)) {
+    return (raw as { data: CommissionReceipt[] }).data;
+  }
+  return [];
+}
+
+async function openReceiptFile(url: string) {
+  try {
+    await Linking.openURL(url);
+  } catch {
+    Alert.alert('Error', 'No se pudo abrir el comprobante');
+  }
+}
 
 function parseAmountInput(raw: string): number | null {
   const cleaned = raw.replace(/\s/g, '').replace(',', '.');
@@ -73,6 +100,19 @@ export const PayCommissionDebtScreen: React.FC = () => {
     },
   });
 
+  const {
+    data: receipts = [],
+    isLoading: receiptsLoading,
+    isError: receiptsError,
+    refetch: refetchReceipts,
+  } = useQuery<CommissionReceipt[]>({
+    queryKey: ['commission-receipts'],
+    queryFn: async () => {
+      const response = await apiClient.get('/drivers/me/commission-receipts');
+      return unwrapListPayload(response.data.data ?? response.data);
+    },
+  });
+
   const debt = payout?.platform_debt ?? 0;
   const [amountText, setAmountText] = useState('');
   const [file, setFile] = useState<SelectedFile | null>(null);
@@ -98,6 +138,7 @@ export const PayCommissionDebtScreen: React.FC = () => {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['earnings-daily'] });
       await queryClient.invalidateQueries({ queryKey: ['payout-info'] });
+      await queryClient.invalidateQueries({ queryKey: ['commission-receipts'] });
       Alert.alert('Listo', 'Deuda saldada. Ya podés conectarte.', [
         {
           text: 'OK',
@@ -181,7 +222,12 @@ export const PayCommissionDebtScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <Navbar title="Pagar comisión" showBack variant="light" onBack={() => navigation.goBack()} />
+      <Navbar
+        title={payout != null && debt <= 0 ? 'Pagos a Lifty' : 'Pagar comisión'}
+        showBack
+        variant="light"
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: padBottom }]}
@@ -204,13 +250,17 @@ export const PayCommissionDebtScreen: React.FC = () => {
           <>
             <Card padding={theme.spacing.lg}>
               <Text style={styles.cardTitle}>Deuda actual</Text>
-              <Text style={styles.debtAmount}>
+              <Text style={[styles.debtAmount, debt <= 0 && styles.debtAmountClear]}>
                 ${debt.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
               </Text>
-              <Text style={styles.hint}>
-                Debés transferir al menos este monto y subir el comprobante. No se aceptan pagos
-                parciales.
-              </Text>
+              {debt > 0 ? (
+                <Text style={styles.hint}>
+                  Debés transferir al menos este monto y subir el comprobante. No se aceptan pagos
+                  parciales.
+                </Text>
+              ) : (
+                <Text style={styles.hint}>No tenés deuda pendiente con Lifty.</Text>
+              )}
             </Card>
 
             <Card padding={theme.spacing.lg}>
@@ -271,52 +321,124 @@ export const PayCommissionDebtScreen: React.FC = () => {
               )}
             </Card>
 
-            <Card padding={theme.spacing.lg}>
-              <Text style={styles.cardTitle}>Monto transferido</Text>
-              <TextInput
-                style={styles.input}
-                value={amountText}
-                onChangeText={setAmountText}
-                keyboardType="number-pad"
-                placeholder={String(debt || 0)}
-                placeholderTextColor={theme.colors.mediumGray}
-              />
-              {amountParsed != null && amountParsed < debt ? (
-                <Text style={styles.warnText}>El monto debe ser al menos ${debt}</Text>
-              ) : null}
-            </Card>
+            {debt > 0 ? (
+              <>
+                <Card padding={theme.spacing.lg}>
+                  <Text style={styles.cardTitle}>Monto transferido</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={amountText}
+                    onChangeText={setAmountText}
+                    keyboardType="number-pad"
+                    placeholder={String(debt || 0)}
+                    placeholderTextColor={theme.colors.mediumGray}
+                  />
+                  {amountParsed != null && amountParsed < debt ? (
+                    <Text style={styles.warnText}>El monto debe ser al menos ${debt}</Text>
+                  ) : null}
+                </Card>
 
-            <Card padding={theme.spacing.lg}>
-              <Text style={styles.cardTitle}>Comprobante</Text>
-              <Text style={styles.hint}>Foto o PDF del transfer</Text>
-              <View style={styles.pickRow}>
-                <TouchableOpacity style={styles.pickBtn} onPress={pickCamera}>
-                  <Text style={styles.pickBtnText}>Cámara</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.pickBtn} onPress={pickGallery}>
-                  <Text style={styles.pickBtnText}>Galería</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.pickBtn} onPress={pickPdf}>
-                  <Text style={styles.pickBtnText}>PDF</Text>
-                </TouchableOpacity>
-              </View>
-              {file ? (
-                <Text style={styles.fileName} numberOfLines={2}>
-                  {file.name}
-                </Text>
-              ) : (
-                <Text style={styles.hint}>Ningún archivo seleccionado</Text>
-              )}
-            </Card>
+                <Card padding={theme.spacing.lg}>
+                  <Text style={styles.cardTitle}>Comprobante</Text>
+                  <Text style={styles.hint}>Foto o PDF del transfer</Text>
+                  <View style={styles.pickRow}>
+                    <TouchableOpacity style={styles.pickBtn} onPress={pickCamera}>
+                      <Text style={styles.pickBtnText}>Cámara</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.pickBtn} onPress={pickGallery}>
+                      <Text style={styles.pickBtnText}>Galería</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.pickBtn} onPress={pickPdf}>
+                      <Text style={styles.pickBtnText}>PDF</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {file ? (
+                    <Text style={styles.fileName} numberOfLines={2}>
+                      {file.name}
+                    </Text>
+                  ) : (
+                    <Text style={styles.hint}>Ningún archivo seleccionado</Text>
+                  )}
+                </Card>
 
-            <Button
-              title="Enviar comprobante"
-              onPress={() => submitMutation.mutate()}
-              disabled={!canSubmit}
-              loading={submitMutation.isPending}
-            />
+                <Button
+                  title="Enviar comprobante"
+                  onPress={() => submitMutation.mutate()}
+                  disabled={!canSubmit}
+                  loading={submitMutation.isPending}
+                />
+              </>
+            ) : null}
           </>
         )}
+
+        <Card padding={theme.spacing.lg}>
+          <Text style={styles.cardTitle}>Historial</Text>
+          {receiptsLoading ? (
+            <ActivityIndicator color={theme.colors.turquoise} />
+          ) : receiptsError ? (
+            <>
+              <Text style={styles.errorText}>No se pudo cargar el historial</Text>
+              <TouchableOpacity onPress={() => refetchReceipts()}>
+                <Text style={styles.retryText}>Reintentar</Text>
+              </TouchableOpacity>
+            </>
+          ) : receipts.length === 0 ? (
+            <Text style={styles.hint}>Todavía no enviaste comprobantes</Text>
+          ) : (
+            receipts.map((item) => {
+              const amount = Number(item.amount_ars) || 0;
+              const statusLabel = formatCommissionReceiptStatus(item.status);
+              const dateLabel = formatCommissionReceiptDate(item.created_at);
+              const hasFile = Boolean(item.file_url?.trim());
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.historyRow}
+                  onPress={() => {
+                    if (hasFile) openReceiptFile(item.file_url);
+                  }}
+                  disabled={!hasFile}
+                  accessibilityRole={hasFile ? 'button' : 'text'}
+                  accessibilityLabel={`${dateLabel}, ${amount} pesos, ${statusLabel}${hasFile ? ', ver comprobante' : ''}`}
+                >
+                  <View style={styles.historyLeft}>
+                    <Text style={styles.historyDate}>{dateLabel}</Text>
+                    <Text style={styles.historyAmount}>
+                      ${amount.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                    </Text>
+                  </View>
+                  <View style={styles.historyRight}>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        item.status === 'approved'
+                          ? styles.statusApproved
+                          : item.status === 'rejected_fraud'
+                            ? styles.statusRejected
+                            : styles.statusPending,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusBadgeText,
+                          item.status === 'approved'
+                            ? styles.statusTextApproved
+                            : item.status === 'rejected_fraud'
+                              ? styles.statusTextRejected
+                              : styles.statusTextPending,
+                        ]}
+                      >
+                        {statusLabel}
+                      </Text>
+                    </View>
+                    {hasFile ? <Text style={styles.viewFileLink}>Ver</Text> : null}
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </Card>
       </ScrollView>
     </View>
   );
@@ -342,6 +464,9 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize['2xl'],
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.dangerRed,
+  },
+  debtAmountClear: {
+    color: theme.colors.success,
   },
   hint: {
     marginTop: theme.spacing.xs,
@@ -416,5 +541,63 @@ const styles = StyleSheet.create({
   retryText: {
     color: theme.colors.turquoise,
     fontWeight: theme.fontWeight.bold,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: theme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.lightGray,
+    gap: theme.spacing.sm,
+  },
+  historyLeft: {
+    flex: 1,
+    gap: 2,
+  },
+  historyDate: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.mediumGray,
+  },
+  historyAmount: {
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.deepBlue,
+  },
+  historyRight: {
+    alignItems: 'flex-end',
+    gap: theme.spacing.xs,
+  },
+  statusBadge: {
+    borderRadius: theme.radius.full,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 2,
+  },
+  statusPending: {
+    backgroundColor: theme.colors.surfaceMuted,
+  },
+  statusApproved: {
+    backgroundColor: theme.colors.surfaceMuted,
+  },
+  statusRejected: {
+    backgroundColor: theme.colors.lightGray,
+  },
+  statusBadgeText: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+  },
+  statusTextPending: {
+    color: theme.colors.amber,
+  },
+  statusTextApproved: {
+    color: theme.colors.success,
+  },
+  statusTextRejected: {
+    color: theme.colors.dangerRed,
+  },
+  viewFileLink: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.turquoise,
   },
 });

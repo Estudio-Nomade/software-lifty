@@ -168,7 +168,16 @@ export const EarningsScreen: React.FC = () => {
                     <Text style={styles.payDebtBtnText}>Pagar / subir comprobante</Text>
                   </TouchableOpacity>
                 </>
-              ) : null}
+              ) : (
+                <TouchableOpacity
+                  style={styles.liftyPaymentsLink}
+                  onPress={() => navigation.navigate('PayCommissionDebt')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Ver pagos a Lifty e historial de comprobantes"
+                >
+                  <Text style={styles.liftyPaymentsLinkText}>Pagos a Lifty / historial</Text>
+                </TouchableOpacity>
+              )}
             </Card>
 
             <Card>
@@ -348,7 +357,16 @@ export const EarningsScreen: React.FC = () => {
                   <Text style={styles.payDebtBtnText}>Pagar / subir comprobante</Text>
                 </TouchableOpacity>
               </Card>
-            ) : null}
+            ) : (
+              <TouchableOpacity
+                style={styles.liftyPaymentsLink}
+                onPress={() => navigation.navigate('PayCommissionDebt')}
+                accessibilityRole="button"
+                accessibilityLabel="Ver pagos a Lifty e historial de comprobantes"
+              >
+                <Text style={styles.liftyPaymentsLinkText}>Pagos a Lifty / historial</Text>
+              </TouchableOpacity>
+            )}
 
             <Card>
               <Text style={styles.cardTitle}>Tus ganancias</Text>
@@ -642,5 +660,15 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
     fontWeight: theme.fontWeight.bold,
     fontSize: theme.fontSize.sm,
+  },
+  liftyPaymentsLink: {
+    marginTop: theme.spacing.sm,
+    paddingVertical: theme.spacing.sm,
+    alignItems: 'center',
+  },
+  liftyPaymentsLinkText: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.turquoise,
   },
 });

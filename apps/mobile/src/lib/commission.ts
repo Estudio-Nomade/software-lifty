@@ -32,3 +32,32 @@ export function formatDebtCapLabel(capArs: number | undefined): string | null {
     maximumFractionDigits: 0,
   })}`;
 }
+
+/** API statuses for driver → Lifty commission receipts (schema + admin pack). */
+export type CommissionReceiptStatus = 'pending_review' | 'approved' | 'rejected_fraud' | string;
+
+export function formatCommissionReceiptStatus(status: CommissionReceiptStatus): string {
+  switch (status) {
+    case 'pending_review':
+      return 'En revisión';
+    case 'approved':
+      return 'Aprobado';
+    case 'rejected_fraud':
+      return 'Rechazado';
+    default:
+      return 'Desconocido';
+  }
+}
+
+export function formatCommissionReceiptDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
