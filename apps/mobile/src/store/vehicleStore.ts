@@ -7,13 +7,15 @@ function toIconType(vehicleType: string | null | undefined): IconType {
   switch (vehicleType) {
     case 'Auto':
     case 'car':
+    case 'Camioneta':
+    case 'pickup':
+    case 'van':
+    case 'camioneta':
       return 'car';
     case 'Moto':
     case 'motorcycle':
     case 'moto':
       return 'moto';
-    case 'Camioneta':
-      return 'camioneta';
     default:
       return 'car';
   }

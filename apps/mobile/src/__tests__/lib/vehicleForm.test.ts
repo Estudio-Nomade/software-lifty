@@ -55,13 +55,15 @@ describe('vehicleType mapping', () => {
   it('maps UI labels to API slugs', () => {
     expect(vehicleTypeToApi('Auto')).toBe('car');
     expect(vehicleTypeToApi('Moto')).toBe('motorcycle');
-    expect(vehicleTypeToApi('Camioneta')).toBe('pickup');
   });
 
-  it('maps API slugs (and legacy UI) back to UI labels', () => {
+  it('maps API slugs (and legacy) back to UI labels', () => {
     expect(vehicleTypeFromApi('car')).toBe('Auto');
     expect(vehicleTypeFromApi('motorcycle')).toBe('Moto');
-    expect(vehicleTypeFromApi('pickup')).toBe('Camioneta');
+    expect(vehicleTypeFromApi('pickup')).toBe('Auto');
+    expect(vehicleTypeFromApi('van')).toBe('Auto');
+    expect(vehicleTypeFromApi('camioneta')).toBe('Auto');
+    expect(vehicleTypeFromApi('Camioneta')).toBe('Auto');
     expect(vehicleTypeFromApi('Auto')).toBe('Auto');
   });
 });

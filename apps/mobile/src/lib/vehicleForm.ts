@@ -1,5 +1,5 @@
 /** UI labels shown on OnboardingVehicle. Backend stores English slugs. */
-export type VehicleTypeUi = 'Auto' | 'Moto' | 'Camioneta';
+export type VehicleTypeUi = 'Auto' | 'Moto';
 
 /** Normativa Lifty: piso histórico 2011 + antigüedad máx. 15 años. */
 export const VEHICLE_MIN_MODEL_YEAR = 2011;
@@ -38,21 +38,20 @@ export function validateVehicleYear(value: string, now: Date = new Date()): stri
 const UI_TO_API: Record<VehicleTypeUi, string> = {
   Auto: 'car',
   Moto: 'motorcycle',
-  Camioneta: 'pickup',
 };
 
+/** Legacy pickup/van/camioneta hydrate as Auto (no third chip). */
 const API_TO_UI: Record<string, VehicleTypeUi> = {
   car: 'Auto',
   motorcycle: 'Moto',
   moto: 'Moto',
-  pickup: 'Camioneta',
-  van: 'Camioneta',
-  camioneta: 'Camioneta',
   auto: 'Auto',
-  // Already-UI values (legacy rows / mistyped PUTs)
+  pickup: 'Auto',
+  van: 'Auto',
+  camioneta: 'Auto',
   Auto: 'Auto',
   Moto: 'Moto',
-  Camioneta: 'Camioneta',
+  Camioneta: 'Auto',
 };
 
 export function vehicleTypeToApi(ui: VehicleTypeUi): string {
