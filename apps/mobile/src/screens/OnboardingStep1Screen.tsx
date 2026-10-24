@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -18,8 +18,10 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
+import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { type PlaceSuggestion, usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
+import { exitOnboardingToWelcome } from '../lib/exitOnboardingToWelcome';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
@@ -71,6 +73,21 @@ const isFormValid = (
 
 export const OnboardingStep1Screen: React.FC = () => {
   const navigation = useAppNavigation();
+  const { signOut } = useAuth();
+  const exitingRef = useRef(false);
+
+  const handleBack = useCallback(async () => {
+    if (exitingRef.current) return;
+    exitingRef.current = true;
+    try {
+      await exitOnboardingToWelcome({
+        signOut,
+        clearAuthState: () => useAuthStore.getState().clearAuthState(),
+      });
+    } finally {
+      exitingRef.current = false;
+    }
+  }, [signOut]);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -331,7 +348,7 @@ export const OnboardingStep1Screen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <Navbar title="Paso 1/3" onBack={() => navigation.goBack()} />
+      <Navbar title="Paso 1/3" onBack={handleBack} />
       {/*
         Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.
         iOS: padding KAV. Keep #406 dismiss modes.
