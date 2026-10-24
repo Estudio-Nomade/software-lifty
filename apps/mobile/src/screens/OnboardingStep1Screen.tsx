@@ -74,20 +74,20 @@ const isFormValid = (
 export const OnboardingStep1Screen: React.FC = () => {
   const navigation = useAppNavigation();
   const { signOut } = useAuth();
-  const [exiting, setExiting] = useState(false);
+  const exitingRef = useRef(false);
 
   const handleBack = useCallback(async () => {
-    if (exiting) return;
-    setExiting(true);
+    if (exitingRef.current) return;
+    exitingRef.current = true;
     try {
       await exitOnboardingToWelcome({
         signOut,
         clearAuthState: () => useAuthStore.getState().clearAuthState(),
       });
     } finally {
-      setExiting(false);
+      exitingRef.current = false;
     }
-  }, [exiting, signOut]);
+  }, [signOut]);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
