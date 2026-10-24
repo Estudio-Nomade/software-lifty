@@ -29,6 +29,7 @@ import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
+import { confirmSignOut } from '../lib/confirmSignOut';
 import { getTabBarReserve } from '../lib/tabBarLayout';
 import { theme } from '../theme';
 import { compressImage } from '../utils/image';
@@ -184,7 +185,7 @@ export const ProfileScreen: React.FC = () => {
   );
 
   const handleSignOut = () => {
-    signOut.mutate();
+    confirmSignOut(() => signOut.mutate());
   };
 
   const openEdit = () => {
