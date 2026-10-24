@@ -3,10 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { apiClient } from '../api/client';
@@ -84,11 +84,19 @@ export const OnboardingVehicleScreen: React.FC = () => {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitError, setSubmitError] = useState('');
-  const prefilled = useRef(false);
+  // Mount-scoped one-shot flags (fresh refs on remount; never reset mid-mount).
+  const prefillDone = useRef(false);
+  /** True after user taps a type chip — only blocks the in-flight one-shot prefill. */
+  const typeTouchedDuringPrefill = useRef(false);
+
+  const selectVehicleType = (type: VehicleTypeUi) => {
+    if (!prefillDone.current) typeTouchedDuringPrefill.current = true;
+    setVehicleType(type);
+  };
 
   // Prefill from GET /drivers/me so back/redirect/kill-app never shows a blank form twice.
   useEffect(() => {
-    if (prefilled.current) return;
+    if (prefillDone.current) return;
     let cancelled = false;
 
     (async () => {
@@ -102,8 +110,10 @@ export const OnboardingVehicleScreen: React.FC = () => {
           setVehicleModel(form.model);
           setVehicleColor(form.color);
           setVehicleYear(form.year);
-          setVehicleType(form.type);
-          prefilled.current = true;
+          // Only apply profile type if user has not already picked while GET was in flight.
+          if (!typeTouchedDuringPrefill.current) {
+            setVehicleType(form.type);
+          }
           if (__DEV__) {
             // eslint-disable-next-line no-console
             console.log('[driver-onboarding] vehicle prefilled from profile');
@@ -112,6 +122,8 @@ export const OnboardingVehicleScreen: React.FC = () => {
       } catch {
         // empty form — first time
       } finally {
+        // Always mark done so this effect path never re-applies type (deps = []).
+        prefillDone.current = true;
         if (!cancelled) setLoadingProfile(false);
       }
     })();
@@ -166,29 +178,38 @@ export const OnboardingVehicleScreen: React.FC = () => {
   };
 
   const formBody = (
-    <>
+    <View style={styles.formColumn}>
       <Text style={styles.sectionTitle}>VEHICULO</Text>
       {vehiclePlate !== '' && vehicleBrand !== '' ? (
         <Text style={styles.hint}>Datos guardados. Revisá y continuá.</Text>
       ) : null}
-      <View style={styles.vehicleTypes}>
-        {VEHICLE_TYPES.map((type) => (
-          <TouchableOpacity
-            key={type}
-            style={[styles.vehicleType, vehicleType === type && styles.vehicleTypeSelected]}
-            onPress={() => setVehicleType(type)}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.vehicleTypeText,
-                vehicleType === type && styles.vehicleTypeTextSelected,
+      <View style={styles.vehicleTypes} accessibilityRole="radiogroup">
+        {VEHICLE_TYPES.map((type) => {
+          const selected = vehicleType === type;
+          return (
+            <Pressable
+              key={type}
+              style={({ pressed }) => [
+                styles.vehicleType,
+                selected && styles.vehicleTypeSelected,
+                pressed && !selected && styles.vehicleTypePressed,
               ]}
+              onPress={() => selectVehicleType(type)}
+              hitSlop={8}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              accessibilityLabel={type}
+              testID={`vehicle-type-${type.toLowerCase()}`}
             >
-              {type}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Text
+                style={[styles.vehicleTypeText, selected && styles.vehicleTypeTextSelected]}
+                pointerEvents="none"
+              >
+                {type}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
       <Input
         placeholder="Patente"
@@ -269,7 +290,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
         variant="cta"
         style={styles.button}
       />
-    </>
+    </View>
   );
 
   return (
@@ -317,9 +338,15 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     justifyContent: 'center',
+    // Center the capped column; chips stretch inside formColumn (not full tablet width).
     alignItems: 'center',
     padding: theme.spacing.md,
     paddingBottom: theme.spacing['2xl'],
+  },
+  formColumn: {
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     gap: theme.spacing.sm,
   },
   sectionTitle: {
@@ -332,67 +359,66 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
-    alignSelf: 'center',
     width: '100%',
-    maxWidth: 480,
     marginBottom: theme.spacing.xs,
   },
   input: {
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   halfInput: {
     flex: 1,
+    minWidth: 0,
   },
   vehicleTypes: {
     flexDirection: 'row',
     gap: theme.spacing.md,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
+    zIndex: 2,
   },
   vehicleType: {
     flex: 1,
-    height: 44,
+    minWidth: 0,
+    minHeight: 48,
     borderRadius: theme.radius.sm,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: theme.colors.mediumGray,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.surface,
+    // fixed border width avoids layout jump that can swallow the next press
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
   },
   vehicleTypeSelected: {
-    backgroundColor: theme.colors.turquoise,
-    borderColor: theme.colors.turquoise,
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  vehicleTypePressed: {
+    opacity: 0.85,
+    borderColor: theme.colors.primary,
   },
   vehicleTypeText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.deepBlue,
+    fontFamily: theme.fontFamily.semibold,
   },
   vehicleTypeTextSelected: {
     color: theme.colors.white,
-    fontWeight: theme.fontWeight.bold,
+    fontFamily: theme.fontFamily.bold,
   },
   row: {
     flexDirection: 'row',
     gap: theme.spacing.md,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   submitError: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
     textAlign: 'center',
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   button: {
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
     marginTop: theme.spacing.md,
   },
 });
