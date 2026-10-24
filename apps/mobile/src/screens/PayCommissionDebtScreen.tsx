@@ -23,7 +23,11 @@ import { Card } from '../components/Card';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { formatCommissionReceiptDate, formatCommissionReceiptStatus } from '../lib/commission';
+import {
+  formatCommissionReceiptDate,
+  formatCommissionReceiptStatus,
+  isSafeHttpUrl,
+} from '../lib/commission';
 import { theme } from '../theme';
 import { uploadCommissionReceipt } from '../utils/upload';
 
@@ -66,8 +70,12 @@ function unwrapListPayload(raw: unknown): CommissionReceipt[] {
 }
 
 async function openReceiptFile(url: string) {
+  if (!isSafeHttpUrl(url)) {
+    Alert.alert('Error', 'No se pudo abrir el comprobante');
+    return;
+  }
   try {
-    await Linking.openURL(url);
+    await Linking.openURL(url.trim());
   } catch {
     Alert.alert('Error', 'No se pudo abrir el comprobante');
   }
@@ -100,7 +108,7 @@ const ReceiptCard: React.FC<ReceiptCardProps> = ({ item }) => {
   const amount = Number(item.amount_ars) || 0;
   const statusLabel = formatCommissionReceiptStatus(item.status);
   const dateLabel = formatCommissionReceiptDate(item.created_at);
-  const hasFile = Boolean(item.file_url?.trim());
+  const hasFile = isSafeHttpUrl(item.file_url);
   const visual = STATUS_VISUAL[item.status] ?? {
     bg: theme.colors.mediumGray,
     fg: theme.colors.white,
@@ -168,17 +176,19 @@ export const PayCommissionDebtScreen: React.FC = () => {
     },
   });
 
-  const debt = payout?.platform_debt ?? 0;
+  /** Only use debt after payout resolved — avoid $0 / "Al día" flash while loading. */
+  const payoutReady = payout != null;
+  const debt = payoutReady ? Number(payout.platform_debt) || 0 : 0;
   const [amountText, setAmountText] = useState('');
   const [file, setFile] = useState<SelectedFile | null>(null);
 
   useEffect(() => {
-    if (payout && amountText === '') {
-      setAmountText(String(Math.round(payout.platform_debt)));
+    if (payoutReady && amountText === '') {
+      setAmountText(String(Math.round(Number(payout.platform_debt) || 0)));
     }
-  }, [payout, amountText]);
+  }, [payoutReady, payout, amountText]);
 
-  const accountConfigured = Boolean(payout?.alias?.trim() || payout?.cvu?.trim());
+  const accountConfigured = Boolean(payoutReady && (payout.alias?.trim() || payout.cvu?.trim()));
 
   const amountParsed = useMemo(() => parseAmountInput(amountText), [amountText]);
   const amountValid = amountParsed != null && amountParsed >= debt && amountParsed >= 1;
@@ -272,7 +282,14 @@ export const PayCommissionDebtScreen: React.FC = () => {
   };
 
   const canSubmit =
-    accountConfigured && amountValid && file != null && !submitMutation.isPending && debt > 0;
+    payoutReady &&
+    accountConfigured &&
+    amountValid &&
+    file != null &&
+    !submitMutation.isPending &&
+    debt > 0;
+
+  const showPayoutBody = !isLoading && !error && payoutReady;
 
   return (
     <View style={styles.container}>
@@ -284,7 +301,7 @@ export const PayCommissionDebtScreen: React.FC = () => {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {isLoading ? (
+        {isLoading || (!error && !payoutReady) ? (
           <ActivityIndicator
             color={theme.colors.turquoise}
             style={{ marginTop: theme.spacing.xl }}
@@ -297,7 +314,7 @@ export const PayCommissionDebtScreen: React.FC = () => {
               <Text style={styles.retryText}>Reintentar</Text>
             </TouchableOpacity>
           </Card>
-        ) : (
+        ) : showPayoutBody ? (
           <>
             <Card padding={theme.spacing.lg} style={styles.heroCard}>
               <View style={styles.heroHeader}>
@@ -469,7 +486,7 @@ export const PayCommissionDebtScreen: React.FC = () => {
               </>
             ) : null}
           </>
-        )}
+        ) : null}
 
         <View style={styles.historyHeader}>
           <Text style={styles.historyTitle}>Comprobantes enviados</Text>

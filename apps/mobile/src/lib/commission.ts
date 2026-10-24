@@ -64,3 +64,16 @@ export function formatCommissionReceiptDate(iso: string | null | undefined): str
   });
   return `${datePart} · ${timePart}`;
 }
+
+/** Only allow http(s) receipt file URLs from API before Linking.openURL. */
+export function isSafeHttpUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}

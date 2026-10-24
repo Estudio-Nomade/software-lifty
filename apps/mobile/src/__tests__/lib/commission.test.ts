@@ -2,6 +2,7 @@ import {
   formatCommissionReceiptDate,
   formatCommissionReceiptStatus,
   formatDebtCapLabel,
+  isSafeHttpUrl,
   normalizePlatformDebt,
   shouldShowPlatformDebt,
 } from '../../lib/commission';
@@ -67,5 +68,20 @@ describe('formatCommissionReceiptDate', () => {
     const label = formatCommissionReceiptDate('2026-03-15T18:30:00.000Z');
     expect(label).not.toBe('—');
     expect(label.length).toBeGreaterThan(8);
+  });
+});
+
+describe('isSafeHttpUrl', () => {
+  it('accepts http and https', () => {
+    expect(isSafeHttpUrl('https://example.com/a.jpg')).toBe(true);
+    expect(isSafeHttpUrl('http://example.com/a.pdf')).toBe(true);
+  });
+
+  it('rejects empty, non-http schemes, and garbage', () => {
+    expect(isSafeHttpUrl(undefined)).toBe(false);
+    expect(isSafeHttpUrl('')).toBe(false);
+    expect(isSafeHttpUrl('javascript:alert(1)')).toBe(false);
+    expect(isSafeHttpUrl('file:///etc/passwd')).toBe(false);
+    expect(isSafeHttpUrl('not-a-url')).toBe(false);
   });
 });
