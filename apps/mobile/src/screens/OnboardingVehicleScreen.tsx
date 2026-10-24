@@ -84,18 +84,19 @@ export const OnboardingVehicleScreen: React.FC = () => {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitError, setSubmitError] = useState('');
-  const prefilled = useRef(false);
-  /** User tapped a type chip — never let late prefill overwrite their choice. */
-  const typeTouched = useRef(false);
+  // Mount-scoped one-shot flags (fresh refs on remount; never reset mid-mount).
+  const prefillDone = useRef(false);
+  /** True after user taps a type chip — only blocks the in-flight one-shot prefill. */
+  const typeTouchedDuringPrefill = useRef(false);
 
   const selectVehicleType = (type: VehicleTypeUi) => {
-    typeTouched.current = true;
+    if (!prefillDone.current) typeTouchedDuringPrefill.current = true;
     setVehicleType(type);
   };
 
   // Prefill from GET /drivers/me so back/redirect/kill-app never shows a blank form twice.
   useEffect(() => {
-    if (prefilled.current) return;
+    if (prefillDone.current) return;
     let cancelled = false;
 
     (async () => {
@@ -109,11 +110,10 @@ export const OnboardingVehicleScreen: React.FC = () => {
           setVehicleModel(form.model);
           setVehicleColor(form.color);
           setVehicleYear(form.year);
-          // Don't stomp a type the user already picked while this request was in flight.
-          if (!typeTouched.current) {
+          // Only apply profile type if user has not already picked while GET was in flight.
+          if (!typeTouchedDuringPrefill.current) {
             setVehicleType(form.type);
           }
-          prefilled.current = true;
           if (__DEV__) {
             // eslint-disable-next-line no-console
             console.log('[driver-onboarding] vehicle prefilled from profile');
@@ -122,6 +122,8 @@ export const OnboardingVehicleScreen: React.FC = () => {
       } catch {
         // empty form — first time
       } finally {
+        // Always mark done so this effect path never re-applies type (deps = []).
+        prefillDone.current = true;
         if (!cancelled) setLoadingProfile(false);
       }
     })();
@@ -176,7 +178,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
   };
 
   const formBody = (
-    <>
+    <View style={styles.formColumn}>
       <Text style={styles.sectionTitle}>VEHICULO</Text>
       {vehiclePlate !== '' && vehicleBrand !== '' ? (
         <Text style={styles.hint}>Datos guardados. Revisá y continuá.</Text>
@@ -288,7 +290,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
         variant="cta"
         style={styles.button}
       />
-    </>
+    </View>
   );
 
   return (
@@ -336,10 +338,15 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     justifyContent: 'center',
-    // stretch full width — center + width:'100%' collapses chip hit targets on web/RN
-    alignItems: 'stretch',
+    // Center the capped column; chips stretch inside formColumn (not full tablet width).
+    alignItems: 'center',
     padding: theme.spacing.md,
     paddingBottom: theme.spacing['2xl'],
+  },
+  formColumn: {
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
     gap: theme.spacing.sm,
   },
   sectionTitle: {
