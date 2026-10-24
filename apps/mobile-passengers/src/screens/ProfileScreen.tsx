@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -22,6 +22,7 @@ import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
+import { confirmSignOut } from '../lib/confirmSignOut';
 import { getFriendlyProfileError } from '../lib/profileErrors';
 import { buildSosWhatsAppUrl } from '../lib/supportContact';
 import { getTabBarReserve } from '../lib/tabBarLayout';
@@ -50,6 +51,14 @@ export function ProfileScreen() {
   const [phone, setPhone] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const [editVisible, setEditVisible] = useState(false);
   const [editFullName, setEditFullName] = useState('');
@@ -69,13 +78,16 @@ export function ProfileScreen() {
 
   const displayName = fullName || email?.split('@')[0] || 'Usuario';
 
-  const handleLogout = async () => {
-    setLoggingOut(true);
-    try {
-      await signOut();
-    } catch {
-      setLoggingOut(false);
-    }
+  const handleLogout = () => {
+    confirmSignOut(async () => {
+      setLoggingOut(true);
+      try {
+        await signOut();
+      } finally {
+        // Success usually unmounts via auth redirect; if not, unlock the button.
+        if (mountedRef.current) setLoggingOut(false);
+      }
+    });
   };
 
   const openEdit = () => {

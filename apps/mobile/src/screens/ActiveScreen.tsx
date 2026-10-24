@@ -39,6 +39,7 @@ import {
   normalizePlatformDebt,
   shouldShowPlatformDebt,
 } from '../lib/commission';
+import { confirmSignOut } from '../lib/confirmSignOut';
 import {
   type ConnectBlockedFeedback,
   feedbackForConnectBlock,
@@ -782,7 +783,7 @@ export const ActiveScreen: React.FC = () => {
           refreshPayoutMethods();
           navigation.navigate('PaymentMethod');
         }}
-        onLogout={() => signOut.mutate()}
+        onLogout={() => confirmSignOut(() => signOut.mutate())}
       />
       <DistrictPickerSheet
         visible={districtSheetVisible}
