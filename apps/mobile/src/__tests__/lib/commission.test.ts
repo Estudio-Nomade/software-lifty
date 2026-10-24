@@ -1,5 +1,8 @@
 import {
+  formatCommissionReceiptDate,
+  formatCommissionReceiptStatus,
   formatDebtCapLabel,
+  isSafeHttpUrl,
   normalizePlatformDebt,
   shouldShowPlatformDebt,
 } from '../../lib/commission';
@@ -39,5 +42,46 @@ describe('formatDebtCapLabel', () => {
 
   it('formats positive cap without inventing a fixed amount', () => {
     expect(formatDebtCapLabel(10000)).toMatch(/tope \$10[.\s]?000/);
+  });
+});
+
+describe('formatCommissionReceiptStatus', () => {
+  it('maps known statuses to Spanish labels', () => {
+    expect(formatCommissionReceiptStatus('pending_review')).toBe('En revisión');
+    expect(formatCommissionReceiptStatus('approved')).toBe('Aprobado');
+    expect(formatCommissionReceiptStatus('rejected_fraud')).toBe('Rechazado');
+  });
+
+  it('falls back for unknown or empty status', () => {
+    expect(formatCommissionReceiptStatus('weird')).toBe('Desconocido');
+    expect(formatCommissionReceiptStatus('')).toBe('Desconocido');
+  });
+});
+
+describe('formatCommissionReceiptDate', () => {
+  it('returns dash for missing or invalid', () => {
+    expect(formatCommissionReceiptDate(undefined)).toBe('—');
+    expect(formatCommissionReceiptDate('not-a-date')).toBe('—');
+  });
+
+  it('formats ISO dates for es-AR', () => {
+    const label = formatCommissionReceiptDate('2026-03-15T18:30:00.000Z');
+    expect(label).not.toBe('—');
+    expect(label.length).toBeGreaterThan(8);
+  });
+});
+
+describe('isSafeHttpUrl', () => {
+  it('accepts http and https', () => {
+    expect(isSafeHttpUrl('https://example.com/a.jpg')).toBe(true);
+    expect(isSafeHttpUrl('http://example.com/a.pdf')).toBe(true);
+  });
+
+  it('rejects empty, non-http schemes, and garbage', () => {
+    expect(isSafeHttpUrl(undefined)).toBe(false);
+    expect(isSafeHttpUrl('')).toBe(false);
+    expect(isSafeHttpUrl('javascript:alert(1)')).toBe(false);
+    expect(isSafeHttpUrl('file:///etc/passwd')).toBe(false);
+    expect(isSafeHttpUrl('not-a-url')).toBe(false);
   });
 });

@@ -163,13 +163,36 @@ export const EarningsScreen: React.FC = () => {
                     style={styles.payDebtBtn}
                     onPress={() => navigation.navigate('PayCommissionDebt')}
                     accessibilityRole="button"
-                    accessibilityLabel="Pagar o subir comprobante de comisión"
+                    accessibilityLabel="Pagar comisión a Lifty"
+                    activeOpacity={0.85}
                   >
-                    <Text style={styles.payDebtBtnText}>Pagar / subir comprobante</Text>
+                    <Ionicons name="card-outline" size={18} color={theme.colors.white} />
+                    <Text style={styles.payDebtBtnText}>Pagar comisión</Text>
                   </TouchableOpacity>
                 </>
               ) : null}
             </Card>
+
+            {!shouldShowPlatformDebt(earnings.platform_debt, {
+              debtBlocksOnline: earnings.debt_blocks_online,
+            }) ? (
+              <TouchableOpacity
+                style={styles.commissionEntryCard}
+                onPress={() => navigation.navigate('PayCommissionDebt')}
+                accessibilityRole="button"
+                accessibilityLabel="Ver comprobantes enviados a Lifty"
+                activeOpacity={0.7}
+              >
+                <View style={styles.commissionEntryIcon}>
+                  <Ionicons name="receipt-outline" size={20} color={theme.colors.turquoise} />
+                </View>
+                <View style={styles.commissionEntryBody}>
+                  <Text style={styles.commissionEntryTitle}>Comprobantes a Lifty</Text>
+                  <Text style={styles.commissionEntrySub}>Historial de pagos de comisión</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.mediumGray} />
+              </TouchableOpacity>
+            ) : null}
 
             <Card>
               <Text style={styles.cardTitle}>Tus ganancias</Text>
@@ -343,12 +366,31 @@ export const EarningsScreen: React.FC = () => {
                   style={styles.payDebtBtn}
                   onPress={() => navigation.navigate('PayCommissionDebt')}
                   accessibilityRole="button"
-                  accessibilityLabel="Pagar o subir comprobante de comisión"
+                  accessibilityLabel="Pagar comisión a Lifty"
+                  activeOpacity={0.85}
                 >
-                  <Text style={styles.payDebtBtnText}>Pagar / subir comprobante</Text>
+                  <Ionicons name="card-outline" size={18} color={theme.colors.white} />
+                  <Text style={styles.payDebtBtnText}>Pagar comisión</Text>
                 </TouchableOpacity>
               </Card>
-            ) : null}
+            ) : (
+              <TouchableOpacity
+                style={styles.commissionEntryCard}
+                onPress={() => navigation.navigate('PayCommissionDebt')}
+                accessibilityRole="button"
+                accessibilityLabel="Ver comprobantes enviados a Lifty"
+                activeOpacity={0.7}
+              >
+                <View style={styles.commissionEntryIcon}>
+                  <Ionicons name="receipt-outline" size={20} color={theme.colors.turquoise} />
+                </View>
+                <View style={styles.commissionEntryBody}>
+                  <Text style={styles.commissionEntryTitle}>Comprobantes a Lifty</Text>
+                  <Text style={styles.commissionEntrySub}>Historial de pagos de comisión</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.colors.mediumGray} />
+              </TouchableOpacity>
+            )}
 
             <Card>
               <Text style={styles.cardTitle}>Tus ganancias</Text>
@@ -631,16 +673,54 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   payDebtBtn: {
-    marginTop: theme.spacing.sm,
+    marginTop: theme.spacing.md,
     backgroundColor: theme.colors.turquoise,
-    borderRadius: theme.radius.sm,
-    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.buttonRadius,
+    paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
   },
   payDebtBtnText: {
     color: theme.colors.white,
     fontWeight: theme.fontWeight.bold,
+    fontSize: theme.fontSize.md,
+  },
+  commissionEntryCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.lg,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    width: '100%',
+    alignSelf: 'stretch',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(13, 43, 69, 0.06)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    ...theme.shadows.card,
+  },
+  commissionEntryIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commissionEntryBody: {
+    flex: 1,
+    gap: 2,
+  },
+  commissionEntryTitle: {
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.deepBlue,
+  },
+  commissionEntrySub: {
     fontSize: theme.fontSize.sm,
+    color: theme.colors.mediumGray,
   },
 });

@@ -32,3 +32,48 @@ export function formatDebtCapLabel(capArs: number | undefined): string | null {
     maximumFractionDigits: 0,
   })}`;
 }
+
+/** API statuses for driver → Lifty commission receipts (schema + admin pack). */
+export type CommissionReceiptStatus = 'pending_review' | 'approved' | 'rejected_fraud' | string;
+
+export function formatCommissionReceiptStatus(status: CommissionReceiptStatus): string {
+  switch (status) {
+    case 'pending_review':
+      return 'En revisión';
+    case 'approved':
+      return 'Aprobado';
+    case 'rejected_fraud':
+      return 'Rechazado';
+    default:
+      return 'Desconocido';
+  }
+}
+
+export function formatCommissionReceiptDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const datePart = d.toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const timePart = d.toLocaleTimeString('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `${datePart} · ${timePart}`;
+}
+
+/** Only allow http(s) receipt file URLs from API before Linking.openURL. */
+export function isSafeHttpUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
