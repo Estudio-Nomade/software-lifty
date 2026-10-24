@@ -84,6 +84,18 @@ export const driverStatusSchema = z.object({
   intended_district_id: z.string().nullable().optional(),
   intended_district_name: z.string().nullable().optional(),
   show_municipality_waitlist_banner: z.boolean().optional(),
+  license_category: z.string().nullable().optional(),
+  license_professional_status: z.string().optional(),
+  professional_license_phase: z
+    .enum(['not_applicable', 'not_started', 'grace', 'overdue', 'satisfied'])
+    .optional(),
+  professional_license_show_banner: z.boolean().optional(),
+  professional_license_blocks_online: z.boolean().optional(),
+  professional_license_grace_days: z.number().optional(),
+  professional_license_grace_started_at: z.string().nullable().optional(),
+  professional_license_due_at: z.string().nullable().optional(),
+  professional_license_days_remaining: z.number().nullable().optional(),
+  professional_license_days_elapsed: z.number().nullable().optional(),
 });
 
 export const districtSchema = z.object({

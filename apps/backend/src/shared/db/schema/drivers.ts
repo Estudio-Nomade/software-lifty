@@ -49,6 +49,17 @@ export const drivers = pgTable('drivers', {
     .default('pending_pickup'),
   identification_issued_at: timestamp('identification_issued_at', { withTimezone: true }),
   identification_external_ref: text('identification_external_ref'),
+  /** Declared license class (A3, B, professional, …). */
+  license_category: varchar('license_category', { length: 30 }),
+  /** unknown | professional | pending_professional | not_required */
+  license_professional_status: varchar('license_professional_status', { length: 30 })
+    .notNull()
+    .default('unknown'),
+  /** First successful is_online=true while pending_professional (product lock). */
+  professional_license_grace_started_at: timestamp('professional_license_grace_started_at', {
+    withTimezone: true,
+  }),
+  professional_license_due_at: timestamp('professional_license_due_at', { withTimezone: true }),
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull(),
 });

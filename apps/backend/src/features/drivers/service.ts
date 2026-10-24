@@ -18,6 +18,12 @@ import {
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
 import { logger } from '../../shared/lib/logger';
+import {
+  buildGraceStartPatch,
+  evaluateProfessionalLicenseGrace,
+  resolveLicenseProfessionalStatus,
+  shouldStartProfessionalLicenseGrace,
+} from '../../shared/lib/professional-license-grace';
 import { sendPushToUser } from '../../shared/lib/push';
 import {
   type StorageProvider,
@@ -320,6 +326,10 @@ export const driversService = {
         address_resolved_city: drivers.address_resolved_city,
         address_resolved_province: drivers.address_resolved_province,
         intended_district_id: drivers.intended_district_id,
+        license_category: drivers.license_category,
+        license_professional_status: drivers.license_professional_status,
+        professional_license_grace_started_at: drivers.professional_license_grace_started_at,
+        professional_license_due_at: drivers.professional_license_due_at,
       })
       .from(drivers)
       .where(eq(drivers.user_id, user.id))
@@ -352,6 +362,24 @@ export const driversService = {
       admin_reviewed_at: driver.admin_reviewed_at,
       created_at: driver.created_at,
     });
+    const professionalLicense = evaluateProfessionalLicenseGrace({
+      license_category: driver.license_category,
+      license_professional_status: driver.license_professional_status,
+      professional_license_grace_started_at: driver.professional_license_grace_started_at,
+      professional_license_due_at: driver.professional_license_due_at,
+    });
+    const professionalLicenseFields = {
+      license_category: professionalLicense.license_category,
+      license_professional_status: professionalLicense.license_professional_status,
+      professional_license_phase: professionalLicense.phase,
+      professional_license_show_banner: professionalLicense.show_banner,
+      professional_license_blocks_online: professionalLicense.blocks_online,
+      professional_license_grace_days: professionalLicense.grace_days,
+      professional_license_grace_started_at: professionalLicense.grace_started_at,
+      professional_license_due_at: professionalLicense.due_at,
+      professional_license_days_remaining: professionalLicense.days_remaining,
+      professional_license_days_elapsed: professionalLicense.days_elapsed,
+    };
     const waitlisted = municipalityFields.municipality_status === 'waitlisted';
     const canGoOnline =
       driver.status === 'approved' &&
@@ -372,6 +400,7 @@ export const driversService = {
         identification_days_until_pause: identification.days_until_pause,
         identification_pause_at: identification.pause_at,
         can_go_online: false,
+        ...professionalLicenseFields,
         ...municipalityFields,
       };
     }
@@ -390,6 +419,7 @@ export const driversService = {
         identification_days_since_approval: identification.days_since_approval,
         can_go_online: canGoOnline && !!district,
         district: district ?? undefined,
+        ...professionalLicenseFields,
         ...municipalityFields,
         has_district: !!district,
       };
@@ -557,6 +587,8 @@ export const driversService = {
         created_at: drivers.created_at,
         platform_debt: drivers.platform_debt,
         commission_fraud_block: drivers.commission_fraud_block,
+        license_professional_status: drivers.license_professional_status,
+        professional_license_grace_started_at: drivers.professional_license_grace_started_at,
       })
       .from(drivers)
       .where(eq(drivers.user_id, user.id))
@@ -633,6 +665,17 @@ export const driversService = {
       });
     }
 
+    const now = new Date();
+    // PRODUCT LOCK: 60d professional carnet grace starts on first successful online.
+    const startProfessionalGrace =
+      isOnline &&
+      shouldStartProfessionalLicenseGrace({
+        isGoingOnline: true,
+        license_professional_status: driver.license_professional_status,
+        professional_license_grace_started_at: driver.professional_license_grace_started_at,
+      });
+    const gracePatch = startProfessionalGrace ? buildGraceStartPatch(now) : null;
+
     await db
       .update(drivers)
       .set({
@@ -641,13 +684,27 @@ export const driversService = {
         // grace-period branch in findNearbyDrivers can't keep matching this
         // driver after they went offline on purpose.
         ...(isOnline ? {} : { last_heartbeat: null }),
-        updated_at: new Date(),
+        ...(gracePatch
+          ? {
+              professional_license_grace_started_at:
+                gracePatch.professional_license_grace_started_at,
+              professional_license_due_at: gracePatch.professional_license_due_at,
+            }
+          : {}),
+        updated_at: now,
       })
       .where(eq(drivers.id, driver.id));
 
     return {
       is_online: isOnline,
       message: isOnline ? 'Driver is now online' : 'Driver is now offline',
+      ...(gracePatch
+        ? {
+            professional_license_grace_started_at:
+              gracePatch.professional_license_grace_started_at.toISOString(),
+            professional_license_due_at: gracePatch.professional_license_due_at.toISOString(),
+          }
+        : {}),
     };
   },
 
@@ -725,6 +782,8 @@ export const driversService = {
       vehicle_color?: string;
       vehicle_year?: number;
       vehicle_type?: string;
+      license_category?: string;
+      license_professional_status?: string;
       photo_url?: string;
       address_line?: string;
       address_lat?: number;
@@ -899,6 +958,44 @@ export const driversService = {
       } else {
         await db.insert(vehicles).values(vehicleValues);
       }
+    }
+
+    // License category / professional carnet status (A3 moto, B/professional auto).
+    if (data.license_category != null || data.license_professional_status != null) {
+      const [veh] = await db
+        .select({ vehicle_type: vehicles.vehicle_type })
+        .from(vehicles)
+        .where(eq(vehicles.driver_id, driverId))
+        .limit(1);
+      const vehicleType = data.vehicle_type ?? veh?.vehicle_type ?? null;
+      const category =
+        data.license_category != null ? String(data.license_category).trim() : undefined;
+      const status = resolveLicenseProfessionalStatus({
+        vehicle_type: vehicleType,
+        license_category: category ?? null,
+        explicit_status: data.license_professional_status ?? null,
+      });
+
+      const licensePatch: {
+        license_category?: string | null;
+        license_professional_status: string;
+        professional_license_grace_started_at?: null;
+        professional_license_due_at?: null;
+        updated_at: Date;
+      } = {
+        license_professional_status: status,
+        updated_at: new Date(),
+      };
+      if (category !== undefined) {
+        licensePatch.license_category = category || null;
+      }
+      // Clearing pending → professional resets grace clock (upload path).
+      if (status === 'professional' || status === 'not_required') {
+        licensePatch.professional_license_grace_started_at = null;
+        licensePatch.professional_license_due_at = null;
+      }
+
+      await db.update(drivers).set(licensePatch).where(eq(drivers.id, driverId));
     }
 
     const result = await this.getMyStatus(user);
@@ -1317,6 +1414,10 @@ export const driversService = {
         address_resolved_province: drivers.address_resolved_province,
         municipality_status: drivers.municipality_status,
         intended_district_id: drivers.intended_district_id,
+        license_category: drivers.license_category,
+        license_professional_status: drivers.license_professional_status,
+        professional_license_grace_started_at: drivers.professional_license_grace_started_at,
+        professional_license_due_at: drivers.professional_license_due_at,
         brand: vehicles.brand,
         model: vehicles.model,
         year: vehicles.year,
@@ -1366,6 +1467,14 @@ export const driversService = {
       address_resolved_province: row.address_resolved_province,
       municipality_status: row.municipality_status ?? 'unset',
       intended_district_id: row.intended_district_id,
+      license_category: row.license_category ?? null,
+      license_professional_status: row.license_professional_status ?? 'unknown',
+      professional_license_grace_started_at: row.professional_license_grace_started_at
+        ? row.professional_license_grace_started_at.toISOString()
+        : null,
+      professional_license_due_at: row.professional_license_due_at
+        ? row.professional_license_due_at.toISOString()
+        : null,
       vehicle: {
         brand: row.brand,
         model: row.model,

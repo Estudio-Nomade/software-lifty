@@ -191,6 +191,26 @@ export const ActiveScreen: React.FC = () => {
     !stickersPaused &&
     !stickersRevoked &&
     (driverStatus?.identification_show_reminder ?? true);
+  const professionalLicenseBanner =
+    driverStatus?.status === 'approved' &&
+    driverStatus?.professional_license_show_banner === true &&
+    (driverStatus.professional_license_phase === 'not_started' ||
+      driverStatus.professional_license_phase === 'grace' ||
+      driverStatus.professional_license_phase === 'overdue');
+  const professionalLicenseCopy = (() => {
+    if (!professionalLicenseBanner) return null;
+    const days = driverStatus?.professional_license_days_remaining;
+    if (driverStatus?.professional_license_phase === 'overdue') {
+      return 'Venció el plazo de 60 días para presentar el carnet profesional. Subilo desde documentos o contactá soporte.';
+    }
+    if (driverStatus?.professional_license_phase === 'not_started') {
+      return 'Cuando te conectes por primera vez, arrancan 60 días para presentar el carnet profesional.';
+    }
+    if (days != null) {
+      return `Carnet profesional: te quedan ${days} días (desde tu primera conexión).`;
+    }
+    return 'Tenés 60 días desde tu primera conexión para presentar el carnet profesional.';
+  })();
   const { needsPayoutMethod, refreshPayoutMethods } = usePayoutMethodGate(driverStatus);
   const signOut = useSignOut();
 
@@ -656,6 +676,14 @@ export const ActiveScreen: React.FC = () => {
                     daysSinceApproval: driverStatus?.identification_days_since_approval,
                   })}
                 </Text>
+              </View>
+            )}
+          {professionalLicenseCopy &&
+            !municipalityWaitlisted &&
+            !awaitingApproval &&
+            !documentsPendingReview && (
+              <View style={styles.goHint} pointerEvents="none">
+                <Text style={styles.reviewBannerText}>{professionalLicenseCopy}</Text>
               </View>
             )}
           {toggleError && (
