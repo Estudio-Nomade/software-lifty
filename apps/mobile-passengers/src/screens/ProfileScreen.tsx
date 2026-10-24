@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -51,6 +51,14 @@ export function ProfileScreen() {
   const [phone, setPhone] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const [editVisible, setEditVisible] = useState(false);
   const [editFullName, setEditFullName] = useState('');
@@ -75,8 +83,9 @@ export function ProfileScreen() {
       setLoggingOut(true);
       try {
         await signOut();
-      } catch {
-        setLoggingOut(false);
+      } finally {
+        // Success usually unmounts via auth redirect; if not, unlock the button.
+        if (mountedRef.current) setLoggingOut(false);
       }
     });
   };
