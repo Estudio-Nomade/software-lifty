@@ -3,10 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { apiClient } from '../api/client';
@@ -85,6 +85,13 @@ export const OnboardingVehicleScreen: React.FC = () => {
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitError, setSubmitError] = useState('');
   const prefilled = useRef(false);
+  /** User tapped a type chip — never let late prefill overwrite their choice. */
+  const typeTouched = useRef(false);
+
+  const selectVehicleType = (type: VehicleTypeUi) => {
+    typeTouched.current = true;
+    setVehicleType(type);
+  };
 
   // Prefill from GET /drivers/me so back/redirect/kill-app never shows a blank form twice.
   useEffect(() => {
@@ -102,7 +109,10 @@ export const OnboardingVehicleScreen: React.FC = () => {
           setVehicleModel(form.model);
           setVehicleColor(form.color);
           setVehicleYear(form.year);
-          setVehicleType(form.type);
+          // Don't stomp a type the user already picked while this request was in flight.
+          if (!typeTouched.current) {
+            setVehicleType(form.type);
+          }
           prefilled.current = true;
           if (__DEV__) {
             // eslint-disable-next-line no-console
@@ -171,24 +181,33 @@ export const OnboardingVehicleScreen: React.FC = () => {
       {vehiclePlate !== '' && vehicleBrand !== '' ? (
         <Text style={styles.hint}>Datos guardados. Revisá y continuá.</Text>
       ) : null}
-      <View style={styles.vehicleTypes}>
-        {VEHICLE_TYPES.map((type) => (
-          <TouchableOpacity
-            key={type}
-            style={[styles.vehicleType, vehicleType === type && styles.vehicleTypeSelected]}
-            onPress={() => setVehicleType(type)}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.vehicleTypeText,
-                vehicleType === type && styles.vehicleTypeTextSelected,
+      <View style={styles.vehicleTypes} accessibilityRole="radiogroup">
+        {VEHICLE_TYPES.map((type) => {
+          const selected = vehicleType === type;
+          return (
+            <Pressable
+              key={type}
+              style={({ pressed }) => [
+                styles.vehicleType,
+                selected && styles.vehicleTypeSelected,
+                pressed && !selected && styles.vehicleTypePressed,
               ]}
+              onPress={() => selectVehicleType(type)}
+              hitSlop={8}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              accessibilityLabel={type}
+              testID={`vehicle-type-${type.toLowerCase()}`}
             >
-              {type}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Text
+                style={[styles.vehicleTypeText, selected && styles.vehicleTypeTextSelected]}
+                pointerEvents="none"
+              >
+                {type}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
       <Input
         placeholder="Patente"
@@ -317,7 +336,8 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    // stretch full width — center + width:'100%' collapses chip hit targets on web/RN
+    alignItems: 'stretch',
     padding: theme.spacing.md,
     paddingBottom: theme.spacing['2xl'],
     gap: theme.spacing.sm,
@@ -332,67 +352,66 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
-    alignSelf: 'center',
     width: '100%',
-    maxWidth: 480,
     marginBottom: theme.spacing.xs,
   },
   input: {
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   halfInput: {
     flex: 1,
+    minWidth: 0,
   },
   vehicleTypes: {
     flexDirection: 'row',
     gap: theme.spacing.md,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
+    zIndex: 2,
   },
   vehicleType: {
     flex: 1,
-    height: 44,
+    minWidth: 0,
+    minHeight: 48,
     borderRadius: theme.radius.sm,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: theme.colors.mediumGray,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.surface,
+    // fixed border width avoids layout jump that can swallow the next press
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
   },
   vehicleTypeSelected: {
-    backgroundColor: theme.colors.turquoise,
-    borderColor: theme.colors.turquoise,
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  vehicleTypePressed: {
+    opacity: 0.85,
+    borderColor: theme.colors.primary,
   },
   vehicleTypeText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.deepBlue,
+    fontFamily: theme.fontFamily.semibold,
   },
   vehicleTypeTextSelected: {
     color: theme.colors.white,
-    fontWeight: theme.fontWeight.bold,
+    fontFamily: theme.fontFamily.bold,
   },
   row: {
     flexDirection: 'row',
     gap: theme.spacing.md,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   submitError: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.dangerRed,
     textAlign: 'center',
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   button: {
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
     marginTop: theme.spacing.md,
   },
 });
