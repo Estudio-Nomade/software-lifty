@@ -53,11 +53,14 @@ export function formatCommissionReceiptDate(iso: string | null | undefined): str
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString('es-AR', {
+  const datePart = d.toLocaleDateString('es-AR', {
     day: '2-digit',
-    month: '2-digit',
+    month: 'short',
     year: 'numeric',
+  });
+  const timePart = d.toLocaleTimeString('es-AR', {
     hour: '2-digit',
     minute: '2-digit',
   });
+  return `${datePart} · ${timePart}`;
 }
