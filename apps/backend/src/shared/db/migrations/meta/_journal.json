@@ -358,6 +358,13 @@
       "when": 1788400000000,
       "tag": "0049_driver_professional_license_grace",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1788500000000,
+      "tag": "0050_vehicle_engine_cc",
+      "breakpoints": true
     }
   ]
 }

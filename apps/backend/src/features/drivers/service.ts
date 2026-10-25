@@ -34,6 +34,7 @@ import {
   contentTypeForFile,
   supabaseStorage,
 } from '../../shared/lib/storage';
+import { assertVehicleEngineCc, isMotoVehicleType } from '../../shared/lib/vehicle-engine-cc';
 import { assertVehicleYear } from '../../shared/lib/vehicle-year';
 
 let _storage: StorageProvider = supabaseStorage;
@@ -817,6 +818,7 @@ export const driversService = {
       vehicle_color?: string;
       vehicle_year?: number;
       vehicle_type?: string;
+      vehicle_engine_cc?: number | null;
       license_category?: string;
       license_professional_status?: string;
       photo_url?: string;
@@ -980,10 +982,28 @@ export const driversService = {
       assertVehicleYear(data.vehicle_year);
 
       const [existingVehicle] = await db
-        .select({ id: vehicles.id })
+        .select({
+          id: vehicles.id,
+          vehicle_type: vehicles.vehicle_type,
+          engine_cc: vehicles.engine_cc,
+        })
         .from(vehicles)
         .where(eq(vehicles.driver_id, driverId))
         .limit(1);
+
+      // Prefer request type → existing row → car. Never silently downgrade moto→car on partial PUT.
+      const vehicleType =
+        (data.vehicle_type && String(data.vehicle_type).trim()) ||
+        existingVehicle?.vehicle_type ||
+        'car';
+
+      const engineCcInput =
+        data.vehicle_engine_cc !== undefined
+          ? data.vehicle_engine_cc
+          : isMotoVehicleType(vehicleType)
+            ? (existingVehicle?.engine_cc ?? null)
+            : null;
+      const engineCc = assertVehicleEngineCc(engineCcInput, vehicleType);
 
       const vehicleValues = {
         driver_id: driverId,
@@ -992,7 +1012,8 @@ export const driversService = {
         year: data.vehicle_year,
         color: data.vehicle_color ?? '',
         plate: data.vehicle_plate ?? '',
-        vehicle_type: data.vehicle_type ?? 'car',
+        vehicle_type: vehicleType,
+        engine_cc: engineCc,
       };
 
       if (existingVehicle) {
@@ -1494,6 +1515,7 @@ export const driversService = {
         color: vehicles.color,
         plate: vehicles.plate,
         vehicle_type: vehicles.vehicle_type,
+        engine_cc: vehicles.engine_cc,
       })
       .from(users)
       .leftJoin(drivers, eq(users.id, drivers.user_id))
@@ -1552,6 +1574,7 @@ export const driversService = {
         color: row.color,
         plate: row.plate,
         vehicle_type: row.vehicle_type,
+        engine_cc: row.engine_cc ?? null,
       },
       created_at: row.created_at ? row.created_at.toISOString() : null,
     };

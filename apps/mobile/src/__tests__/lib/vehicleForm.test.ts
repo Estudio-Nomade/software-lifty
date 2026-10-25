@@ -1,8 +1,12 @@
 import {
+  MOTO_MIN_ENGINE_CC,
   VEHICLE_MAX_AGE_YEARS,
   VEHICLE_MIN_MODEL_YEAR,
   getVehicleYearBounds,
   hasCompleteVehicle,
+  normalizeVehiclePlate,
+  validateVehicleEngineCc,
+  validateVehiclePlate,
   validateVehicleYear,
   vehicleFormFromProfile,
   vehicleTypeFromApi,
@@ -51,6 +55,45 @@ describe('vehicle year policy', () => {
   });
 });
 
+describe('vehicle plate formats', () => {
+  it('normalizes spaces and hyphens', () => {
+    expect(normalizeVehiclePlate('ab 123 cd')).toBe('AB123CD');
+    expect(normalizeVehiclePlate('ABC-123')).toBe('ABC123');
+    expect(normalizeVehiclePlate('  a 123 bcd  ')).toBe('A123BCD');
+  });
+
+  it('auto: Mercosur AB123CD and classic ABC123 (spaces ok)', () => {
+    expect(validateVehiclePlate('AB123CD', 'Auto')).toBeUndefined();
+    expect(validateVehiclePlate('AB 123 CD', 'Auto')).toBeUndefined();
+    expect(validateVehiclePlate('ABC123', 'Auto')).toBeUndefined();
+    expect(validateVehiclePlate('ABC 123', 'Auto')).toBeUndefined();
+  });
+
+  it('moto: Mercosur A123BCD and classic 123ABC (spaces ok)', () => {
+    expect(validateVehiclePlate('A123BCD', 'Moto')).toBeUndefined();
+    expect(validateVehiclePlate('A 123 BCD', 'Moto')).toBeUndefined();
+    expect(validateVehiclePlate('123ABC', 'Moto')).toBeUndefined();
+    expect(validateVehiclePlate('123 ABC', 'Moto')).toBeUndefined();
+    expect(validateVehiclePlate('686 JXT', 'Moto')).toBeUndefined();
+  });
+
+  it('rejects cross-type and incomplete plates', () => {
+    // moto format on auto
+    expect(validateVehiclePlate('A123BCD', 'Auto')).toBeDefined();
+    expect(validateVehiclePlate('123ABC', 'Auto')).toBeDefined();
+    // auto format on moto
+    expect(validateVehiclePlate('AB123CD', 'Moto')).toBeDefined();
+    expect(validateVehiclePlate('ABC123', 'Moto')).toBeDefined();
+    expect(validateVehiclePlate('AB123C', 'Auto')).toBeDefined();
+    expect(validateVehiclePlate('A12BCD', 'Moto')).toBeDefined();
+  });
+
+  it('empty is not a field error (required elsewhere)', () => {
+    expect(validateVehiclePlate('', 'Auto')).toBeUndefined();
+    expect(validateVehiclePlate('   ', 'Moto')).toBeUndefined();
+  });
+});
+
 describe('vehicleType mapping', () => {
   it('maps UI labels to API slugs', () => {
     expect(vehicleTypeToApi('Auto')).toBe('car');
@@ -65,6 +108,25 @@ describe('vehicleType mapping', () => {
     expect(vehicleTypeFromApi('camioneta')).toBe('Auto');
     expect(vehicleTypeFromApi('Camioneta')).toBe('Auto');
     expect(vehicleTypeFromApi('Auto')).toBe('Auto');
+  });
+});
+
+describe('vehicle engine_cc policy', () => {
+  it('exposes min 150', () => {
+    expect(MOTO_MIN_ENGINE_CC).toBe(150);
+  });
+
+  it('moto 150 ok; 149 invalid; empty no field error', () => {
+    expect(validateVehicleEngineCc('150', 'Moto')).toBeUndefined();
+    expect(validateVehicleEngineCc('250', 'Moto')).toBeUndefined();
+    expect(validateVehicleEngineCc('149', 'Moto')).toMatch(/150 cc/);
+    expect(validateVehicleEngineCc('', 'Moto')).toBeUndefined();
+    expect(validateVehicleEngineCc('abc', 'Moto')).toMatch(/cilindrada/);
+  });
+
+  it('auto ignores cc field errors', () => {
+    expect(validateVehicleEngineCc('50', 'Auto')).toBeUndefined();
+    expect(validateVehicleEngineCc('', 'Auto')).toBeUndefined();
   });
 });
 
@@ -99,7 +161,51 @@ describe('vehicleFormFromProfile', () => {
       color: 'Blanco',
       year: '2022',
       type: 'Auto',
+      engineCc: '',
     });
     expect(hasCompleteVehicle(form!)).toBe(true);
+  });
+
+  it('moto without engine_cc is incomplete; with 150 prefills', () => {
+    expect(
+      hasCompleteVehicle({
+        plate: 'MOT123',
+        brand: 'Honda',
+        model: 'CG',
+        color: 'Rojo',
+        year: 2022,
+        vehicle_type: 'motorcycle',
+      }),
+    ).toBe(false);
+    expect(
+      hasCompleteVehicle({
+        plate: 'MOT123',
+        brand: 'Honda',
+        model: 'CG',
+        color: 'Rojo',
+        year: 2022,
+        vehicle_type: 'motorcycle',
+        engine_cc: 149,
+      }),
+    ).toBe(false);
+
+    const form = vehicleFormFromProfile({
+      plate: 'mot 123',
+      brand: 'Honda',
+      model: 'CG',
+      color: 'Rojo',
+      year: 2022,
+      vehicle_type: 'motorcycle',
+      engine_cc: 150,
+    });
+    expect(form).toEqual({
+      plate: 'MOT123',
+      brand: 'Honda',
+      model: 'CG',
+      color: 'Rojo',
+      year: '2022',
+      type: 'Moto',
+      engineCc: '150',
+    });
   });
 });

@@ -18,6 +18,8 @@ export const updateProfileBody = t.Object({
   vehicle_color: t.Optional(t.String()),
   vehicle_year: t.Optional(t.Number()),
   vehicle_type: t.Optional(t.String()),
+  /** Motorcycle displacement (cc). Required ≥150 for moto; ignored/null for car. */
+  vehicle_engine_cc: t.Optional(t.Union([t.Number(), t.Null()])),
   /** License class: A3 (moto), B, professional, … */
   license_category: t.Optional(t.String()),
   /** Optional explicit status; else derived from category + vehicle_type. */
