@@ -4,6 +4,7 @@ import {
   buildGraceStartPatch,
   evaluateProfessionalLicenseGrace,
   resolveLicenseProfessionalStatus,
+  shouldClearProfessionalGraceTimestamps,
   shouldStartProfessionalLicenseGrace,
 } from './professional-license-grace';
 
@@ -42,6 +43,34 @@ describe('professional-license-grace', () => {
         professional_license_grace_started_at: null,
       }),
     ).toBe(false);
+  });
+
+  test('shouldStart false when started already set (concurrent second writer)', () => {
+    expect(
+      shouldStartProfessionalLicenseGrace({
+        isGoingOnline: true,
+        license_professional_status: 'pending_professional',
+        professional_license_grace_started_at: t0,
+      }),
+    ).toBe(false);
+  });
+
+  test('shouldClearProfessionalGraceTimestamps only pending → professional/not_required', () => {
+    expect(shouldClearProfessionalGraceTimestamps('pending_professional', 'professional')).toBe(
+      true,
+    );
+    expect(shouldClearProfessionalGraceTimestamps('pending_professional', 'not_required')).toBe(
+      true,
+    );
+    expect(
+      shouldClearProfessionalGraceTimestamps('pending_professional', 'pending_professional'),
+    ).toBe(false);
+    expect(shouldClearProfessionalGraceTimestamps('professional', 'professional')).toBe(false);
+    expect(shouldClearProfessionalGraceTimestamps('professional', 'not_required')).toBe(false);
+    expect(shouldClearProfessionalGraceTimestamps('not_required', 'pending_professional')).toBe(
+      false,
+    );
+    expect(shouldClearProfessionalGraceTimestamps(null, 'professional')).toBe(false);
   });
 
   test('buildGraceStartPatch is +60 days', () => {
@@ -109,5 +138,17 @@ describe('professional-license-grace', () => {
     expect(
       resolveLicenseProfessionalStatus({ vehicle_type: 'car', license_category: 'professional' }),
     ).toBe('professional');
+  });
+
+  test('resolveLicenseProfessionalStatus A3 + null vehicle → unknown (no false pending)', () => {
+    expect(resolveLicenseProfessionalStatus({ vehicle_type: null, license_category: 'A3' })).toBe(
+      'unknown',
+    );
+    expect(
+      resolveLicenseProfessionalStatus({ vehicle_type: undefined, license_category: 'B' }),
+    ).toBe('unknown');
+    expect(resolveLicenseProfessionalStatus({ vehicle_type: '', license_category: 'A3' })).toBe(
+      'unknown',
+    );
   });
 });

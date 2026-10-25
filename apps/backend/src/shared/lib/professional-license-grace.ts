@@ -61,6 +61,18 @@ export function shouldStartProfessionalLicenseGrace(input: {
   return toDate(input.professional_license_grace_started_at) == null;
 }
 
+/**
+ * Clear grace timestamps only on explicit exit from pending_professional.
+ * Re-saves that re-resolve the same status must not wipe a running clock.
+ */
+export function shouldClearProfessionalGraceTimestamps(
+  prev: LicenseProfessionalStatus | null | undefined,
+  next: LicenseProfessionalStatus | null | undefined,
+): boolean {
+  if (prev !== 'pending_professional') return false;
+  return next === 'professional' || next === 'not_required';
+}
+
 export function buildGraceStartPatch(now: Date = new Date()): {
   professional_license_grace_started_at: Date;
   professional_license_due_at: Date;
@@ -170,6 +182,9 @@ export function resolveLicenseProfessionalStatus(input: {
   const isMoto = vt === 'motorcycle' || vt === 'moto';
 
   if (!cat) return 'unknown';
+
+  // Without vehicle type, do not assume auto (A3 would falsely become pending).
+  if (!vt) return 'unknown';
 
   if (isMoto) {
     // A3 (and A1/A2) are accepted for moto — no professional-car grace.
