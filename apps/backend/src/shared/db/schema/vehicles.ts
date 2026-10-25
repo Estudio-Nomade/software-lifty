@@ -14,6 +14,8 @@ export const vehicles = pgTable('vehicles', {
   vehicle_type: varchar('vehicle_type', { length: 50 }).notNull().default('car'),
   /** Declared motorcycle displacement (cc). Null for cars. */
   engine_cc: integer('engine_cc'),
+  /** Moto póliza: third_party | comprehensive. Null for cars. */
+  insurance_coverage_type: varchar('insurance_coverage_type', { length: 30 }),
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull(),
 });

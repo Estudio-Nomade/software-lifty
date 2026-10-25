@@ -325,6 +325,7 @@ export const adminService = {
         plate: vehicles.plate,
         vehicle_type: vehicles.vehicle_type,
         engine_cc: vehicles.engine_cc,
+        insurance_coverage_type: vehicles.insurance_coverage_type,
         created_at: vehicles.created_at,
       })
       .from(vehicles)

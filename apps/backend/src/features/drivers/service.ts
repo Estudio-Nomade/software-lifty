@@ -35,6 +35,10 @@ import {
   supabaseStorage,
 } from '../../shared/lib/storage';
 import { assertVehicleEngineCc, isMotoVehicleType } from '../../shared/lib/vehicle-engine-cc';
+import {
+  assertInsuranceCoverageForVehicle,
+  hasValidMotoInsuranceCoverage,
+} from '../../shared/lib/vehicle-insurance-coverage';
 import { assertVehicleYear } from '../../shared/lib/vehicle-year';
 
 let _storage: StorageProvider = supabaseStorage;
@@ -216,6 +220,24 @@ export async function ensureDriverEnteredReview(driverId: string): Promise<boole
       driverId,
       uploaded: docsList.map((d) => d.doc_type).sort(),
       missing: missingRequiredDocTypes(docsList),
+    });
+    return false;
+  }
+
+  const [veh] = await db
+    .select({
+      vehicle_type: vehicles.vehicle_type,
+      insurance_coverage_type: vehicles.insurance_coverage_type,
+    })
+    .from(vehicles)
+    .where(eq(vehicles.driver_id, driverId))
+    .limit(1);
+
+  if (!hasValidMotoInsuranceCoverage(veh?.vehicle_type, veh?.insurance_coverage_type)) {
+    logger.info('[DOCS] Moto missing insurance coverage — not entering review', {
+      driverId,
+      vehicle_type: veh?.vehicle_type ?? null,
+      insurance_coverage_type: veh?.insurance_coverage_type ?? null,
     });
     return false;
   }
@@ -501,9 +523,23 @@ export const driversService = {
     const missingDocTypes = missingRequiredDocTypes(validDocs);
     const docsComplete = hasAllRequiredDocs(validDocs);
 
+    const [vehicleRow] = await db
+      .select({
+        vehicle_type: vehicles.vehicle_type,
+        insurance_coverage_type: vehicles.insurance_coverage_type,
+      })
+      .from(vehicles)
+      .where(eq(vehicles.driver_id, driver.id))
+      .limit(1);
+    const motoCoverageOk = hasValidMotoInsuranceCoverage(
+      vehicleRow?.vehicle_type,
+      vehicleRow?.insurance_coverage_type,
+    );
+    const docsAndCoverageComplete = docsComplete && motoCoverageOk;
+
     // Rejected driver: re-enter review when docs complete; else documents step.
     if (driver.status === 'rejected' || driver.admin_review_status === 'rejected') {
-      if (docsComplete) {
+      if (docsAndCoverageComplete) {
         await ensureDriverEnteredReview(driver.id);
         const [fresh] = await db
           .select({
@@ -540,7 +576,7 @@ export const driversService = {
       };
     }
 
-    if (!docsComplete) {
+    if (!docsAndCoverageComplete) {
       return {
         status: 'pending',
         step: 'documents',
@@ -819,6 +855,7 @@ export const driversService = {
       vehicle_year?: number;
       vehicle_type?: string;
       vehicle_engine_cc?: number | null;
+      vehicle_insurance_coverage_type?: string | null;
       license_category?: string;
       license_professional_status?: string;
       photo_url?: string;
@@ -986,6 +1023,7 @@ export const driversService = {
           id: vehicles.id,
           vehicle_type: vehicles.vehicle_type,
           engine_cc: vehicles.engine_cc,
+          insurance_coverage_type: vehicles.insurance_coverage_type,
         })
         .from(vehicles)
         .where(eq(vehicles.driver_id, driverId))
@@ -1005,6 +1043,14 @@ export const driversService = {
             : null;
       const engineCc = assertVehicleEngineCc(engineCcInput, vehicleType);
 
+      const coverageInput =
+        data.vehicle_insurance_coverage_type !== undefined
+          ? data.vehicle_insurance_coverage_type
+          : isMotoVehicleType(vehicleType)
+            ? (existingVehicle?.insurance_coverage_type ?? null)
+            : null;
+      const insuranceCoverageType = assertInsuranceCoverageForVehicle(coverageInput, vehicleType);
+
       const vehicleValues = {
         driver_id: driverId,
         brand: data.vehicle_brand ?? '',
@@ -1014,6 +1060,7 @@ export const driversService = {
         plate: data.vehicle_plate ?? '',
         vehicle_type: vehicleType,
         engine_cc: engineCc,
+        insurance_coverage_type: insuranceCoverageType,
       };
 
       if (existingVehicle) {
@@ -1021,6 +1068,40 @@ export const driversService = {
       } else {
         await db.insert(vehicles).values(vehicleValues);
       }
+    } else if (data.vehicle_insurance_coverage_type !== undefined) {
+      // Chip-only PUT from docs step (vehicle already registered).
+      const [existingVehicle] = await db
+        .select({
+          id: vehicles.id,
+          vehicle_type: vehicles.vehicle_type,
+        })
+        .from(vehicles)
+        .where(eq(vehicles.driver_id, driverId))
+        .limit(1);
+
+      if (!existingVehicle) {
+        throw new AppError(
+          'Guardá el vehículo antes de elegir la cobertura del seguro.',
+          400,
+          'VEHICLE_REQUIRED',
+        );
+      }
+
+      const insuranceCoverageType = assertInsuranceCoverageForVehicle(
+        data.vehicle_insurance_coverage_type,
+        existingVehicle.vehicle_type,
+        { required: isMotoVehicleType(existingVehicle.vehicle_type) },
+      );
+
+      await db
+        .update(vehicles)
+        .set({
+          insurance_coverage_type: insuranceCoverageType,
+          updated_at: new Date(),
+        })
+        .where(eq(vehicles.id, existingVehicle.id));
+
+      await ensureDriverEnteredReview(driverId);
     }
 
     // License category / professional carnet status (A3 moto, B/professional auto).
@@ -1516,6 +1597,7 @@ export const driversService = {
         plate: vehicles.plate,
         vehicle_type: vehicles.vehicle_type,
         engine_cc: vehicles.engine_cc,
+        insurance_coverage_type: vehicles.insurance_coverage_type,
       })
       .from(users)
       .leftJoin(drivers, eq(users.id, drivers.user_id))
@@ -1575,6 +1657,7 @@ export const driversService = {
         plate: row.plate,
         vehicle_type: row.vehicle_type,
         engine_cc: row.engine_cc ?? null,
+        insurance_coverage_type: row.insurance_coverage_type ?? null,
       },
       created_at: row.created_at ? row.created_at.toISOString() : null,
     };
