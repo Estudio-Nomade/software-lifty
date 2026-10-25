@@ -3,7 +3,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams } from 'expo-router';
 import type React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -115,6 +115,11 @@ export const OnboardingStep2Screen: React.FC = () => {
   const [insuranceCoverage, setInsuranceCoverage] = useState<InsuranceCoverageType | null>(null);
   const [coverageError, setCoverageError] = useState<string | null>(null);
   const [savingCoverage, setSavingCoverage] = useState(false);
+  /** Last value confirmed by server (or hydrate). Restored on PUT failure. */
+  const committedCoverageRef = useRef<InsuranceCoverageType | null>(null);
+  /** Serializes chip PUTs; latest tap while in-flight is queued. */
+  const coverageSaveLockRef = useRef(false);
+  const pendingCoverageRef = useRef<InsuranceCoverageType | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,8 +142,11 @@ export const OnboardingStep2Screen: React.FC = () => {
         const moto = vehicleTypeFromApi(me.vehicle?.vehicle_type) === 'Moto';
         setIsMoto(moto);
         if (moto) {
-          setInsuranceCoverage(insuranceCoverageFromApi(me.vehicle?.insurance_coverage_type));
+          const fromApi = insuranceCoverageFromApi(me.vehicle?.insurance_coverage_type);
+          committedCoverageRef.current = fromApi;
+          setInsuranceCoverage(fromApi);
         } else {
+          committedCoverageRef.current = null;
           setInsuranceCoverage(null);
         }
         const hasOk = (Object.keys(DOC_SIDES) as DocBase[]).some((dt) =>
@@ -343,21 +351,58 @@ export const OnboardingStep2Screen: React.FC = () => {
     });
   }, []);
 
-  const handleSelectCoverage = useCallback(async (value: InsuranceCoverageType) => {
-    setInsuranceCoverage(value);
-    setCoverageError(null);
-    setSavingCoverage(true);
-    try {
-      await apiClient.put('/drivers/me', {
-        vehicle_insurance_coverage_type: value,
-      });
-    } catch (err: unknown) {
-      setInsuranceCoverage(null);
-      setCoverageError(err instanceof Error ? err.message : MOTO_INSURANCE_COVERAGE_REQUIRED_MSG);
-    } finally {
-      setSavingCoverage(false);
-    }
-  }, []);
+  const handleSelectCoverage = useCallback(
+    async (value: InsuranceCoverageType) => {
+      if (value === committedCoverageRef.current && !coverageError) return;
+
+      // Coalesce rapid taps: keep latest intent while a PUT is in flight.
+      if (coverageSaveLockRef.current) {
+        pendingCoverageRef.current = value;
+        setInsuranceCoverage(value);
+        setCoverageError(null);
+        return;
+      }
+
+      coverageSaveLockRef.current = true;
+      setSavingCoverage(true);
+      let next: InsuranceCoverageType | null = value;
+
+      try {
+        while (next != null) {
+          const toSave = next;
+          next = null;
+          pendingCoverageRef.current = null;
+
+          if (toSave === committedCoverageRef.current) continue;
+
+          const previous = committedCoverageRef.current;
+          setInsuranceCoverage(toSave);
+          setCoverageError(null);
+
+          try {
+            await apiClient.put('/drivers/me', {
+              vehicle_insurance_coverage_type: toSave,
+            });
+            committedCoverageRef.current = toSave;
+            setInsuranceCoverage(toSave);
+          } catch (err: unknown) {
+            setInsuranceCoverage(previous);
+            setCoverageError(
+              err instanceof Error ? err.message : MOTO_INSURANCE_COVERAGE_REQUIRED_MSG,
+            );
+            pendingCoverageRef.current = null;
+            break;
+          }
+
+          next = pendingCoverageRef.current;
+        }
+      } finally {
+        coverageSaveLockRef.current = false;
+        setSavingCoverage(false);
+      }
+    },
+    [coverageError],
+  );
 
   const handleVerify = useCallback(async () => {
     if (isMoto && !insuranceCoverage) {
