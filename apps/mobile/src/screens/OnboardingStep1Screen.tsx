@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -17,6 +18,7 @@ import { apiClient } from '../api/client';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Navbar } from '../components/Navbar';
+import { OnboardingCard, OnboardingChrome } from '../components/OnboardingChrome';
 import { Text } from '../components/ui/Text';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -238,117 +240,159 @@ export const OnboardingStep1Screen: React.FC = () => {
 
   const formBody = (
     <>
-      <TouchableOpacity style={styles.avatarSection} onPress={pickImage} activeOpacity={0.7}>
-        <View style={styles.avatarCircle}>
-          {photoUri ? (
-            <Image source={{ uri: photoUri }} style={styles.avatarImage} />
-          ) : (
-            <Text style={styles.avatarIcon}>📷</Text>
-          )}
-        </View>
-        <Text style={styles.avatarLabel}>Agregar foto</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.sectionTitle}>PERFIL</Text>
-      <Input
-        placeholder="Nombre"
-        value={firstName}
-        onChangeText={(t) => {
-          setFirstName(t);
-          setError('firstName', undefined);
-        }}
-        onBlur={() => setError('firstName', validateName(firstName))}
-        error={errors.firstName}
-        containerStyle={styles.input}
-        maxLength={100}
-      />
-      <Input
-        placeholder="Apellido"
-        value={lastName}
-        onChangeText={(t) => {
-          setLastName(t);
-          setError('lastName', undefined);
-        }}
-        onBlur={() => setError('lastName', validateName(lastName))}
-        error={errors.lastName}
-        containerStyle={styles.input}
-        maxLength={100}
-      />
-      <Input
-        leftElement={<Text style={styles.countryCode}>+54</Text>}
-        placeholder="9 XX XXXX-XXXX"
-        value={formatPhone(phoneDigits)}
-        onChangeText={(t) => setPhoneDigits(t.replace(/\D/g, '').slice(0, 11))}
-        keyboardType="phone-pad"
-        containerStyle={styles.input}
+      <OnboardingChrome
+        step={1}
+        kicker="Perfil"
+        title="Contanos quién sos"
+        subtitle="Con estos datos te van a reconocer pasajeros y soporte."
       />
 
-      <View style={styles.addressBlock}>
-        <Input
-          placeholder="Domicilio (calle y altura, ciudad…)"
-          value={addressLine}
-          onChangeText={(t) => {
-            setAddressLine(t);
-            setSelectedPlace(null);
-            setShowSuggestions(true);
-            setError('address', undefined);
-          }}
-          onBlur={() => {
-            if (addressLine.trim().length > 0 && addressLine.trim().length < MIN_ADDRESS_CHARS) {
-              setError('address', 'Ingresá un domicilio más completo');
-            }
-          }}
-          onFocus={() => setShowSuggestions(true)}
-          error={errors.address}
-          containerStyle={styles.input}
-          maxLength={200}
-          autoCorrect={false}
-        />
-        {showSuggestions && suggestions.length > 0 && (
-          <View style={styles.suggestions}>
-            {suggestions.map((s) => (
-              <Pressable
-                key={`${s.place_id}-${s.description}`}
-                style={styles.suggestionRow}
-                onPress={() => handleSelectPlace(s)}
-              >
-                <Text style={styles.suggestionText} numberOfLines={2}>
-                  {s.description}
-                </Text>
-              </Pressable>
-            ))}
+      <OnboardingCard>
+        <TouchableOpacity
+          style={styles.avatarRow}
+          onPress={pickImage}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={photoUri ? 'Cambiar foto' : 'Agregar foto'}
+        >
+          <View style={[styles.avatarCircle, photoUri ? styles.avatarCircleFilled : null]}>
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={styles.avatarImage} />
+            ) : (
+              <Ionicons name="camera-outline" size={28} color={theme.colors.primary} />
+            )}
           </View>
-        )}
-      </View>
+          <View style={styles.avatarCopy}>
+            <Text style={styles.avatarLabel}>{photoUri ? 'Cambiar foto' : 'Agregar foto'}</Text>
+            <Text style={styles.avatarHint}>Opcional · se ve en el viaje</Text>
+          </View>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.checkboxRow}
-        onPress={() => setTermsAccepted(!termsAccepted)}
-        activeOpacity={0.7}
-      >
-        <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
-          {termsAccepted ? <Text style={styles.checkmark}>✓</Text> : null}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Nombre</Text>
+          <Input
+            placeholder="Como figura en tu DNI"
+            value={firstName}
+            onChangeText={(t) => {
+              setFirstName(t);
+              setError('firstName', undefined);
+            }}
+            onBlur={() => setError('firstName', validateName(firstName))}
+            error={errors.firstName}
+            containerStyle={styles.input}
+            maxLength={100}
+          />
         </View>
-        <Text style={styles.checkboxLabel}>Acepto los términos y condiciones</Text>
-      </TouchableOpacity>
 
-      {submitError !== '' && <Text style={styles.submitError}>{submitError}</Text>}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Apellido</Text>
+          <Input
+            placeholder="Apellido completo"
+            value={lastName}
+            onChangeText={(t) => {
+              setLastName(t);
+              setError('lastName', undefined);
+            }}
+            onBlur={() => setError('lastName', validateName(lastName))}
+            error={errors.lastName}
+            containerStyle={styles.input}
+            maxLength={100}
+          />
+        </View>
 
-      <Button
-        title="CONTINUAR"
-        onPress={handleContinue}
-        disabled={!formOk}
-        loading={loading}
-        variant="cta"
-        style={styles.button}
-      />
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Celular</Text>
+          <Input
+            leftElement={<Text style={styles.countryCode}>+54</Text>}
+            placeholder="9 XX XXXX-XXXX"
+            value={formatPhone(phoneDigits)}
+            onChangeText={(t) => setPhoneDigits(t.replace(/\D/g, '').slice(0, 11))}
+            keyboardType="phone-pad"
+            containerStyle={styles.input}
+          />
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Domicilio</Text>
+          <View style={styles.addressBlock}>
+            <Input
+              placeholder="Calle, altura, ciudad…"
+              value={addressLine}
+              onChangeText={(t) => {
+                setAddressLine(t);
+                setSelectedPlace(null);
+                setShowSuggestions(true);
+                setError('address', undefined);
+              }}
+              onBlur={() => {
+                if (
+                  addressLine.trim().length > 0 &&
+                  addressLine.trim().length < MIN_ADDRESS_CHARS
+                ) {
+                  setError('address', 'Ingresá un domicilio más completo');
+                }
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              error={errors.address}
+              containerStyle={styles.input}
+              maxLength={200}
+              autoCorrect={false}
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <View style={styles.suggestions}>
+                {suggestions.map((s) => (
+                  <Pressable
+                    key={`${s.place_id}-${s.description}`}
+                    style={styles.suggestionRow}
+                    onPress={() => handleSelectPlace(s)}
+                  >
+                    <Ionicons
+                      name="location-outline"
+                      size={16}
+                      color={theme.colors.mediumGray}
+                      style={styles.suggestionIcon}
+                    />
+                    <Text style={styles.suggestionText} numberOfLines={2}>
+                      {s.description}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.checkboxRow}
+          onPress={() => setTermsAccepted(!termsAccepted)}
+          activeOpacity={0.7}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: termsAccepted }}
+        >
+          <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
+            {termsAccepted ? <Text style={styles.checkmark}>✓</Text> : null}
+          </View>
+          <Text style={styles.checkboxLabel}>Acepto los términos y condiciones</Text>
+        </TouchableOpacity>
+
+        {submitError !== '' && <Text style={styles.submitError}>{submitError}</Text>}
+
+        <Button
+          title="Continuar"
+          onPress={handleContinue}
+          disabled={!formOk}
+          loading={loading}
+          variant="cta"
+          style={styles.button}
+        />
+      </OnboardingCard>
     </>
   );
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <Navbar title="Paso 1/3" onBack={handleBack} />
+      <StatusBar barStyle="dark-content" />
+      <Navbar title="Tu perfil" onBack={handleBack} variant="light" />
       {/*
         Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.
         iOS: padding KAV. Keep #406 dismiss modes.
@@ -388,87 +432,102 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    alignItems: 'center',
-    padding: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing['2xl'],
-    gap: theme.spacing.sm,
   },
-  avatarSection: {
+  avatarRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
+    gap: theme.spacing.md,
   },
   avatarCircle: {
-    width: 80,
-    height: 80,
+    width: 72,
+    height: 72,
     borderRadius: theme.radius.full,
-    borderWidth: 2,
-    borderColor: theme.colors.mediumGray,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+  },
+  avatarCircleFilled: {
+    borderStyle: 'solid',
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.surface,
   },
   avatarImage: {
     width: '100%',
     height: '100%',
   },
-  avatarIcon: {
-    fontSize: 32,
-    color: theme.colors.mediumGray,
+  avatarCopy: {
+    flex: 1,
+    gap: 2,
   },
   avatarLabel: {
+    fontSize: theme.fontSize.md,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.deepBlue,
+  },
+  avatarHint: {
     fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
   },
-  sectionTitle: {
+  fieldGroup: {
+    width: '100%',
+    gap: theme.spacing.xs,
+  },
+  fieldLabel: {
     fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.bold,
+    fontFamily: theme.fontFamily.medium,
     color: theme.colors.deepBlue,
-    alignSelf: 'flex-start',
-    marginBottom: theme.spacing.xs,
   },
   input: {
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   addressBlock: {
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
     zIndex: 10,
   },
   suggestions: {
     marginTop: 4,
-    borderWidth: 1,
-    borderColor: theme.colors.lightGray,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.surface,
+    backgroundColor: theme.colors.surfaceMuted,
     overflow: 'hidden',
   },
   suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
+    minHeight: 44,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.lightGray,
   },
+  suggestionIcon: {
+    marginTop: 1,
+  },
   suggestionText: {
+    flex: 1,
     fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.deepBlue,
   },
   countryCode: {
     color: theme.colors.deepBlue,
     fontSize: theme.fontSize.md,
-    fontWeight: theme.fontWeight.medium,
+    fontFamily: theme.fontFamily.medium,
   },
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
-    marginTop: theme.spacing.md,
+    minHeight: 44,
   },
   checkbox: {
     width: 22,
@@ -481,8 +540,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxChecked: {
-    backgroundColor: theme.colors.turquoise,
-    borderColor: theme.colors.turquoise,
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
   },
   checkmark: {
     color: theme.colors.white,
@@ -491,21 +550,20 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   checkboxLabel: {
+    flex: 1,
     fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.deepBlue,
   },
   submitError: {
     fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.dangerRed,
     textAlign: 'center',
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
   },
   button: {
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
-    marginTop: theme.spacing.md,
+    marginTop: theme.spacing.xs,
   },
 });

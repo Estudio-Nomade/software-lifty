@@ -14,6 +14,7 @@ import { ApiError } from '../api/types';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Navbar } from '../components/Navbar';
+import { OnboardingCard, OnboardingChrome } from '../components/OnboardingChrome';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
@@ -213,161 +214,191 @@ export const OnboardingVehicleScreen: React.FC = () => {
   };
 
   const formBody = (
-    <View style={styles.formColumn}>
-      <Text style={styles.sectionTitle}>VEHICULO</Text>
-      {vehiclePlate !== '' && vehicleBrand !== '' ? (
-        <Text style={styles.hint}>Datos guardados. Revisá y continuá.</Text>
-      ) : null}
-      <View style={styles.vehicleTypes} accessibilityRole="radiogroup">
-        {VEHICLE_TYPES.map((type) => {
-          const selected = vehicleType === type;
-          return (
-            <Pressable
-              key={type}
-              style={({ pressed }) => [
-                styles.vehicleType,
-                selected && styles.vehicleTypeSelected,
-                pressed && !selected && styles.vehicleTypePressed,
-              ]}
-              onPress={() => selectVehicleType(type)}
-              hitSlop={8}
-              accessibilityRole="radio"
-              accessibilityState={{ selected }}
-              accessibilityLabel={type}
-              testID={`vehicle-type-${type.toLowerCase()}`}
-            >
-              <Text
-                style={[styles.vehicleTypeText, selected && styles.vehicleTypeTextSelected]}
-                pointerEvents="none"
-              >
-                {type}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <Text style={styles.licenseLabel}>Categoría de licencia</Text>
-      <Text style={styles.licenseHint}>
-        {vehicleType === 'Moto'
-          ? 'Motos: se admite A3 (también A1/A2).'
-          : 'Autos: si todavía no tenés carnet profesional, elegí B. Tenés 60 días desde que te conectás la primera vez para presentarlo.'}
-      </Text>
-      <View style={styles.vehicleTypes} accessibilityRole="radiogroup">
-        {licenseOptions.map((cat) => {
-          const selected = licenseCategory === cat;
-          const label = cat === 'professional' ? 'Profesional' : cat;
-          return (
-            <Pressable
-              key={cat}
-              style={({ pressed }) => [
-                styles.vehicleType,
-                selected && styles.vehicleTypeSelected,
-                pressed && !selected && styles.vehicleTypePressed,
-              ]}
-              onPress={() => setLicenseCategory(cat)}
-              hitSlop={8}
-              accessibilityRole="radio"
-              accessibilityState={{ selected }}
-              accessibilityLabel={label}
-              testID={`license-cat-${cat}`}
-            >
-              <Text
-                style={[styles.vehicleTypeText, selected && styles.vehicleTypeTextSelected]}
-                pointerEvents="none"
-              >
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <Input
-        placeholder="Patente"
-        value={vehiclePlate}
-        onChangeText={(t) => {
-          setVehiclePlate(t.toUpperCase());
-          setError('vehiclePlate', undefined);
-        }}
-        onBlur={() => setError('vehiclePlate', validatePlate(vehiclePlate))}
-        error={errors.vehiclePlate}
-        containerStyle={styles.input}
-        autoCapitalize="characters"
-        maxLength={9}
+    <>
+      <OnboardingChrome
+        step={2}
+        kicker="Vehículo"
+        title="Datos del vehículo"
+        subtitle="Patente y ficha como figuran en la cédula."
       />
-      <View style={styles.row}>
-        <Input
-          placeholder="Marca"
-          value={vehicleBrand}
-          onChangeText={(t) => {
-            setVehicleBrand(t);
-            setError('vehicleBrand', undefined);
-          }}
-          onBlur={() => setError('vehicleBrand', validateRequired(vehicleBrand))}
-          error={errors.vehicleBrand}
-          containerStyle={styles.halfInput}
-        />
-        <Input
-          placeholder="Modelo"
-          value={vehicleModel}
-          onChangeText={(t) => {
-            setVehicleModel(t);
-            setError('vehicleModel', undefined);
-          }}
-          onBlur={() => setError('vehicleModel', validateRequired(vehicleModel))}
-          error={errors.vehicleModel}
-          containerStyle={styles.halfInput}
-        />
-      </View>
-      <View style={styles.row}>
-        <Input
-          placeholder="Color"
-          value={vehicleColor}
-          onChangeText={(t) => {
-            setVehicleColor(t);
-            setError('vehicleColor', undefined);
-          }}
-          onBlur={() => setError('vehicleColor', validateRequired(vehicleColor))}
-          error={errors.vehicleColor}
-          containerStyle={styles.halfInput}
-        />
-        <Input
-          placeholder="Año"
-          value={vehicleYear}
-          onChangeText={(t) => {
-            const digits = t.replace(/\D/g, '').slice(0, 4);
-            setVehicleYear(digits);
-            // Show error live once they typed a full year (e.g. 2010).
-            setError('vehicleYear', digits.length === 4 ? validateYear(digits) : undefined);
-          }}
-          onBlur={() => setError('vehicleYear', validateYear(vehicleYear))}
-          error={errors.vehicleYear}
-          containerStyle={styles.halfInput}
-          keyboardType="numeric"
-          maxLength={4}
-        />
-      </View>
 
-      {submitError !== '' && <Text style={styles.submitError}>{submitError}</Text>}
+      <OnboardingCard>
+        {vehiclePlate !== '' && vehicleBrand !== '' ? (
+          <Text style={styles.hint}>Datos guardados. Revisá y continuá.</Text>
+        ) : null}
 
-      <Button
-        title="CONTINUAR"
-        onPress={handleContinue}
-        disabled={
-          loadingProfile ||
-          !licenseCategory ||
-          !isFormValid(vehiclePlate, vehicleBrand, vehicleModel, vehicleColor, vehicleYear)
-        }
-        loading={loading || loadingProfile}
-        variant="cta"
-        style={styles.button}
-      />
-    </View>
+        <View style={styles.vehicleTypes} accessibilityRole="radiogroup">
+          {VEHICLE_TYPES.map((type) => {
+            const selected = vehicleType === type;
+            return (
+              <Pressable
+                key={type}
+                style={({ pressed }) => [
+                  styles.vehicleType,
+                  selected && styles.vehicleTypeSelected,
+                  pressed && !selected && styles.vehicleTypePressed,
+                ]}
+                onPress={() => selectVehicleType(type)}
+                hitSlop={8}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                accessibilityLabel={type}
+                testID={`vehicle-type-${type.toLowerCase()}`}
+              >
+                <Text
+                  style={[styles.vehicleTypeText, selected && styles.vehicleTypeTextSelected]}
+                  pointerEvents="none"
+                >
+                  {type}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Categoría de licencia</Text>
+          <Text style={styles.licenseHint}>
+            {vehicleType === 'Moto'
+              ? 'Motos: se admite A3 (también A1/A2).'
+              : 'Autos: si todavía no tenés carnet profesional, elegí B. Tenés 60 días desde que te conectás la primera vez para presentarlo.'}
+          </Text>
+          <View style={styles.vehicleTypes} accessibilityRole="radiogroup">
+            {licenseOptions.map((cat) => {
+              const selected = licenseCategory === cat;
+              const label = cat === 'professional' ? 'Profesional' : cat;
+              return (
+                <Pressable
+                  key={cat}
+                  style={({ pressed }) => [
+                    styles.vehicleType,
+                    selected && styles.vehicleTypeSelected,
+                    pressed && !selected && styles.vehicleTypePressed,
+                  ]}
+                  onPress={() => setLicenseCategory(cat)}
+                  hitSlop={8}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={label}
+                  testID={`license-cat-${cat}`}
+                >
+                  <Text
+                    style={[styles.vehicleTypeText, selected && styles.vehicleTypeTextSelected]}
+                    pointerEvents="none"
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Patente</Text>
+          <Input
+            placeholder="ABC123"
+            value={vehiclePlate}
+            onChangeText={(t) => {
+              setVehiclePlate(t.toUpperCase());
+              setError('vehiclePlate', undefined);
+            }}
+            onBlur={() => setError('vehiclePlate', validatePlate(vehiclePlate))}
+            error={errors.vehiclePlate}
+            containerStyle={styles.input}
+            autoCapitalize="characters"
+            maxLength={9}
+          />
+        </View>
+
+        <View style={styles.row}>
+          <View style={styles.halfField}>
+            <Text style={styles.fieldLabel}>Marca</Text>
+            <Input
+              placeholder="Marca"
+              value={vehicleBrand}
+              onChangeText={(t) => {
+                setVehicleBrand(t);
+                setError('vehicleBrand', undefined);
+              }}
+              onBlur={() => setError('vehicleBrand', validateRequired(vehicleBrand))}
+              error={errors.vehicleBrand}
+              containerStyle={styles.halfInput}
+            />
+          </View>
+          <View style={styles.halfField}>
+            <Text style={styles.fieldLabel}>Modelo</Text>
+            <Input
+              placeholder="Modelo"
+              value={vehicleModel}
+              onChangeText={(t) => {
+                setVehicleModel(t);
+                setError('vehicleModel', undefined);
+              }}
+              onBlur={() => setError('vehicleModel', validateRequired(vehicleModel))}
+              error={errors.vehicleModel}
+              containerStyle={styles.halfInput}
+            />
+          </View>
+        </View>
+
+        <View style={styles.row}>
+          <View style={styles.halfField}>
+            <Text style={styles.fieldLabel}>Color</Text>
+            <Input
+              placeholder="Color"
+              value={vehicleColor}
+              onChangeText={(t) => {
+                setVehicleColor(t);
+                setError('vehicleColor', undefined);
+              }}
+              onBlur={() => setError('vehicleColor', validateRequired(vehicleColor))}
+              error={errors.vehicleColor}
+              containerStyle={styles.halfInput}
+            />
+          </View>
+          <View style={styles.halfField}>
+            <Text style={styles.fieldLabel}>Año</Text>
+            <Input
+              placeholder="Año"
+              value={vehicleYear}
+              onChangeText={(t) => {
+                const digits = t.replace(/\D/g, '').slice(0, 4);
+                setVehicleYear(digits);
+                // Show error live once they typed a full year (e.g. 2010).
+                setError('vehicleYear', digits.length === 4 ? validateYear(digits) : undefined);
+              }}
+              onBlur={() => setError('vehicleYear', validateYear(vehicleYear))}
+              error={errors.vehicleYear}
+              containerStyle={styles.halfInput}
+              keyboardType="numeric"
+              maxLength={4}
+            />
+          </View>
+        </View>
+
+        {submitError !== '' && <Text style={styles.submitError}>{submitError}</Text>}
+
+        <Button
+          title="Continuar"
+          onPress={handleContinue}
+          disabled={
+            loadingProfile ||
+            !licenseCategory ||
+            !isFormValid(vehiclePlate, vehicleBrand, vehicleModel, vehicleColor, vehicleYear)
+          }
+          loading={loading || loadingProfile}
+          variant="cta"
+          style={styles.button}
+        />
+      </OnboardingCard>
+    </>
   );
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-      <Navbar title="Paso 2/3" onBack={() => navigation.goBack()} />
+      <StatusBar barStyle="dark-content" />
+      <Navbar title="Tu vehículo" onBack={() => navigation.goBack()} variant="light" />
       {/*
         Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.
         iOS: padding KAV. Keep #406 dismiss modes.
@@ -408,50 +439,42 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    justifyContent: 'center',
-    // Center the capped column; chips stretch inside formColumn (not full tablet width).
-    alignItems: 'center',
-    padding: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing['2xl'],
   },
-  formColumn: {
+  hint: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
     width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
-    gap: theme.spacing.sm,
   },
-  sectionTitle: {
-    fontSize: theme.fontSize.sm,
-    fontWeight: theme.fontWeight.bold,
-    color: theme.colors.deepBlue,
-    alignSelf: 'flex-start',
-    marginBottom: theme.spacing.xs,
+  fieldGroup: {
+    width: '100%',
+    gap: theme.spacing.xs,
   },
-  licenseLabel: {
+  fieldLabel: {
     fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.semibold,
+    fontFamily: theme.fontFamily.medium,
     color: theme.colors.deepBlue,
-    alignSelf: 'flex-start',
-    marginTop: theme.spacing.xs,
   },
   licenseHint: {
     fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
     width: '100%',
     lineHeight: 18,
   },
-  hint: {
-    fontSize: theme.fontSize.sm,
-    color: theme.colors.mediumGray,
-    width: '100%',
-    marginBottom: theme.spacing.xs,
-  },
   input: {
     width: '100%',
   },
-  halfInput: {
+  halfField: {
     flex: 1,
     minWidth: 0,
+    gap: theme.spacing.xs,
+  },
+  halfInput: {
+    width: '100%',
   },
   vehicleTypes: {
     flexDirection: 'row',
@@ -497,12 +520,13 @@ const styles = StyleSheet.create({
   },
   submitError: {
     fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
     color: theme.colors.dangerRed,
     textAlign: 'center',
     width: '100%',
   },
   button: {
     width: '100%',
-    marginTop: theme.spacing.md,
+    marginTop: theme.spacing.xs,
   },
 });
