@@ -26,7 +26,7 @@ export function validateVehiclePlate(value: string): string | undefined {
   if (!value.trim()) return undefined;
   const plate = normalizeVehiclePlate(value);
   if (PLATE_MERCOSUR.test(plate) || PLATE_CLASSIC.test(plate)) return undefined;
-  return 'Formato inválido. Usá ABC123 o AB123CD (Mercosur). Espacios ok.';
+  return 'Formato inválido. Usá ABC123 o AB123CD (Mercosur).';
 }
 
 export function getVehicleYearBounds(now: Date = new Date()): {
