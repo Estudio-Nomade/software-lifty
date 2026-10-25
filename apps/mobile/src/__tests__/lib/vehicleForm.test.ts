@@ -59,30 +59,38 @@ describe('vehicle plate formats', () => {
   it('normalizes spaces and hyphens', () => {
     expect(normalizeVehiclePlate('ab 123 cd')).toBe('AB123CD');
     expect(normalizeVehiclePlate('ABC-123')).toBe('ABC123');
-    expect(normalizeVehiclePlate('  ab 123  ')).toBe('AB123');
+    expect(normalizeVehiclePlate('  a 123 bcd  ')).toBe('A123BCD');
   });
 
-  it('accepts Mercosur AA999AA and classic AAA999 (with spaces)', () => {
-    expect(validateVehiclePlate('AB123CD')).toBeUndefined();
-    expect(validateVehiclePlate('AB 123 CD')).toBeUndefined();
-    expect(validateVehiclePlate('ab-123-cd')).toBeUndefined();
-    expect(validateVehiclePlate('ABC123')).toBeUndefined();
-    expect(validateVehiclePlate('ABC 123')).toBeUndefined();
-    expect(validateVehiclePlate('abc-123')).toBeUndefined();
+  it('auto: Mercosur AB123CD and classic ABC123 (spaces ok)', () => {
+    expect(validateVehiclePlate('AB123CD', 'Auto')).toBeUndefined();
+    expect(validateVehiclePlate('AB 123 CD', 'Auto')).toBeUndefined();
+    expect(validateVehiclePlate('ABC123', 'Auto')).toBeUndefined();
+    expect(validateVehiclePlate('ABC 123', 'Auto')).toBeUndefined();
   });
 
-  it('rejects incomplete or wrong patterns', () => {
-    expect(validateVehiclePlate('AB123C')).toBeDefined();
-    expect(validateVehiclePlate('AB12CD')).toBeDefined();
-    expect(validateVehiclePlate('A123BCD')).toBeDefined();
-    expect(validateVehiclePlate('ABCD12')).toBeDefined();
-    expect(validateVehiclePlate('123ABC')).toBeDefined();
-    expect(validateVehiclePlate('AB1234CD')).toBeDefined();
+  it('moto: Mercosur A123BCD and classic 123ABC (spaces ok)', () => {
+    expect(validateVehiclePlate('A123BCD', 'Moto')).toBeUndefined();
+    expect(validateVehiclePlate('A 123 BCD', 'Moto')).toBeUndefined();
+    expect(validateVehiclePlate('123ABC', 'Moto')).toBeUndefined();
+    expect(validateVehiclePlate('123 ABC', 'Moto')).toBeUndefined();
+    expect(validateVehiclePlate('686 JXT', 'Moto')).toBeUndefined();
+  });
+
+  it('rejects cross-type and incomplete plates', () => {
+    // moto format on auto
+    expect(validateVehiclePlate('A123BCD', 'Auto')).toBeDefined();
+    expect(validateVehiclePlate('123ABC', 'Auto')).toBeDefined();
+    // auto format on moto
+    expect(validateVehiclePlate('AB123CD', 'Moto')).toBeDefined();
+    expect(validateVehiclePlate('ABC123', 'Moto')).toBeDefined();
+    expect(validateVehiclePlate('AB123C', 'Auto')).toBeDefined();
+    expect(validateVehiclePlate('A12BCD', 'Moto')).toBeDefined();
   });
 
   it('empty is not a field error (required elsewhere)', () => {
-    expect(validateVehiclePlate('')).toBeUndefined();
-    expect(validateVehiclePlate('   ')).toBeUndefined();
+    expect(validateVehiclePlate('', 'Auto')).toBeUndefined();
+    expect(validateVehiclePlate('   ', 'Moto')).toBeUndefined();
   });
 });
 

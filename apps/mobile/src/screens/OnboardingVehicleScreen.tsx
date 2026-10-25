@@ -48,7 +48,7 @@ type LicenseCategoryUi =
   | (typeof MOTO_LICENSE_CATEGORIES)[number]
   | (typeof AUTO_LICENSE_CATEGORIES)[number];
 
-const validatePlate = (value: string) => validateVehiclePlate(value);
+const validatePlate = (value: string, type: VehicleTypeUi) => validateVehiclePlate(value, type);
 
 const validateRequired = (value: string) => {
   if (!value.trim()) return 'Requerido';
@@ -68,7 +68,7 @@ const isFormValid = (
 ) => {
   const baseOk =
     vehiclePlate.trim() !== '' &&
-    !validatePlate(vehiclePlate) &&
+    !validatePlate(vehiclePlate, vehicleType) &&
     vehicleBrand.trim() !== '' &&
     vehicleModel.trim() !== '' &&
     vehicleColor.trim() !== '' &&
@@ -117,6 +117,10 @@ export const OnboardingVehicleScreen: React.FC = () => {
     if (type === 'Auto') {
       setEngineCc('');
       setError('engineCc', undefined);
+    }
+    // Re-validate plate against the new family rules if already typed.
+    if (vehiclePlate.trim()) {
+      setError('vehiclePlate', validatePlate(vehiclePlate, type));
     }
   };
 
@@ -325,14 +329,14 @@ export const OnboardingVehicleScreen: React.FC = () => {
         <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Patente</Text>
           <Input
-            placeholder="ABC123 o AB123CD"
+            placeholder={vehicleType === 'Moto' ? 'A123BCD o 123ABC' : 'AB123CD o ABC123'}
             value={vehiclePlate}
             onChangeText={(t) => {
               // Keep spaces/hyphens while typing; validate strips them.
               setVehiclePlate(t.toUpperCase());
               setError('vehiclePlate', undefined);
             }}
-            onBlur={() => setError('vehiclePlate', validatePlate(vehiclePlate))}
+            onBlur={() => setError('vehiclePlate', validatePlate(vehiclePlate, vehicleType))}
             error={errors.vehiclePlate}
             containerStyle={styles.input}
             autoCapitalize="characters"

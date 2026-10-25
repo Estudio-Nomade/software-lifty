@@ -9,24 +9,37 @@ export const VEHICLE_MAX_AGE_YEARS = 15;
 export const MOTO_MIN_ENGINE_CC = 150;
 
 /**
- * AR plate formats (auto + moto), after stripping spaces/hyphens:
- * - Mercosur unificado: 2 letras + 3 dígitos + 2 letras (AB123CD)
- * - Nacional previo: 3 letras + 3 dígitos (ABC123)
+ * AR plate formats (DNRPA), after stripping spaces/hyphens.
+ * Auto:
+ * - Mercosur (2016+): 2 letras + 3 dígitos + 2 letras (AB123CD)
+ * - Nacional 1995–2016: 3 letras + 3 dígitos (ABC123)
+ * Moto:
+ * - Mercosur: 1 letra + 3 dígitos + 3 letras (A123BCD)
+ * - Previo: 3 dígitos + 3 letras (123ABC)
  */
-const PLATE_MERCOSUR = /^[A-Z]{2}[0-9]{3}[A-Z]{2}$/;
-const PLATE_CLASSIC = /^[A-Z]{3}[0-9]{3}$/;
+const PLATE_AUTO_MERCOSUR = /^[A-Z]{2}[0-9]{3}[A-Z]{2}$/;
+const PLATE_AUTO_CLASSIC = /^[A-Z]{3}[0-9]{3}$/;
+const PLATE_MOTO_MERCOSUR = /^[A-Z][0-9]{3}[A-Z]{3}$/;
+const PLATE_MOTO_CLASSIC = /^[0-9]{3}[A-Z]{3}$/;
 
 /** Strip spaces/hyphens and uppercase for validate + PUT body. */
 export function normalizeVehiclePlate(value: string): string {
   return value.replace(/[\s\-]+/g, '').toUpperCase();
 }
 
-/** Field error or undefined if empty/valid. Empty → required elsewhere. Spaces OK while typing. */
-export function validateVehiclePlate(value: string): string | undefined {
+/** Field error or undefined if empty/valid. Empty → required elsewhere. Spaces stripped for match. */
+export function validateVehiclePlate(
+  value: string,
+  type: VehicleTypeUi = 'Auto',
+): string | undefined {
   if (!value.trim()) return undefined;
   const plate = normalizeVehiclePlate(value);
-  if (PLATE_MERCOSUR.test(plate) || PLATE_CLASSIC.test(plate)) return undefined;
-  return 'Formato inválido. Usá ABC123 o AB123CD (Mercosur).';
+  if (type === 'Moto') {
+    if (PLATE_MOTO_MERCOSUR.test(plate) || PLATE_MOTO_CLASSIC.test(plate)) return undefined;
+    return 'Formato inválido. Usá A123BCD o 123ABC.';
+  }
+  if (PLATE_AUTO_MERCOSUR.test(plate) || PLATE_AUTO_CLASSIC.test(plate)) return undefined;
+  return 'Formato inválido. Usá AB123CD o ABC123.';
 }
 
 export function getVehicleYearBounds(now: Date = new Date()): {
