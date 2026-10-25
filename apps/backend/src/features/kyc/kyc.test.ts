@@ -56,7 +56,7 @@ async function createDriver(token: string): Promise<string> {
   const { data } = await request(
     'PUT',
     '/api/drivers/me',
-    { first_name: 'Test Driver', address_line: 'San Martín 100, Villa Dolores, Córdoba' },
+    { first_name: 'Test Driver', address_line: 'San Martín 100, Villa Dolores, Córdoba', photo_url: 'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png' },
     token,
   );
   return data.id;

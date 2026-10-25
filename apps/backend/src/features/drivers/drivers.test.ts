@@ -115,6 +115,8 @@ async function fullOnboarding(phone: string, password: string) {
     {
       first_name: 'Juan Perez',
       address_line: 'San Martín 100, Villa Dolores, Córdoba',
+      photo_url:
+        'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
     },
     token,
   );
@@ -125,7 +127,13 @@ async function fullOnboarding(phone: string, password: string) {
   await request(
     'PUT',
     '/api/drivers/me',
-    { vehicle_brand: 'Toyota', vehicle_model: 'Corolla', vehicle_year: 2022, vehicle_color: 'Blanco', vehicle_plate: 'ABC123' },
+    {
+      vehicle_brand: 'Toyota',
+      vehicle_model: 'Corolla',
+      vehicle_year: 2022,
+      vehicle_color: 'Blanco',
+      vehicle_plate: 'ABC123',
+    },
     token,
   );
   return { token, driverId, userId };
@@ -167,7 +175,7 @@ describe('Driver Profile', () => {
     expect(status).toBe(200);
     expect(data.id).toBe(driverId);
     expect(data.full_name).toBe('Juan');
-    expect(data.avatar_url).toBeNull();
+    expect(data.avatar_url).toContain('avatars/test-avatar.png');
     expect(data.rating_avg).toBe(0);
     expect(data.total_trips).toBe(0);
     expect(data.kyc_verified).toBe(true);
@@ -208,7 +216,7 @@ describe('Driver Profile', () => {
     expect(data.phone).toBe(phone);
     expect(data.email).toBeNull();
     expect(data.full_name).toBe('Juan Perez');
-    expect(data.avatar_url).toBeNull();
+    expect(data.avatar_url).toContain('avatars/test-avatar.png');
     expect(data.status).toBe('pending');
     expect(data.kyc_status).toBe('approved');
     expect(data.rating_avg).toBe(0);
@@ -262,6 +270,8 @@ describe('Driver Profile', () => {
       {
         first_name: 'Test',
         address_line: 'San Martín 100, Villa Dolores, Córdoba',
+        photo_url:
+          'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
       },
       token,
     );
@@ -321,6 +331,8 @@ describe('Driver Profile', () => {
       {
         first_name: 'Test',
         address_line: 'San Martín 100, Villa Dolores, Córdoba',
+        photo_url:
+          'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
       },
       token,
     );
@@ -362,6 +374,8 @@ describe('Driver Profile', () => {
       {
         first_name: 'Test',
         address_line: 'San Martín 100, Villa Dolores, Córdoba',
+        photo_url:
+          'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
       },
       token,
     );
@@ -720,6 +734,8 @@ describe('Vehicle step (no duplicate form)', () => {
         first_name: 'Ana',
         last_name: 'Gomez',
         address_line: 'San Martín 100, Villa Dolores, Córdoba',
+        photo_url:
+          'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
       },
       token,
     );
@@ -767,6 +783,8 @@ describe('Vehicle step (no duplicate form)', () => {
       {
         first_name: 'Ana',
         address_line: 'San Martín 100, Villa Dolores, Córdoba',
+        photo_url:
+          'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
       },
       token,
     );
@@ -1487,7 +1505,7 @@ describe('Document step completeness', () => {
 });
 
 describe('Avatar photo upload', () => {
-  const phone = '+5492618888888';
+  const phone = '+549****8888';
   const password = 'testPass123';
 
   async function uploadPhoto(token: string) {
@@ -1501,6 +1519,53 @@ describe('Avatar photo upload', () => {
     const res = await app.handle(req);
     return { status: res.status, data: await res.json() };
   }
+
+  test('PUT /me profile completion without avatar returns AVATAR_REQUIRED', async () => {
+    const { token } = await registerAndGetToken(phone, password);
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Juan',
+        last_name: 'Perez',
+        address_line: 'San Martín 100, Villa Dolores, Córdoba',
+      },
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error?.code).toBe('AVATAR_REQUIRED');
+  });
+
+  test('PUT /me rejects photo_url outside driver-documents avatars', async () => {
+    const { token } = await registerAndGetToken(phone, password);
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Juan',
+        photo_url: 'https://evil.example/avatar.png',
+      },
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error?.code).toBe('AVATAR_URL_INVALID');
+  });
+
+  test('PUT /me with photo_url null does not clear existing avatar', async () => {
+    const { token } = await registerAndGetToken(phone, password);
+    const { data: uploaded } = await uploadPhoto(token);
+
+    // Only null photo_url — no profile-completion fields that require address.
+    const { status } = await request('PUT', '/api/drivers/me', { photo_url: null }, token);
+    expect(status).toBe(200);
+
+    const { data: profile } = await request('GET', '/api/drivers/me', undefined, token);
+    expect(profile.avatar_url).toBe(uploaded.file_url);
+  });
 
   test('POST /me/photo uploads avatar and sets avatar_url', async () => {
     const { token } = await registerAndGetToken(phone, password);

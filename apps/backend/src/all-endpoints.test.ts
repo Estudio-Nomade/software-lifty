@@ -101,6 +101,8 @@ async function driver(token: string): Promise<string> {
     {
       first_name: 'Test Driver',
       address_line: 'San Martín 100, Villa Dolores, Córdoba',
+      photo_url:
+        'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
     },
     token,
   );
@@ -211,6 +213,8 @@ describe('Drivers', () => {
       {
         first_name: 'JP',
         address_line: 'San Martín 100, Villa Dolores, Córdoba',
+        photo_url:
+          'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
       },
       token,
     );

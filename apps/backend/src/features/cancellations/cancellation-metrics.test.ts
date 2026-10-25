@@ -72,7 +72,7 @@ async function registerDriver(): Promise<string> {
 }
 
 async function createDriverRow(token: string): Promise<string> {
-  await request('PUT', '/api/drivers/me', { first_name: 'Test Driver', address_line: 'San Martín 100, Villa Dolores, Córdoba' }, token);
+  await request('PUT', '/api/drivers/me', { first_name: 'Test Driver', address_line: 'San Martín 100, Villa Dolores, Córdoba', photo_url: 'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png' }, token);
   const db = getDb();
   const [driver] = await db.select({ id: drivers.id }).from(drivers).limit(1);
   return driver!.id;

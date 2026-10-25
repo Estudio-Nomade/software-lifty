@@ -23,6 +23,14 @@ import { Text } from '../components/ui/Text';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { type PlaceSuggestion, usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
+import {
+  DRIVER_PROFILE_PHOTO_HINT,
+  DRIVER_PROFILE_PHOTO_PERMISSION_MSG,
+  DRIVER_PROFILE_PHOTO_REQUIRED_MSG,
+  DRIVER_PROFILE_PHOTO_UPLOAD_FAIL_MSG,
+  isDriverProfilePhotoPresent,
+  isDriverProfilePhotoRemote,
+} from '../lib/driverProfilePhoto';
 import { exitOnboardingToWelcome } from '../lib/exitOnboardingToWelcome';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
@@ -34,6 +42,7 @@ interface ValidationErrors {
   firstName?: string;
   lastName?: string;
   address?: string;
+  photo?: string;
 }
 
 const MIN_PHONE_DIGITS = 10;
@@ -61,6 +70,7 @@ const isFormValid = (
   phoneDigits: string,
   addressLine: string,
   termsAccepted: boolean,
+  photoUri: string | null,
 ) => {
   return (
     firstName.trim() !== '' &&
@@ -69,7 +79,8 @@ const isFormValid = (
     !validateName(lastName) &&
     phoneDigits.length >= MIN_PHONE_DIGITS &&
     addressLine.trim().length >= MIN_ADDRESS_CHARS &&
-    termsAccepted
+    termsAccepted &&
+    isDriverProfilePhotoPresent(photoUri)
   );
 };
 
@@ -155,16 +166,17 @@ export const OnboardingStep1Screen: React.FC = () => {
     setErrors((prev) => ({ ...prev, [field]: error }));
   };
 
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permiso denegado', 'Necesitamos acceso a tu galeria para agregar una foto.');
+      Alert.alert('Permiso denegado', DRIVER_PROFILE_PHOTO_PERMISSION_MSG);
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
       quality: 0.8,
+      cameraType: ImagePicker.CameraType.front,
     });
     if (!result.canceled && result.assets.length > 0) {
       const asset = result.assets[0];
@@ -175,6 +187,7 @@ export const OnboardingStep1Screen: React.FC = () => {
         console.warn('Image compression failed, using original:', err);
         setPhotoUri(asset.uri);
       }
+      setError('photo', undefined);
     }
   };
 
@@ -186,19 +199,30 @@ export const OnboardingStep1Screen: React.FC = () => {
   };
 
   const handleContinue = async () => {
-    if (!isFormValid(firstName, lastName, phoneDigits, addressLine, termsAccepted)) return;
+    if (!isFormValid(firstName, lastName, phoneDigits, addressLine, termsAccepted, photoUri)) {
+      if (!isDriverProfilePhotoPresent(photoUri)) {
+        setError('photo', DRIVER_PROFILE_PHOTO_REQUIRED_MSG);
+      }
+      return;
+    }
     setLoading(true);
     setSubmitError('');
+    setError('photo', undefined);
 
     try {
       let uploadedPhotoUrl: string | null = null;
 
-      if (photoUri) {
+      if (isDriverProfilePhotoRemote(photoUri)) {
+        uploadedPhotoUrl = photoUri!.trim();
+      } else {
         try {
-          const result = await uploadPhotoToBackend(photoUri, 'avatar.jpg', 'image/jpeg');
+          const result = await uploadPhotoToBackend(photoUri!, 'avatar.jpg', 'image/jpeg');
           uploadedPhotoUrl = result.file_url;
         } catch (err) {
           console.error('Photo upload error:', err);
+          setError('photo', DRIVER_PROFILE_PHOTO_UPLOAD_FAIL_MSG);
+          setSubmitError(DRIVER_PROFILE_PHOTO_UPLOAD_FAIL_MSG);
+          return;
         }
       }
 
@@ -207,16 +231,13 @@ export const OnboardingStep1Screen: React.FC = () => {
         last_name: lastName.trim(),
         phone: `+54${phoneDigits}`,
         address_line: addressLine.trim(),
+        photo_url: uploadedPhotoUrl,
       };
 
       if (selectedPlace) {
         payload.address_lat = selectedPlace.lat;
         payload.address_lng = selectedPlace.lng;
         if (selectedPlace.place_id) payload.address_place_id = selectedPlace.place_id;
-      }
-
-      if (uploadedPhotoUrl) {
-        payload.photo_url = uploadedPhotoUrl;
       }
 
       const { data } = await apiClient.put('/drivers/me', payload);
@@ -236,7 +257,14 @@ export const OnboardingStep1Screen: React.FC = () => {
     }
   };
 
-  const formOk = isFormValid(firstName, lastName, phoneDigits, addressLine, termsAccepted);
+  const formOk = isFormValid(
+    firstName,
+    lastName,
+    phoneDigits,
+    addressLine,
+    termsAccepted,
+    photoUri,
+  );
 
   const formBody = (
     <>
@@ -250,10 +278,10 @@ export const OnboardingStep1Screen: React.FC = () => {
       <OnboardingCard>
         <TouchableOpacity
           style={styles.avatarRow}
-          onPress={pickImage}
+          onPress={takePhoto}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={photoUri ? 'Cambiar foto' : 'Agregar foto'}
+          accessibilityLabel={photoUri ? 'Cambiar foto con cámara' : 'Sacar foto de perfil'}
         >
           <View style={[styles.avatarCircle, photoUri ? styles.avatarCircleFilled : null]}>
             {photoUri ? (
@@ -263,10 +291,13 @@ export const OnboardingStep1Screen: React.FC = () => {
             )}
           </View>
           <View style={styles.avatarCopy}>
-            <Text style={styles.avatarLabel}>{photoUri ? 'Cambiar foto' : 'Agregar foto'}</Text>
-            <Text style={styles.avatarHint}>Opcional · se ve en el viaje</Text>
+            <Text style={styles.avatarLabel}>
+              {photoUri ? 'Cambiar foto' : 'Sacar foto de perfil'}
+            </Text>
+            <Text style={styles.avatarHint}>{DRIVER_PROFILE_PHOTO_HINT}</Text>
           </View>
         </TouchableOpacity>
+        {errors.photo ? <Text style={styles.photoError}>{errors.photo}</Text> : null}
 
         <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Nombre</Text>
@@ -475,6 +506,12 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
+  },
+  photoError: {
+    marginTop: theme.spacing.xs,
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.dangerRed,
   },
   fieldGroup: {
     width: '100%',
