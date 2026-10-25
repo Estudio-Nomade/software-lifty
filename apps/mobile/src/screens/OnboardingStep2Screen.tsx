@@ -6,6 +6,7 @@ import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -13,13 +14,20 @@ import {
   View,
 } from 'react-native';
 import { z } from 'zod';
-import { getValidated } from '../api/client';
+import { apiClient, getValidated } from '../api/client';
 import { ApiError, documentSchema, driverStatusSchema } from '../api/types';
 import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { OnboardingCard, OnboardingChrome } from '../components/OnboardingChrome';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import {
+  INSURANCE_COVERAGE_OPTIONS,
+  type InsuranceCoverageType,
+  MOTO_INSURANCE_COVERAGE_HINT,
+  MOTO_INSURANCE_COVERAGE_REQUIRED_MSG,
+  insuranceCoverageFromApi,
+} from '../lib/insuranceCoverage';
 import {
   type HydratedDocsState,
   type HydratedSideState,
@@ -29,10 +37,21 @@ import {
 } from '../lib/onboardingDocsHydrate';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
 import { resolveReviewGate } from '../lib/reviewGate';
+import { vehicleTypeFromApi } from '../lib/vehicleForm';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 import { compressImage } from '../utils/image';
 import { DOC_SIDES, type DocBase, type DocSide, uploadDocumentToBackend } from '../utils/upload';
+
+const meVehicleSchema = z.object({
+  vehicle: z
+    .object({
+      vehicle_type: z.string().nullable().optional(),
+      insurance_coverage_type: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+});
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -92,14 +111,19 @@ export const OnboardingStep2Screen: React.FC = () => {
       : null,
   );
   const [partialFix, setPartialFix] = useState(false);
+  const [isMoto, setIsMoto] = useState(false);
+  const [insuranceCoverage, setInsuranceCoverage] = useState<InsuranceCoverageType | null>(null);
+  const [coverageError, setCoverageError] = useState<string | null>(null);
+  const [savingCoverage, setSavingCoverage] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [status, documents] = await Promise.all([
+        const [status, documents, me] = await Promise.all([
           getValidated('/drivers/me/status', driverStatusSchema),
           getValidated('/drivers/me/documents', z.array(documentSchema)),
+          getValidated('/drivers/me', meVehicleSchema),
         ]);
         if (cancelled) return;
         if (status.admin_review_notes?.trim()) {
@@ -110,6 +134,13 @@ export const OnboardingStep2Screen: React.FC = () => {
         }
         const hydrated = hydrateDocsFromApi(documents);
         setDocs(hydrated);
+        const moto = vehicleTypeFromApi(me.vehicle?.vehicle_type) === 'Moto';
+        setIsMoto(moto);
+        if (moto) {
+          setInsuranceCoverage(insuranceCoverageFromApi(me.vehicle?.insurance_coverage_type));
+        } else {
+          setInsuranceCoverage(null);
+        }
         const hasOk = (Object.keys(DOC_SIDES) as DocBase[]).some((dt) =>
           DOC_SIDES[dt].some((side) => {
             const s = hydrated[dt][side];
@@ -135,6 +166,7 @@ export const OnboardingStep2Screen: React.FC = () => {
   }, []);
 
   const allUploaded = allDocsSatisfied(docs);
+  const coverageReady = !isMoto || insuranceCoverage != null;
 
   const setSideError = useCallback((docType: DocType, side: DocSide, error: string) => {
     setDocs((prev) => ({
@@ -311,7 +343,28 @@ export const OnboardingStep2Screen: React.FC = () => {
     });
   }, []);
 
+  const handleSelectCoverage = useCallback(async (value: InsuranceCoverageType) => {
+    setInsuranceCoverage(value);
+    setCoverageError(null);
+    setSavingCoverage(true);
+    try {
+      await apiClient.put('/drivers/me', {
+        vehicle_insurance_coverage_type: value,
+      });
+    } catch (err: unknown) {
+      setInsuranceCoverage(null);
+      setCoverageError(err instanceof Error ? err.message : MOTO_INSURANCE_COVERAGE_REQUIRED_MSG);
+    } finally {
+      setSavingCoverage(false);
+    }
+  }, []);
+
   const handleVerify = useCallback(async () => {
+    if (isMoto && !insuranceCoverage) {
+      setCoverageError(MOTO_INSURANCE_COVERAGE_REQUIRED_MSG);
+      setVerifyError(MOTO_INSURANCE_COVERAGE_REQUIRED_MSG);
+      return;
+    }
     setVerifying(true);
     setVerifyError(null);
     try {
@@ -332,7 +385,7 @@ export const OnboardingStep2Screen: React.FC = () => {
     } finally {
       setVerifying(false);
     }
-  }, [navigation]);
+  }, [insuranceCoverage, isMoto, navigation]);
 
   return (
     <View style={styles.container}>
@@ -380,6 +433,44 @@ export const OnboardingStep2Screen: React.FC = () => {
                 <Text style={styles.hintText}>
                   Alcanza un archivo o foto del seguro (PDF o imagen). No hace falta dorso.
                 </Text>
+              ) : null}
+              {doc.type === 'vehicle_insurance' && isMoto ? (
+                <View style={styles.coverageBlock}>
+                  <Text style={styles.hintText}>{MOTO_INSURANCE_COVERAGE_HINT}</Text>
+                  <View style={styles.coverageChips} accessibilityRole="radiogroup">
+                    {INSURANCE_COVERAGE_OPTIONS.map((opt) => {
+                      const selected = insuranceCoverage === opt.api;
+                      return (
+                        <Pressable
+                          key={opt.api}
+                          style={({ pressed }) => [
+                            styles.coverageChip,
+                            selected && styles.coverageChipSelected,
+                            pressed && !selected && styles.coverageChipPressed,
+                          ]}
+                          onPress={() => handleSelectCoverage(opt.api)}
+                          disabled={savingCoverage}
+                          hitSlop={8}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={opt.label}
+                          testID={`insurance-coverage-${opt.api}`}
+                        >
+                          <Text
+                            style={[
+                              styles.coverageChipText,
+                              selected && styles.coverageChipTextSelected,
+                            ]}
+                            pointerEvents="none"
+                          >
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  {coverageError ? <Text style={styles.errorText}>{coverageError}</Text> : null}
+                </View>
               ) : null}
               {doc.type === 'platform_rc_insurance' ? (
                 <Text style={styles.hintText}>
@@ -479,7 +570,7 @@ export const OnboardingStep2Screen: React.FC = () => {
           title={verifying ? 'Verificando…' : 'Enviar documentos'}
           onPress={handleVerify}
           style={styles.button}
-          disabled={!allUploaded || verifying || hydrating}
+          disabled={!allUploaded || !coverageReady || verifying || hydrating || savingCoverage}
           variant="cta"
         />
       </ScrollView>
@@ -557,6 +648,46 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
     width: '100%',
     lineHeight: 18,
+  },
+  coverageBlock: {
+    width: '100%',
+    gap: theme.spacing.sm,
+  },
+  coverageChips: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    width: '100%',
+  },
+  coverageChip: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 48,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1.5,
+    borderColor: theme.colors.mediumGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.surface,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+  },
+  coverageChipSelected: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  coverageChipPressed: {
+    opacity: 0.85,
+    borderColor: theme.colors.primary,
+  },
+  coverageChipText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.deepBlue,
+    fontFamily: theme.fontFamily.semibold,
+    textAlign: 'center',
+  },
+  coverageChipTextSelected: {
+    color: theme.colors.white,
+    fontFamily: theme.fontFamily.bold,
   },
   sideBlock: {
     width: '100%',

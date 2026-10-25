@@ -932,6 +932,87 @@ describe('Vehicle step (no duplicate form)', () => {
     expect(me.data.vehicle.engine_cc).toBe(150);
     expect(me.data.vehicle.brand).toBe('Yamaha');
   });
+
+  test('moto chip PUT stores insurance coverage and GET me returns it', async () => {
+    const { token } = await fullOnboarding('+5492617777009', password);
+    await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTCOV',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+        license_category: 'A3',
+      },
+      token,
+    );
+
+    const { status } = await request(
+      'PUT',
+      '/api/drivers/me',
+      { vehicle_insurance_coverage_type: 'third_party' },
+      token,
+    );
+    expect(status).toBe(200);
+
+    const me = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me.data.vehicle.insurance_coverage_type).toBe('third_party');
+  });
+
+  test('moto chip PUT invalid coverage returns VEHICLE_INSURANCE_COVERAGE_INVALID', async () => {
+    const { token } = await fullOnboarding('+5492617777010', password);
+    await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTBAD',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+        license_category: 'A3',
+      },
+      token,
+    );
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      { vehicle_insurance_coverage_type: 'todo_riesgo' },
+      token,
+    );
+    expect(status).toBe(400);
+    expect(data.error?.code).toBe('VEHICLE_INSURANCE_COVERAGE_INVALID');
+  });
+
+  test('car vehicle PUT strips insurance_coverage_type to null', async () => {
+    const { token } = await fullOnboarding('+5492617777011', password);
+    const { status } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Toyota',
+        vehicle_model: 'Corolla',
+        vehicle_year: 2022,
+        vehicle_color: 'Blanco',
+        vehicle_plate: 'CARCOV',
+        vehicle_type: 'car',
+        vehicle_insurance_coverage_type: 'comprehensive',
+      },
+      token,
+    );
+    expect(status).toBe(200);
+
+    const me = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me.data.vehicle.vehicle_type).toBe('car');
+    expect(me.data.vehicle.insurance_coverage_type).toBeNull();
+  });
 });
 
 describe('Document step completeness', () => {
@@ -960,6 +1041,110 @@ describe('Document step completeness', () => {
 
   test('all required docs without insurance_back moves driver to review', async () => {
     const { token, driverId } = await fullOnboarding(phone, password);
+    await getDb().insert(driverDocuments).values(
+      DOC_TYPES.map((doc_type) => ({
+        driver_id: driverId,
+        doc_type,
+        file_url: 'https://x.com/f.png',
+      })),
+    );
+
+    const res = await app.handle(
+      new Request('http://localhost/api/drivers/me/status', {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    );
+    const data = await res.json();
+    expect(data.step).toBe('review');
+  });
+
+  test('moto with all docs and comprehensive coverage enters review', async () => {
+    const { token, driverId } = await fullOnboarding('+5492619999901', password);
+    await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTREV',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+        vehicle_insurance_coverage_type: 'comprehensive',
+        license_category: 'A3',
+      },
+      token,
+    );
+    await getDb().insert(driverDocuments).values(
+      DOC_TYPES.map((doc_type) => ({
+        driver_id: driverId,
+        doc_type,
+        file_url: 'https://x.com/f.png',
+      })),
+    );
+
+    const res = await app.handle(
+      new Request('http://localhost/api/drivers/me/status', {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    );
+    const data = await res.json();
+    expect(data.step).toBe('review');
+  });
+
+  test('moto with all docs but no coverage stays in documents', async () => {
+    const { token, driverId } = await fullOnboarding('+5492619999902', password);
+    await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTDOC',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+        license_category: 'A3',
+      },
+      token,
+    );
+    await getDb().insert(driverDocuments).values(
+      DOC_TYPES.map((doc_type) => ({
+        driver_id: driverId,
+        doc_type,
+        file_url: 'https://x.com/f.png',
+      })),
+    );
+
+    const res = await app.handle(
+      new Request('http://localhost/api/drivers/me/status', {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    );
+    const data = await res.json();
+    expect(data.step).toBe('documents');
+  });
+
+  test('moto with all docs and third_party coverage enters review', async () => {
+    const { token, driverId } = await fullOnboarding('+5492619999903', password);
+    await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Yamaha',
+        vehicle_model: 'YBR',
+        vehicle_year: 2023,
+        vehicle_color: 'Negro',
+        vehicle_plate: 'MOT3RD',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+        vehicle_insurance_coverage_type: 'third_party',
+        license_category: 'A3',
+      },
+      token,
+    );
     await getDb().insert(driverDocuments).values(
       DOC_TYPES.map((doc_type) => ({
         driver_id: driverId,
