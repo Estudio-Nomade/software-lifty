@@ -223,7 +223,9 @@ export const ProfileScreen: React.FC = () => {
     if (!profile) return;
     setSaving(true);
     try {
-      let photoUrl = profile.avatar_url;
+      // Reuse existing avatar when editing name/phone only.
+      // Camera is required only when the user taps change-photo (editPhotoUri set).
+      let newPhotoUrl: string | undefined;
 
       if (editPhotoUri) {
         try {
@@ -233,7 +235,7 @@ export const ProfileScreen: React.FC = () => {
             'avatar.jpg',
             'image/jpeg',
           );
-          photoUrl = uploadResult.file_url;
+          newPhotoUrl = uploadResult.file_url;
         } catch {
           Alert.alert('Error', DRIVER_PROFILE_PHOTO_UPLOAD_FAIL_MSG);
           return;
@@ -244,7 +246,7 @@ export const ProfileScreen: React.FC = () => {
         first_name: editFirstName.trim(),
         last_name: editLastName.trim(),
         phone: editPhone.trim(),
-        ...(photoUrl ? { photo_url: photoUrl } : {}),
+        ...(newPhotoUrl ? { photo_url: newPhotoUrl } : {}),
       });
 
       setEditVisible(false);

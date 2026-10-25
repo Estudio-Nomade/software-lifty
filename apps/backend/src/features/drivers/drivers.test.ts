@@ -1538,6 +1538,35 @@ describe('Avatar photo upload', () => {
     expect(data.error?.code).toBe('AVATAR_REQUIRED');
   });
 
+  test('PUT /me rejects photo_url outside driver-documents avatars', async () => {
+    const { token } = await registerAndGetToken(phone, password);
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Juan',
+        photo_url: 'https://evil.example/avatar.png',
+      },
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error?.code).toBe('AVATAR_URL_INVALID');
+  });
+
+  test('PUT /me with photo_url null does not clear existing avatar', async () => {
+    const { token } = await registerAndGetToken(phone, password);
+    const { data: uploaded } = await uploadPhoto(token);
+
+    // Only null photo_url — no profile-completion fields that require address.
+    const { status } = await request('PUT', '/api/drivers/me', { photo_url: null }, token);
+    expect(status).toBe(200);
+
+    const { data: profile } = await request('GET', '/api/drivers/me', undefined, token);
+    expect(profile.avatar_url).toBe(uploaded.file_url);
+  });
+
   test('POST /me/photo uploads avatar and sets avatar_url', async () => {
     const { token } = await registerAndGetToken(phone, password);
 

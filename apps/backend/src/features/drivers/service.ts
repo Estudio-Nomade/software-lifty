@@ -933,10 +933,24 @@ export const driversService = {
       }
     }
 
-    if (data.photo_url) {
+    if (data.photo_url !== undefined && data.photo_url !== null) {
+      const photoUrl = data.photo_url.trim();
+      if (!photoUrl) {
+        throw new AppError('URL de foto inválida.', 400, 'AVATAR_URL_INVALID');
+      }
+      // Only accept URLs we can map back to driver-documents storage paths
+      // (blocks arbitrary remote hosts). Empty/null is ignored — never clears avatar.
+      const storagePath = _storage.extractStoragePath(photoUrl);
+      if (!storagePath || !storagePath.startsWith('avatars/')) {
+        throw new AppError(
+          'La foto de perfil debe subirse desde la app.',
+          400,
+          'AVATAR_URL_INVALID',
+        );
+      }
       await db
         .update(users)
-        .set({ avatar_url: data.photo_url, updated_at: new Date() })
+        .set({ avatar_url: photoUrl, updated_at: new Date() })
         .where(eq(users.id, user.id));
     }
 
