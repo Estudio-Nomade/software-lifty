@@ -20,7 +20,9 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
 import {
   type VehicleTypeUi,
+  normalizeVehiclePlate,
   validateVehicleEngineCc,
+  validateVehiclePlate,
   validateVehicleYear,
   vehicleFormFromProfile,
   vehicleTypeToApi,
@@ -37,7 +39,6 @@ interface ValidationErrors {
   engineCc?: string;
 }
 
-const PLATE_REGEX = /^[A-Z]{2,3}[0-9]{3}[A-Z]{0,2}$/;
 const VEHICLE_TYPES: VehicleTypeUi[] = ['Auto', 'Moto'];
 /** Moto: A3 explicit. Auto: B (pending professional) or professional. */
 const MOTO_LICENSE_CATEGORIES = ['A3', 'A1', 'A2'] as const;
@@ -47,13 +48,7 @@ type LicenseCategoryUi =
   | (typeof MOTO_LICENSE_CATEGORIES)[number]
   | (typeof AUTO_LICENSE_CATEGORIES)[number];
 
-const normalizePlate = (value: string) => value.replace(/\s+/g, '').toUpperCase();
-
-const validatePlate = (value: string) => {
-  if (!value.trim()) return undefined;
-  if (!PLATE_REGEX.test(normalizePlate(value))) return 'Formato invalido (ej: ABC123)';
-  return undefined;
-};
+const validatePlate = (value: string) => validateVehiclePlate(value);
 
 const validateRequired = (value: string) => {
   if (!value.trim()) return 'Requerido';
@@ -206,7 +201,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
 
     try {
       const body: Record<string, unknown> = {
-        vehicle_plate: normalizePlate(vehiclePlate),
+        vehicle_plate: normalizeVehiclePlate(vehiclePlate),
         vehicle_brand: vehicleBrand.trim(),
         vehicle_model: vehicleModel.trim(),
         vehicle_color: vehicleColor.trim(),
@@ -330,9 +325,10 @@ export const OnboardingVehicleScreen: React.FC = () => {
         <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Patente</Text>
           <Input
-            placeholder="ABC123"
+            placeholder="ABC123 o AB123CD"
             value={vehiclePlate}
             onChangeText={(t) => {
+              // Keep spaces/hyphens while typing; validate strips them.
               setVehiclePlate(t.toUpperCase());
               setError('vehiclePlate', undefined);
             }}
@@ -340,7 +336,8 @@ export const OnboardingVehicleScreen: React.FC = () => {
             error={errors.vehiclePlate}
             containerStyle={styles.input}
             autoCapitalize="characters"
-            maxLength={9}
+            autoCorrect={false}
+            maxLength={12}
           />
         </View>
 

@@ -8,6 +8,27 @@ export const VEHICLE_MAX_AGE_YEARS = 15;
 /** Ops lock: solo motos ≥ 150 cc (inclusive). */
 export const MOTO_MIN_ENGINE_CC = 150;
 
+/**
+ * AR plate formats (auto + moto), after stripping spaces/hyphens:
+ * - Mercosur unificado: 2 letras + 3 dígitos + 2 letras (AB123CD)
+ * - Nacional previo: 3 letras + 3 dígitos (ABC123)
+ */
+const PLATE_MERCOSUR = /^[A-Z]{2}[0-9]{3}[A-Z]{2}$/;
+const PLATE_CLASSIC = /^[A-Z]{3}[0-9]{3}$/;
+
+/** Strip spaces/hyphens and uppercase for validate + PUT body. */
+export function normalizeVehiclePlate(value: string): string {
+  return value.replace(/[\s\-]+/g, '').toUpperCase();
+}
+
+/** Field error or undefined if empty/valid. Empty → required elsewhere. Spaces OK while typing. */
+export function validateVehiclePlate(value: string): string | undefined {
+  if (!value.trim()) return undefined;
+  const plate = normalizeVehiclePlate(value);
+  if (PLATE_MERCOSUR.test(plate) || PLATE_CLASSIC.test(plate)) return undefined;
+  return 'Formato inválido. Usá ABC123 o AB123CD (Mercosur). Espacios ok.';
+}
+
 export function getVehicleYearBounds(now: Date = new Date()): {
   currentYear: number;
   minYear: number;
@@ -145,9 +166,7 @@ export function vehicleFormFromProfile(
   const engineCc =
     type === 'Moto' && vehicle.engine_cc != null ? String(vehicle.engine_cc).trim() : '';
   return {
-    plate: String(vehicle.plate ?? '')
-      .replace(/\s+/g, '')
-      .toUpperCase(),
+    plate: normalizeVehiclePlate(String(vehicle.plate ?? '')),
     brand: String(vehicle.brand ?? '').trim(),
     model: String(vehicle.model ?? '').trim(),
     color: String(vehicle.color ?? '').trim(),

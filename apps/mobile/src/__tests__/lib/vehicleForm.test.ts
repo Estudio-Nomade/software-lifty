@@ -4,7 +4,9 @@ import {
   VEHICLE_MIN_MODEL_YEAR,
   getVehicleYearBounds,
   hasCompleteVehicle,
+  normalizeVehiclePlate,
   validateVehicleEngineCc,
+  validateVehiclePlate,
   validateVehicleYear,
   vehicleFormFromProfile,
   vehicleTypeFromApi,
@@ -50,6 +52,37 @@ describe('vehicle year policy', () => {
   it('empty year is not a field error (required handled elsewhere)', () => {
     expect(validateVehicleYear('')).toBeUndefined();
     expect(validateVehicleYear('   ')).toBeUndefined();
+  });
+});
+
+describe('vehicle plate formats', () => {
+  it('normalizes spaces and hyphens', () => {
+    expect(normalizeVehiclePlate('ab 123 cd')).toBe('AB123CD');
+    expect(normalizeVehiclePlate('ABC-123')).toBe('ABC123');
+    expect(normalizeVehiclePlate('  ab 123  ')).toBe('AB123');
+  });
+
+  it('accepts Mercosur AA999AA and classic AAA999 (with spaces)', () => {
+    expect(validateVehiclePlate('AB123CD')).toBeUndefined();
+    expect(validateVehiclePlate('AB 123 CD')).toBeUndefined();
+    expect(validateVehiclePlate('ab-123-cd')).toBeUndefined();
+    expect(validateVehiclePlate('ABC123')).toBeUndefined();
+    expect(validateVehiclePlate('ABC 123')).toBeUndefined();
+    expect(validateVehiclePlate('abc-123')).toBeUndefined();
+  });
+
+  it('rejects incomplete or wrong patterns', () => {
+    expect(validateVehiclePlate('AB123C')).toBeDefined();
+    expect(validateVehiclePlate('AB12CD')).toBeDefined();
+    expect(validateVehiclePlate('A123BCD')).toBeDefined();
+    expect(validateVehiclePlate('ABCD12')).toBeDefined();
+    expect(validateVehiclePlate('123ABC')).toBeDefined();
+    expect(validateVehiclePlate('AB1234CD')).toBeDefined();
+  });
+
+  it('empty is not a field error (required elsewhere)', () => {
+    expect(validateVehiclePlate('')).toBeUndefined();
+    expect(validateVehiclePlate('   ')).toBeUndefined();
   });
 });
 
