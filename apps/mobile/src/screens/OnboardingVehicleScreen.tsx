@@ -20,6 +20,7 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
 import {
   type VehicleTypeUi,
+  validateVehicleEngineCc,
   validateVehicleYear,
   vehicleFormFromProfile,
   vehicleTypeToApi,
@@ -33,6 +34,7 @@ interface ValidationErrors {
   vehicleModel?: string;
   vehicleColor?: string;
   vehicleYear?: string;
+  engineCc?: string;
 }
 
 const PLATE_REGEX = /^[A-Z]{2,3}[0-9]{3}[A-Z]{0,2}$/;
@@ -66,16 +68,23 @@ const isFormValid = (
   vehicleModel: string,
   vehicleColor: string,
   vehicleYear: string,
+  vehicleType: VehicleTypeUi,
+  engineCc: string,
 ) => {
-  return (
+  const baseOk =
     vehiclePlate.trim() !== '' &&
     !validatePlate(vehiclePlate) &&
     vehicleBrand.trim() !== '' &&
     vehicleModel.trim() !== '' &&
     vehicleColor.trim() !== '' &&
     vehicleYear.trim() !== '' &&
-    !validateYear(vehicleYear)
-  );
+    !validateYear(vehicleYear);
+  if (!baseOk) return false;
+  if (vehicleType === 'Moto') {
+    if (!engineCc.trim()) return false;
+    if (validateVehicleEngineCc(engineCc, 'Moto')) return false;
+  }
+  return true;
 };
 
 export const OnboardingVehicleScreen: React.FC = () => {
@@ -88,6 +97,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
   const [vehicleColor, setVehicleColor] = useState('');
   const [vehicleYear, setVehicleYear] = useState('');
   const [vehicleType, setVehicleType] = useState<VehicleTypeUi>('Auto');
+  const [engineCc, setEngineCc] = useState('');
   const [licenseCategory, setLicenseCategory] = useState<LicenseCategoryUi | ''>('');
   const [loading, setLoading] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -100,11 +110,19 @@ export const OnboardingVehicleScreen: React.FC = () => {
 
   const licenseOptions = vehicleType === 'Moto' ? MOTO_LICENSE_CATEGORIES : AUTO_LICENSE_CATEGORIES;
 
+  const setError = (field: keyof ValidationErrors, error: string | undefined) => {
+    setErrors((prev) => ({ ...prev, [field]: error }));
+  };
+
   const selectVehicleType = (type: VehicleTypeUi) => {
     if (!prefillDone.current) typeTouchedDuringPrefill.current = true;
     setVehicleType(type);
     // Reset category when switching family so chips stay valid.
     setLicenseCategory('');
+    if (type === 'Auto') {
+      setEngineCc('');
+      setError('engineCc', undefined);
+    }
   };
 
   // Prefill from GET /drivers/me so back/redirect/kill-app never shows a blank form twice.
@@ -123,9 +141,10 @@ export const OnboardingVehicleScreen: React.FC = () => {
           setVehicleModel(form.model);
           setVehicleColor(form.color);
           setVehicleYear(form.year);
-          // Only apply profile type if user has not already picked while GET was in flight.
+          // Only apply profile type/cc if user has not already picked while GET was in flight.
           if (!typeTouchedDuringPrefill.current) {
             setVehicleType(form.type);
+            setEngineCc(form.engineCc);
           }
           if (__DEV__) {
             // eslint-disable-next-line no-console
@@ -164,12 +183,20 @@ export const OnboardingVehicleScreen: React.FC = () => {
     };
   }, []);
 
-  const setError = (field: keyof ValidationErrors, error: string | undefined) => {
-    setErrors((prev) => ({ ...prev, [field]: error }));
-  };
-
   const handleContinue = async () => {
-    if (!isFormValid(vehiclePlate, vehicleBrand, vehicleModel, vehicleColor, vehicleYear)) return;
+    if (
+      !isFormValid(
+        vehiclePlate,
+        vehicleBrand,
+        vehicleModel,
+        vehicleColor,
+        vehicleYear,
+        vehicleType,
+        engineCc,
+      )
+    ) {
+      return;
+    }
     if (!licenseCategory) {
       setSubmitError('Elegí la categoría de tu licencia');
       return;
@@ -178,7 +205,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
     setSubmitError('');
 
     try {
-      const { data } = await apiClient.put('/drivers/me', {
+      const body: Record<string, unknown> = {
         vehicle_plate: normalizePlate(vehiclePlate),
         vehicle_brand: vehicleBrand.trim(),
         vehicle_model: vehicleModel.trim(),
@@ -186,7 +213,13 @@ export const OnboardingVehicleScreen: React.FC = () => {
         vehicle_year: Number.parseInt(vehicleYear, 10),
         vehicle_type: vehicleTypeToApi(vehicleType),
         license_category: licenseCategory,
-      });
+      };
+      if (vehicleType === 'Moto') {
+        body.vehicle_engine_cc = Number.parseInt(engineCc, 10);
+      } else {
+        body.vehicle_engine_cc = null;
+      }
+      const { data } = await apiClient.put('/drivers/me', body);
 
       const step: string = data?.step ?? data?.data?.step ?? 'documents';
       setOnboardingStep(step);
@@ -377,6 +410,33 @@ export const OnboardingVehicleScreen: React.FC = () => {
           </View>
         </View>
 
+        {vehicleType === 'Moto' ? (
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Cilindrada (cc)</Text>
+            <Text style={styles.licenseHint}>
+              Por ahora solo motos de 150 cc o más. Debe coincidir con la cédula.
+            </Text>
+            <Input
+              placeholder="150"
+              value={engineCc}
+              onChangeText={(t) => {
+                const digits = t.replace(/\D/g, '').slice(0, 4);
+                setEngineCc(digits);
+                setError(
+                  'engineCc',
+                  digits.length > 0 ? validateVehicleEngineCc(digits, 'Moto') : undefined,
+                );
+              }}
+              onBlur={() => setError('engineCc', validateVehicleEngineCc(engineCc, 'Moto'))}
+              error={errors.engineCc}
+              containerStyle={styles.input}
+              keyboardType="numeric"
+              maxLength={4}
+              testID="vehicle-engine-cc"
+            />
+          </View>
+        ) : null}
+
         {submitError !== '' && <Text style={styles.submitError}>{submitError}</Text>}
 
         <Button
@@ -385,7 +445,15 @@ export const OnboardingVehicleScreen: React.FC = () => {
           disabled={
             loadingProfile ||
             !licenseCategory ||
-            !isFormValid(vehiclePlate, vehicleBrand, vehicleModel, vehicleColor, vehicleYear)
+            !isFormValid(
+              vehiclePlate,
+              vehicleBrand,
+              vehicleModel,
+              vehicleColor,
+              vehicleYear,
+              vehicleType,
+              engineCc,
+            )
           }
           loading={loading || loadingProfile}
           variant="cta"

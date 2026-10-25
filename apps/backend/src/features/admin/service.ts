@@ -324,6 +324,7 @@ export const adminService = {
         color: vehicles.color,
         plate: vehicles.plate,
         vehicle_type: vehicles.vehicle_type,
+        engine_cc: vehicles.engine_cc,
         created_at: vehicles.created_at,
       })
       .from(vehicles)

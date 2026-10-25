@@ -1,8 +1,10 @@
 import {
+  MOTO_MIN_ENGINE_CC,
   VEHICLE_MAX_AGE_YEARS,
   VEHICLE_MIN_MODEL_YEAR,
   getVehicleYearBounds,
   hasCompleteVehicle,
+  validateVehicleEngineCc,
   validateVehicleYear,
   vehicleFormFromProfile,
   vehicleTypeFromApi,
@@ -68,6 +70,25 @@ describe('vehicleType mapping', () => {
   });
 });
 
+describe('vehicle engine_cc policy', () => {
+  it('exposes min 150', () => {
+    expect(MOTO_MIN_ENGINE_CC).toBe(150);
+  });
+
+  it('moto 150 ok; 149 invalid; empty no field error', () => {
+    expect(validateVehicleEngineCc('150', 'Moto')).toBeUndefined();
+    expect(validateVehicleEngineCc('250', 'Moto')).toBeUndefined();
+    expect(validateVehicleEngineCc('149', 'Moto')).toMatch(/150 cc/);
+    expect(validateVehicleEngineCc('', 'Moto')).toBeUndefined();
+    expect(validateVehicleEngineCc('abc', 'Moto')).toMatch(/cilindrada/);
+  });
+
+  it('auto ignores cc field errors', () => {
+    expect(validateVehicleEngineCc('50', 'Auto')).toBeUndefined();
+    expect(validateVehicleEngineCc('', 'Auto')).toBeUndefined();
+  });
+});
+
 describe('vehicleFormFromProfile', () => {
   it('returns null when vehicle is missing or incomplete', () => {
     expect(vehicleFormFromProfile(null)).toBeNull();
@@ -99,7 +120,51 @@ describe('vehicleFormFromProfile', () => {
       color: 'Blanco',
       year: '2022',
       type: 'Auto',
+      engineCc: '',
     });
     expect(hasCompleteVehicle(form!)).toBe(true);
+  });
+
+  it('moto without engine_cc is incomplete; with 150 prefills', () => {
+    expect(
+      hasCompleteVehicle({
+        plate: 'MOT123',
+        brand: 'Honda',
+        model: 'CG',
+        color: 'Rojo',
+        year: 2022,
+        vehicle_type: 'motorcycle',
+      }),
+    ).toBe(false);
+    expect(
+      hasCompleteVehicle({
+        plate: 'MOT123',
+        brand: 'Honda',
+        model: 'CG',
+        color: 'Rojo',
+        year: 2022,
+        vehicle_type: 'motorcycle',
+        engine_cc: 149,
+      }),
+    ).toBe(false);
+
+    const form = vehicleFormFromProfile({
+      plate: 'mot 123',
+      brand: 'Honda',
+      model: 'CG',
+      color: 'Rojo',
+      year: 2022,
+      vehicle_type: 'motorcycle',
+      engine_cc: 150,
+    });
+    expect(form).toEqual({
+      plate: 'MOT123',
+      brand: 'Honda',
+      model: 'CG',
+      color: 'Rojo',
+      year: '2022',
+      type: 'Moto',
+      engineCc: '150',
+    });
   });
 });

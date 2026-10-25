@@ -805,6 +805,94 @@ describe('Vehicle step (no duplicate form)', () => {
     expect(status).toBe(400);
     expect(data.error?.code).toBe('VEHICLE_YEAR_INVALID');
   });
+
+  test('moto vehicle PUT with engine_cc 150 stores and GET me returns it', async () => {
+    const { token } = await fullOnboarding('+5492617777004', password);
+    const { status } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOT150',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+        license_category: 'A3',
+      },
+      token,
+    );
+    expect(status).toBe(200);
+
+    const me = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me.data.vehicle.vehicle_type).toBe('motorcycle');
+    expect(me.data.vehicle.engine_cc).toBe(150);
+  });
+
+  test('moto vehicle PUT with engine_cc 149 returns VEHICLE_ENGINE_CC_INVALID', async () => {
+    const { token } = await fullOnboarding('+5492617777005', password);
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOT149',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 149,
+        license_category: 'A3',
+      },
+      token,
+    );
+    expect(status).toBe(400);
+    expect(data.error?.code).toBe('VEHICLE_ENGINE_CC_INVALID');
+  });
+
+  test('moto vehicle PUT without engine_cc returns VEHICLE_ENGINE_CC_INVALID', async () => {
+    const { token } = await fullOnboarding('+5492617777006', password);
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOT000',
+        vehicle_type: 'motorcycle',
+        license_category: 'A3',
+      },
+      token,
+    );
+    expect(status).toBe(400);
+    expect(data.error?.code).toBe('VEHICLE_ENGINE_CC_INVALID');
+  });
+
+  test('car vehicle PUT strips engine_cc to null', async () => {
+    const { token } = await fullOnboarding('+5492617777007', password);
+    const { status } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Toyota',
+        vehicle_model: 'Corolla',
+        vehicle_year: 2022,
+        vehicle_color: 'Blanco',
+        vehicle_plate: 'CAR250',
+        vehicle_type: 'car',
+        vehicle_engine_cc: 250,
+      },
+      token,
+    );
+    expect(status).toBe(200);
+
+    const me = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me.data.vehicle.vehicle_type).toBe('car');
+    expect(me.data.vehicle.engine_cc).toBeNull();
+  });
 });
 
 describe('Document step completeness', () => {

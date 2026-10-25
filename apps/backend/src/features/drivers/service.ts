@@ -34,6 +34,7 @@ import {
   contentTypeForFile,
   supabaseStorage,
 } from '../../shared/lib/storage';
+import { assertVehicleEngineCc } from '../../shared/lib/vehicle-engine-cc';
 import { assertVehicleYear } from '../../shared/lib/vehicle-year';
 
 let _storage: StorageProvider = supabaseStorage;
@@ -817,6 +818,7 @@ export const driversService = {
       vehicle_color?: string;
       vehicle_year?: number;
       vehicle_type?: string;
+      vehicle_engine_cc?: number | null;
       license_category?: string;
       license_professional_status?: string;
       photo_url?: string;
@@ -979,6 +981,9 @@ export const driversService = {
       }
       assertVehicleYear(data.vehicle_year);
 
+      const vehicleType = data.vehicle_type ?? 'car';
+      const engineCc = assertVehicleEngineCc(data.vehicle_engine_cc, vehicleType);
+
       const [existingVehicle] = await db
         .select({ id: vehicles.id })
         .from(vehicles)
@@ -992,7 +997,8 @@ export const driversService = {
         year: data.vehicle_year,
         color: data.vehicle_color ?? '',
         plate: data.vehicle_plate ?? '',
-        vehicle_type: data.vehicle_type ?? 'car',
+        vehicle_type: vehicleType,
+        engine_cc: engineCc,
       };
 
       if (existingVehicle) {
@@ -1494,6 +1500,7 @@ export const driversService = {
         color: vehicles.color,
         plate: vehicles.plate,
         vehicle_type: vehicles.vehicle_type,
+        engine_cc: vehicles.engine_cc,
       })
       .from(users)
       .leftJoin(drivers, eq(users.id, drivers.user_id))
@@ -1552,6 +1559,7 @@ export const driversService = {
         color: row.color,
         plate: row.plate,
         vehicle_type: row.vehicle_type,
+        engine_cc: row.engine_cc ?? null,
       },
       created_at: row.created_at ? row.created_at.toISOString() : null,
     };
