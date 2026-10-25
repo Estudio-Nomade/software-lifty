@@ -2,7 +2,7 @@ import { AppError } from './errors';
 
 export const MOTO_MIN_ENGINE_CC = 150;
 
-function isMotoType(vehicleType: string | null | undefined): boolean {
+export function isMotoVehicleType(vehicleType: string | null | undefined): boolean {
   const t = String(vehicleType ?? '')
     .trim()
     .toLowerCase();
@@ -25,7 +25,7 @@ export function assertVehicleEngineCc(
   cc: number | null | undefined,
   vehicleType: string | null | undefined,
 ): number | null {
-  if (isMotoType(vehicleType)) {
+  if (isMotoVehicleType(vehicleType)) {
     if (cc == null || !Number.isInteger(cc) || cc < MOTO_MIN_ENGINE_CC) {
       throw new AppError(
         `Por ahora solo motos de ${MOTO_MIN_ENGINE_CC} cc o más. Ingresá la cilindrada como figura en la cédula.`,

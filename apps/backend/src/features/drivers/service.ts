@@ -34,7 +34,7 @@ import {
   contentTypeForFile,
   supabaseStorage,
 } from '../../shared/lib/storage';
-import { assertVehicleEngineCc } from '../../shared/lib/vehicle-engine-cc';
+import { assertVehicleEngineCc, isMotoVehicleType } from '../../shared/lib/vehicle-engine-cc';
 import { assertVehicleYear } from '../../shared/lib/vehicle-year';
 
 let _storage: StorageProvider = supabaseStorage;
@@ -981,14 +981,29 @@ export const driversService = {
       }
       assertVehicleYear(data.vehicle_year);
 
-      const vehicleType = data.vehicle_type ?? 'car';
-      const engineCc = assertVehicleEngineCc(data.vehicle_engine_cc, vehicleType);
-
       const [existingVehicle] = await db
-        .select({ id: vehicles.id })
+        .select({
+          id: vehicles.id,
+          vehicle_type: vehicles.vehicle_type,
+          engine_cc: vehicles.engine_cc,
+        })
         .from(vehicles)
         .where(eq(vehicles.driver_id, driverId))
         .limit(1);
+
+      // Prefer request type → existing row → car. Never silently downgrade moto→car on partial PUT.
+      const vehicleType =
+        (data.vehicle_type && String(data.vehicle_type).trim()) ||
+        existingVehicle?.vehicle_type ||
+        'car';
+
+      const engineCcInput =
+        data.vehicle_engine_cc !== undefined
+          ? data.vehicle_engine_cc
+          : isMotoVehicleType(vehicleType)
+            ? (existingVehicle?.engine_cc ?? null)
+            : null;
+      const engineCc = assertVehicleEngineCc(engineCcInput, vehicleType);
 
       const vehicleValues = {
         driver_id: driverId,

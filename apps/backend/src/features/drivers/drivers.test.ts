@@ -893,6 +893,45 @@ describe('Vehicle step (no duplicate form)', () => {
     expect(me.data.vehicle.vehicle_type).toBe('car');
     expect(me.data.vehicle.engine_cc).toBeNull();
   });
+
+  test('vehicle PUT without vehicle_type keeps existing motorcycle type and cc', async () => {
+    const { token } = await fullOnboarding('+5492617777008', password);
+    await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'A123BCD',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+        license_category: 'A3',
+      },
+      token,
+    );
+
+    const { status } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Yamaha',
+        vehicle_model: 'YBR',
+        vehicle_year: 2023,
+        vehicle_color: 'Negro',
+        vehicle_plate: 'A123BCD',
+        // no vehicle_type, no vehicle_engine_cc
+      },
+      token,
+    );
+    expect(status).toBe(200);
+
+    const me = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me.data.vehicle.vehicle_type).toBe('motorcycle');
+    expect(me.data.vehicle.engine_cc).toBe(150);
+    expect(me.data.vehicle.brand).toBe('Yamaha');
+  });
 });
 
 describe('Document step completeness', () => {
