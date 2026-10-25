@@ -37,6 +37,13 @@ interface ValidationErrors {
 
 const PLATE_REGEX = /^[A-Z]{2,3}[0-9]{3}[A-Z]{0,2}$/;
 const VEHICLE_TYPES: VehicleTypeUi[] = ['Auto', 'Moto'];
+/** Moto: A3 explicit. Auto: B (pending professional) or professional. */
+const MOTO_LICENSE_CATEGORIES = ['A3', 'A1', 'A2'] as const;
+const AUTO_LICENSE_CATEGORIES = ['B', 'professional'] as const;
+
+type LicenseCategoryUi =
+  | (typeof MOTO_LICENSE_CATEGORIES)[number]
+  | (typeof AUTO_LICENSE_CATEGORIES)[number];
 
 const normalizePlate = (value: string) => value.replace(/\s+/g, '').toUpperCase();
 
@@ -81,6 +88,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
   const [vehicleColor, setVehicleColor] = useState('');
   const [vehicleYear, setVehicleYear] = useState('');
   const [vehicleType, setVehicleType] = useState<VehicleTypeUi>('Auto');
+  const [licenseCategory, setLicenseCategory] = useState<LicenseCategoryUi | ''>('');
   const [loading, setLoading] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -90,9 +98,13 @@ export const OnboardingVehicleScreen: React.FC = () => {
   /** True after user taps a type chip — only blocks the in-flight one-shot prefill. */
   const typeTouchedDuringPrefill = useRef(false);
 
+  const licenseOptions = vehicleType === 'Moto' ? MOTO_LICENSE_CATEGORIES : AUTO_LICENSE_CATEGORIES;
+
   const selectVehicleType = (type: VehicleTypeUi) => {
     if (!prefillDone.current) typeTouchedDuringPrefill.current = true;
     setVehicleType(type);
+    // Reset category when switching family so chips stay valid.
+    setLicenseCategory('');
   };
 
   // Prefill from GET /drivers/me so back/redirect/kill-app never shows a blank form twice.
@@ -120,6 +132,24 @@ export const OnboardingVehicleScreen: React.FC = () => {
             console.log('[driver-onboarding] vehicle prefilled from profile');
           }
         }
+        const rawCat = String(data?.license_category ?? '').trim();
+        if (rawCat) {
+          const normalized =
+            rawCat.toLowerCase() === 'profesional' || rawCat.toLowerCase() === 'pro'
+              ? 'professional'
+              : rawCat.toUpperCase() === 'PROFESSIONAL'
+                ? 'professional'
+                : rawCat.length <= 3
+                  ? rawCat.toUpperCase()
+                  : rawCat;
+          const opts =
+            (form?.type ?? vehicleType) === 'Moto'
+              ? MOTO_LICENSE_CATEGORIES
+              : AUTO_LICENSE_CATEGORIES;
+          if ((opts as readonly string[]).includes(normalized)) {
+            setLicenseCategory(normalized as LicenseCategoryUi);
+          }
+        }
       } catch {
         // empty form — first time
       } finally {
@@ -140,6 +170,10 @@ export const OnboardingVehicleScreen: React.FC = () => {
 
   const handleContinue = async () => {
     if (!isFormValid(vehiclePlate, vehicleBrand, vehicleModel, vehicleColor, vehicleYear)) return;
+    if (!licenseCategory) {
+      setSubmitError('Elegí la categoría de tu licencia');
+      return;
+    }
     setLoading(true);
     setSubmitError('');
 
@@ -151,6 +185,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
         vehicle_color: vehicleColor.trim(),
         vehicle_year: Number.parseInt(vehicleYear, 10),
         vehicle_type: vehicleTypeToApi(vehicleType),
+        license_category: licenseCategory,
       });
 
       const step: string = data?.step ?? data?.data?.step ?? 'documents';
@@ -219,6 +254,44 @@ export const OnboardingVehicleScreen: React.FC = () => {
               </Pressable>
             );
           })}
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Categoría de licencia</Text>
+          <Text style={styles.licenseHint}>
+            {vehicleType === 'Moto'
+              ? 'Motos: se admite A3 (también A1/A2).'
+              : 'Autos: si todavía no tenés carnet profesional, elegí B. Tenés 60 días desde que te conectás la primera vez para presentarlo.'}
+          </Text>
+          <View style={styles.vehicleTypes} accessibilityRole="radiogroup">
+            {licenseOptions.map((cat) => {
+              const selected = licenseCategory === cat;
+              const label = cat === 'professional' ? 'Profesional' : cat;
+              return (
+                <Pressable
+                  key={cat}
+                  style={({ pressed }) => [
+                    styles.vehicleType,
+                    selected && styles.vehicleTypeSelected,
+                    pressed && !selected && styles.vehicleTypePressed,
+                  ]}
+                  onPress={() => setLicenseCategory(cat)}
+                  hitSlop={8}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={label}
+                  testID={`license-cat-${cat}`}
+                >
+                  <Text
+                    style={[styles.vehicleTypeText, selected && styles.vehicleTypeTextSelected]}
+                    pointerEvents="none"
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
         <View style={styles.fieldGroup}>
@@ -311,6 +384,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
           onPress={handleContinue}
           disabled={
             loadingProfile ||
+            !licenseCategory ||
             !isFormValid(vehiclePlate, vehicleBrand, vehicleModel, vehicleColor, vehicleYear)
           }
           loading={loading || loadingProfile}
@@ -383,6 +457,13 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.medium,
     color: theme.colors.deepBlue,
+  },
+  licenseHint: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+    width: '100%',
+    lineHeight: 18,
   },
   input: {
     width: '100%',
