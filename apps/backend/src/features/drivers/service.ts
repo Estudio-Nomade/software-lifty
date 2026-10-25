@@ -989,7 +989,7 @@ export const driversService = {
 
     // After saving profile data, advance from 'step1' so the KYC gate in
     // getMyStatus will route to 'kyc' instead of 'vehicle' prematurely.
-    // Require address when leaving step1 (profile completion path).
+    // Require address + avatar when leaving step1 (profile completion path).
     const wasStep1 = !existing || existing.status === 'step1';
     const isProfileCompletion =
       wasStep1 &&
@@ -1006,6 +1006,20 @@ export const driversService = {
           throw new AppError('Ingresá tu domicilio para continuar.', 400, 'ADDRESS_REQUIRED');
         }
       }
+
+      const [avatarCheck] = await db
+        .select({ avatar_url: users.avatar_url })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
+      if (!avatarCheck?.avatar_url) {
+        throw new AppError(
+          'Sacá una foto de perfil con la cámara para continuar.',
+          400,
+          'AVATAR_REQUIRED',
+        );
+      }
+
       await db
         .update(drivers)
         .set({ status: 'pending', updated_at: new Date() })

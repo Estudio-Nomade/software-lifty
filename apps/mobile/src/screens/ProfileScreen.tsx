@@ -30,6 +30,10 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useSignOut } from '../hooks/useAuth';
 import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
 import { confirmSignOut } from '../lib/confirmSignOut';
+import {
+  DRIVER_PROFILE_PHOTO_PERMISSION_MSG,
+  DRIVER_PROFILE_PHOTO_UPLOAD_FAIL_MSG,
+} from '../lib/driverProfilePhoto';
 import { getTabBarReserve } from '../lib/tabBarLayout';
 import { theme } from '../theme';
 import { compressImage } from '../utils/image';
@@ -199,15 +203,16 @@ export const ProfileScreen: React.FC = () => {
   };
 
   const handlePickPhoto = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permiso denegado', 'Necesitamos acceso a la galeria.');
+      Alert.alert('Permiso denegado', DRIVER_PROFILE_PHOTO_PERMISSION_MSG);
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
       quality: 0.8,
+      cameraType: ImagePicker.CameraType.front,
     });
     if (!result.canceled && result.assets.length > 0) {
       setEditPhotoUri(result.assets[0].uri);
@@ -221,16 +226,25 @@ export const ProfileScreen: React.FC = () => {
       let photoUrl = profile.avatar_url;
 
       if (editPhotoUri) {
-        const compressed = await compressImage(editPhotoUri);
-        const uploadResult = await uploadPhotoToBackend(compressed.uri, 'avatar.jpg', 'image/jpeg');
-        photoUrl = uploadResult.file_url;
+        try {
+          const compressed = await compressImage(editPhotoUri);
+          const uploadResult = await uploadPhotoToBackend(
+            compressed.uri,
+            'avatar.jpg',
+            'image/jpeg',
+          );
+          photoUrl = uploadResult.file_url;
+        } catch {
+          Alert.alert('Error', DRIVER_PROFILE_PHOTO_UPLOAD_FAIL_MSG);
+          return;
+        }
       }
 
       await apiClient.put('/drivers/me', {
         first_name: editFirstName.trim(),
         last_name: editLastName.trim(),
         phone: editPhone.trim(),
-        photo_url: photoUrl,
+        ...(photoUrl ? { photo_url: photoUrl } : {}),
       });
 
       setEditVisible(false);
