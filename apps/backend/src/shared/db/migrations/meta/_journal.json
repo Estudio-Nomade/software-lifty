@@ -351,6 +351,13 @@
       "when": 1788300000000,
       "tag": "0048_driver_commission_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1788400000000,
+      "tag": "0049_driver_professional_license_grace",
+      "breakpoints": true
     }
   ]
 }
