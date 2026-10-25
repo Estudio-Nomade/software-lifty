@@ -93,7 +93,7 @@ afterAll(async () => {
 describe('cancellationService', () => {
   test('expireSearchTimeouts cancels stale pending trips', async () => {
     const token = await registerDriver();
-    await request('PUT', '/api/drivers/me', { first_name: 'Test Driver', address_line: 'San Martín 100, Villa Dolores, Córdoba' }, token);
+    await request('PUT', '/api/drivers/me', { first_name: 'Test Driver', address_line: 'San Martín 100, Villa Dolores, Córdoba', photo_url: 'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png' }, token);
     const db = getDb();
     const [passenger] = await db
       .insert(users)

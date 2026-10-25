@@ -121,6 +121,7 @@ describe('Driver address municipality eligibility', () => {
         last_name: 'Perez',
         phone: '+5492619000001',
         address_line: 'San Martín 123, Villa Dolores, Córdoba',
+        photo_url: 'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
       },
       token,
     );
@@ -154,6 +155,7 @@ describe('Driver address municipality eligibility', () => {
         last_name: 'Lopez',
         phone: '+5492619000002',
         address_line: 'Av Colón 500, Córdoba capital',
+        photo_url: 'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
       },
       token,
     );
