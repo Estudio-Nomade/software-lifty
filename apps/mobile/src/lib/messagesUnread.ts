@@ -15,9 +15,11 @@ export async function syncOsAppBadge(count: number): Promise<void> {
 
 /**
  * Pull server unread for Lifty account messages and mirror into store + OS badge.
- * Safe to call often (Profile focus, app resume, after mark-read).
+ * Safe to call often (Profile focus, app resume, after mark-read, push received).
+ * Single source of truth for in-app + OS badge — no optimistic bump on push.
  */
 export async function refreshMessagesUnread(): Promise<number> {
+  const current = () => useMessagesUnreadStore.getState().unreadCount;
   try {
     const res = await apiClient.get('/drivers/me/messages/unread-count');
     const payload = res.data?.data ?? res.data;
@@ -27,13 +29,10 @@ export async function refreshMessagesUnread(): Promise<number> {
     void syncOsAppBadge(next);
     return next;
   } catch {
-    return useMessagesUnreadStore.getState().unreadCount;
+    // Keep store as-is but always re-mirror OS badge so icon and UI stay aligned
+    // when the request fails (offline / 401 mid-refresh).
+    const fallback = current();
+    void syncOsAppBadge(fallback);
+    return fallback;
   }
-}
-
-/** Optimistic bump when a soft review_notes push arrives before the list refreshes. */
-export function bumpMessagesUnreadFromPush(): void {
-  useMessagesUnreadStore.getState().bumpUnread(1);
-  const next = useMessagesUnreadStore.getState().unreadCount;
-  void syncOsAppBadge(next);
 }

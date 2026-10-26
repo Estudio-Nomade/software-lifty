@@ -6,7 +6,7 @@ import type { DriverStatus } from '../api/types';
 import { driverStatusSchema } from '../api/types';
 import { useAuthStore } from '../store/authStore';
 import { buildTripCancelledParams } from './cancellation';
-import { bumpMessagesUnreadFromPush, refreshMessagesUnread } from './messagesUnread';
+import { refreshMessagesUnread } from './messagesUnread';
 import { resolvePostAuthRoute, routeForDriverStatus } from './postAuthRouting';
 
 interface PermStatus {
@@ -49,23 +49,16 @@ export async function setupNotificationHandler(): Promise<void> {
   if (!Notifications) return;
 
   Notifications.setNotificationHandler({
-    handleNotification: async (notification) => {
-      const data = notification.request.content.data as
-        | Record<string, string | undefined>
-        | undefined;
-      // Soft account notes: keep OS banner on Android+iOS and bump in-app badge.
-      if (data?.type === 'driver:review_notes') {
-        bumpMessagesUnreadFromPush();
-      }
-      return {
-        shouldShowAlert: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-        shouldPlaySound: true,
-        // iOS app-icon badge; count is also mirrored via messagesUnread store.
-        shouldSetBadge: true,
-      };
-    },
+    // Presentation only. Unread badge is owned by refreshMessagesUnread
+    // (receive listener / session restore / inbox focus) — avoid double-count.
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      // Allow OS to apply payload.badge from Expo; store still refreshed via API.
+      shouldSetBadge: true,
+    }),
   });
 }
 
