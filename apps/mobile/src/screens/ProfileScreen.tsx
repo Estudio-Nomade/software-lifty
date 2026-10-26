@@ -437,11 +437,15 @@ export const ProfileScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Contacto</Text>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Telefono</Text>
-            <Text style={styles.infoValue}>{profile?.phone || '-'}</Text>
+            <Text style={styles.infoValue} numberOfLines={2}>
+              {profile?.phone || '-'}
+            </Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Email</Text>
-            <Text style={styles.infoValue}>{profile?.email || '-'}</Text>
+            <Text style={styles.infoValue} numberOfLines={2} ellipsizeMode="tail" selectable>
+              {profile?.email || '-'}
+            </Text>
           </View>
         </Card>
 
@@ -673,16 +677,23 @@ const styles = StyleSheet.create({
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
     paddingVertical: 6,
   },
   infoLabel: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
+    flexShrink: 0,
   },
   infoValue: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     fontSize: theme.fontSize.sm,
     color: theme.colors.deepBlue,
     fontWeight: theme.fontWeight.medium,
+    textAlign: 'right',
   },
   metricSubline: {
     fontSize: theme.fontSize.xs,
