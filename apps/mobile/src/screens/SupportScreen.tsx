@@ -73,7 +73,9 @@ export const SupportScreen: React.FC = () => {
             </View>
             <View style={styles.actionInfo}>
               <Text style={styles.actionTitle}>Enviar un email</Text>
-              <Text style={styles.actionSub}>{SUPPORT_EMAIL}</Text>
+              <Text style={styles.actionSub} numberOfLines={2} ellipsizeMode="tail">
+                {SUPPORT_EMAIL}
+              </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={theme.colors.mediumGray} />
           </TouchableOpacity>
@@ -146,6 +148,8 @@ const styles = StyleSheet.create({
   },
   actionInfo: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     gap: 2,
   },
   actionTitle: {
@@ -156,6 +160,8 @@ const styles = StyleSheet.create({
   actionSub: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
+    flexShrink: 1,
+    minWidth: 0,
   },
   faqList: {
     gap: theme.spacing.sm,
