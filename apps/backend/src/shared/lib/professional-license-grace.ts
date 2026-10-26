@@ -169,6 +169,20 @@ export function evaluateProfessionalLicenseGrace(input: {
   };
 }
 
+/** Moto license classes allowed in Lifty (A1 = ≤50cc — out of product). */
+export const MOTO_LICENSE_CATEGORIES = ['A2', 'A3', 'A4'] as const;
+export type MotoLicenseCategory = (typeof MOTO_LICENSE_CATEGORIES)[number];
+
+export function normalizeLicenseCategory(raw: string | null | undefined): string {
+  return (raw ?? '').trim().toUpperCase();
+}
+
+/** True when category is A2/A3/A4 (case-insensitive). */
+export function isAllowedMotoLicenseCategory(raw: string | null | undefined): boolean {
+  const cat = normalizeLicenseCategory(raw);
+  return (MOTO_LICENSE_CATEGORIES as readonly string[]).includes(cat);
+}
+
 /** Map UI/API category + vehicle type → professional status. */
 export function resolveLicenseProfessionalStatus(input: {
   vehicle_type?: string | null;
@@ -187,8 +201,9 @@ export function resolveLicenseProfessionalStatus(input: {
   if (!vt) return 'unknown';
 
   if (isMoto) {
-    // A3 (and A1/A2) are accepted for moto — no professional-car grace.
-    if (cat === 'a1' || cat === 'a2' || cat === 'a3') return 'not_required';
+    // A2/A3/A4 accepted for moto — no professional-car grace. A1 rejected at service layer.
+    if (isAllowedMotoLicenseCategory(cat)) return 'not_required';
+    // Unknown moto class still does not start auto professional grace.
     return 'not_required';
   }
 

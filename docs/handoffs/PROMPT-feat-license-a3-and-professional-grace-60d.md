@@ -5,7 +5,7 @@
 **Title:** `feat(backend+mobile): license a3 and 60d professional grace from first online`
 
 ## Product locks
-- Moto: categoría **A3** (también A1/A2 en UI).
+- Moto: categorías **A2 / A3 / A4** (A1 no — 50 cc fuera de producto).
 - Auto: B = pending profesional; Profesional = satisfied.
 - **60 días empiezan en el primer `is_online=true` exitoso** (no approve). One-shot.
 - v1: banner only — **no** hard-block online día 61.

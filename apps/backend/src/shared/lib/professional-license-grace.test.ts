@@ -3,6 +3,7 @@ import {
   PROFESSIONAL_LICENSE_GRACE_DAYS,
   buildGraceStartPatch,
   evaluateProfessionalLicenseGrace,
+  isAllowedMotoLicenseCategory,
   resolveLicenseProfessionalStatus,
   shouldClearProfessionalGraceTimestamps,
   shouldStartProfessionalLicenseGrace,
@@ -122,13 +123,28 @@ describe('professional-license-grace', () => {
     expect(snap.show_banner).toBe(true);
   });
 
-  test('resolveLicenseProfessionalStatus moto A3 → not_required', () => {
+  test('resolveLicenseProfessionalStatus moto A2/A3/A4 → not_required', () => {
     expect(
       resolveLicenseProfessionalStatus({ vehicle_type: 'motorcycle', license_category: 'A3' }),
     ).toBe('not_required');
     expect(resolveLicenseProfessionalStatus({ vehicle_type: 'moto', license_category: 'a3' })).toBe(
       'not_required',
     );
+    expect(
+      resolveLicenseProfessionalStatus({ vehicle_type: 'motorcycle', license_category: 'A2' }),
+    ).toBe('not_required');
+    expect(
+      resolveLicenseProfessionalStatus({ vehicle_type: 'motorcycle', license_category: 'A4' }),
+    ).toBe('not_required');
+  });
+
+  test('isAllowedMotoLicenseCategory allows A2/A3/A4 only', () => {
+    expect(isAllowedMotoLicenseCategory('A2')).toBe(true);
+    expect(isAllowedMotoLicenseCategory('a3')).toBe(true);
+    expect(isAllowedMotoLicenseCategory('A4')).toBe(true);
+    expect(isAllowedMotoLicenseCategory('A1')).toBe(false);
+    expect(isAllowedMotoLicenseCategory('B')).toBe(false);
+    expect(isAllowedMotoLicenseCategory('')).toBe(false);
   });
 
   test('resolveLicenseProfessionalStatus auto B → pending_professional', () => {

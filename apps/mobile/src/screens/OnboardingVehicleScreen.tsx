@@ -40,8 +40,8 @@ interface ValidationErrors {
 }
 
 const VEHICLE_TYPES: VehicleTypeUi[] = ['Auto', 'Moto'];
-/** Moto: A3 explicit. Auto: B (pending professional) or professional. */
-const MOTO_LICENSE_CATEGORIES = ['A3', 'A1', 'A2'] as const;
+/** Moto: A2/A3/A4 (no A1 — 50cc, fuera de Lifty). Auto: B or professional. */
+const MOTO_LICENSE_CATEGORIES = ['A2', 'A3', 'A4'] as const;
 const AUTO_LICENSE_CATEGORIES = ['B', 'professional'] as const;
 
 type LicenseCategoryUi =
@@ -292,7 +292,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
           <Text style={styles.fieldLabel}>Categoría de licencia</Text>
           <Text style={styles.licenseHint}>
             {vehicleType === 'Moto'
-              ? 'Motos: se admite A3 (también A1/A2).'
+              ? 'Motos: categorías A2, A3 o A4 (A1 no aplica: es para 50 cc).'
               : 'Autos: si todavía no tenés carnet profesional, elegí B. Tenés 60 días desde que te conectás la primera vez para presentarlo.'}
           </Text>
           <View style={styles.vehicleTypes} accessibilityRole="radiogroup">

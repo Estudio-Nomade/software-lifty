@@ -21,6 +21,8 @@ import { logger } from '../../shared/lib/logger';
 import {
   buildGraceStartPatch,
   evaluateProfessionalLicenseGrace,
+  isAllowedMotoLicenseCategory,
+  normalizeLicenseCategory,
   resolveLicenseProfessionalStatus,
   shouldClearProfessionalGraceTimestamps,
   shouldStartProfessionalLicenseGrace,
@@ -1339,7 +1341,7 @@ export const driversService = {
       await ensureDriverEnteredReview(driverId);
     }
 
-    // License category / professional carnet status (A3 moto, B/professional auto).
+    // License category / professional carnet status (A2/A3/A4 moto, B/professional auto).
     if (data.license_category != null || data.license_professional_status != null) {
       const [veh] = await db
         .select({ vehicle_type: vehicles.vehicle_type })
@@ -1353,7 +1355,9 @@ export const driversService = {
         (hasVehicleData ? (data.vehicle_type ?? 'car') : null) ||
         null;
       const category =
-        data.license_category != null ? String(data.license_category).trim() : undefined;
+        data.license_category != null
+          ? normalizeLicenseCategory(String(data.license_category))
+          : undefined;
 
       // explicit_status alone does not need vehicle type; category resolve does.
       if (
@@ -1365,6 +1369,15 @@ export const driversService = {
           'Guardá el vehículo (Auto/Moto) antes de la categoría de licencia.',
           400,
           'VEHICLE_TYPE_REQUIRED',
+        );
+      }
+
+      // Moto: only A2/A3/A4 (A1 = ≤50cc — out of product; same floor as engine_cc ≥150).
+      if (category && isMotoVehicleType(vehicleType) && !isAllowedMotoLicenseCategory(category)) {
+        throw new AppError(
+          'Para moto la categoría de licencia debe ser A2, A3 o A4 (A1 no aplica).',
+          400,
+          'LICENSE_CATEGORY_INVALID',
         );
       }
 

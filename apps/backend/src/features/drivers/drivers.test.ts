@@ -870,7 +870,7 @@ describe('Vehicle step (no duplicate form)', () => {
   });
 
   test('moto vehicle PUT without engine_cc returns VEHICLE_ENGINE_CC_INVALID', async () => {
-    const { token } = await fullOnboarding('+5492617777006', password);
+    const { token } = await fullOnboarding('+549****7006', password);
     const { status, data } = await request(
       'PUT',
       '/api/drivers/me',
@@ -889,8 +889,50 @@ describe('Vehicle step (no duplicate form)', () => {
     expect(data.error?.code).toBe('VEHICLE_ENGINE_CC_INVALID');
   });
 
+  test('moto license A1 returns LICENSE_CATEGORY_INVALID; A4 is accepted', async () => {
+    const { token } = await fullOnboarding('+549****7012', password);
+    const bad = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTA01',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+        license_category: 'A1',
+      },
+      token,
+    );
+    expect(bad.status).toBe(400);
+    expect(bad.data.error?.code).toBe('LICENSE_CATEGORY_INVALID');
+
+    const ok = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTA04',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+        license_category: 'A4',
+      },
+      token,
+    );
+    expect(ok.status).toBe(200);
+
+    const me = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me.data.license_category).toBe('A4');
+    expect(me.data.license_professional_status).toBe('not_required');
+  });
+
   test('car vehicle PUT strips engine_cc to null', async () => {
-    const { token } = await fullOnboarding('+5492617777007', password);
+    const { token } = await fullOnboarding('+549****7007', password);
     const { status } = await request(
       'PUT',
       '/api/drivers/me',
@@ -913,7 +955,7 @@ describe('Vehicle step (no duplicate form)', () => {
   });
 
   test('vehicle PUT without vehicle_type keeps existing motorcycle type and cc', async () => {
-    const { token } = await fullOnboarding('+5492617777008', password);
+    const { token } = await fullOnboarding('+549****7008', password);
     await request(
       'PUT',
       '/api/drivers/me',
