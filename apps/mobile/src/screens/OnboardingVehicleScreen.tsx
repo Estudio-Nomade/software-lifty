@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,8 +20,13 @@ import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
 import {
+  MOTO_LICENSE_CATEGORIES,
+  MOTO_LICENSE_CHIP_META,
+  type MotoLicenseCategory,
   type VehicleTypeUi,
+  normalizeMotoLicenseCategory,
   normalizeVehiclePlate,
+  validateMotoLicenseVsEngineCc,
   validateVehicleEngineCc,
   validateVehiclePlate,
   validateVehicleYear,
@@ -37,16 +43,14 @@ interface ValidationErrors {
   vehicleColor?: string;
   vehicleYear?: string;
   engineCc?: string;
+  licenseCategory?: string;
 }
 
 const VEHICLE_TYPES: VehicleTypeUi[] = ['Auto', 'Moto'];
-/** Moto: A2/A3/A4 (no A1 — 50cc, fuera de Lifty). Auto: B or professional. */
-const MOTO_LICENSE_CATEGORIES = ['A2', 'A3', 'A4'] as const;
+/** Auto: B or professional. Moto classes from vehicleForm (ANSV A1.x). */
 const AUTO_LICENSE_CATEGORIES = ['B', 'professional'] as const;
 
-type LicenseCategoryUi =
-  | (typeof MOTO_LICENSE_CATEGORIES)[number]
-  | (typeof AUTO_LICENSE_CATEGORIES)[number];
+type LicenseCategoryUi = MotoLicenseCategory | (typeof AUTO_LICENSE_CATEGORIES)[number];
 
 const validatePlate = (value: string, type: VehicleTypeUi) => validateVehiclePlate(value, type);
 
@@ -65,6 +69,7 @@ const isFormValid = (
   vehicleYear: string,
   vehicleType: VehicleTypeUi,
   engineCc: string,
+  licenseCategory: string,
 ) => {
   const baseOk =
     vehiclePlate.trim() !== '' &&
@@ -75,9 +80,11 @@ const isFormValid = (
     vehicleYear.trim() !== '' &&
     !validateYear(vehicleYear);
   if (!baseOk) return false;
+  if (!licenseCategory) return false;
   if (vehicleType === 'Moto') {
     if (!engineCc.trim()) return false;
     if (validateVehicleEngineCc(engineCc, 'Moto')) return false;
+    if (validateMotoLicenseVsEngineCc(licenseCategory, engineCc)) return false;
   }
   return true;
 };
@@ -111,9 +118,12 @@ export const OnboardingVehicleScreen: React.FC = () => {
 
   const selectVehicleType = (type: VehicleTypeUi) => {
     if (!prefillDone.current) typeTouchedDuringPrefill.current = true;
+    Keyboard.dismiss();
     setVehicleType(type);
     // Reset category when switching family so chips stay valid.
     setLicenseCategory('');
+    setError('licenseCategory', undefined);
+    setSubmitError('');
     if (type === 'Auto') {
       setEngineCc('');
       setError('engineCc', undefined);
@@ -121,6 +131,19 @@ export const OnboardingVehicleScreen: React.FC = () => {
     // Re-validate plate against the new family rules if already typed.
     if (vehiclePlate.trim()) {
       setError('vehiclePlate', validatePlate(vehiclePlate, type));
+    }
+  };
+
+  const selectLicenseCategory = (cat: LicenseCategoryUi) => {
+    setLicenseCategory(cat);
+    setError('licenseCategory', undefined);
+    setSubmitError('');
+    if (vehicleType === 'Moto' && engineCc.trim()) {
+      setError('licenseCategory', validateMotoLicenseVsEngineCc(cat, engineCc));
+      setError(
+        'engineCc',
+        validateVehicleEngineCc(engineCc, 'Moto') ?? validateMotoLicenseVsEngineCc(cat, engineCc),
+      );
     }
   };
 
@@ -152,20 +175,24 @@ export const OnboardingVehicleScreen: React.FC = () => {
         }
         const rawCat = String(data?.license_category ?? '').trim();
         if (rawCat) {
-          const normalized =
-            rawCat.toLowerCase() === 'profesional' || rawCat.toLowerCase() === 'pro'
-              ? 'professional'
-              : rawCat.toUpperCase() === 'PROFESSIONAL'
+          const formType = form?.type ?? vehicleType;
+          if (formType === 'Moto') {
+            const normalized = normalizeMotoLicenseCategory(rawCat);
+            if ((MOTO_LICENSE_CATEGORIES as readonly string[]).includes(normalized)) {
+              setLicenseCategory(normalized as MotoLicenseCategory);
+            }
+          } else {
+            const normalized =
+              rawCat.toLowerCase() === 'profesional' || rawCat.toLowerCase() === 'pro'
                 ? 'professional'
-                : rawCat.length <= 3
-                  ? rawCat.toUpperCase()
-                  : rawCat;
-          const opts =
-            (form?.type ?? vehicleType) === 'Moto'
-              ? MOTO_LICENSE_CATEGORIES
-              : AUTO_LICENSE_CATEGORIES;
-          if ((opts as readonly string[]).includes(normalized)) {
-            setLicenseCategory(normalized as LicenseCategoryUi);
+                : rawCat.toLowerCase() === 'professional'
+                  ? 'professional'
+                  : rawCat.toUpperCase() === 'B'
+                    ? 'B'
+                    : rawCat;
+            if ((AUTO_LICENSE_CATEGORIES as readonly string[]).includes(normalized as any)) {
+              setLicenseCategory(normalized as LicenseCategoryUi);
+            }
           }
         }
       } catch {
@@ -183,6 +210,14 @@ export const OnboardingVehicleScreen: React.FC = () => {
   }, []);
 
   const handleContinue = async () => {
+    if (vehicleType === 'Moto' && licenseCategory && engineCc.trim()) {
+      const mismatch = validateMotoLicenseVsEngineCc(licenseCategory, engineCc);
+      if (mismatch) {
+        setError('licenseCategory', mismatch);
+        setSubmitError(mismatch);
+        return;
+      }
+    }
     if (
       !isFormValid(
         vehiclePlate,
@@ -192,6 +227,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
         vehicleYear,
         vehicleType,
         engineCc,
+        licenseCategory,
       )
     ) {
       return;
@@ -211,7 +247,8 @@ export const OnboardingVehicleScreen: React.FC = () => {
         vehicle_color: vehicleColor.trim(),
         vehicle_year: Number.parseInt(vehicleYear, 10),
         vehicle_type: vehicleTypeToApi(vehicleType),
-        license_category: licenseCategory,
+        license_category:
+          vehicleType === 'Moto' ? normalizeMotoLicenseCategory(licenseCategory) : licenseCategory,
       };
       if (vehicleType === 'Moto') {
         body.vehicle_engine_cc = Number.parseInt(engineCc, 10);
@@ -259,7 +296,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
           <Text style={styles.hint}>Datos guardados. Revisá y continuá.</Text>
         ) : null}
 
-        <View style={styles.vehicleTypes} accessibilityRole="radiogroup">
+        <View style={styles.vehicleTypes} accessibilityRole="radiogroup" collapsable={false}>
           {VEHICLE_TYPES.map((type) => {
             const selected = vehicleType === type;
             return (
@@ -271,7 +308,8 @@ export const OnboardingVehicleScreen: React.FC = () => {
                   pressed && !selected && styles.vehicleTypePressed,
                 ]}
                 onPress={() => selectVehicleType(type)}
-                hitSlop={8}
+                hitSlop={12}
+                collapsable={false}
                 accessibilityRole="radio"
                 accessibilityState={{ selected }}
                 accessibilityLabel={type}
@@ -288,31 +326,38 @@ export const OnboardingVehicleScreen: React.FC = () => {
           })}
         </View>
 
-        <View style={styles.fieldGroup}>
+        <View style={styles.fieldGroup} collapsable={false}>
           <Text style={styles.fieldLabel}>Categoría de licencia</Text>
           <Text style={styles.licenseHint}>
             {vehicleType === 'Moto'
-              ? 'Motos: categorías A2, A3 o A4 (A1 no aplica: es para 50 cc).'
+              ? 'Elegí la clase ANSV que figura en tu licencia (A1.2 / A1.3 / A1.4). Tiene que coincidir con los cc de la cédula.'
               : 'Autos: si todavía no tenés carnet profesional, elegí B. Tenés 60 días desde que te conectás la primera vez para presentarlo.'}
           </Text>
-          <View style={styles.vehicleTypes} accessibilityRole="radiogroup">
+          <View style={styles.vehicleTypes} accessibilityRole="radiogroup" collapsable={false}>
             {licenseOptions.map((cat) => {
               const selected = licenseCategory === cat;
+              const isMotoCat = vehicleType === 'Moto';
               const label = cat === 'professional' ? 'Profesional' : cat;
+              const range =
+                isMotoCat && cat in MOTO_LICENSE_CHIP_META
+                  ? MOTO_LICENSE_CHIP_META[cat as MotoLicenseCategory].rangeLabel
+                  : null;
               return (
                 <Pressable
                   key={cat}
                   style={({ pressed }) => [
                     styles.vehicleType,
+                    isMotoCat && styles.licenseChipMoto,
                     selected && styles.vehicleTypeSelected,
                     pressed && !selected && styles.vehicleTypePressed,
                   ]}
-                  onPress={() => setLicenseCategory(cat)}
-                  hitSlop={8}
+                  onPress={() => selectLicenseCategory(cat)}
+                  hitSlop={12}
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
-                  accessibilityLabel={label}
+                  accessibilityLabel={range ? `${label}, ${range}` : label}
                   testID={`license-cat-${cat}`}
+                  collapsable={false}
                 >
                   <Text
                     style={[styles.vehicleTypeText, selected && styles.vehicleTypeTextSelected]}
@@ -320,10 +365,21 @@ export const OnboardingVehicleScreen: React.FC = () => {
                   >
                     {label}
                   </Text>
+                  {range ? (
+                    <Text
+                      style={[styles.licenseRange, selected && styles.licenseRangeSelected]}
+                      pointerEvents="none"
+                    >
+                      {range}
+                    </Text>
+                  ) : null}
                 </Pressable>
               );
             })}
           </View>
+          {errors.licenseCategory ? (
+            <Text style={styles.fieldError}>{errors.licenseCategory}</Text>
+          ) : null}
         </View>
 
         <View style={styles.fieldGroup}>
@@ -423,12 +479,28 @@ export const OnboardingVehicleScreen: React.FC = () => {
               onChangeText={(t) => {
                 const digits = t.replace(/\D/g, '').slice(0, 4);
                 setEngineCc(digits);
-                setError(
-                  'engineCc',
-                  digits.length > 0 ? validateVehicleEngineCc(digits, 'Moto') : undefined,
-                );
+                const ccErr =
+                  digits.length > 0 ? validateVehicleEngineCc(digits, 'Moto') : undefined;
+                setError('engineCc', ccErr);
+                if (licenseCategory && digits.length > 0 && !ccErr) {
+                  setError(
+                    'licenseCategory',
+                    validateMotoLicenseVsEngineCc(licenseCategory, digits),
+                  );
+                } else if (!digits) {
+                  setError('licenseCategory', undefined);
+                }
               }}
-              onBlur={() => setError('engineCc', validateVehicleEngineCc(engineCc, 'Moto'))}
+              onBlur={() => {
+                const ccErr = validateVehicleEngineCc(engineCc, 'Moto');
+                setError('engineCc', ccErr);
+                if (licenseCategory && engineCc.trim() && !ccErr) {
+                  setError(
+                    'licenseCategory',
+                    validateMotoLicenseVsEngineCc(licenseCategory, engineCc),
+                  );
+                }
+              }}
               error={errors.engineCc}
               containerStyle={styles.input}
               keyboardType="numeric"
@@ -454,6 +526,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
               vehicleYear,
               vehicleType,
               engineCc,
+              licenseCategory,
             )
           }
           loading={loading || loadingProfile}
@@ -581,6 +654,27 @@ const styles = StyleSheet.create({
   vehicleTypeTextSelected: {
     color: theme.colors.white,
     fontFamily: theme.fontFamily.bold,
+  },
+  licenseChipMoto: {
+    flexDirection: 'column',
+    gap: 2,
+    paddingVertical: theme.spacing.sm + 2,
+  },
+  licenseRange: {
+    fontSize: 10,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+    textAlign: 'center',
+  },
+  licenseRangeSelected: {
+    color: theme.colors.white,
+    opacity: 0.9,
+  },
+  fieldError: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.dangerRed,
+    width: '100%',
   },
   row: {
     flexDirection: 'row',

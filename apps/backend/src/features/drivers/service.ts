@@ -19,10 +19,13 @@ import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
 import { logger } from '../../shared/lib/logger';
 import {
+  assertMotoLicenseMatchesEngineCc,
+  isAllowedMotoLicenseCategory,
+  normalizeMotoLicenseCategory,
+} from '../../shared/lib/moto-license-category';
+import {
   buildGraceStartPatch,
   evaluateProfessionalLicenseGrace,
-  isAllowedMotoLicenseCategory,
-  normalizeLicenseCategory,
   resolveLicenseProfessionalStatus,
   shouldClearProfessionalGraceTimestamps,
   shouldStartProfessionalLicenseGrace,
@@ -1341,10 +1344,13 @@ export const driversService = {
       await ensureDriverEnteredReview(driverId);
     }
 
-    // License category / professional carnet status (A2/A3/A4 moto, B/professional auto).
+    // License category / professional carnet status (A1.2/A1.3/A1.4 moto ANSV, B/professional auto).
     if (data.license_category != null || data.license_professional_status != null) {
       const [veh] = await db
-        .select({ vehicle_type: vehicles.vehicle_type })
+        .select({
+          vehicle_type: vehicles.vehicle_type,
+          engine_cc: vehicles.engine_cc,
+        })
         .from(vehicles)
         .where(eq(vehicles.driver_id, driverId))
         .limit(1);
@@ -1356,7 +1362,9 @@ export const driversService = {
         null;
       const category =
         data.license_category != null
-          ? normalizeLicenseCategory(String(data.license_category))
+          ? isMotoVehicleType(vehicleType)
+            ? normalizeMotoLicenseCategory(String(data.license_category))
+            : String(data.license_category).trim().toUpperCase()
           : undefined;
 
       // explicit_status alone does not need vehicle type; category resolve does.
@@ -1372,18 +1380,28 @@ export const driversService = {
         );
       }
 
-      // Moto: only A2/A3/A4 (A1 = ≤50cc — out of product; same floor as engine_cc ≥150).
-      if (category && isMotoVehicleType(vehicleType) && !isAllowedMotoLicenseCategory(category)) {
-        throw new AppError(
-          'Para moto la categoría de licencia debe ser A2, A3 o A4 (A1 no aplica).',
-          400,
-          'LICENSE_CATEGORY_INVALID',
-        );
+      // Moto: ANSV A1.2/A1.3/A1.4 and must match engine_cc band (Lifty floor ≥150).
+      let canonicalMotoCategory: string | undefined;
+      if (category && isMotoVehicleType(vehicleType)) {
+        if (!isAllowedMotoLicenseCategory(category)) {
+          throw new AppError(
+            'Para moto la clase de licencia debe ser A1.2, A1.3 o A1.4 (ANSV). A1.1 (≤50 cc) no aplica en Lifty.',
+            400,
+            'LICENSE_CATEGORY_INVALID',
+          );
+        }
+        const engineCc =
+          data.vehicle_engine_cc != null
+            ? Number(data.vehicle_engine_cc)
+            : veh?.engine_cc != null
+              ? Number(veh.engine_cc)
+              : null;
+        canonicalMotoCategory = assertMotoLicenseMatchesEngineCc(category, engineCc);
       }
 
       const status = resolveLicenseProfessionalStatus({
         vehicle_type: vehicleType,
-        license_category: category ?? null,
+        license_category: canonicalMotoCategory ?? category ?? null,
         explicit_status: data.license_professional_status ?? null,
       });
 
@@ -1407,7 +1425,7 @@ export const driversService = {
         updated_at: new Date(),
       };
       if (category !== undefined) {
-        licensePatch.license_category = category || null;
+        licensePatch.license_category = (canonicalMotoCategory ?? category) || null;
       }
       // Clear grace only on pending → professional/not_required transition.
       if (shouldClearProfessionalGraceTimestamps(prevStatus, status)) {

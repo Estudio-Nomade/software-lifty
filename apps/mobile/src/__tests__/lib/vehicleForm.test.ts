@@ -4,7 +4,9 @@ import {
   VEHICLE_MIN_MODEL_YEAR,
   getVehicleYearBounds,
   hasCompleteVehicle,
+  normalizeMotoLicenseCategory,
   normalizeVehiclePlate,
+  validateMotoLicenseVsEngineCc,
   validateVehicleEngineCc,
   validateVehiclePlate,
   validateVehicleYear,
@@ -207,5 +209,20 @@ describe('vehicleFormFromProfile', () => {
       type: 'Moto',
       engineCc: '150',
     });
+  });
+});
+
+describe('moto license vs engine_cc (ANSV A1.x)', () => {
+  it('normalizes A1.2 and legacy A2', () => {
+    expect(normalizeMotoLicenseCategory('a 1.2')).toBe('A1.2');
+    expect(normalizeMotoLicenseCategory('A2')).toBe('A1.2');
+  });
+
+  it('matches bands', () => {
+    expect(validateMotoLicenseVsEngineCc('A1.2', '150')).toBeUndefined();
+    expect(validateMotoLicenseVsEngineCc('A1.2', '200')).toMatch(/A1\.3/);
+    expect(validateMotoLicenseVsEngineCc('A1.3', '200')).toBeUndefined();
+    expect(validateMotoLicenseVsEngineCc('A1.3', '301')).toMatch(/A1\.4/);
+    expect(validateMotoLicenseVsEngineCc('A1.4', '400')).toBeUndefined();
   });
 });

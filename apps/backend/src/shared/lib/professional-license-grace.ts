@@ -169,19 +169,13 @@ export function evaluateProfessionalLicenseGrace(input: {
   };
 }
 
-/** Moto license classes allowed in Lifty (A1 = ≤50cc — out of product). */
-export const MOTO_LICENSE_CATEGORIES = ['A2', 'A3', 'A4'] as const;
-export type MotoLicenseCategory = (typeof MOTO_LICENSE_CATEGORIES)[number];
-
-export function normalizeLicenseCategory(raw: string | null | undefined): string {
-  return (raw ?? '').trim().toUpperCase();
-}
-
-/** True when category is A2/A3/A4 (case-insensitive). */
-export function isAllowedMotoLicenseCategory(raw: string | null | undefined): boolean {
-  const cat = normalizeLicenseCategory(raw);
-  return (MOTO_LICENSE_CATEGORIES as readonly string[]).includes(cat);
-}
+/** Moto license classes — see moto-license-category.ts (ANSV A1.x). Re-export keepers. */
+export {
+  MOTO_LICENSE_CATEGORIES,
+  type MotoLicenseCategory,
+  isAllowedMotoLicenseCategory,
+  normalizeMotoLicenseCategory as normalizeLicenseCategory,
+} from './moto-license-category';
 
 /** Map UI/API category + vehicle type → professional status. */
 export function resolveLicenseProfessionalStatus(input: {
@@ -197,13 +191,12 @@ export function resolveLicenseProfessionalStatus(input: {
 
   if (!cat) return 'unknown';
 
-  // Without vehicle type, do not assume auto (A3 would falsely become pending).
+  // Without vehicle type, do not assume auto (A1.x would falsely become pending).
   if (!vt) return 'unknown';
 
   if (isMoto) {
-    // A2/A3/A4 accepted for moto — no professional-car grace. A1 rejected at service layer.
-    if (isAllowedMotoLicenseCategory(cat)) return 'not_required';
-    // Unknown moto class still does not start auto professional grace.
+    // A1.2/A1.3/A1.4 (and legacy A2/A3/A4 aliases) — no professional-car grace.
+    // Invalid classes still do not start auto professional grace (rejected at service).
     return 'not_required';
   }
 
