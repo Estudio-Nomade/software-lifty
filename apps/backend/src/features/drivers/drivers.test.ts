@@ -949,6 +949,53 @@ describe('Vehicle step (no duplicate form)', () => {
     expect(me.data.license_professional_status).toBe('not_required');
   });
 
+  test('moto vehicle re-save soft-heals legacy A2 to A1.2 when cc matches', async () => {
+    const { token, driverId } = await fullOnboarding('+549****7013', password);
+    const first = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTLEG',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+        license_category: 'A1.2',
+      },
+      token,
+    );
+    expect(first.status).toBe(200);
+
+    // Simulate pre-fix row that stored mistaken chip "A2".
+    const db = getDb();
+    await db
+      .update(drivers)
+      .set({ license_category: 'A2', updated_at: new Date() })
+      .where(eq(drivers.id, driverId));
+
+    // Vehicle re-save without license_category must re-validate/heal from DB.
+    const resave = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTLEG',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+      },
+      token,
+    );
+    expect(resave.status).toBe(200);
+
+    const me = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me.data.license_category).toBe('A1.2');
+  });
+
   test('car vehicle PUT strips engine_cc to null', async () => {
     const { token } = await fullOnboarding('+549****7007', password);
     const { status } = await request(
