@@ -20,6 +20,7 @@ import { useAuthStore } from '../store/authStore';
 import { useTripStore } from '../store/tripStore';
 import { AuthRedirectWatcher } from './AuthRedirectWatcher';
 import { DriverRealtimeProvider } from './DriverRealtimeProvider';
+import { PlatformRealtimeProvider } from './PlatformRealtimeProvider';
 import { LoadingOverlay } from './feedback/LoadingOverlay';
 
 /**
@@ -285,6 +286,7 @@ export function AppInitializer() {
       <LocationInit />
       <ActiveTripRecovery />
       <NotificationSetup />
+      <PlatformRealtimeProvider />
       <DriverRealtimeProvider />
     </>
   );

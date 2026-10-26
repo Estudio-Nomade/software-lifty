@@ -13,6 +13,7 @@ import {
 } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
+import { PlatformRealtimeProvider } from './PlatformRealtimeProvider';
 
 /**
  * RN 0.88 removed InteractionManager.
@@ -194,6 +195,7 @@ export function AppInitializer() {
       <AuthRedirectWatcher />
       <ActiveTripRecovery />
       <NotificationSetup />
+      <PlatformRealtimeProvider />
     </>
   );
 }

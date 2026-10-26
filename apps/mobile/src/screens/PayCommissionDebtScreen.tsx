@@ -161,6 +161,10 @@ export const PayCommissionDebtScreen: React.FC = () => {
       const response = await apiClient.get('/drivers/me/payout-info');
       return response.data.data ?? response.data;
     },
+    // Admin can change alias/CVU while this screen is open — Realtime invalidates; keep refetch eager.
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnReconnect: true,
   });
 
   const {
@@ -174,6 +178,9 @@ export const PayCommissionDebtScreen: React.FC = () => {
       const response = await apiClient.get('/drivers/me/commission-receipts');
       return unwrapListPayload(response.data.data ?? response.data);
     },
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnReconnect: true,
   });
 
   /** Only use debt after payout resolved — avoid $0 / "Al día" flash while loading. */

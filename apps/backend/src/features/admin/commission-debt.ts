@@ -1,6 +1,10 @@
 import { and, count, desc, eq, sql } from 'drizzle-orm';
 import { db, getDb } from '../../shared/db/client';
 import { driverCommissionReceipts, drivers, users } from '../../shared/db/schema';
+import {
+  broadcastDriverAccountUpdated,
+  broadcastPlatformConfigUpdated,
+} from '../../shared/lib/broadcast';
 import { getConfig, getDebtCapArs, setConfig } from '../../shared/lib/commission';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { logger } from '../../shared/lib/logger';
@@ -118,7 +122,18 @@ export const adminCommissionDebtService = {
       await setConfig(database, key, value);
     }
 
-    return this.getPayoutAccount();
+    const account = await this.getPayoutAccount();
+    // Driver apps cache /drivers/me/payout-info — push a platform realtime tick so open sessions refetch.
+    broadcastPlatformConfigUpdated({
+      reason: 'payout_account',
+      keys: updates.map(([key]) => key),
+      alias: account.alias,
+      cvu: account.cvu,
+      holder: account.holder,
+      bank: account.bank,
+      debt_cap_ars: account.debt_cap_ars,
+    });
+    return account;
   },
 
   async listReceipts(opts: {
@@ -304,6 +319,11 @@ export const adminCommissionDebtService = {
       return row;
     });
 
+    broadcastDriverAccountUpdated(existing.driver_id, {
+      reason: 'commission_receipt',
+      action: 'approved',
+      receipt_id: id,
+    });
     return mapReceiptRow(updated);
   },
 
@@ -423,6 +443,12 @@ export const adminCommissionDebtService = {
       });
     });
 
+    broadcastDriverAccountUpdated(existing.driver_id, {
+      reason: 'commission_receipt',
+      action: 'rejected_fraud',
+      receipt_id: id,
+      platform_debt: result.restoredDebt,
+    });
     return mapReceiptRow(result.receipt);
   },
 
@@ -446,6 +472,11 @@ export const adminCommissionDebtService = {
         updated_at: new Date(),
       })
       .where(eq(drivers.id, driverId));
+
+    broadcastDriverAccountUpdated(driverId, {
+      reason: 'commission_fraud_cleared',
+      action: 'clear_fraud',
+    });
 
     return {
       driver_id: driverId,
