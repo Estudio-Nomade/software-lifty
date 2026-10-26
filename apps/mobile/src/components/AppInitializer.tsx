@@ -6,7 +6,9 @@ import { driverStatusSchema } from '../api/types';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { isLiveTrip } from '../lib/isLiveTrip';
 import { getCurrentPosition } from '../lib/location';
+import { refreshMessagesUnread } from '../lib/messagesUnread';
 import {
+  addNotificationReceivedListener,
   addNotificationResponseListener,
   getLastNotificationResponse,
   handleNotificationResponse,
@@ -206,29 +208,41 @@ function NotificationSetup() {
 
   useEffect(() => {
     let cancelled = false;
-    let subscription: { remove: () => void } | null = null;
+    let tapSub: { remove: () => void } | null = null;
+    let receiveSub: { remove: () => void } | null = null;
 
     void (async () => {
       await setupNotificationHandler();
       if (cancelled) return;
-      subscription = await addNotificationResponseListener((response) => {
+      tapSub = await addNotificationResponseListener((response) => {
         handleNotificationResponse(response, navigate);
       });
+      // Android + iOS: keep in-app badges warm when a push arrives while app is open.
+      receiveSub = await addNotificationReceivedListener((notification) => {
+        const data = notification.request.content.data;
+        if (data?.type === 'driver:review_notes') {
+          void refreshMessagesUnread();
+        }
+      });
       if (cancelled) {
-        subscription?.remove();
-        subscription = null;
+        tapSub?.remove();
+        receiveSub?.remove();
+        tapSub = null;
+        receiveSub = null;
       }
     })();
 
     return () => {
       cancelled = true;
-      subscription?.remove();
+      tapSub?.remove();
+      receiveSub?.remove();
     };
   }, [navigate]);
 
   useEffect(() => {
     if (!sessionRestored || !authToken) return;
 
+    // Android + iOS share the same Expo push token path (platform field differs).
     registerForPush().then((token) => {
       if (!token) return;
       apiClient
@@ -240,6 +254,9 @@ function NotificationSetup() {
           // best-effort
         });
     });
+
+    // Seed tab/avatar badges after session restore (works even without push).
+    void refreshMessagesUnread();
 
     // Cold start: user opened the app by tapping a notification.
     // Wait for interactions so ActiveTripRecovery can restore the trip first.

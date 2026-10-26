@@ -19,6 +19,7 @@ import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
+import { refreshMessagesUnread } from '../lib/messagesUnread';
 import { getTabBarReserve } from '../lib/tabBarLayout';
 import { theme } from '../theme';
 
@@ -77,6 +78,7 @@ export const MessagesInboxScreen: React.FC = () => {
                 m.id === params.messageId ? { ...m, read_at: new Date().toISOString() } : m,
               ),
             );
+            void refreshMessagesUnread();
           }
         }
       } catch {
@@ -92,6 +94,7 @@ export const MessagesInboxScreen: React.FC = () => {
   useFocusEffect(
     useCallback(() => {
       void load();
+      void refreshMessagesUnread();
     }, [load]),
   );
 
@@ -108,6 +111,7 @@ export const MessagesInboxScreen: React.FC = () => {
         setItems((prev) =>
           prev.map((m) => (m.id === msg.id ? { ...m, read_at: new Date().toISOString() } : m)),
         );
+        void refreshMessagesUnread();
       } catch {
         /* best-effort */
       }

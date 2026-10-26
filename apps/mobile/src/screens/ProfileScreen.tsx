@@ -34,7 +34,9 @@ import {
   DRIVER_PROFILE_PHOTO_PERMISSION_MSG,
   DRIVER_PROFILE_PHOTO_UPLOAD_FAIL_MSG,
 } from '../lib/driverProfilePhoto';
+import { refreshMessagesUnread } from '../lib/messagesUnread';
 import { getTabBarReserve } from '../lib/tabBarLayout';
+import { useMessagesUnreadStore } from '../store/messagesUnreadStore';
 import { theme } from '../theme';
 import { compressImage } from '../utils/image';
 import { uploadPhotoToBackend } from '../utils/upload';
@@ -154,7 +156,8 @@ export const ProfileScreen: React.FC = () => {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [documents, setDocuments] = useState<DriverDocument[]>([]);
   const [metrics, setMetrics] = useState<CancellationMetrics | null>(null);
-  const [unreadMessages, setUnreadMessages] = useState(0);
+  const unreadMessages = useMessagesUnreadStore((s) => s.unreadCount);
+  const setUnreadMessages = useMessagesUnreadStore((s) => s.setUnreadCount);
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
   const [editFirstName, setEditFirstName] = useState('');
@@ -165,22 +168,21 @@ export const ProfileScreen: React.FC = () => {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [profileRes, docsRes, metricsRes, unreadRes] = await Promise.all([
+      const [profileRes, docsRes, metricsRes, unreadCount] = await Promise.all([
         apiClient.get('/drivers/me'),
         getValidated('/drivers/me/documents', z.array(documentSchema)),
         apiClient.get('/drivers/me/cancellation-metrics'),
-        apiClient.get('/drivers/me/messages/unread-count').catch(() => null),
+        refreshMessagesUnread().catch(() => 0),
       ]);
       setProfile(profileRes.data);
       setDocuments(docsRes);
       setMetrics(metricsRes.data?.data ?? metricsRes.data);
-      const unreadPayload = unreadRes?.data?.data ?? unreadRes?.data;
-      setUnreadMessages(Number(unreadPayload?.unread_count ?? 0));
+      setUnreadMessages(unreadCount);
     } catch {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setUnreadMessages]);
 
   useEffect(() => {
     fetchData();
