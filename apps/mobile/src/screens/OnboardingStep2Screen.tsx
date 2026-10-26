@@ -32,6 +32,7 @@ import {
   type HydratedDocsState,
   type HydratedSideState,
   allDocsSatisfied,
+  canAppendMoreFiles,
   emptyHydratedDocs,
   hydrateDocsFromApi,
 } from '../lib/onboardingDocsHydrate';
@@ -41,7 +42,13 @@ import { vehicleTypeFromApi } from '../lib/vehicleForm';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 import { compressImage } from '../utils/image';
-import { DOC_SIDES, type DocBase, type DocSide, uploadDocumentToBackend } from '../utils/upload';
+import {
+  DOC_SIDES,
+  type DocBase,
+  type DocSide,
+  MAX_FILES_PER_DOC_SIDE,
+  uploadDocumentToBackend,
+} from '../utils/upload';
 
 const meVehicleSchema = z.object({
   vehicle: z
@@ -64,11 +71,17 @@ const DOCS: { type: DocType; label: string }[] = [
   { type: 'vehicle_insurance', label: 'Seguro del vehiculo' },
   {
     type: 'platform_rc_insurance',
-    label: 'Seguro de Responsabilidad Civil',
+    label: 'Seguro para transporte de pasajeros',
   },
   { type: 'background_check', label: 'Certificado de antecedentes penales' },
   { type: 'rndg', label: 'Registro Nacional de Datos Geneticos (RNDG)' },
 ];
+
+const PLATFORM_RC_HINT =
+  'Acreditá la cobertura de responsabilidad civil exigida para realizar viajes mediante Lifty, incluyendo a los pasajeros transportados, según la póliza contratada. PDF o imagen; podés sumar más de una foto si no entra en una sola.';
+
+const MULTI_SHOT_HINT =
+  'Si no entra en una sola foto, podés sacar o subir hasta 5 imágenes del mismo documento.';
 
 const SIDE_LABELS: Record<DocSide, string> = { front: 'Frente', back: 'Dorso' };
 
@@ -187,10 +200,23 @@ export const OnboardingStep2Screen: React.FC = () => {
   }, []);
 
   const handlePick = useCallback(
-    async (docType: DocType, side: DocSide, method: PickMethod) => {
+    async (
+      docType: DocType,
+      side: DocSide,
+      method: PickMethod,
+      mode: 'replace' | 'append' = 'replace',
+    ) => {
       if (!driverId) {
         setSideError(docType, side, 'Sesion no valida. Reincia la app.');
         return;
+      }
+
+      if (mode === 'append') {
+        const current = docs[docType][side];
+        if (!canAppendMoreFiles(current)) {
+          setSideError(docType, side, `Máximo ${MAX_FILES_PER_DOC_SIDE} archivos por documento.`);
+          return;
+        }
       }
 
       if (method === 'camera') {
@@ -201,12 +227,16 @@ export const OnboardingStep2Screen: React.FC = () => {
         }
       }
 
-      let uri: string | null = null;
-      let name: string | null = null;
-      let mimeType: string | null = null;
-      let fileSize: number | null = null;
+      type PickedAsset = {
+        uri: string;
+        name: string;
+        mimeType: string;
+        fileSize: number | null;
+      };
 
       try {
+        let picked: PickedAsset[] = [];
+
         if (method === 'pdf') {
           const result = await DocumentPicker.getDocumentAsync({
             type: 'application/pdf',
@@ -215,10 +245,14 @@ export const OnboardingStep2Screen: React.FC = () => {
           });
           if (result.canceled || !result.assets?.[0]) return;
           const asset = result.assets[0];
-          uri = asset.uri;
-          name = asset.name ?? `seguro_${Date.now()}.pdf`;
-          mimeType = asset.mimeType ?? 'application/pdf';
-          fileSize = asset.size ?? null;
+          picked = [
+            {
+              uri: asset.uri,
+              name: asset.name ?? `seguro_${Date.now()}.pdf`,
+              mimeType: asset.mimeType ?? 'application/pdf',
+              fileSize: asset.size ?? null,
+            },
+          ];
         } else if (method === 'camera') {
           const result = await ImagePicker.launchCameraAsync({
             mediaTypes: 'images',
@@ -226,46 +260,42 @@ export const OnboardingStep2Screen: React.FC = () => {
           });
           if (result.canceled || !result.assets?.[0]) return;
           const asset = result.assets[0];
-          uri = asset.uri;
-          name = asset.fileName ?? `photo_${Date.now()}.jpg`;
-          mimeType = asset.mimeType ?? 'image/jpeg';
-          fileSize = asset.fileSize ?? null;
+          picked = [
+            {
+              uri: asset.uri,
+              name: asset.fileName ?? `photo_${Date.now()}.jpg`,
+              mimeType: asset.mimeType ?? 'image/jpeg',
+              fileSize: asset.fileSize ?? null,
+            },
+          ];
         } else {
+          const remaining =
+            mode === 'append'
+              ? Math.max(0, MAX_FILES_PER_DOC_SIDE - (docs[docType][side].files.length || 0))
+              : 1;
+          if (remaining <= 0) {
+            setSideError(docType, side, `Máximo ${MAX_FILES_PER_DOC_SIDE} archivos por documento.`);
+            return;
+          }
           const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: 'images',
             quality: 0.7,
+            allowsMultipleSelection: mode === 'append',
+            selectionLimit: mode === 'append' ? remaining : 1,
           });
           if (result.canceled || !result.assets?.[0]) return;
-          const asset = result.assets[0];
-          uri = asset.uri;
-          name = asset.fileName ?? `image_${Date.now()}.jpg`;
-          mimeType = asset.mimeType ?? 'image/jpeg';
-          fileSize = asset.fileSize ?? null;
+          picked = result.assets.map((asset, i) => ({
+            uri: asset.uri,
+            name: asset.fileName ?? `image_${Date.now()}_${i}.jpg`,
+            mimeType: asset.mimeType ?? 'image/jpeg',
+            fileSize: asset.fileSize ?? null,
+          }));
         }
 
-        if (fileSize && fileSize > MAX_FILE_SIZE) {
-          setSideError(docType, side, 'El archivo debe ser menor a 10MB');
-          return;
-        }
-
-        const isPdf =
-          mimeType === 'application/pdf' ||
-          name?.toLowerCase().endsWith('.pdf') === true ||
-          method === 'pdf';
-
-        if (!isPdf) {
-          try {
-            const compressed = await compressImage(uri!);
-            uri = compressed.uri;
-            name = name?.replace(/\.[^.]+$/, '.jpg') ?? `photo_${Date.now()}.jpg`;
-            mimeType = 'image/jpeg';
-          } catch (err) {
-            console.warn('Image compression failed, using original:', err);
-          }
-        } else {
-          mimeType = 'application/pdf';
-          if (!name?.toLowerCase().endsWith('.pdf')) {
-            name = `${name ?? `seguro_${Date.now()}`}.pdf`.replace(/\.pdf\.pdf$/i, '.pdf');
+        for (const asset of picked) {
+          if (asset.fileSize && asset.fileSize > MAX_FILE_SIZE) {
+            setSideError(docType, side, 'El archivo debe ser menor a 10MB');
+            return;
           }
         }
 
@@ -275,15 +305,87 @@ export const OnboardingStep2Screen: React.FC = () => {
             ...prev[docType],
             [side]: {
               ...prev[docType][side],
-              fileUri: uri,
-              fileName: name,
               uploading: true,
               error: null,
             },
           },
         }));
 
-        const result = await uploadDocumentToBackend(uri!, name!, mimeType!, docType, side);
+        let lastError: string | null = null;
+        for (let i = 0; i < picked.length; i++) {
+          let { uri, name, mimeType } = picked[i]!;
+          const isPdf =
+            mimeType === 'application/pdf' ||
+            name.toLowerCase().endsWith('.pdf') ||
+            method === 'pdf';
+
+          if (!isPdf) {
+            try {
+              const compressed = await compressImage(uri);
+              uri = compressed.uri;
+              name = name.replace(/\.[^.]+$/, '.jpg') || `photo_${Date.now()}.jpg`;
+              mimeType = 'image/jpeg';
+            } catch (err) {
+              console.warn('Image compression failed, using original:', err);
+            }
+          } else {
+            mimeType = 'application/pdf';
+            if (!name.toLowerCase().endsWith('.pdf')) {
+              name = `${name || `seguro_${Date.now()}`}.pdf`.replace(/\.pdf\.pdf$/i, '.pdf');
+            }
+          }
+
+          // replace mode: first file replaces group; multi gallery append: all append.
+          const replaceGroup = mode === 'replace' && i === 0;
+          try {
+            const result = await uploadDocumentToBackend(uri, name, mimeType, docType, side, {
+              replaceGroup,
+            });
+
+            setDocs((prev) => {
+              const prevSide = prev[docType][side];
+              const newPart = {
+                fileUri: uri,
+                fileName: name,
+                fileUrl: result.file_url,
+                isPdf,
+                serverStatus: 'pending_review' as const,
+              };
+              const files = replaceGroup
+                ? [newPart]
+                : [...prevSide.files, newPart].slice(0, MAX_FILES_PER_DOC_SIDE);
+              const count = files.length;
+              return {
+                ...prev,
+                [docType]: {
+                  ...prev[docType],
+                  [side]: {
+                    ...prevSide,
+                    fileUrl: result.file_url,
+                    fileName: count > 1 ? `${count} archivos` : name,
+                    fileUri: uri,
+                    files,
+                    uploading: i < picked.length - 1,
+                    uploaded: true,
+                    needsReplace: false,
+                    replacedInSession: true,
+                    serverStatus: 'pending_review',
+                    isPdf: files.some((f) => f.isPdf),
+                    error: null,
+                  },
+                },
+              };
+            });
+          } catch (err: unknown) {
+            if (err instanceof ApiError && err.code === 'KYC_REQUIRED') {
+              const kycRoute = STEP_ROUTE.kyc;
+              if (kycRoute) navigation.replace(kycRoute.screen);
+              return;
+            }
+            lastError = err instanceof Error ? err.message : 'Error al subir el documento';
+            break;
+          }
+        }
 
         setDocs((prev) => ({
           ...prev,
@@ -291,16 +393,8 @@ export const OnboardingStep2Screen: React.FC = () => {
             ...prev[docType],
             [side]: {
               ...prev[docType][side],
-              fileUrl: result.file_url,
-              fileName: name,
-              fileUri: uri,
               uploading: false,
-              uploaded: true,
-              needsReplace: false,
-              replacedInSession: true,
-              serverStatus: 'pending_review',
-              isPdf,
-              error: null,
+              ...(lastError ? { error: lastError } : {}),
             },
           },
         }));
@@ -318,15 +412,13 @@ export const OnboardingStep2Screen: React.FC = () => {
             [side]: {
               ...prev[docType][side],
               uploading: false,
-              uploaded: false,
-              replacedInSession: false,
               error: message,
             },
           },
         }));
       }
     },
-    [driverId, navigation, setSideError],
+    [docs, driverId, navigation, setSideError],
   );
 
   const handleRetry = useCallback((docType: DocType, side: DocSide) => {
@@ -341,6 +433,7 @@ export const OnboardingStep2Screen: React.FC = () => {
             fileUri: null,
             fileName: prevSide.needsReplace ? 'Rehacer' : null,
             fileUrl: prevSide.needsReplace ? prevSide.fileUrl : null,
+            files: prevSide.needsReplace ? prevSide.files : [],
             uploaded: false,
             replacedInSession: false,
             error: null,
@@ -476,7 +569,8 @@ export const OnboardingStep2Screen: React.FC = () => {
               </View>
               {doc.type === 'vehicle_insurance' ? (
                 <Text style={styles.hintText}>
-                  Alcanza un archivo o foto del seguro (PDF o imagen). No hace falta dorso.
+                  Alcanza un archivo o foto del seguro (PDF o imagen). No hace falta dorso.{' '}
+                  {MULTI_SHOT_HINT}
                 </Text>
               ) : null}
               {doc.type === 'vehicle_insurance' && isMoto ? (
@@ -518,10 +612,10 @@ export const OnboardingStep2Screen: React.FC = () => {
                 </View>
               ) : null}
               {doc.type === 'platform_rc_insurance' ? (
-                <Text style={styles.hintText}>
-                  Cobertura de responsabilidad civil mientras trabajás con apps. Es distinto al
-                  seguro del auto.
-                </Text>
+                <Text style={styles.hintText}>{PLATFORM_RC_HINT}</Text>
+              ) : null}
+              {doc.type !== 'vehicle_insurance' && doc.type !== 'platform_rc_insurance' ? (
+                <Text style={styles.hintText}>{MULTI_SHOT_HINT}</Text>
               ) : null}
 
               {DOC_SIDES[doc.type].map((side) => {
@@ -530,6 +624,7 @@ export const OnboardingStep2Screen: React.FC = () => {
                 const showSideLabel = DOC_SIDES[doc.type].length > 1 || allowsPdf(doc.type);
                 const badge = badgeFor(state);
                 const showAsOk = sideSatisfiedUi(state);
+                const canAppend = showAsOk && canAppendMoreFiles(state) && !state.uploading;
                 return (
                   <View key={side} style={styles.sideBlock}>
                     {showSideLabel ? <Text style={styles.sideLabel}>{label}</Text> : null}
@@ -537,30 +632,66 @@ export const OnboardingStep2Screen: React.FC = () => {
                     {state.uploading ? (
                       <ActivityIndicator size="small" color={theme.colors.primary} />
                     ) : showAsOk ? (
-                      <View style={styles.uploadedRow}>
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={18}
-                          color={
-                            state.needsReplace && !state.replacedInSession
-                              ? theme.colors.dangerRed
-                              : theme.colors.primary
-                          }
-                          accessibilityLabel="Documento subido"
-                        />
-                        <Text
-                          style={[
-                            styles.fileName,
-                            state.needsReplace && !state.replacedInSession
-                              ? styles.fileNameReject
-                              : null,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {state.fileName ?? 'Documento cargado'}
-                        </Text>
-                        {badge ? (
-                          <Text style={[styles.badge, { color: badge.color }]}>{badge.label}</Text>
+                      <View style={styles.uploadedBlock}>
+                        <View style={styles.uploadedRow}>
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={18}
+                            color={
+                              state.needsReplace && !state.replacedInSession
+                                ? theme.colors.dangerRed
+                                : theme.colors.primary
+                            }
+                            accessibilityLabel="Documento subido"
+                          />
+                          <Text
+                            style={[
+                              styles.fileName,
+                              state.needsReplace && !state.replacedInSession
+                                ? styles.fileNameReject
+                                : null,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {state.fileName ?? 'Documento cargado'}
+                          </Text>
+                          {badge ? (
+                            <Text style={[styles.badge, { color: badge.color }]}>
+                              {badge.label}
+                            </Text>
+                          ) : null}
+                        </View>
+                        {canAppend ? (
+                          <View style={styles.appendRow}>
+                            <TouchableOpacity
+                              style={styles.appendOption}
+                              onPress={() => handlePick(doc.type, side, 'camera', 'append')}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.appendOptionText}>+ Otra foto</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.appendOption}
+                              onPress={() => handlePick(doc.type, side, 'gallery', 'append')}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.appendOptionText}>+ Galería</Text>
+                            </TouchableOpacity>
+                            {allowsPdf(doc.type) ? (
+                              <TouchableOpacity
+                                style={styles.appendOption}
+                                onPress={() => handlePick(doc.type, side, 'pdf', 'append')}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.appendOptionText}>+ PDF</Text>
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+                        ) : null}
+                        {!state.needsReplace || state.replacedInSession ? (
+                          <TouchableOpacity onPress={() => handleRetry(doc.type, side)} hitSlop={8}>
+                            <Text style={styles.retryText}>Reemplazar todo</Text>
+                          </TouchableOpacity>
                         ) : null}
                       </View>
                     ) : (
@@ -570,14 +701,14 @@ export const OnboardingStep2Screen: React.FC = () => {
                         ) : null}
                         <TouchableOpacity
                           style={styles.uploadOption}
-                          onPress={() => handlePick(doc.type, side, 'camera')}
+                          onPress={() => handlePick(doc.type, side, 'camera', 'replace')}
                           activeOpacity={0.7}
                         >
                           <Text style={styles.optionText}>Sacar foto</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.uploadOption}
-                          onPress={() => handlePick(doc.type, side, 'gallery')}
+                          onPress={() => handlePick(doc.type, side, 'gallery', 'replace')}
                           activeOpacity={0.7}
                         >
                           <Text style={styles.optionText}>Subir de galería</Text>
@@ -585,7 +716,7 @@ export const OnboardingStep2Screen: React.FC = () => {
                         {allowsPdf(doc.type) ? (
                           <TouchableOpacity
                             style={styles.uploadOption}
-                            onPress={() => handlePick(doc.type, side, 'pdf')}
+                            onPress={() => handlePick(doc.type, side, 'pdf', 'replace')}
                             activeOpacity={0.7}
                           >
                             <Text style={styles.optionText}>Archivo PDF</Text>
@@ -771,6 +902,32 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     paddingVertical: theme.spacing.xs,
     minHeight: 44,
+  },
+  uploadedBlock: {
+    width: '100%',
+    gap: theme.spacing.sm,
+  },
+  appendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+    width: '100%',
+  },
+  appendOption: {
+    minHeight: 40,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.md,
+    backgroundColor: theme.colors.surface,
+  },
+  appendOptionText: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.primary,
   },
   fileName: {
     fontSize: theme.fontSize.sm,

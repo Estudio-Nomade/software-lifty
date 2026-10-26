@@ -1,5 +1,8 @@
 import type { DriverDocument } from '../api/types';
 
+/** Keep in sync with utils/upload MAX_FILES_PER_DOC_SIDE + backend MAX_ACTIVE_FILES_PER_DOC_TYPE. */
+const MAX_FILES_PER_DOC_SIDE = 5;
+
 /** Mirrors utils/upload DocBase / DocSide without importing apiClient (RN). */
 export type DocBase =
   | 'drivers_license'
@@ -35,15 +38,27 @@ const BACKEND_TO_MOBILE: Record<string, { base: DocBase; side: DocSide }> = {
 
 export type ServerDocStatus = 'approved' | 'pending_review' | 'rejected' | null;
 
+export type HydratedFilePart = {
+  id?: string;
+  fileUri: string | null;
+  fileName: string | null;
+  fileUrl: string | null;
+  isPdf: boolean;
+  serverStatus: ServerDocStatus;
+};
+
 export type HydratedSideState = {
   uploaded: boolean;
   needsReplace: boolean;
   replacedInSession: boolean;
   serverStatus: ServerDocStatus;
+  /** Latest / primary file (compat with single-file UI). */
   fileUri: string | null;
   fileName: string | null;
   fileUrl: string | null;
   isPdf: boolean;
+  /** All active pages/photos for this side (multi-shot). */
+  files: HydratedFilePart[];
   uploading: boolean;
   error: string | null;
 };
@@ -60,6 +75,7 @@ function emptySide(): HydratedSideState {
     fileName: null,
     fileUrl: null,
     isPdf: false,
+    files: [],
     uploading: false,
     error: null,
   };
@@ -82,13 +98,42 @@ function isPdfUrl(url: string | null | undefined): boolean {
   return lower.includes('.pdf') || lower.includes('application/pdf');
 }
 
+function statusRank(status: ServerDocStatus): number {
+  if (status === 'rejected') return 3;
+  if (status === 'pending_review') return 2;
+  if (status === 'approved') return 1;
+  return 0;
+}
+
+function foldSideStatus(files: HydratedFilePart[]): ServerDocStatus {
+  let best: ServerDocStatus = null;
+  for (const f of files) {
+    if (statusRank(f.serverStatus) > statusRank(best)) best = f.serverStatus;
+  }
+  return best;
+}
+
+function labelForPart(
+  status: ServerDocStatus,
+  isPdf: boolean,
+  index: number,
+  total: number,
+): string {
+  const n = total > 1 ? ` ${index + 1}/${total}` : '';
+  if (status === 'rejected') return `Rehacer${n}`;
+  if (isPdf) return `PDF cargado${n}`;
+  return total > 1 ? `Foto${n}` : 'Documento cargado';
+}
+
 /**
  * Map GET /drivers/me/documents rows into onboarding side state.
- * approved / pending_review → satisfied (uploaded).
+ * Multiple non-superseded rows of the same doc_type = multi-page / multi-shot.
+ * approved / pending_review → satisfied (uploaded) unless any is rejected without replace.
  * rejected → needsReplace (not satisfied until re-upload this session).
  */
 export function hydrateDocsFromApi(documents: DriverDocument[]): HydratedDocsState {
   const state = emptyHydratedDocs();
+  const buckets = new Map<string, HydratedFilePart[]>();
 
   for (const row of documents) {
     if (row.status === 'superseded') continue;
@@ -98,9 +143,33 @@ export function hydrateDocsFromApi(documents: DriverDocument[]): HydratedDocsSta
     const { base, side } = mapped;
     if (!DOC_SIDES[base].includes(side)) continue;
 
+    const key = `${base}:${side}`;
     const status = (row.status ?? 'pending_review') as ServerDocStatus;
+    const part: HydratedFilePart = {
+      id: row.id,
+      fileUri: null,
+      fileName: null,
+      fileUrl: row.file_url ?? null,
+      isPdf: isPdfUrl(row.file_url),
+      serverStatus: status,
+    };
+    const list = buckets.get(key) ?? [];
+    list.push(part);
+    buckets.set(key, list);
+  }
+
+  for (const [key, parts] of buckets) {
+    const [base, side] = key.split(':') as [DocBase, DocSide];
+    const capped = parts.slice(0, MAX_FILES_PER_DOC_SIDE);
+    const total = capped.length;
+    const labeled = capped.map((p, i) => ({
+      ...p,
+      fileName: labelForPart(p.serverStatus, p.isPdf, i, total),
+    }));
+    const status = foldSideStatus(labeled);
     const rejected = status === 'rejected';
     const ok = status === 'approved' || status === 'pending_review';
+    const primary = labeled[labeled.length - 1]!;
 
     state[base][side] = {
       uploaded: ok,
@@ -109,14 +178,17 @@ export function hydrateDocsFromApi(documents: DriverDocument[]): HydratedDocsSta
       serverStatus: status,
       fileUri: null,
       fileName: rejected
-        ? 'Rehacer'
+        ? total > 1
+          ? `Rehacer (${total})`
+          : 'Rehacer'
         : ok
-          ? isPdfUrl(row.file_url)
-            ? 'PDF cargado'
-            : 'Documento cargado'
+          ? total > 1
+            ? `${total} archivos`
+            : primary.fileName
           : null,
-      fileUrl: row.file_url ?? null,
-      isPdf: isPdfUrl(row.file_url),
+      fileUrl: primary.fileUrl,
+      isPdf: labeled.some((p) => p.isPdf),
+      files: labeled,
       uploading: false,
       error: null,
     };
@@ -135,4 +207,9 @@ export function allDocsSatisfied(docs: HydratedDocsState): boolean {
   return (Object.keys(DOC_SIDES) as DocBase[]).every((docType) =>
     DOC_SIDES[docType].every((side) => sideSatisfied(docs[docType][side])),
   );
+}
+
+export function canAppendMoreFiles(side: HydratedSideState): boolean {
+  const n = side.files.length > 0 ? side.files.length : side.uploaded || side.fileUrl ? 1 : 0;
+  return n < MAX_FILES_PER_DOC_SIDE;
 }

@@ -40,6 +40,28 @@ describe('hydrateDocsFromApi', () => {
     expect(state.vehicle_insurance.front.uploaded).toBe(false);
   });
 
+  it('aggregates multiple active rows of the same doc_type', () => {
+    const state = hydrateDocsFromApi([
+      {
+        id: 'a',
+        doc_type: 'license_front',
+        file_url: 'https://cdn.example.com/1.jpg',
+        status: 'pending_review',
+        created_at: '2026-01-01T00:00:00Z',
+      },
+      {
+        id: 'b',
+        doc_type: 'license_front',
+        file_url: 'https://cdn.example.com/2.jpg',
+        status: 'pending_review',
+        created_at: '2026-01-01T00:01:00Z',
+      },
+    ]);
+    expect(state.drivers_license.front.uploaded).toBe(true);
+    expect(state.drivers_license.front.files).toHaveLength(2);
+    expect(state.drivers_license.front.fileName).toBe('2 archivos');
+  });
+
   it('marks rejected as needsReplace (not satisfied)', () => {
     const state = hydrateDocsFromApi([doc('platform_rc_insurance_front', 'rejected')]);
     expect(state.platform_rc_insurance.front.needsReplace).toBe(true);

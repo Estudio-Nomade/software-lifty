@@ -46,6 +46,8 @@ export const uploadPhotoBody = t.Object({
 export const uploadDocBody = t.Object({
   file: t.File({ maxSize: 10 * 1024 * 1024 }),
   doc_type: t.String({ minLength: 1 }),
+  /** FormData string "true"|"1"|"yes" → supersede all active rows of this doc_type first. */
+  replace_group: t.Optional(t.Union([t.String(), t.Boolean()])),
 });
 
 export const commissionReceiptBody = t.Object({
@@ -56,6 +58,8 @@ export const commissionReceiptBody = t.Object({
 export const reuploadDocBody = t.Object({
   file: t.File({ maxSize: 10 * 1024 * 1024 }),
   doc_type: t.String({ minLength: 1 }),
+  /** FormData string; default true on reupload (replace whole group). Pass false to append. */
+  replace_group: t.Optional(t.Union([t.String(), t.Boolean()])),
 });
 
 export const setDistrictBody = t.Object({

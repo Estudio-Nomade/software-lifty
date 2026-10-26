@@ -14,6 +14,7 @@ import { getConfig, getDebtCapArs } from '../../shared/lib/commission';
 import {
   VALID_DOC_TYPES as CANONICAL_VALID_DOC_TYPES,
   DOC_TYPES,
+  MAX_ACTIVE_FILES_PER_DOC_TYPE,
 } from '../../shared/lib/documents';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
@@ -83,6 +84,132 @@ const HARD_TERMINAL_DRIVER_STATUSES = new Set(['approved', 'suspended']);
 function missingRequiredDocTypes(uploaded: { doc_type: string }[]): string[] {
   const types = new Set(uploaded.map((d) => d.doc_type));
   return DOC_TYPES.filter((t) => !types.has(t));
+}
+
+/** FormData may send booleans as strings; missing → fallback. */
+function parseReplaceGroupFlag(
+  raw: string | boolean | null | undefined,
+  defaultWhenMissing: boolean,
+): boolean {
+  if (raw === undefined || raw === null || raw === '') return defaultWhenMissing;
+  if (typeof raw === 'boolean') return raw;
+  const v = String(raw).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'on'].includes(v)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(v)) return false;
+  return defaultWhenMissing;
+}
+
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function countActiveDocsOfType(
+  driverId: string,
+  docType: string,
+  executor: typeof db | DbTx = db,
+): Promise<number> {
+  const [row] = await executor
+    .select({ n: count() })
+    .from(driverDocuments)
+    .where(
+      and(
+        eq(driverDocuments.driver_id, driverId),
+        eq(driverDocuments.doc_type, docType),
+        ne(driverDocuments.status, 'superseded'),
+      ),
+    );
+  return Number(row?.n ?? 0);
+}
+
+async function supersedeActiveDocsOfType(
+  driverId: string,
+  docType: string,
+  executor: typeof db | DbTx = db,
+): Promise<void> {
+  await executor
+    .update(driverDocuments)
+    .set({ status: 'superseded', superseded_at: new Date() })
+    .where(
+      and(
+        eq(driverDocuments.driver_id, driverId),
+        eq(driverDocuments.doc_type, docType),
+        ne(driverDocuments.status, 'superseded'),
+      ),
+    );
+}
+
+/**
+ * Insert an active doc row under a driver-row lock so concurrent appends cannot
+ * both pass the MAX_ACTIVE_FILES_PER_DOC_TYPE check.
+ * - replaceGroup true → supersede every active file of this type, then insert.
+ * - replaceGroup false → append if under cap.
+ */
+async function commitDriverDocument(params: {
+  driverId: string;
+  docType: string;
+  fileUrl: string;
+  replaceGroup: boolean;
+  status?: string;
+}): Promise<{
+  id: string;
+  doc_type: string;
+  file_url: string;
+  status: string;
+}> {
+  const { driverId, docType, fileUrl, replaceGroup, status } = params;
+  return await db.transaction(async (tx) => {
+    await tx
+      .select({ id: drivers.id })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .for('update')
+      .limit(1);
+
+    if (replaceGroup) {
+      await supersedeActiveDocsOfType(driverId, docType, tx);
+    } else {
+      const active = await countActiveDocsOfType(driverId, docType, tx);
+      if (active >= MAX_ACTIVE_FILES_PER_DOC_TYPE) {
+        throw new AppError(
+          `Máximo ${MAX_ACTIVE_FILES_PER_DOC_TYPE} archivos por documento. Sacá o subí menos fotos, o reemplazá el grupo.`,
+          400,
+          'DOC_FILE_LIMIT',
+        );
+      }
+    }
+
+    const values: {
+      driver_id: string;
+      doc_type: string;
+      file_url: string;
+      status?: string;
+    } = {
+      driver_id: driverId,
+      doc_type: docType,
+      file_url: fileUrl,
+    };
+    if (status !== undefined) values.status = status;
+
+    const [doc] = await tx.insert(driverDocuments).values(values).returning({
+      id: driverDocuments.id,
+      doc_type: driverDocuments.doc_type,
+      file_url: driverDocuments.file_url,
+      status: driverDocuments.status,
+    });
+
+    if (!doc) throw new AppError('Failed to upload document', 400, 'BAD_REQUEST');
+    return doc;
+  });
+}
+
+/** Best-effort precheck before storage upload (real gate is commitDriverDocument). */
+async function assertCanAppendDoc(driverId: string, docType: string): Promise<void> {
+  const active = await countActiveDocsOfType(driverId, docType);
+  if (active >= MAX_ACTIVE_FILES_PER_DOC_TYPE) {
+    throw new AppError(
+      `Máximo ${MAX_ACTIVE_FILES_PER_DOC_TYPE} archivos por documento. Sacá o subí menos fotos, o reemplazá el grupo.`,
+      400,
+      'DOC_FILE_LIMIT',
+    );
+  }
 }
 
 /**
@@ -1062,8 +1189,18 @@ export const driversService = {
         .where(eq(users.id, user.id));
     }
 
-    if (data.phone) {
+    if (data.phone !== undefined) {
       const phone = data.phone.trim();
+      if (!phone) {
+        throw new AppError('Ingresá un número de teléfono válido.', 400, 'PHONE_REQUIRED');
+      }
+      if (phone.length > 20) {
+        throw new AppError(
+          'El teléfono es demasiado largo. Usá hasta 20 caracteres.',
+          400,
+          'PHONE_TOO_LONG',
+        );
+      }
 
       const [existingPhoneOwner] = await db
         .select({ id: users.id })
@@ -1072,22 +1209,21 @@ export const driversService = {
         .limit(1);
 
       if (existingPhoneOwner) {
-        logger.warn(
-          `Phone ${phone} already belongs to user ${existingPhoneOwner.id}; skipping save for user ${user.id}`,
+        throw new AppError(
+          'Ese teléfono ya está registrado en otra cuenta. Probá con otro número.',
+          409,
+          'PHONE_TAKEN',
         );
-      } else {
-        const [currentUser] = await db
-          .select({ phone: users.phone })
-          .from(users)
-          .where(eq(users.id, user.id))
-          .limit(1);
+      }
 
-        if (currentUser?.phone !== phone) {
-          await db
-            .update(users)
-            .set({ phone, updated_at: new Date() })
-            .where(eq(users.id, user.id));
-        }
+      const [currentUser] = await db
+        .select({ phone: users.phone })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
+
+      if (currentUser?.phone !== phone) {
+        await db.update(users).set({ phone, updated_at: new Date() }).where(eq(users.id, user.id));
       }
     }
 
@@ -1573,21 +1709,12 @@ export const driversService = {
       );
     }
 
-    await db
-      .update(driverDocuments)
-      .set({ status: 'superseded', superseded_at: new Date() })
-      .where(
-        and(
-          eq(driverDocuments.driver_id, driver.id),
-          eq(driverDocuments.doc_type, data.doc_type),
-          ne(driverDocuments.status, 'superseded'),
-        ),
-      );
-
-    await db.insert(driverDocuments).values({
-      driver_id: driver.id,
-      doc_type: data.doc_type,
-      file_url: data.file_url,
+    // Metadata add always replaces the group (legacy clients send one URL).
+    await commitDriverDocument({
+      driverId: driver.id,
+      docType: data.doc_type,
+      fileUrl: data.file_url,
+      replaceGroup: true,
     });
 
     // All required docs → review queue (listPending filters status='review').
@@ -1598,7 +1725,12 @@ export const driversService = {
     return { message: 'Document uploaded', status: result.status, step: result.step };
   },
 
-  async uploadDocument(user: AuthUser, file: File, docType: string) {
+  async uploadDocument(
+    user: AuthUser,
+    file: File,
+    docType: string,
+    opts?: { replaceGroup?: string | boolean | null },
+  ) {
     if (!VALID_DOC_TYPES.includes(docType)) {
       throw new AppError(`Invalid doc_type: ${docType}`, 400, 'BAD_REQUEST');
     }
@@ -1625,6 +1757,12 @@ export const driversService = {
       );
     }
 
+    // Default append so multi-page photos accumulate; replace_group=true wipes the set.
+    const replaceGroup = parseReplaceGroupFlag(opts?.replaceGroup, false);
+    if (!replaceGroup) {
+      await assertCanAppendDoc(driver.id, docType);
+    }
+
     const contentType = contentTypeForFile(file);
     const path = buildDriverDocumentPath({
       fullName: driver.full_name,
@@ -1634,26 +1772,38 @@ export const driversService = {
     });
     const fileUrl = await _storage.uploadFile(file, path, { contentType });
 
-    await db
-      .update(driverDocuments)
-      .set({ status: 'superseded', superseded_at: new Date() })
-      .where(
-        and(
-          eq(driverDocuments.driver_id, driver.id),
-          eq(driverDocuments.doc_type, docType),
-          ne(driverDocuments.status, 'superseded'),
-        ),
-      );
-
-    await db.insert(driverDocuments).values({
-      driver_id: driver.id,
-      doc_type: docType,
-      file_url: fileUrl,
-    });
+    try {
+      await commitDriverDocument({
+        driverId: driver.id,
+        docType,
+        fileUrl,
+        replaceGroup,
+      });
+    } catch (err) {
+      // New object is orphaned if insert/cap fails; drop it so storage stays clean.
+      const storagePath = _storage.extractStoragePath(fileUrl);
+      if (storagePath) {
+        try {
+          await _storage.deleteFile(storagePath);
+        } catch (delErr) {
+          logger.warn('[DOCS] Failed to roll back orphaned upload', {
+            path: storagePath,
+            error: (delErr as Error).message,
+          });
+        }
+      }
+      throw err;
+    }
 
     await ensureDriverEnteredReview(driver.id);
 
-    return { file_url: fileUrl };
+    const activeCount = await countActiveDocsOfType(driver.id, docType);
+    return {
+      file_url: fileUrl,
+      active_count: activeCount,
+      max_files: MAX_ACTIVE_FILES_PER_DOC_TYPE,
+      replaced_group: replaceGroup,
+    };
   },
 
   async uploadPhoto(user: AuthUser, file: File) {
@@ -1720,7 +1870,13 @@ export const driversService = {
   // row (the previous one is marked `superseded`, never overwritten) so an admin
   // can always compare before/after. If the doc_type is sensitive, the driver is
   // pushed back into the admin review queue and forced offline until approved.
-  async reuploadDocument(user: AuthUser, file: File, docType: string) {
+  // Default replace_group=true (wipe active set). Pass false to append another page.
+  async reuploadDocument(
+    user: AuthUser,
+    file: File,
+    docType: string,
+    opts?: { replaceGroup?: string | boolean | null },
+  ) {
     if (!VALID_DOC_TYPES.includes(docType)) {
       throw new AppError(`Invalid doc_type: ${docType}`, 400, 'BAD_REQUEST');
     }
@@ -1738,35 +1894,25 @@ export const driversService = {
 
     if (!driver) throw new NotFoundError('Driver profile not found. Complete onboarding first');
 
-    // Delete previous file from storage before uploading the new one.
-    // Best-effort: if deletion fails we log and continue — the old file becomes
-    // orphaned but the re-upload itself is not blocked.
-    const [previousDoc] = await db
-      .select({ file_url: driverDocuments.file_url })
-      .from(driverDocuments)
-      .where(
-        and(
-          eq(driverDocuments.driver_id, driver.id),
-          eq(driverDocuments.doc_type, docType),
-          ne(driverDocuments.status, 'superseded'),
-        ),
-      )
-      .limit(1);
+    const replaceGroup = parseReplaceGroupFlag(opts?.replaceGroup, true);
 
-    if (previousDoc) {
-      const storagePath = _storage.extractStoragePath(previousDoc.file_url);
-      if (storagePath) {
-        try {
-          await _storage.deleteFile(storagePath);
-        } catch (err) {
-          logger.warn('[DOCS] Failed to delete previous doc from storage', {
-            driverId: driver.id,
-            docType,
-            path: storagePath,
-            error: (err as Error).message,
-          });
-        }
-      }
+    // Capture previous active URLs before supersede; delete storage only after
+    // the new row is committed so a failed upload leaves originals recoverable.
+    const previousDocs = replaceGroup
+      ? await db
+          .select({ file_url: driverDocuments.file_url })
+          .from(driverDocuments)
+          .where(
+            and(
+              eq(driverDocuments.driver_id, driver.id),
+              eq(driverDocuments.doc_type, docType),
+              ne(driverDocuments.status, 'superseded'),
+            ),
+          )
+      : [];
+
+    if (!replaceGroup) {
+      await assertCanAppendDoc(driver.id, docType);
     }
 
     const contentType = contentTypeForFile(file);
@@ -1778,34 +1924,53 @@ export const driversService = {
     });
     const fileUrl = await _storage.uploadFile(file, path, { contentType });
 
-    // Supersede any prior non-superseded doc of the same type.
-    await db
-      .update(driverDocuments)
-      .set({ status: 'superseded', superseded_at: new Date() })
-      .where(
-        and(
-          eq(driverDocuments.driver_id, driver.id),
-          eq(driverDocuments.doc_type, docType),
-          ne(driverDocuments.status, 'superseded'),
-        ),
-      );
-
-    const [doc] = await db
-      .insert(driverDocuments)
-      .values({
-        driver_id: driver.id,
-        doc_type: docType,
-        file_url: fileUrl,
+    let doc: {
+      id: string;
+      doc_type: string;
+      file_url: string;
+      status: string;
+    };
+    try {
+      doc = await commitDriverDocument({
+        driverId: driver.id,
+        docType,
+        fileUrl,
+        replaceGroup,
         status: 'pending_review',
-      })
-      .returning({
-        id: driverDocuments.id,
-        doc_type: driverDocuments.doc_type,
-        file_url: driverDocuments.file_url,
-        status: driverDocuments.status,
       });
+    } catch (err) {
+      const storagePath = _storage.extractStoragePath(fileUrl);
+      if (storagePath) {
+        try {
+          await _storage.deleteFile(storagePath);
+        } catch (delErr) {
+          logger.warn('[DOCS] Failed to roll back orphaned reupload', {
+            path: storagePath,
+            error: (delErr as Error).message,
+          });
+        }
+      }
+      throw err;
+    }
 
-    if (!doc) throw new AppError('Failed to upload document', 400, 'BAD_REQUEST');
+    // Safe to drop previous objects only after the new row is live.
+    if (replaceGroup) {
+      for (const previousDoc of previousDocs) {
+        const storagePath = _storage.extractStoragePath(previousDoc.file_url);
+        if (storagePath) {
+          try {
+            await _storage.deleteFile(storagePath);
+          } catch (err) {
+            logger.warn('[DOCS] Failed to delete previous doc from storage', {
+              driverId: driver.id,
+              docType,
+              path: storagePath,
+              error: (err as Error).message,
+            });
+          }
+        }
+      }
+    }
 
     const isSensitive = SENSITIVE_DOC_TYPES.has(docType);
 
@@ -1843,12 +2008,16 @@ export const driversService = {
       await ensureDriverEnteredReview(driver.id);
     }
 
+    const activeCount = await countActiveDocsOfType(driver.id, docType);
     return {
       id: doc.id,
       doc_type: doc.doc_type,
       file_url: doc.file_url,
       status: doc.status,
       requires_review: isSensitive,
+      active_count: activeCount,
+      max_files: MAX_ACTIVE_FILES_PER_DOC_TYPE,
+      replaced_group: replaceGroup,
     };
   },
 
