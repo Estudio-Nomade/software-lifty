@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import {
   commissionPhases,
@@ -528,6 +528,15 @@ export const adminService = {
       let emailStatus: string | null = null;
       let pushStatus: string | null = null;
 
+      // Unread after this insert (for iOS/Android app-icon badge on the push).
+      const [unreadRow] = await db
+        .select({ count: count() })
+        .from(driverAccountMessages)
+        .where(
+          and(eq(driverAccountMessages.driver_id, driverId), isNull(driverAccountMessages.read_at)),
+        );
+      const unreadBadge = Number(unreadRow?.count ?? 0);
+
       if (driverUser) {
         const name = driverUser.full_name ?? 'Driver';
         if (driverUser.email) {
@@ -540,7 +549,7 @@ export const adminService = {
           });
         }
 
-        const notesPush = driverReviewNotesPush(trimmedNotes, inserted?.id);
+        const notesPush = driverReviewNotesPush(trimmedNotes, inserted?.id, unreadBadge);
         try {
           const pushResult = await sendPushToUserDetailed(driverUser.user_id, notesPush);
           pushStatus = pushResult.status;
@@ -549,6 +558,7 @@ export const adminService = {
             messageId: inserted?.id?.slice(0, 8),
             tokenCount: pushResult.tokenCount,
             push_status: pushResult.status,
+            badge: unreadBadge,
           });
         } catch (err) {
           pushStatus = 'failed';

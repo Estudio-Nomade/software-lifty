@@ -8,6 +8,8 @@ export interface PushMessage {
   data?: Record<string, string>;
   /** Android Expo channel; defaults to trip-requests for trip alerts. */
   channelId?: string;
+  /** iOS app-icon badge (and Android when supported via Expo). */
+  badge?: number;
 }
 
 // Expo push tokens look like `ExponentPushToken[...]` (or the legacy
@@ -149,7 +151,7 @@ export async function sendExpoPushNotification(
   token: string,
   message: PushMessage,
 ): Promise<boolean> {
-  const payload = {
+  const payload: Record<string, unknown> = {
     to: token,
     title: message.title,
     body: message.body,
@@ -159,6 +161,9 @@ export async function sendExpoPushNotification(
     // Matches Android channels in the driver app (notifications.ts).
     channelId: message.channelId ?? 'trip-requests',
   };
+  if (typeof message.badge === 'number' && Number.isFinite(message.badge)) {
+    payload.badge = Math.max(0, Math.floor(message.badge));
+  }
 
   try {
     const res = await fetch('https://exp.host/--/api/v2/push/send', {

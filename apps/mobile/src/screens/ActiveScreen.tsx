@@ -25,6 +25,7 @@ import { GoButton } from '../components/GoButton';
 import { MapView } from '../components/MapView';
 import { PayoutMethodGateModal } from '../components/PayoutMethodGateModal';
 import { Toggle } from '../components/Toggle';
+import { UnreadBadge } from '../components/UnreadBadge';
 import { bottomSheetExpandedHeight } from '../components/bottomSheetMath';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { Snackbar } from '../components/feedback/Snackbar';
@@ -53,6 +54,7 @@ import {
 } from '../lib/shouldOpenDistrictPicker';
 import { TAB_BAR_HORIZONTAL_INSET, getTabBarReserve } from '../lib/tabBarLayout';
 import { useLocationStore } from '../store/locationStore';
+import { useMessagesUnreadStore } from '../store/messagesUnreadStore';
 import { ONLINE_SINCE_KEY, useOnlineStore } from '../store/onlineStore';
 import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
@@ -120,6 +122,7 @@ export const ActiveScreen: React.FC = () => {
   const setOnline = useOnlineStore((s) => s.setOnline);
   const onlineSince = useOnlineStore((s) => s.onlineSince);
   const setOnlineSince = useOnlineStore((s) => s.setOnlineSince);
+  const unreadMessages = useMessagesUnreadStore((s) => s.unreadCount);
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [connectFeedback, setConnectFeedback] = useState<ConnectBlockedFeedback | null>(null);
   const [connecting, setConnecting] = useState(false);
@@ -585,9 +588,18 @@ export const ActiveScreen: React.FC = () => {
             activeOpacity={0.7}
             onPress={() => navigation.navigate('Profile')}
             accessibilityRole="button"
-            accessibilityLabel="Ir a perfil"
+            accessibilityLabel={
+              unreadMessages > 0
+                ? `Ir a perfil, ${unreadMessages} mensajes sin leer`
+                : 'Ir a perfil'
+            }
           >
             <Avatar uri={profile?.avatar_url ?? null} name={profile?.full_name ?? ''} size={44} />
+            {unreadMessages > 0 ? (
+              <View style={styles.floatingAvatarBadge} pointerEvents="none">
+                <UnreadBadge count={unreadMessages} size="sm" testID="home-avatar-unread-badge" />
+              </View>
+            ) : null}
           </TouchableOpacity>
         </View>
       </View>
@@ -872,7 +884,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...theme.shadows.card,
-    overflow: 'hidden',
+    overflow: 'visible',
+    position: 'relative',
+  },
+  floatingAvatarBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
   },
   goStack: {
     position: 'absolute',

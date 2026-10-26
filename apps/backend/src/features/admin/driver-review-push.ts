@@ -33,7 +33,11 @@ export function driverRejectedPush(notes?: string | null) {
 }
 
 /** Soft message while still in review — not a terminal reject. */
-export function driverReviewNotesPush(notes?: string | null, messageId?: string | null) {
+export function driverReviewNotesPush(
+  notes?: string | null,
+  messageId?: string | null,
+  badge?: number | null,
+) {
   const reason = shortReviewReason(notes);
   const data: Record<string, string> = { type: 'driver:review_notes', reason };
   if (messageId) data.message_id = messageId;
@@ -42,5 +46,8 @@ export function driverReviewNotesPush(notes?: string | null, messageId?: string 
     body: reason,
     data,
     channelId: 'account' as const,
+    ...(typeof badge === 'number' && Number.isFinite(badge)
+      ? { badge: Math.max(0, Math.floor(badge)) }
+      : {}),
   };
 }

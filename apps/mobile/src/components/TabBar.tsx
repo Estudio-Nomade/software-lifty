@@ -10,7 +10,9 @@ import {
   TAB_BAR_PILL_HEIGHT,
   getTabBarReserve,
 } from '../lib/tabBarLayout';
+import { useMessagesUnreadStore } from '../store/messagesUnreadStore';
 import { theme } from '../theme';
+import { UnreadBadge } from './UnreadBadge';
 import { Text } from './ui/Text';
 
 export type TabKey = 'home' | 'earnings' | 'trips' | 'profile';
@@ -37,6 +39,7 @@ const tabs: TabItem[] = [
 export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabPress }) => {
   const insets = useSafeAreaInsets();
   const { visible } = useTabBarVisibility();
+  const unreadMessages = useMessagesUnreadStore((s) => s.unreadCount);
   const translateY = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
 
@@ -77,20 +80,34 @@ export const TabBar: React.FC<TabBarProps> = ({ activeTab, onTabPress }) => {
       <View style={styles.pill}>
         {tabs.map((tab) => {
           const isActive = activeTab === tab.key;
+          const showProfileBadge = tab.key === 'profile' && unreadMessages > 0;
           return (
             <TouchableOpacity
               key={tab.key}
               style={styles.tab}
               onPress={() => onTabPress(tab.key)}
               activeOpacity={0.7}
+              accessibilityLabel={
+                showProfileBadge
+                  ? `Perfil tab, ${unreadMessages} mensajes sin leer`
+                  : `${tab.label} tab`
+              }
             >
               <View style={[styles.iconWell, isActive && styles.iconWellActive]}>
                 <Ionicons
                   name={isActive ? tab.iconActive : tab.icon}
                   size={22}
                   color={isActive ? theme.colors.primary : theme.colors.mediumGray}
-                  accessibilityLabel={`${tab.label} tab`}
                 />
+                {showProfileBadge ? (
+                  <View style={styles.badgeAnchor} pointerEvents="none">
+                    <UnreadBadge
+                      count={unreadMessages}
+                      size="sm"
+                      testID="tab-profile-unread-badge"
+                    />
+                  </View>
+                ) : null}
               </View>
               <Text style={[styles.label, isActive ? styles.activeLabel : styles.inactiveLabel]}>
                 {tab.label}
@@ -138,9 +155,15 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   iconWellActive: {
     backgroundColor: 'rgba(0, 194, 179, 0.12)',
+  },
+  badgeAnchor: {
+    position: 'absolute',
+    top: -2,
+    right: 2,
   },
   label: {
     fontSize: 11,

@@ -3,8 +3,10 @@ import type React from 'react';
 import { StyleSheet, TouchableOpacity, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { useMessagesUnreadStore } from '../store/messagesUnreadStore';
 import { theme } from '../theme';
 import { Avatar } from './Avatar';
+import { UnreadBadge } from './UnreadBadge';
 import { Text } from './ui/Text';
 
 interface NavbarProps {
@@ -41,6 +43,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const navigation = useAppNavigation();
+  const unreadMessages = useMessagesUnreadStore((s) => s.unreadCount);
   const floating = variant === 'floating';
   const light = variant === 'light';
   const barBg = backgroundColor ?? (light ? theme.colors.background : theme.colors.deepBlue);
@@ -80,8 +83,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           style={styles.avatarButton}
           activeOpacity={0.7}
           onPress={() => navigation.navigate('Profile')}
+          accessibilityRole="button"
+          accessibilityLabel={
+            unreadMessages > 0 ? `Ir a perfil, ${unreadMessages} mensajes sin leer` : 'Ir a perfil'
+          }
         >
           <Avatar uri={avatarUrl ?? null} name={avatarName ?? ''} size={32} />
+          {unreadMessages > 0 ? (
+            <View style={styles.avatarBadge} pointerEvents="none">
+              <UnreadBadge count={unreadMessages} size="sm" testID="navbar-avatar-unread-badge" />
+            </View>
+          ) : null}
         </TouchableOpacity>
       );
     }
@@ -162,5 +174,11 @@ const styles = StyleSheet.create({
   },
   avatarButton: {
     minWidth: 40,
+    position: 'relative',
+  },
+  avatarBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -4,
   },
 });

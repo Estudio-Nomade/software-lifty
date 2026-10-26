@@ -6,6 +6,7 @@ import type { DriverStatus } from '../api/types';
 import { driverStatusSchema } from '../api/types';
 import { useAuthStore } from '../store/authStore';
 import { buildTripCancelledParams } from './cancellation';
+import { refreshMessagesUnread } from './messagesUnread';
 import { resolvePostAuthRoute, routeForDriverStatus } from './postAuthRouting';
 
 interface PermStatus {
@@ -48,14 +49,34 @@ export async function setupNotificationHandler(): Promise<void> {
   if (!Notifications) return;
 
   Notifications.setNotificationHandler({
+    // Presentation only. Unread badge is owned by refreshMessagesUnread
+    // (receive listener / session restore / inbox focus) — avoid double-count.
     handleNotification: async () => ({
       shouldShowAlert: true,
       shouldShowBanner: true,
       shouldShowList: true,
       shouldPlaySound: true,
-      shouldSetBadge: false,
+      // Allow OS to apply payload.badge from Expo; store still refreshed via API.
+      shouldSetBadge: true,
     }),
   });
+}
+
+/** Foreground/background receipt listener — keep unread badges warm without requiring a tap. */
+export async function addNotificationReceivedListener(
+  listener: (notification: {
+    request: { content: { data?: Record<string, string | undefined> } };
+  }) => void,
+): Promise<{ remove: () => void } | null> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return null;
+  try {
+    return Notifications.addNotificationReceivedListener(
+      listener as Parameters<typeof Notifications.addNotificationReceivedListener>[0],
+    );
+  } catch {
+    return null;
+  }
 }
 
 export async function addNotificationResponseListener(
@@ -156,6 +177,7 @@ export async function reactToDriverReviewPush(
     if (pushReason) inboxParams.reviewReason = pushReason;
     // Mark-as-read happens in MessagesInboxScreen on focus (messageId param).
     navigate('Messages', Object.keys(inboxParams).length ? inboxParams : undefined);
+    void refreshMessagesUnread();
   } else {
     useAuthStore.getState().setDriverStatus('rejected');
     useAuthStore.getState().setOnboardingStep('documents');

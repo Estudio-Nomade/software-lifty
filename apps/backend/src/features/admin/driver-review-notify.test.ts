@@ -56,6 +56,13 @@ describe('driver review notify copy', () => {
     expect(push.data.message_id).toBe('msg-uuid-1');
     expect(push.data.type).toBe('driver:review_notes');
   });
+
+  test('driverReviewNotesPush includes badge for iOS/Android app icon', () => {
+    const push = driverReviewNotesPush('Falta dorso', 'msg-1', 3);
+    expect(push.badge).toBe(3);
+    const noBadge = driverReviewNotesPush('x');
+    expect(noBadge.badge).toBeUndefined();
+  });
 });
 
 describe('sendPushToUser web filter (contract)', () => {
