@@ -2600,7 +2600,12 @@ export const driversService = {
       .orderBy(desc(driverAccountMessages.created_at))
       .limit(50);
 
-    const unreadCount = rows.filter((r) => r.read_at == null).length;
+    const [unreadRow] = await db
+      .select({ count: count() })
+      .from(driverAccountMessages)
+      .where(
+        and(eq(driverAccountMessages.driver_id, driver.id), isNull(driverAccountMessages.read_at)),
+      );
 
     return {
       items: rows.map((r) => ({
@@ -2611,7 +2616,7 @@ export const driversService = {
         created_at: r.created_at,
         read_at: r.read_at,
       })),
-      unread_count: unreadCount,
+      unread_count: Number(unreadRow?.count ?? 0),
     };
   },
 

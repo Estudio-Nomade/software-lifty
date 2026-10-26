@@ -154,14 +154,8 @@ export async function reactToDriverReviewPush(
     const inboxParams: Record<string, string> = {};
     if (messageId) inboxParams.messageId = messageId;
     if (pushReason) inboxParams.reviewReason = pushReason;
+    // Mark-as-read happens in MessagesInboxScreen on focus (messageId param).
     navigate('Messages', Object.keys(inboxParams).length ? inboxParams : undefined);
-    if (messageId) {
-      try {
-        void apiClient.post(`/drivers/me/messages/${messageId}/read`).catch(() => {});
-      } catch {
-        /* mock or offline */
-      }
-    }
   } else {
     useAuthStore.getState().setDriverStatus('rejected');
     useAuthStore.getState().setOnboardingStep('documents');

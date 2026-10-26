@@ -531,13 +531,8 @@ export const adminService = {
       if (driverUser) {
         const name = driverUser.full_name ?? 'Driver';
         if (driverUser.email) {
-          try {
-            await notifyDriverReviewNotes(driverUser.email, name, trimmedNotes!);
-            emailStatus = 'sent';
-          } catch (err) {
-            emailStatus = 'failed';
-            logger.error('[DRIVER-NOTIFY] Review-notes email failed', (err as Error).message);
-          }
+          const emailOk = await notifyDriverReviewNotes(driverUser.email, name, trimmedNotes!);
+          emailStatus = emailOk ? 'sent' : 'failed';
         } else {
           emailStatus = 'skipped';
           logger.info('[DRIVER-NOTIFY] Skip review-notes email — no email', {
