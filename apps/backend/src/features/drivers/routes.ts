@@ -78,7 +78,13 @@ export const driversRoutes = new Elysia({ prefix: '/drivers' })
   .post(
     '/me/documents/upload',
     ({ user, body, set }) =>
-      safeCall(() => driversService.uploadDocument(user, body.file, body.doc_type), set),
+      safeCall(
+        () =>
+          driversService.uploadDocument(user, body.file, body.doc_type, {
+            replaceGroup: body.replace_group,
+          }),
+        set,
+      ),
     { body: uploadDocBody, requireAuth: true },
   )
   .get(
@@ -91,7 +97,13 @@ export const driversRoutes = new Elysia({ prefix: '/drivers' })
   .post(
     '/me/documents/reupload',
     ({ user, body, set }) =>
-      safeCall(() => driversService.reuploadDocument(user, body.file, body.doc_type), set),
+      safeCall(
+        () =>
+          driversService.reuploadDocument(user, body.file, body.doc_type, {
+            replaceGroup: body.replace_group,
+          }),
+        set,
+      ),
     { body: reuploadDocBody, requireAuth: true },
   )
   .post(

@@ -107,7 +107,7 @@ const MANAGEABLE_DOCS: { docType: string; label: string }[] = [
   { docType: 'vehicle_insurance', label: 'Seguro del vehiculo' },
   {
     docType: 'platform_rc_insurance',
-    label: 'Seguro de Responsabilidad Civil',
+    label: 'Seguro para transporte de pasajeros',
   },
   { docType: 'background_check', label: 'Certificado de antecedentes penales' },
   { docType: 'rndg', label: 'Registro Nacional de Datos Geneticos (RNDG)' },

@@ -26,3 +26,10 @@ export const OPTIONAL_DOC_TYPES = ['insurance_back'] as const;
 export const VALID_DOC_TYPES = [...DOC_TYPES, ...OPTIONAL_DOC_TYPES] as const;
 
 export type ValidDocType = (typeof VALID_DOC_TYPES)[number];
+
+/**
+ * Max concurrent non-superseded files per (driver_id, doc_type).
+ * Lets drivers split long policies / multi-page papers across several photos
+ * when a single shot does not fit. PDF multipage still counts as one file.
+ */
+export const MAX_ACTIVE_FILES_PER_DOC_TYPE = 5;

@@ -1662,6 +1662,62 @@ describe('Avatar photo upload', () => {
     expect(data.error?.code).toBe('AVATAR_URL_INVALID');
   });
 
+  test('PUT /me saves phone on profile and GET /me returns it', async () => {
+    const ownPhone = '+5492614000999';
+    const { token, userId } = await registerAndGetToken(ownPhone, password);
+    // Simulate email-signup user with null phone (phone only set at step1).
+    await getDb().update(users).set({ phone: null }).where(eq(users.id, userId));
+
+    const newPhone = '+5492614555123';
+    const { status } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Marti',
+        last_name: 'Yaquinta',
+        phone: newPhone,
+        address_line: 'San Martín 100, Villa Dolores, Córdoba',
+        photo_url:
+          'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
+      },
+      token,
+    );
+    expect(status).toBe(200);
+
+    const [row] = await getDb()
+      .select({ phone: users.phone })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    expect(row?.phone).toBe(newPhone);
+
+    const me = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me.status).toBe(200);
+    expect(me.data.phone).toBe(newPhone);
+  });
+
+  test('PUT /me returns PHONE_TAKEN when phone belongs to another user', async () => {
+    const taken = '+5492614666777';
+    await registerAndGetToken(taken, password);
+    const { token } = await registerAndGetToken('+5492614000888', password);
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Otra',
+        last_name: 'Cuenta',
+        phone: taken,
+        address_line: 'San Martín 100, Villa Dolores, Córdoba',
+        photo_url:
+          'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
+      },
+      token,
+    );
+    expect(status).toBe(409);
+    expect(data.error?.code).toBe('PHONE_TAKEN');
+  });
+
   test('PUT /me with photo_url null does not clear existing avatar', async () => {
     const { token } = await registerAndGetToken(phone, password);
     const { data: uploaded } = await uploadPhoto(token);
@@ -1772,7 +1828,7 @@ describe('driver storage path naming', () => {
     expect(path).toBe('avatars/Juan Perez_aaaaaaaa-100.png');
   });
 
-  test('POST /me/documents/upload stores path with driver name folder and contentType', async () => {
+    test('POST /me/documents/upload stores path with driver name folder and contentType', async () => {
     const phone = '+5492614444001';
     const { token, driverId } = await fullOnboarding(phone, 'testPass123');
     const testStorage = createTestStorage();
@@ -1793,13 +1849,90 @@ describe('driver storage path naming', () => {
     expect(data.file_url).toContain('drivers/Juan Perez_');
     expect(data.file_url).toContain(`${driverId.slice(0, 8)}/license_front-`);
     expect(data.file_url).toMatch(/\.jpg$/);
+    expect(data.active_count).toBe(1);
+    expect(data.max_files).toBe(5);
 
     const uploadedPath = [...testStorage.uploaded.keys()][0]!;
     expect(uploadedPath.startsWith(`drivers/Juan Perez_${driverId.slice(0, 8)}/`)).toBe(true);
     expect(testStorage.lastUploadOptions[0]?.contentType).toBe('image/jpeg');
   });
 
-  test('POST /me/photo uses named avatar path', async () => {
+  test('POST /me/documents/upload appends multiple files for same doc_type', async () => {
+    const phone = '+5492614444011';
+    const { token, driverId } = await fullOnboarding(phone, 'testPass123');
+    const testStorage = createTestStorage();
+    setStorageForTesting(testStorage);
+
+    async function uploadOnce(name: string) {
+      const formData = new FormData();
+      formData.append('file', new Blob([name], { type: 'image/jpeg' }), name);
+      formData.append('doc_type', 'license_front');
+      formData.append('replace_group', 'false');
+      return app.handle(
+        new Request('http://localhost/api/drivers/me/documents/upload', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        }),
+      );
+    }
+
+    const r1 = await uploadOnce('a.jpg');
+    const d1 = await r1.json();
+    expect(r1.status).toBe(200);
+    expect(d1.active_count).toBe(1);
+
+    const r2 = await uploadOnce('b.jpg');
+    const d2 = await r2.json();
+    expect(r2.status).toBe(200);
+    expect(d2.active_count).toBe(2);
+
+    const docs = await getDb()
+      .select()
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId));
+    const active = docs.filter((d) => d.doc_type === 'license_front' && d.status !== 'superseded');
+    expect(active.length).toBe(2);
+  });
+
+  test('POST /me/documents/upload replace_group supersedes prior pages', async () => {
+    const phone = '+5492614444012';
+    const { token, driverId } = await fullOnboarding(phone, 'testPass123');
+    setStorageForTesting(createTestStorage());
+
+    async function upload(replace: boolean, name: string) {
+      const formData = new FormData();
+      formData.append('file', new Blob([name], { type: 'image/jpeg' }), name);
+      formData.append('doc_type', 'license_front');
+      formData.append('replace_group', replace ? 'true' : 'false');
+      return app.handle(
+        new Request('http://localhost/api/drivers/me/documents/upload', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        }),
+      );
+    }
+
+    await upload(false, 'a.jpg');
+    await upload(false, 'b.jpg');
+    const r3 = await upload(true, 'c.jpg');
+    const d3 = await r3.json();
+    expect(r3.status).toBe(200);
+    expect(d3.active_count).toBe(1);
+    expect(d3.replaced_group).toBe(true);
+
+    const docs = await getDb()
+      .select()
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId));
+    const active = docs.filter((d) => d.doc_type === 'license_front' && d.status !== 'superseded');
+    const superseded = docs.filter((d) => d.doc_type === 'license_front' && d.status === 'superseded');
+    expect(active.length).toBe(1);
+    expect(superseded.length).toBe(2);
+  });
+
+test('POST /me/photo uses named avatar path', async () => {
     const { token, driverId } = await fullOnboarding('+5492614444002', 'testPass123');
     const testStorage = createTestStorage();
     setStorageForTesting(testStorage);

@@ -184,14 +184,14 @@ async function gatherDriverData(driverId: string): Promise<{
     license: 'Licencia de conducir',
     registration: 'Cedula del vehiculo',
     insurance: 'Seguro del vehiculo',
-    platform_rc_insurance: 'Seguro de Responsabilidad Civil',
+    platform_rc_insurance: 'Seguro para transporte de pasajeros',
     background_check: 'Certificado de antecedentes',
     rndg: 'Registro Nacional de Datos Geneticos (RNDG)',
   };
 
   return {
-    fullName: d.fullName ?? 'Sin nombre',
-    phone: d.phone ?? 'Sin telefono',
+    fullName: displayOrFallback(d.fullName, 'Sin nombre'),
+    phone: displayOrFallback(d.phone, 'Sin telefono'),
     email: d.email,
     kycStatus: d.kycStatus,
     verifiedName: d.verifiedName,
@@ -211,6 +211,12 @@ async function gatherDriverData(driverId: string): Promise<{
       back: urls.back,
     })),
   };
+}
+
+/** Empty/whitespace DB strings must not render as blank table cells. */
+function displayOrFallback(value: string | null | undefined, fallback: string): string {
+  const t = value?.trim();
+  return t && t.length > 0 ? t : fallback;
 }
 
 async function collectAdminRecipients(): Promise<Set<string>> {
