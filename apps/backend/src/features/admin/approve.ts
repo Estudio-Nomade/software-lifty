@@ -3,6 +3,7 @@ import { db } from '../../shared/db/client';
 import { drivers } from '../../shared/db/schema';
 import { driverDocuments } from '../../shared/db/schema/driver-documents';
 import { users } from '../../shared/db/schema/users';
+import { broadcastDriverAccountUpdated } from '../../shared/lib/broadcast';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
@@ -78,6 +79,13 @@ export async function approveDriver(token: string): Promise<{ message: string }>
     channelId: DRIVER_APPROVED_PUSH.channelId,
   }).catch((err) => {
     logger.error('[ADMIN-APPROVE] Push failed', (err as Error).message);
+  });
+
+  broadcastDriverAccountUpdated(driver.id, {
+    reason: 'review',
+    action: 'approve',
+    status: 'approved',
+    via: 'approval_token',
   });
 
   return {

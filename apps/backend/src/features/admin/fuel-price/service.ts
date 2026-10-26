@@ -1,3 +1,4 @@
+import { broadcastPlatformConfigUpdated } from '../../../shared/lib/broadcast';
 import {
   getFuelPriceHistory,
   getFuelPriceStatus,
@@ -17,11 +18,13 @@ export const fuelPriceService = {
     data: { price: number; source?: string; notes?: string; force?: boolean },
     updatedBy: string,
   ) {
-    return setFuelPrice(data.price, {
+    const result = await setFuelPrice(data.price, {
       updatedBy,
       source: data.source ?? null,
       notes: data.notes ?? null,
       force: data.force ?? false,
     });
+    broadcastPlatformConfigUpdated({ reason: 'fuel_price', price: data.price });
+    return result;
   },
 };

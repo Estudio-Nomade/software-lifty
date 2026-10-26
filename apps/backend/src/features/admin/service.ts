@@ -10,6 +10,10 @@ import {
   users,
   vehicles,
 } from '../../shared/db/schema';
+import {
+  broadcastDriverAccountUpdated,
+  broadcastPlatformConfigUpdated,
+} from '../../shared/lib/broadcast';
 import { getCommissionConfig } from '../../shared/lib/commission';
 import { DOC_TYPES, VALID_DOC_TYPES } from '../../shared/lib/documents';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
@@ -579,6 +583,12 @@ export const adminService = {
           .where(eq(driverAccountMessages.id, inserted.id));
       }
 
+      broadcastDriverAccountUpdated(driverId, {
+        reason: 'review',
+        action: 'request_changes',
+        message_id: inserted?.id ?? null,
+      });
+
       return {
         driver_id: driver.id,
         action,
@@ -690,6 +700,12 @@ export const adminService = {
       }
     }
 
+    broadcastDriverAccountUpdated(driverId, {
+      reason: 'review',
+      action,
+      status: newStatus,
+    });
+
     return {
       driver_id: driver.id,
       action,
@@ -757,6 +773,7 @@ export const adminService = {
       .where(eq(commissionPhases.id, id))
       .returning();
 
+    broadcastPlatformConfigUpdated({ reason: 'commission_phase', phase_id: id });
     return updated;
   },
 
@@ -780,6 +797,7 @@ export const adminService = {
         set: { value, updated_at: new Date() },
       });
 
+    broadcastPlatformConfigUpdated({ reason: 'commission_start_date', start_date: value });
     // Same shape as GET so admin can clear the "not configured" banner without a second fetch.
     return { start_date: value, configured: true as const };
   },

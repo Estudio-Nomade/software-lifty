@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  DeviceEventEmitter,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -35,6 +36,7 @@ import {
   DRIVER_PROFILE_PHOTO_UPLOAD_FAIL_MSG,
 } from '../lib/driverProfilePhoto';
 import { refreshMessagesUnread } from '../lib/messagesUnread';
+import { DRIVER_ACCOUNT_REFRESH_EVENT } from '../lib/platformRealtime';
 import { getTabBarReserve } from '../lib/tabBarLayout';
 import { useMessagesUnreadStore } from '../store/messagesUnreadStore';
 import { theme } from '../theme';
@@ -186,6 +188,13 @@ export const ProfileScreen: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(DRIVER_ACCOUNT_REFRESH_EVENT, () => {
+      void fetchData();
+    });
+    return () => sub.remove();
   }, [fetchData]);
 
   useFocusEffect(
