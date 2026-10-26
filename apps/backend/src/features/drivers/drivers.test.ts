@@ -837,7 +837,7 @@ describe('Vehicle step (no duplicate form)', () => {
         vehicle_plate: 'MOT150',
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
-        license_category: 'A3',
+        license_category: 'A1.2',
       },
       token,
     );
@@ -861,7 +861,7 @@ describe('Vehicle step (no duplicate form)', () => {
         vehicle_plate: 'MOT149',
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 149,
-        license_category: 'A3',
+        license_category: 'A1.3',
       },
       token,
     );
@@ -870,7 +870,7 @@ describe('Vehicle step (no duplicate form)', () => {
   });
 
   test('moto vehicle PUT without engine_cc returns VEHICLE_ENGINE_CC_INVALID', async () => {
-    const { token } = await fullOnboarding('+5492617777006', password);
+    const { token } = await fullOnboarding('+549****7006', password);
     const { status, data } = await request(
       'PUT',
       '/api/drivers/me',
@@ -881,7 +881,7 @@ describe('Vehicle step (no duplicate form)', () => {
         vehicle_color: 'Rojo',
         vehicle_plate: 'MOT000',
         vehicle_type: 'motorcycle',
-        license_category: 'A3',
+        license_category: 'A1.3',
       },
       token,
     );
@@ -889,8 +889,115 @@ describe('Vehicle step (no duplicate form)', () => {
     expect(data.error?.code).toBe('VEHICLE_ENGINE_CC_INVALID');
   });
 
+  test('moto license A1.1 invalid; A1.2@150 ok; A1.2@200 mismatch', async () => {
+    const { token } = await fullOnboarding('+549****7012', password);
+    const bad = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTA11',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+        license_category: 'A1.1',
+      },
+      token,
+    );
+    expect(bad.status).toBe(400);
+    expect(bad.data.error?.code).toBe('LICENSE_CATEGORY_INVALID');
+
+    const mismatch = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTA12',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 200,
+        license_category: 'A1.2',
+      },
+      token,
+    );
+    expect(mismatch.status).toBe(400);
+    expect(mismatch.data.error?.code).toBe('LICENSE_CATEGORY_CC_MISMATCH');
+
+    const ok = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTA14',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 400,
+        license_category: 'A1.4',
+      },
+      token,
+    );
+    expect(ok.status).toBe(200);
+
+    const me = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me.data.license_category).toBe('A1.4');
+    expect(me.data.license_professional_status).toBe('not_required');
+  });
+
+  test('moto vehicle re-save soft-heals legacy A2 to A1.2 when cc matches', async () => {
+    const { token, driverId } = await fullOnboarding('+549****7013', password);
+    const first = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTLEG',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+        license_category: 'A1.2',
+      },
+      token,
+    );
+    expect(first.status).toBe(200);
+
+    // Simulate pre-fix row that stored mistaken chip "A2".
+    const db = getDb();
+    await db
+      .update(drivers)
+      .set({ license_category: 'A2', updated_at: new Date() })
+      .where(eq(drivers.id, driverId));
+
+    // Vehicle re-save without license_category must re-validate/heal from DB.
+    const resave = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTLEG',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+      },
+      token,
+    );
+    expect(resave.status).toBe(200);
+
+    const me = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me.data.license_category).toBe('A1.2');
+  });
+
   test('car vehicle PUT strips engine_cc to null', async () => {
-    const { token } = await fullOnboarding('+5492617777007', password);
+    const { token } = await fullOnboarding('+549****7007', password);
     const { status } = await request(
       'PUT',
       '/api/drivers/me',
@@ -913,7 +1020,7 @@ describe('Vehicle step (no duplicate form)', () => {
   });
 
   test('vehicle PUT without vehicle_type keeps existing motorcycle type and cc', async () => {
-    const { token } = await fullOnboarding('+5492617777008', password);
+    const { token } = await fullOnboarding('+549****7008', password);
     await request(
       'PUT',
       '/api/drivers/me',
@@ -925,7 +1032,7 @@ describe('Vehicle step (no duplicate form)', () => {
         vehicle_plate: 'A123BCD',
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
-        license_category: 'A3',
+        license_category: 'A1.2',
       },
       token,
     );
@@ -964,7 +1071,7 @@ describe('Vehicle step (no duplicate form)', () => {
         vehicle_plate: 'MOTCOV',
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
-        license_category: 'A3',
+        license_category: 'A1.2',
       },
       token,
     );
@@ -994,7 +1101,7 @@ describe('Vehicle step (no duplicate form)', () => {
         vehicle_plate: 'MOTBAD',
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
-        license_category: 'A3',
+        license_category: 'A1.2',
       },
       token,
     );
@@ -1090,7 +1197,7 @@ describe('Document step completeness', () => {
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
         vehicle_insurance_coverage_type: 'comprehensive',
-        license_category: 'A3',
+        license_category: 'A1.2',
       },
       token,
     );
@@ -1124,7 +1231,7 @@ describe('Document step completeness', () => {
         vehicle_plate: 'MOTDOC',
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
-        license_category: 'A3',
+        license_category: 'A1.2',
       },
       token,
     );
@@ -1159,7 +1266,7 @@ describe('Document step completeness', () => {
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
         vehicle_insurance_coverage_type: 'third_party',
-        license_category: 'A3',
+        license_category: 'A1.2',
       },
       token,
     );

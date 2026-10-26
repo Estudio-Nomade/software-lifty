@@ -169,6 +169,14 @@ export function evaluateProfessionalLicenseGrace(input: {
   };
 }
 
+/** Moto license classes — see moto-license-category.ts (ANSV A1.x). Re-export keepers. */
+export {
+  MOTO_LICENSE_CATEGORIES,
+  type MotoLicenseCategory,
+  isAllowedMotoLicenseCategory,
+  normalizeMotoLicenseCategory as normalizeLicenseCategory,
+} from './moto-license-category';
+
 /** Map UI/API category + vehicle type → professional status. */
 export function resolveLicenseProfessionalStatus(input: {
   vehicle_type?: string | null;
@@ -183,12 +191,12 @@ export function resolveLicenseProfessionalStatus(input: {
 
   if (!cat) return 'unknown';
 
-  // Without vehicle type, do not assume auto (A3 would falsely become pending).
+  // Without vehicle type, do not assume auto (A1.x would falsely become pending).
   if (!vt) return 'unknown';
 
   if (isMoto) {
-    // A3 (and A1/A2) are accepted for moto — no professional-car grace.
-    if (cat === 'a1' || cat === 'a2' || cat === 'a3') return 'not_required';
+    // A1.2/A1.3/A1.4 (and legacy A2/A3/A4 aliases) — no professional-car grace.
+    // Invalid classes still do not start auto professional grace (rejected at service).
     return 'not_required';
   }
 

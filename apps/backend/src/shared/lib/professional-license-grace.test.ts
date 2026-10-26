@@ -3,6 +3,7 @@ import {
   PROFESSIONAL_LICENSE_GRACE_DAYS,
   buildGraceStartPatch,
   evaluateProfessionalLicenseGrace,
+  isAllowedMotoLicenseCategory,
   resolveLicenseProfessionalStatus,
   shouldClearProfessionalGraceTimestamps,
   shouldStartProfessionalLicenseGrace,
@@ -122,13 +123,26 @@ describe('professional-license-grace', () => {
     expect(snap.show_banner).toBe(true);
   });
 
-  test('resolveLicenseProfessionalStatus moto A3 → not_required', () => {
+  test('resolveLicenseProfessionalStatus moto A1.x → not_required', () => {
     expect(
-      resolveLicenseProfessionalStatus({ vehicle_type: 'motorcycle', license_category: 'A3' }),
+      resolveLicenseProfessionalStatus({ vehicle_type: 'motorcycle', license_category: 'A1.3' }),
     ).toBe('not_required');
-    expect(resolveLicenseProfessionalStatus({ vehicle_type: 'moto', license_category: 'a3' })).toBe(
-      'not_required',
-    );
+    expect(
+      resolveLicenseProfessionalStatus({ vehicle_type: 'moto', license_category: 'a1.2' }),
+    ).toBe('not_required');
+    expect(
+      resolveLicenseProfessionalStatus({ vehicle_type: 'motorcycle', license_category: 'A1.4' }),
+    ).toBe('not_required');
+  });
+
+  test('isAllowedMotoLicenseCategory allows A1.2/A1.3/A1.4 (+ legacy A2/A3/A4)', () => {
+    expect(isAllowedMotoLicenseCategory('A1.2')).toBe(true);
+    expect(isAllowedMotoLicenseCategory('a1.3')).toBe(true);
+    expect(isAllowedMotoLicenseCategory('A1.4')).toBe(true);
+    expect(isAllowedMotoLicenseCategory('A2')).toBe(true); // legacy alias
+    expect(isAllowedMotoLicenseCategory('A1.1')).toBe(false);
+    expect(isAllowedMotoLicenseCategory('B')).toBe(false);
+    expect(isAllowedMotoLicenseCategory('')).toBe(false);
   });
 
   test('resolveLicenseProfessionalStatus auto B → pending_professional', () => {
@@ -140,14 +154,14 @@ describe('professional-license-grace', () => {
     ).toBe('professional');
   });
 
-  test('resolveLicenseProfessionalStatus A3 + null vehicle → unknown (no false pending)', () => {
-    expect(resolveLicenseProfessionalStatus({ vehicle_type: null, license_category: 'A3' })).toBe(
+  test('resolveLicenseProfessionalStatus A1.3 + null vehicle → unknown (no false pending)', () => {
+    expect(resolveLicenseProfessionalStatus({ vehicle_type: null, license_category: 'A1.3' })).toBe(
       'unknown',
     );
     expect(
       resolveLicenseProfessionalStatus({ vehicle_type: undefined, license_category: 'B' }),
     ).toBe('unknown');
-    expect(resolveLicenseProfessionalStatus({ vehicle_type: '', license_category: 'A3' })).toBe(
+    expect(resolveLicenseProfessionalStatus({ vehicle_type: '', license_category: 'A1.3' })).toBe(
       'unknown',
     );
   });

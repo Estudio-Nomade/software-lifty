@@ -9,6 +9,48 @@ export const VEHICLE_MAX_AGE_YEARS = 15;
 export const MOTO_MIN_ENGINE_CC = 150;
 
 /**
+ * ANSV Licencia Nacional — motos 2 ruedas = A 1.x
+ * https://www.argentina.gob.ar/seguridadvial/licencianacional/clasesysubclases
+ * Lifty floor ≥150 → A1.1 out; A1.2 only at 150 cc.
+ */
+export const MOTO_LICENSE_CATEGORIES = ['A1.2', 'A1.3', 'A1.4'] as const;
+export type MotoLicenseCategory = (typeof MOTO_LICENSE_CATEGORIES)[number];
+
+export const MOTO_LICENSE_CHIP_META: Record<
+  MotoLicenseCategory,
+  { rangeLabel: string; min: number; max: number | null }
+> = {
+  'A1.2': { rangeLabel: 'hasta 150 cc', min: MOTO_MIN_ENGINE_CC, max: 150 },
+  'A1.3': { rangeLabel: '151–300 cc', min: 151, max: 300 },
+  'A1.4': { rangeLabel: '+300 cc', min: 301, max: null },
+};
+
+/** Normalize client/DB token → A1.2 | A1.3 | A1.4 | other. */
+export function normalizeMotoLicenseCategory(raw: string | null | undefined): string {
+  const s = (raw ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!s) return '';
+  const m = s.match(/^A\.?1[.\-]?([234])$/);
+  if (m) return `A1.${m[1]}`;
+  if ((MOTO_LICENSE_CATEGORIES as readonly string[]).includes(s)) return s;
+  // Legacy early Lifty chips
+  if (s === 'A2') return 'A1.2';
+  if (s === 'A3') return 'A1.3';
+  if (s === 'A4') return 'A1.4';
+  return s;
+}
+
+export function isAllowedMotoLicenseCategory(raw: string | null | undefined): boolean {
+  return (MOTO_LICENSE_CATEGORIES as readonly string[]).includes(normalizeMotoLicenseCategory(raw));
+}
+
+export function motoLicenseCategoryForEngineCc(cc: number): MotoLicenseCategory | null {
+  if (!Number.isInteger(cc) || cc < MOTO_MIN_ENGINE_CC) return null;
+  if (cc <= 150) return 'A1.2';
+  if (cc <= 300) return 'A1.3';
+  return 'A1.4';
+}
+
+/**
  * AR plate formats (DNRPA), after stripping spaces/hyphens.
  * Auto:
  * - Mercosur (2016+): 2 letras + 3 dígitos + 2 letras (AB123CD)
@@ -87,6 +129,28 @@ export function validateVehicleEngineCc(value: string, type: VehicleTypeUi): str
     return `Por ahora solo motos de ${MOTO_MIN_ENGINE_CC} cc o más. Debe coincidir con la cédula.`;
   }
   return undefined;
+}
+
+/** Field error if class + cc don't match ANSV band (after floor ≥150). */
+export function validateMotoLicenseVsEngineCc(
+  categoryRaw: string,
+  engineCcRaw: string,
+): string | undefined {
+  if (!categoryRaw.trim() || !engineCcRaw.trim()) return undefined;
+  const cat = normalizeMotoLicenseCategory(categoryRaw);
+  if (!(MOTO_LICENSE_CATEGORIES as readonly string[]).includes(cat)) {
+    return 'Elegí A1.2, A1.3 o A1.4 (como en tu licencia nacional).';
+  }
+  const ccErr = validateVehicleEngineCc(engineCcRaw, 'Moto');
+  if (ccErr) return ccErr;
+  const cc = Number.parseInt(engineCcRaw.trim(), 10);
+  const meta = MOTO_LICENSE_CHIP_META[cat as MotoLicenseCategory];
+  const inRange = cc >= meta.min && (meta.max == null || cc <= meta.max);
+  if (inRange) return undefined;
+  const suggested = motoLicenseCategoryForEngineCc(cc);
+  return suggested
+    ? `Con ${cc} cc corresponde clase ${suggested} (${MOTO_LICENSE_CHIP_META[suggested].rangeLabel}).`
+    : `La clase ${cat} no coincide con ${cc} cc.`;
 }
 
 const UI_TO_API: Record<VehicleTypeUi, string> = {

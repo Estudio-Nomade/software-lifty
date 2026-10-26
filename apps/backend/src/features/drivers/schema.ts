@@ -22,7 +22,7 @@ export const updateProfileBody = t.Object({
   vehicle_engine_cc: t.Optional(t.Union([t.Number(), t.Null()])),
   /** Moto póliza: third_party | comprehensive. Ignored/null for car. */
   vehicle_insurance_coverage_type: t.Optional(t.Union([t.String(), t.Null()])),
-  /** License class: A3 (moto), B, professional, … */
+  /** License class: A1.2/A1.3/A1.4 (moto ANSV), B, professional, … */
   license_category: t.Optional(t.String()),
   /** Optional explicit status; else derived from category + vehicle_type. */
   license_professional_status: t.Optional(t.String()),
