@@ -33,12 +33,14 @@ export function driverRejectedPush(notes?: string | null) {
 }
 
 /** Soft message while still in review — not a terminal reject. */
-export function driverReviewNotesPush(notes?: string | null) {
+export function driverReviewNotesPush(notes?: string | null, messageId?: string | null) {
   const reason = shortReviewReason(notes);
+  const data: Record<string, string> = { type: 'driver:review_notes', reason };
+  if (messageId) data.message_id = messageId;
   return {
     title: 'Necesitamos que corrijas documentación',
     body: reason,
-    data: { type: 'driver:review_notes', reason } as Record<string, string>,
+    data,
     channelId: 'account' as const,
   };
 }

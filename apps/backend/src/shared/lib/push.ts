@@ -221,7 +221,16 @@ export async function sendPush(token: string, message: PushMessage): Promise<boo
 
 // ─── Per-user fan-out ──────────────────────────────────────────────────
 
-export async function sendPushToUser(userId: string, message: PushMessage): Promise<boolean> {
+export type PushToUserResult = {
+  ok: boolean;
+  tokenCount: number;
+  status: 'sent' | 'zero_tokens' | 'failed';
+};
+
+export async function sendPushToUserDetailed(
+  userId: string,
+  message: PushMessage,
+): Promise<PushToUserResult> {
   try {
     const { db } = await import('../db/client');
     const { pushTokens } = await import('../db/schema/push-tokens');
@@ -236,25 +245,34 @@ export async function sendPushToUser(userId: string, message: PushMessage): Prom
 
     if (deviceTokens.length === 0) {
       logger.warn('[PUSH] No push tokens for user', {
-        userId,
+        userId: userId.slice(0, 8),
         skippedWeb: tokens.length - deviceTokens.length,
       });
-      return false;
+      return { ok: false, tokenCount: 0, status: 'zero_tokens' };
     }
 
     let anySuccess = false;
     for (const t of deviceTokens) {
       logger.info('[PUSH] Sending to token', {
-        userId,
+        userId: userId.slice(0, 8),
         platform: t.platform,
         tokenKind: isExpoToken(t.token) ? 'expo' : 'fcm',
       });
       const ok = await sendPush(t.token, message);
       if (ok) anySuccess = true;
     }
-    return anySuccess;
+    return {
+      ok: anySuccess,
+      tokenCount: deviceTokens.length,
+      status: anySuccess ? 'sent' : 'failed',
+    };
   } catch (err) {
     logger.error('[PUSH] sendPushToUser error', { error: (err as Error).message });
-    return false;
+    return { ok: false, tokenCount: 0, status: 'failed' };
   }
+}
+
+export async function sendPushToUser(userId: string, message: PushMessage): Promise<boolean> {
+  const result = await sendPushToUserDetailed(userId, message);
+  return result.ok;
 }

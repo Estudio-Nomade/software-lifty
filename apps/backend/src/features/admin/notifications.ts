@@ -97,11 +97,12 @@ export async function notifyDriverRejected(
   }
 }
 
+/** Returns true if email was sent; false on failure (never throws — same as approve/reject). */
 export async function notifyDriverReviewNotes(
   driverEmail: string,
   driverName: string,
   reason: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const subject = 'Necesitamos que corrijas documentación';
     const html = `
@@ -111,8 +112,10 @@ export async function notifyDriverReviewNotes(
       <p>Entrá a la app y volvé a subir lo que falte. Tu cuenta sigue en revisión.</p>
     `;
     await sendEmail(driverEmail, subject, html);
+    return true;
   } catch (err) {
     logger.error('[DRIVER-NOTIFY] Failed to send review-notes email', (err as Error).message);
+    return false;
   }
 }
 

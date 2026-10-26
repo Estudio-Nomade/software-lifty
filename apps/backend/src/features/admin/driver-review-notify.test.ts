@@ -50,6 +50,12 @@ describe('driver review notify copy', () => {
     expect(push.data.reason).toBe('Falta dorso de la licencia');
     expect(push.channelId).toBe('account');
   });
+
+  test('driverReviewNotesPush includes message_id when provided', () => {
+    const push = driverReviewNotesPush('Falta dorso', 'msg-uuid-1');
+    expect(push.data.message_id).toBe('msg-uuid-1');
+    expect(push.data.type).toBe('driver:review_notes');
+  });
 });
 
 describe('sendPushToUser web filter (contract)', () => {
