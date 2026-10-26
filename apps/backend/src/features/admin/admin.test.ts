@@ -6,7 +6,15 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
-import { commissionPhases, driverDocuments, drivers, platformConfig, users, vehicles } from '../../shared/db/schema';
+import {
+  commissionPhases,
+  driverAccountMessages,
+  driverDocuments,
+  drivers,
+  platformConfig,
+  users,
+  vehicles,
+} from '../../shared/db/schema';
 import { DOC_TYPES } from '../../shared/lib/documents';
 import { createTestToken } from '../../shared/testing/utils';
 
@@ -14,6 +22,7 @@ let app: any;
 
 async function truncateTables() {
   const db = getDb();
+  await db.delete(driverAccountMessages);
   await db.delete(driverDocuments);
   await db.delete(vehicles);
   await db.delete(drivers);
@@ -644,6 +653,91 @@ describe('Admin', () => {
     );
     expect(hard.status).toBe(200);
     expect(hard.data.status).toBe('rejected');
+  });
+
+  test('request_changes ×2 appends account_messages; admin_review_notes is last', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId, token } = await createReviewDriver();
+    const first = 'Falta dorso de la licencia nítido';
+    const second = 'También falta el seguro del vehículo';
+
+    const r1 = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      { action: 'request_changes', notes: first },
+      adminToken,
+    );
+    expect(r1.status).toBe(200);
+    expect(r1.data.account_message?.id).toBeTruthy();
+    expect(r1.data.account_message?.body).toBe(first);
+    expect(['sent', 'zero_tokens', 'failed']).toContain(r1.data.account_message?.push_status);
+
+    const r2 = await request(
+      'POST',
+      `/api/admin/drivers/${driverId}/review`,
+      { action: 'request_changes', notes: second },
+      adminToken,
+    );
+    expect(r2.status).toBe(200);
+    expect(r2.data.account_message?.body).toBe(second);
+
+    const db = getDb();
+    const [driver] = await db.select().from(drivers).where(eq(drivers.id, driverId)).limit(1);
+    expect(driver!.status).toBe('review');
+    expect(driver!.admin_review_status).toBe('pending');
+    expect(driver!.admin_review_notes).toBe(second);
+
+    const history = await db
+      .select()
+      .from(driverAccountMessages)
+      .where(eq(driverAccountMessages.driver_id, driverId));
+    expect(history).toHaveLength(2);
+
+    const detail = await request('GET', `/api/admin/drivers/${driverId}`, undefined, adminToken);
+    expect(detail.status).toBe(200);
+    expect(detail.data.account_messages).toHaveLength(2);
+    expect(detail.data.account_messages[0].body).toBe(second);
+    expect(detail.data.account_messages[1].body).toBe(first);
+    expect(detail.data.account_messages[0].author?.id).toBeTruthy();
+    expect(detail.data.admin_review_notes).toBe(second);
+
+    const list = await request('GET', '/api/drivers/me/messages', undefined, token);
+    expect(list.status).toBe(200);
+    expect(list.data.items).toHaveLength(2);
+    expect(list.data.unread_count).toBe(2);
+
+    const msgId = list.data.items[0].id as string;
+    const marked = await request('POST', `/api/drivers/me/messages/${msgId}/read`, undefined, token);
+    expect(marked.status).toBe(200);
+    expect(marked.data.read_at).toBeTruthy();
+
+    const list2 = await request('GET', '/api/drivers/me/messages', undefined, token);
+    expect(list2.status).toBe(200);
+    expect(list2.data.unread_count).toBe(1);
+
+    const [strangerUser] = await db
+      .insert(users)
+      .values({
+        phone: '+5492617777001',
+        full_name: 'Other Driver',
+        role: 'driver',
+        kyc_status: 'approved',
+      })
+      .returning({ id: users.id });
+    await db.insert(drivers).values({
+      user_id: strangerUser.id,
+      status: 'review',
+      kyc_status: 'approved',
+      admin_review_status: 'pending',
+    });
+    const strangerToken = await createTestToken(strangerUser.id);
+    const denied = await request(
+      'POST',
+      `/api/drivers/me/messages/${msgId}/read`,
+      undefined,
+      strangerToken,
+    );
+    expect(denied.status).toBe(404);
   });
 
   test('POST /drivers/:id/review already reviewed returns error', async () => {

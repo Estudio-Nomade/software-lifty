@@ -113,6 +113,7 @@ export async function notifyDriverReviewNotes(
     await sendEmail(driverEmail, subject, html);
   } catch (err) {
     logger.error('[DRIVER-NOTIFY] Failed to send review-notes email', (err as Error).message);
+    throw err;
   }
 }
 

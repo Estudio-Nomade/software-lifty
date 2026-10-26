@@ -154,6 +154,7 @@ export const ProfileScreen: React.FC = () => {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [documents, setDocuments] = useState<DriverDocument[]>([]);
   const [metrics, setMetrics] = useState<CancellationMetrics | null>(null);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [editVisible, setEditVisible] = useState(false);
   const [editFirstName, setEditFirstName] = useState('');
@@ -164,14 +165,17 @@ export const ProfileScreen: React.FC = () => {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [profileRes, docsRes, metricsRes] = await Promise.all([
+      const [profileRes, docsRes, metricsRes, unreadRes] = await Promise.all([
         apiClient.get('/drivers/me'),
         getValidated('/drivers/me/documents', z.array(documentSchema)),
         apiClient.get('/drivers/me/cancellation-metrics'),
+        apiClient.get('/drivers/me/messages/unread-count').catch(() => null),
       ]);
       setProfile(profileRes.data);
       setDocuments(docsRes);
       setMetrics(metricsRes.data?.data ?? metricsRes.data);
+      const unreadPayload = unreadRes?.data?.data ?? unreadRes?.data;
+      setUnreadMessages(Number(unreadPayload?.unread_count ?? 0));
     } catch {
     } finally {
       setLoading(false);
@@ -501,6 +505,23 @@ export const ProfileScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>Ayuda</Text>
           <TouchableOpacity
             style={styles.menuRow}
+            onPress={() => navigation.navigate('Messages')}
+            accessibilityRole="button"
+            accessibilityLabel="Mensajes de Lifty"
+          >
+            <Ionicons name="mail-outline" size={20} color={theme.colors.deepBlue} />
+            <Text style={styles.menuLabel}>Mensajes de Lifty</Text>
+            {unreadMessages > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {unreadMessages > 99 ? '99+' : String(unreadMessages)}
+                </Text>
+              </View>
+            ) : null}
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.mediumGray} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuRow}
             onPress={() => navigation.navigate('Terms', { from: 'profile' })}
             accessibilityRole="button"
             accessibilityLabel="Términos y condiciones"
@@ -720,6 +741,20 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.deepBlue,
     fontWeight: theme.fontWeight.medium,
+  },
+  badge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  badgeText: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.white,
   },
   reviewBanner: {
     backgroundColor: 'rgba(229, 57, 53, 0.12)',

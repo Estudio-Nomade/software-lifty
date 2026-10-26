@@ -9,7 +9,7 @@ jest.mock('../../lib/postAuthRouting', () => ({
 }));
 
 jest.mock('../../api/client', () => ({
-  apiClient: { get: jest.fn() },
+  apiClient: { get: jest.fn(), post: jest.fn(() => Promise.resolve({ data: {} })) },
 }));
 
 jest.mock('../../store/authStore', () => ({
@@ -56,16 +56,30 @@ describe('handleNotificationResponse driver review', () => {
     expect(navigate).not.toHaveBeenCalledWith('WaitingApproval');
   });
 
-  it('routes driver:review_notes to OnboardingStep2 with reason (soft, not reject)', () => {
+  it('routes driver:review_notes to Messages inbox (soft, not reject)', () => {
     const navigate = jest.fn();
     handleNotificationResponse(
-      makeResponse('driver:review_notes', { reason: 'Falta dorso de la licencia' }),
+      makeResponse('driver:review_notes', {
+        reason: 'Falta dorso de la licencia',
+        message_id: 'msg-1',
+      }),
       navigate,
     );
-    expect(navigate).toHaveBeenCalledWith('OnboardingStep2', {
+    expect(navigate).toHaveBeenCalledWith('Messages', {
+      messageId: 'msg-1',
       reviewReason: 'Falta dorso de la licencia',
     });
     expect(navigate).not.toHaveBeenCalledWith('WaitingApproval');
+    expect(navigate).not.toHaveBeenCalledWith('OnboardingStep2', expect.anything());
+  });
+
+  it('routes driver:review_notes without message_id still opens Messages', () => {
+    const navigate = jest.fn();
+    handleNotificationResponse(
+      makeResponse('driver:review_notes', { reason: 'Falta dorso' }),
+      navigate,
+    );
+    expect(navigate).toHaveBeenCalledWith('Messages', { reviewReason: 'Falta dorso' });
   });
 
   it('routes driver:commission_debt_block to PayCommissionDebt', () => {

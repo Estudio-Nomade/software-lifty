@@ -2,6 +2,7 @@ import { and, count, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 import { db, getDb } from '../../shared/db/client';
 import {
   districts,
+  driverAccountMessages,
   driverCommissionReceipts,
   driverDocuments,
   driverLocations,
@@ -2576,5 +2577,93 @@ export const driversService = {
       }
       throw err;
     }
+  },
+
+  async listAccountMessages(user: AuthUser) {
+    const [driver] = await db
+      .select({ id: drivers.id })
+      .from(drivers)
+      .where(eq(drivers.user_id, user.id))
+      .limit(1);
+    if (!driver) throw new NotFoundError('Driver not found');
+
+    const rows = await db
+      .select({
+        id: driverAccountMessages.id,
+        type: driverAccountMessages.type,
+        body: driverAccountMessages.body,
+        created_at: driverAccountMessages.created_at,
+        read_at: driverAccountMessages.read_at,
+      })
+      .from(driverAccountMessages)
+      .where(eq(driverAccountMessages.driver_id, driver.id))
+      .orderBy(desc(driverAccountMessages.created_at))
+      .limit(50);
+
+    const unreadCount = rows.filter((r) => r.read_at == null).length;
+
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        type: r.type,
+        body: r.body,
+        title: r.type === 'review_notes' ? 'Documentación' : 'Aviso de Lifty',
+        created_at: r.created_at,
+        read_at: r.read_at,
+      })),
+      unread_count: unreadCount,
+    };
+  },
+
+  async markAccountMessageRead(user: AuthUser, messageId: string) {
+    const [driver] = await db
+      .select({ id: drivers.id })
+      .from(drivers)
+      .where(eq(drivers.user_id, user.id))
+      .limit(1);
+    if (!driver) throw new NotFoundError('Driver not found');
+
+    const [row] = await db
+      .select({
+        id: driverAccountMessages.id,
+        driver_id: driverAccountMessages.driver_id,
+        read_at: driverAccountMessages.read_at,
+      })
+      .from(driverAccountMessages)
+      .where(eq(driverAccountMessages.id, messageId))
+      .limit(1);
+
+    if (!row || row.driver_id !== driver.id) {
+      throw new NotFoundError('Message not found');
+    }
+
+    if (row.read_at == null) {
+      const now = new Date();
+      await db
+        .update(driverAccountMessages)
+        .set({ read_at: now })
+        .where(eq(driverAccountMessages.id, messageId));
+      return { id: row.id, read_at: now };
+    }
+
+    return { id: row.id, read_at: row.read_at };
+  },
+
+  async getAccountMessagesUnreadCount(user: AuthUser) {
+    const [driver] = await db
+      .select({ id: drivers.id })
+      .from(drivers)
+      .where(eq(drivers.user_id, user.id))
+      .limit(1);
+    if (!driver) throw new NotFoundError('Driver not found');
+
+    const [row] = await db
+      .select({ count: count() })
+      .from(driverAccountMessages)
+      .where(
+        and(eq(driverAccountMessages.driver_id, driver.id), isNull(driverAccountMessages.read_at)),
+      );
+
+    return { unread_count: Number(row?.count ?? 0) };
   },
 };

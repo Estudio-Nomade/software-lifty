@@ -136,6 +136,7 @@ export async function reactToDriverReviewPush(
   type: string,
   navigate: (screen: string, params?: Record<string, string>) => void,
   pushReason?: string,
+  messageId?: string,
 ): Promise<void> {
   const isApproved = type === 'driver:approved' || type === 'kyc:approved';
   const isRejected = type === 'driver:rejected' || type === 'kyc:rejected';
@@ -148,26 +149,32 @@ export async function reactToDriverReviewPush(
     useAuthStore.getState().setOnboardingStep('approved');
     navigate('Active');
   } else if (isReviewNotes) {
-    // Soft correction: stay under_review, open docs with the reason.
     useAuthStore.getState().setDriverStatus('under_review');
     useAuthStore.getState().setOnboardingStep('documents');
-    navigate('OnboardingStep2', pushReason ? { reviewReason: pushReason } : undefined);
+    const inboxParams: Record<string, string> = {};
+    if (messageId) inboxParams.messageId = messageId;
+    if (pushReason) inboxParams.reviewReason = pushReason;
+    navigate('Messages', Object.keys(inboxParams).length ? inboxParams : undefined);
+    if (messageId) {
+      try {
+        void apiClient.post(`/drivers/me/messages/${messageId}/read`).catch(() => {});
+      } catch {
+        /* mock or offline */
+      }
+    }
   } else {
     useAuthStore.getState().setDriverStatus('rejected');
     useAuthStore.getState().setOnboardingStep('documents');
     navigate('OnboardingStep2', pushReason ? { reviewReason: pushReason } : undefined);
   }
 
+  if (isReviewNotes) return;
+
   try {
     const route = await resolvePostAuthRoute();
     const fallback = isApproved ? 'Active' : 'OnboardingStep2';
     if (route.screen && route.screen !== fallback) {
-      // Soft notes: prefer staying on docs with reason even if status maps to Active.
-      if (isReviewNotes && route.screen === 'Active') {
-        navigate('OnboardingStep2', pushReason ? { reviewReason: pushReason } : undefined);
-      } else {
-        navigate(route.screen);
-      }
+      navigate(route.screen);
     }
   } catch {
     try {
@@ -180,15 +187,6 @@ export async function reactToDriverReviewPush(
       }
       if (driverData.step != null) {
         useAuthStore.getState().setOnboardingStep(driverData.step);
-      }
-      if (isReviewNotes) {
-        navigate(
-          'OnboardingStep2',
-          pushReason || driverData.admin_review_notes
-            ? { reviewReason: pushReason || driverData.admin_review_notes || '' }
-            : undefined,
-        );
-        return;
       }
       const r = routeForDriverStatus(driverData);
       if (r.screen) navigate(r.screen);
@@ -236,8 +234,10 @@ export function handleNotificationResponse(
       break;
     case 'driver:rejected':
     case 'kyc:rejected':
-    case 'driver:review_notes':
       void reactToDriverReviewPush(type, navigate, data?.reason);
+      break;
+    case 'driver:review_notes':
+      void reactToDriverReviewPush(type, navigate, data?.reason, data?.message_id);
       break;
     case 'payment:deposited':
       navigate('Earnings');

@@ -3,6 +3,7 @@ import { db } from '../../shared/db/client';
 import {
   commissionPhases,
   districts,
+  driverAccountMessages,
   driverDocuments,
   drivers,
   platformConfig,
@@ -14,7 +15,7 @@ import { DOC_TYPES, VALID_DOC_TYPES } from '../../shared/lib/documents';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
 import { logger } from '../../shared/lib/logger';
-import { sendPushToUser } from '../../shared/lib/push';
+import { sendPushToUser, sendPushToUserDetailed } from '../../shared/lib/push';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { ensureDriverEnteredReview } from '../drivers/service';
 import {
@@ -27,6 +28,8 @@ import {
   notifyDriverRejected,
   notifyDriverReviewNotes,
 } from './notifications';
+
+const ACCOUNT_MESSAGES_LIMIT = 50;
 
 function escapeIlike(raw: string): string {
   return raw.replace(/[\\%_]/g, (ch) => `\\${ch}`);
@@ -358,6 +361,42 @@ export const adminService = {
       created_at: driver.created_at,
     });
 
+    const messageRows = await db
+      .select({
+        id: driverAccountMessages.id,
+        type: driverAccountMessages.type,
+        body: driverAccountMessages.body,
+        created_at: driverAccountMessages.created_at,
+        email_status: driverAccountMessages.email_status,
+        push_status: driverAccountMessages.push_status,
+        read_at: driverAccountMessages.read_at,
+        author_id: users.id,
+        author_full_name: users.full_name,
+        author_email: users.email,
+      })
+      .from(driverAccountMessages)
+      .leftJoin(users, eq(driverAccountMessages.author_admin_user_id, users.id))
+      .where(eq(driverAccountMessages.driver_id, driver.id))
+      .orderBy(desc(driverAccountMessages.created_at))
+      .limit(ACCOUNT_MESSAGES_LIMIT);
+
+    const account_messages = messageRows.map((row) => ({
+      id: row.id,
+      type: row.type,
+      body: row.body,
+      created_at: row.created_at,
+      email_status: row.email_status,
+      push_status: row.push_status,
+      read_at: row.read_at,
+      author: row.author_id
+        ? {
+            id: row.author_id,
+            full_name: row.author_full_name,
+            email: row.author_email,
+          }
+        : null,
+    }));
+
     return {
       ...driver,
       platform_debt: Math.round(Number(driver.platform_debt ?? 0)),
@@ -375,6 +414,7 @@ export const adminService = {
       missing_doc_types,
       vehicles: vehicleRows,
       documents: documentRows,
+      account_messages,
     };
   },
 
@@ -451,6 +491,21 @@ export const adminService = {
 
     // Soft message: stay in review queue, keep docs pending, notify driver to re-upload.
     if (action === 'request_changes') {
+      const [inserted] = await db
+        .insert(driverAccountMessages)
+        .values({
+          driver_id: driverId,
+          author_admin_user_id: adminUser.id,
+          type: 'review_notes',
+          body: trimmedNotes!,
+        })
+        .returning({
+          id: driverAccountMessages.id,
+          body: driverAccountMessages.body,
+          type: driverAccountMessages.type,
+          created_at: driverAccountMessages.created_at,
+        });
+
       await db
         .update(drivers)
         .set({
@@ -470,19 +525,53 @@ export const adminService = {
         .where(eq(drivers.id, driverId))
         .limit(1);
 
+      let emailStatus: string | null = null;
+      let pushStatus: string | null = null;
+
       if (driverUser) {
         const name = driverUser.full_name ?? 'Driver';
         if (driverUser.email) {
-          void notifyDriverReviewNotes(driverUser.email, name, trimmedNotes!);
+          try {
+            await notifyDriverReviewNotes(driverUser.email, name, trimmedNotes!);
+            emailStatus = 'sent';
+          } catch (err) {
+            emailStatus = 'failed';
+            logger.error('[DRIVER-NOTIFY] Review-notes email failed', (err as Error).message);
+          }
         } else {
+          emailStatus = 'skipped';
           logger.info('[DRIVER-NOTIFY] Skip review-notes email — no email', {
             driverId: driverId.split('-')[0],
           });
         }
-        const notesPush = driverReviewNotesPush(trimmedNotes);
-        void sendPushToUser(driverUser.user_id, notesPush).catch((err) => {
+
+        const notesPush = driverReviewNotesPush(trimmedNotes, inserted?.id);
+        try {
+          const pushResult = await sendPushToUserDetailed(driverUser.user_id, notesPush);
+          pushStatus = pushResult.status;
+          logger.info('[DRIVER-NOTIFY] Review-notes push', {
+            userId: driverUser.user_id.slice(0, 8),
+            messageId: inserted?.id?.slice(0, 8),
+            tokenCount: pushResult.tokenCount,
+            push_status: pushResult.status,
+          });
+        } catch (err) {
+          pushStatus = 'failed';
           logger.error('[DRIVER-NOTIFY] Review-notes push failed', (err as Error).message);
-        });
+        }
+      } else {
+        emailStatus = 'skipped';
+        pushStatus = 'zero_tokens';
+      }
+
+      if (inserted?.id) {
+        await db
+          .update(driverAccountMessages)
+          .set({
+            email_status: emailStatus,
+            push_status: pushStatus,
+          })
+          .where(eq(driverAccountMessages.id, inserted.id));
       }
 
       return {
@@ -490,6 +579,16 @@ export const adminService = {
         action,
         status: 'review',
         message: 'Review notes sent to driver',
+        account_message: inserted
+          ? {
+              id: inserted.id,
+              type: inserted.type,
+              body: inserted.body,
+              created_at: inserted.created_at,
+              email_status: emailStatus,
+              push_status: pushStatus,
+            }
+          : null,
       };
     }
 

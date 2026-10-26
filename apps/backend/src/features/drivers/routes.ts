@@ -6,6 +6,7 @@ import {
   commissionReceiptBody,
   driverIdParams,
   heartbeatBody,
+  messageIdParams,
   reuploadDocBody,
   setDistrictBody,
   toggleOnlineBody,
@@ -50,6 +51,22 @@ export const driversRoutes = new Elysia({ prefix: '/drivers' })
   .get('/me/status', ({ user, set }) => safeCall(() => driversService.getMyStatus(user), set), {
     requireAuth: true,
   })
+  .get(
+    '/me/messages',
+    ({ user, set }) => safeCall(() => driversService.listAccountMessages(user), set),
+    { requireAuth: true },
+  )
+  .get(
+    '/me/messages/unread-count',
+    ({ user, set }) => safeCall(() => driversService.getAccountMessagesUnreadCount(user), set),
+    { requireAuth: true },
+  )
+  .post(
+    '/me/messages/:id/read',
+    ({ user, params, set }) =>
+      safeCall(() => driversService.markAccountMessageRead(user, params.id), set),
+    { params: messageIdParams, requireAuth: true },
+  )
   .get(
     '/me/cancellation-metrics',
     ({ user, set }) => safeCall(() => cancellationService.getDriverCancellationMetrics(user), set),

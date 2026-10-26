@@ -12,6 +12,7 @@ const SCREEN_TO_ROUTE = {
   ForgotPassword: '/forgot-password',
   Terms: '/terms',
   Support: '/support',
+  Messages: '/messages',
   TripHistory: '/trip-history',
   OnboardingStep1: '/onboarding-step1',
   OnboardingStep2: '/onboarding-step2',
@@ -66,6 +67,7 @@ const BACK_FALLBACK: Record<string, string> = {
   'district-terms': 'SelectDistrict',
   support: 'Profile',
   terms: 'Profile',
+  messages: 'Profile',
   'cancellation-policy': 'Profile',
   'pay-commission-debt': 'Earnings',
 };
