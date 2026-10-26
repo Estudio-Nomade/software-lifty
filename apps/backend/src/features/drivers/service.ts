@@ -80,6 +80,36 @@ function missingRequiredDocTypes(uploaded: { doc_type: string }[]): string[] {
 }
 
 /**
+ * Prod wabdd often lags monorepo migrations (#451–#453):
+ * drivers.license_* / vehicles.engine_cc / vehicles.insurance_coverage_type.
+ * Missing columns surface as Postgres 42703 → safeCall 500 on GET /me/status
+ * (SessionRestore) and PUT /me vehicle step. Detect drift so we can soft-fallback.
+ */
+export function isMissingOnboardingVehicleSchemaError(err: unknown): boolean {
+  const e = err as { message?: string; code?: string; cause?: { message?: string; code?: string } };
+  const msg = String(e?.message ?? e?.cause?.message ?? err ?? '');
+  const code = String(e?.code ?? e?.cause?.code ?? '');
+  const looksMissing = /does not exist/i.test(msg) || code === '42703' || /42703/.test(msg);
+  if (!looksMissing) return false;
+  return (
+    /license_category/i.test(msg) ||
+    /license_professional_status/i.test(msg) ||
+    /professional_license_grace_started_at/i.test(msg) ||
+    /professional_license_due_at/i.test(msg) ||
+    /engine_cc/i.test(msg) ||
+    /insurance_coverage_type/i.test(msg) ||
+    (/column/i.test(msg) && /(drivers|vehicles)/i.test(msg))
+  );
+}
+
+const EMPTY_PROFESSIONAL_LICENSE_ROW = {
+  license_category: null as string | null,
+  license_professional_status: 'unknown' as string | null,
+  professional_license_grace_started_at: null as Date | null,
+  professional_license_due_at: null as Date | null,
+};
+
+/**
  * Blocks online when platform_debt > debt cap OR commission_fraud_block.
  * Force-offlines if currently online. Push only once per enforcement call
  * (toggle GO attempt, or heartbeat online→offline transition) — not on every
@@ -224,14 +254,30 @@ export async function ensureDriverEnteredReview(driverId: string): Promise<boole
     return false;
   }
 
-  const [veh] = await db
-    .select({
-      vehicle_type: vehicles.vehicle_type,
-      insurance_coverage_type: vehicles.insurance_coverage_type,
-    })
-    .from(vehicles)
-    .where(eq(vehicles.driver_id, driverId))
-    .limit(1);
+  let veh: { vehicle_type: string | null; insurance_coverage_type: string | null } | undefined;
+  try {
+    const [row] = await db
+      .select({
+        vehicle_type: vehicles.vehicle_type,
+        insurance_coverage_type: vehicles.insurance_coverage_type,
+      })
+      .from(vehicles)
+      .where(eq(vehicles.driver_id, driverId))
+      .limit(1);
+    veh = row;
+  } catch (err) {
+    if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
+    logger.warn('[DOCS] schema drift — insurance_coverage_type missing; skip coverage gate', {
+      driverId: driverId.split('-')[0],
+      message: (err as Error).message,
+    });
+    const [row] = await db
+      .select({ vehicle_type: vehicles.vehicle_type })
+      .from(vehicles)
+      .where(eq(vehicles.driver_id, driverId))
+      .limit(1);
+    veh = row ? { vehicle_type: row.vehicle_type, insurance_coverage_type: null } : undefined;
+  }
 
   if (!hasValidMotoInsuranceCoverage(veh?.vehicle_type, veh?.insurance_coverage_type)) {
     logger.info('[DOCS] Moto missing insurance coverage — not entering review', {
@@ -333,31 +379,73 @@ export const driversService = {
   // reach `vehicle`/`documents` until `kyc_status === 'approved'`. Returned
   // steps: profile → kyc → vehicle → documents → review → approved.
   async getMyStatus(user: AuthUser) {
-    const [driver] = await db
-      .select({
-        id: drivers.id,
-        status: drivers.status,
-        kyc_status: drivers.kyc_status,
-        admin_review_status: drivers.admin_review_status,
-        admin_review_notes: drivers.admin_review_notes,
-        documents_pending_review: drivers.documents_pending_review,
-        identification_status: drivers.identification_status,
-        approved_at: drivers.approved_at,
-        admin_reviewed_at: drivers.admin_reviewed_at,
-        created_at: drivers.created_at,
-        municipality_status: drivers.municipality_status,
-        address_line: drivers.address_line,
-        address_resolved_city: drivers.address_resolved_city,
-        address_resolved_province: drivers.address_resolved_province,
-        intended_district_id: drivers.intended_district_id,
-        license_category: drivers.license_category,
-        license_professional_status: drivers.license_professional_status,
-        professional_license_grace_started_at: drivers.professional_license_grace_started_at,
-        professional_license_due_at: drivers.professional_license_due_at,
-      })
-      .from(drivers)
-      .where(eq(drivers.user_id, user.id))
-      .limit(1);
+    const statusBaseSelect = {
+      id: drivers.id,
+      status: drivers.status,
+      kyc_status: drivers.kyc_status,
+      admin_review_status: drivers.admin_review_status,
+      admin_review_notes: drivers.admin_review_notes,
+      documents_pending_review: drivers.documents_pending_review,
+      identification_status: drivers.identification_status,
+      approved_at: drivers.approved_at,
+      admin_reviewed_at: drivers.admin_reviewed_at,
+      created_at: drivers.created_at,
+      municipality_status: drivers.municipality_status,
+      address_line: drivers.address_line,
+      address_resolved_city: drivers.address_resolved_city,
+      address_resolved_province: drivers.address_resolved_province,
+      intended_district_id: drivers.intended_district_id,
+    };
+
+    type StatusDriverRow = {
+      id: string;
+      status: string;
+      kyc_status: string | null;
+      admin_review_status: string;
+      admin_review_notes: string | null;
+      documents_pending_review: boolean | null;
+      identification_status: string | null;
+      approved_at: Date | null;
+      admin_reviewed_at: Date | null;
+      created_at: Date;
+      municipality_status: string | null;
+      address_line: string | null;
+      address_resolved_city: string | null;
+      address_resolved_province: string | null;
+      intended_district_id: string | null;
+      license_category: string | null;
+      license_professional_status: string | null;
+      professional_license_grace_started_at: Date | null;
+      professional_license_due_at: Date | null;
+    };
+
+    let driver: StatusDriverRow | undefined;
+    try {
+      const [row] = await db
+        .select({
+          ...statusBaseSelect,
+          license_category: drivers.license_category,
+          license_professional_status: drivers.license_professional_status,
+          professional_license_grace_started_at: drivers.professional_license_grace_started_at,
+          professional_license_due_at: drivers.professional_license_due_at,
+        })
+        .from(drivers)
+        .where(eq(drivers.user_id, user.id))
+        .limit(1);
+      driver = row;
+    } catch (err) {
+      if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
+      logger.warn('[drivers] getMyStatus schema drift — retry without license columns', {
+        userId: user.id.slice(0, 8),
+        message: (err as Error).message,
+      });
+      const [row] = await db
+        .select(statusBaseSelect)
+        .from(drivers)
+        .where(eq(drivers.user_id, user.id))
+        .limit(1);
+      driver = row ? { ...row, ...EMPTY_PROFESSIONAL_LICENSE_ROW } : undefined;
+    }
 
     // No driver row yet → user must complete their profile (step1).
     if (!driver) {
@@ -523,14 +611,33 @@ export const driversService = {
     const missingDocTypes = missingRequiredDocTypes(validDocs);
     const docsComplete = hasAllRequiredDocs(validDocs);
 
-    const [vehicleRow] = await db
-      .select({
-        vehicle_type: vehicles.vehicle_type,
-        insurance_coverage_type: vehicles.insurance_coverage_type,
-      })
-      .from(vehicles)
-      .where(eq(vehicles.driver_id, driver.id))
-      .limit(1);
+    let vehicleRow: {
+      vehicle_type: string | null;
+      insurance_coverage_type: string | null;
+    } | null = null;
+    try {
+      const [row] = await db
+        .select({
+          vehicle_type: vehicles.vehicle_type,
+          insurance_coverage_type: vehicles.insurance_coverage_type,
+        })
+        .from(vehicles)
+        .where(eq(vehicles.driver_id, driver.id))
+        .limit(1);
+      vehicleRow = row ?? null;
+    } catch (err) {
+      if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
+      logger.warn('[drivers] getMyStatus schema drift — insurance_coverage_type missing', {
+        driverId: driver.id.slice(0, 8),
+        message: (err as Error).message,
+      });
+      const [row] = await db
+        .select({ vehicle_type: vehicles.vehicle_type })
+        .from(vehicles)
+        .where(eq(vehicles.driver_id, driver.id))
+        .limit(1);
+      vehicleRow = row ? { vehicle_type: row.vehicle_type, insurance_coverage_type: null } : null;
+    }
     const motoCoverageOk = hasValidMotoInsuranceCoverage(
       vehicleRow?.vehicle_type,
       vehicleRow?.insurance_coverage_type,
@@ -865,18 +972,54 @@ export const driversService = {
       address_place_id?: string;
     },
   ) {
-    const [existing] = await db
-      .select({
-        id: drivers.id,
-        status: drivers.status,
-        kyc_status: drivers.kyc_status,
-        license_professional_status: drivers.license_professional_status,
-        professional_license_grace_started_at: drivers.professional_license_grace_started_at,
-        professional_license_due_at: drivers.professional_license_due_at,
-      })
-      .from(drivers)
-      .where(eq(drivers.user_id, user.id))
-      .limit(1);
+    let existing:
+      | {
+          id: string;
+          status: string;
+          kyc_status: string | null;
+          license_professional_status: string | null;
+          professional_license_grace_started_at: Date | null;
+          professional_license_due_at: Date | null;
+        }
+      | undefined;
+    try {
+      const [row] = await db
+        .select({
+          id: drivers.id,
+          status: drivers.status,
+          kyc_status: drivers.kyc_status,
+          license_professional_status: drivers.license_professional_status,
+          professional_license_grace_started_at: drivers.professional_license_grace_started_at,
+          professional_license_due_at: drivers.professional_license_due_at,
+        })
+        .from(drivers)
+        .where(eq(drivers.user_id, user.id))
+        .limit(1);
+      existing = row;
+    } catch (err) {
+      if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
+      logger.warn('[drivers] updateProfile schema drift — retry without license columns', {
+        userId: user.id.slice(0, 8),
+        message: (err as Error).message,
+      });
+      const [row] = await db
+        .select({
+          id: drivers.id,
+          status: drivers.status,
+          kyc_status: drivers.kyc_status,
+        })
+        .from(drivers)
+        .where(eq(drivers.user_id, user.id))
+        .limit(1);
+      existing = row
+        ? {
+            ...row,
+            license_professional_status: 'unknown',
+            professional_license_grace_started_at: null,
+            professional_license_due_at: null,
+          }
+        : undefined;
+    }
 
     let driverId: string;
     const kycStatus = existing?.kyc_status ?? 'pending';
@@ -1046,16 +1189,44 @@ export const driversService = {
       }
       assertVehicleYear(data.vehicle_year);
 
-      const [existingVehicle] = await db
-        .select({
-          id: vehicles.id,
-          vehicle_type: vehicles.vehicle_type,
-          engine_cc: vehicles.engine_cc,
-          insurance_coverage_type: vehicles.insurance_coverage_type,
-        })
-        .from(vehicles)
-        .where(eq(vehicles.driver_id, driverId))
-        .limit(1);
+      let existingVehicle:
+        | {
+            id: string;
+            vehicle_type: string;
+            engine_cc: number | null;
+            insurance_coverage_type: string | null;
+          }
+        | undefined;
+      try {
+        const [row] = await db
+          .select({
+            id: vehicles.id,
+            vehicle_type: vehicles.vehicle_type,
+            engine_cc: vehicles.engine_cc,
+            insurance_coverage_type: vehicles.insurance_coverage_type,
+          })
+          .from(vehicles)
+          .where(eq(vehicles.driver_id, driverId))
+          .limit(1);
+        existingVehicle = row;
+      } catch (err) {
+        if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
+        logger.warn('[drivers] updateProfile schema drift — vehicle cols missing on select', {
+          driverId: driverId.slice(0, 8),
+          message: (err as Error).message,
+        });
+        const [row] = await db
+          .select({
+            id: vehicles.id,
+            vehicle_type: vehicles.vehicle_type,
+          })
+          .from(vehicles)
+          .where(eq(vehicles.driver_id, driverId))
+          .limit(1);
+        existingVehicle = row
+          ? { ...row, engine_cc: null, insurance_coverage_type: null }
+          : undefined;
+      }
 
       // Prefer request type → existing row → car. Never silently downgrade moto→car on partial PUT.
       const vehicleType =
@@ -1079,7 +1250,7 @@ export const driversService = {
             : null;
       const insuranceCoverageType = assertInsuranceCoverageForVehicle(coverageInput, vehicleType);
 
-      const vehicleValues = {
+      const vehicleCore = {
         driver_id: driverId,
         brand: data.vehicle_brand ?? '',
         model: data.vehicle_model ?? '',
@@ -1087,14 +1258,35 @@ export const driversService = {
         color: data.vehicle_color ?? '',
         plate: data.vehicle_plate ?? '',
         vehicle_type: vehicleType,
+      };
+      const vehicleValues = {
+        ...vehicleCore,
         engine_cc: engineCc,
         insurance_coverage_type: insuranceCoverageType,
       };
 
-      if (existingVehicle) {
-        await db.update(vehicles).set(vehicleValues).where(eq(vehicles.id, existingVehicle.id));
-      } else {
-        await db.insert(vehicles).values(vehicleValues);
+      const writeVehicle = async (withExtendedCols: boolean) => {
+        const values = withExtendedCols ? vehicleValues : vehicleCore;
+        if (existingVehicle) {
+          await db.update(vehicles).set(values).where(eq(vehicles.id, existingVehicle.id));
+        } else {
+          await db.insert(vehicles).values(values);
+        }
+      };
+
+      try {
+        await writeVehicle(true);
+      } catch (err) {
+        if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
+        logger.warn(
+          '[drivers] updateProfile schema drift — writing vehicle without engine_cc/coverage',
+          {
+            driverId: driverId.slice(0, 8),
+            message: (err as Error).message,
+          },
+        );
+        // Moto rules still enforced in-process; DB just cannot store yet until migration.
+        await writeVehicle(false);
       }
     } else if (data.vehicle_insurance_coverage_type !== undefined) {
       // Chip-only PUT from docs step (vehicle already registered).
@@ -1121,13 +1313,22 @@ export const driversService = {
         { required: isMotoVehicleType(existingVehicle.vehicle_type) },
       );
 
-      await db
-        .update(vehicles)
-        .set({
-          insurance_coverage_type: insuranceCoverageType,
-          updated_at: new Date(),
-        })
-        .where(eq(vehicles.id, existingVehicle.id));
+      try {
+        await db
+          .update(vehicles)
+          .set({
+            insurance_coverage_type: insuranceCoverageType,
+            updated_at: new Date(),
+          })
+          .where(eq(vehicles.id, existingVehicle.id));
+      } catch (err) {
+        if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
+        throw new AppError(
+          'El backend aún no tiene la columna de cobertura del seguro. Aplicá la migración 0051 en wabdd.',
+          503,
+          'SCHEMA_MIGRATION_REQUIRED',
+        );
+      }
 
       await ensureDriverEnteredReview(driverId);
     }
@@ -1195,7 +1396,19 @@ export const driversService = {
         licensePatch.professional_license_due_at = null;
       }
 
-      await db.update(drivers).set(licensePatch).where(eq(drivers.id, driverId));
+      try {
+        await db.update(drivers).set(licensePatch).where(eq(drivers.id, driverId));
+      } catch (err) {
+        if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
+        logger.warn(
+          '[drivers] updateProfile schema drift — license columns missing; vehicle saved without license persist',
+          {
+            driverId: driverId.slice(0, 8),
+            message: (err as Error).message,
+          },
+        );
+        // Soft-fail: do not block vehicle step when only license cols lag.
+      }
     }
 
     const result = await this.getMyStatus(user);
@@ -1591,49 +1804,116 @@ export const driversService = {
   },
 
   async getMyProfile(user: AuthUser) {
-    const rows = await db
-      .select({
-        phone: users.phone,
-        email: users.email,
-        full_name: users.full_name,
-        avatar_url: users.avatar_url,
-        id: drivers.id,
-        user_id: drivers.user_id,
-        status: drivers.status,
-        kyc_status: drivers.kyc_status,
-        rating_avg: drivers.rating_avg,
-        total_trips: drivers.total_trips,
-        completion_rate: drivers.completion_rate,
-        is_online: drivers.is_online,
-        documents_pending_review: drivers.documents_pending_review,
-        created_at: drivers.created_at,
-        address_line: drivers.address_line,
-        address_lat: drivers.address_lat,
-        address_lng: drivers.address_lng,
-        address_resolved_city: drivers.address_resolved_city,
-        address_resolved_province: drivers.address_resolved_province,
-        municipality_status: drivers.municipality_status,
-        intended_district_id: drivers.intended_district_id,
-        license_category: drivers.license_category,
-        license_professional_status: drivers.license_professional_status,
-        professional_license_grace_started_at: drivers.professional_license_grace_started_at,
-        professional_license_due_at: drivers.professional_license_due_at,
-        brand: vehicles.brand,
-        model: vehicles.model,
-        year: vehicles.year,
-        color: vehicles.color,
-        plate: vehicles.plate,
-        vehicle_type: vehicles.vehicle_type,
-        engine_cc: vehicles.engine_cc,
-        insurance_coverage_type: vehicles.insurance_coverage_type,
-      })
-      .from(users)
-      .leftJoin(drivers, eq(users.id, drivers.user_id))
-      .leftJoin(vehicles, eq(drivers.id, vehicles.driver_id))
-      .where(eq(users.id, user.id))
-      .limit(1);
+    const profileBaseSelect = {
+      phone: users.phone,
+      email: users.email,
+      full_name: users.full_name,
+      avatar_url: users.avatar_url,
+      id: drivers.id,
+      user_id: drivers.user_id,
+      status: drivers.status,
+      kyc_status: drivers.kyc_status,
+      rating_avg: drivers.rating_avg,
+      total_trips: drivers.total_trips,
+      completion_rate: drivers.completion_rate,
+      is_online: drivers.is_online,
+      documents_pending_review: drivers.documents_pending_review,
+      created_at: drivers.created_at,
+      address_line: drivers.address_line,
+      address_lat: drivers.address_lat,
+      address_lng: drivers.address_lng,
+      address_resolved_city: drivers.address_resolved_city,
+      address_resolved_province: drivers.address_resolved_province,
+      municipality_status: drivers.municipality_status,
+      intended_district_id: drivers.intended_district_id,
+      brand: vehicles.brand,
+      model: vehicles.model,
+      year: vehicles.year,
+      color: vehicles.color,
+      plate: vehicles.plate,
+      vehicle_type: vehicles.vehicle_type,
+    };
 
-    const row = rows[0];
+    let row:
+      | (typeof profileBaseSelect extends never
+          ? never
+          : {
+              phone: string | null;
+              email: string | null;
+              full_name: string | null;
+              avatar_url: string | null;
+              id: string | null;
+              user_id: string | null;
+              status: string | null;
+              kyc_status: string | null;
+              rating_avg: number | null;
+              total_trips: number | null;
+              completion_rate: number | null;
+              is_online: boolean | null;
+              documents_pending_review: boolean | null;
+              created_at: Date | null;
+              address_line: string | null;
+              address_lat: number | null;
+              address_lng: number | null;
+              address_resolved_city: string | null;
+              address_resolved_province: string | null;
+              municipality_status: string | null;
+              intended_district_id: string | null;
+              brand: string | null;
+              model: string | null;
+              year: number | null;
+              color: string | null;
+              plate: string | null;
+              vehicle_type: string | null;
+              license_category: string | null;
+              license_professional_status: string | null;
+              professional_license_grace_started_at: Date | null;
+              professional_license_due_at: Date | null;
+              engine_cc: number | null;
+              insurance_coverage_type: string | null;
+            })
+      | undefined;
+
+    try {
+      const rows = await db
+        .select({
+          ...profileBaseSelect,
+          license_category: drivers.license_category,
+          license_professional_status: drivers.license_professional_status,
+          professional_license_grace_started_at: drivers.professional_license_grace_started_at,
+          professional_license_due_at: drivers.professional_license_due_at,
+          engine_cc: vehicles.engine_cc,
+          insurance_coverage_type: vehicles.insurance_coverage_type,
+        })
+        .from(users)
+        .leftJoin(drivers, eq(users.id, drivers.user_id))
+        .leftJoin(vehicles, eq(drivers.id, vehicles.driver_id))
+        .where(eq(users.id, user.id))
+        .limit(1);
+      row = rows[0];
+    } catch (err) {
+      if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
+      logger.warn('[drivers] getMyProfile schema drift — retry without license/vehicle extras', {
+        userId: user.id.slice(0, 8),
+        message: (err as Error).message,
+      });
+      const rows = await db
+        .select(profileBaseSelect)
+        .from(users)
+        .leftJoin(drivers, eq(users.id, drivers.user_id))
+        .leftJoin(vehicles, eq(drivers.id, vehicles.driver_id))
+        .where(eq(users.id, user.id))
+        .limit(1);
+      const base = rows[0];
+      row = base
+        ? {
+            ...base,
+            ...EMPTY_PROFESSIONAL_LICENSE_ROW,
+            engine_cc: null,
+            insurance_coverage_type: null,
+          }
+        : undefined;
+    }
 
     if (!row || !row.id) {
       return {

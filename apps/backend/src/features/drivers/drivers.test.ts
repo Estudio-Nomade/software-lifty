@@ -33,7 +33,7 @@ import {
   type StorageProvider,
 } from '../../shared/lib/storage';
 import { createTestToken } from '../../shared/testing/utils';
-import { setStorageForTesting } from './service';
+import { isMissingOnboardingVehicleSchemaError, setStorageForTesting } from './service';
 
 interface TestStorage extends StorageProvider {
   uploaded: Map<string, string>;
@@ -2135,5 +2135,41 @@ describe('commission receipt upload', () => {
     expect(status).toBe(409);
     expect(data.error.code).toBe('RECEIPT_PENDING');
     expect(base.deleted.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('isMissingOnboardingVehicleSchemaError (wabdd schema drift #451–#453)', () => {
+  test('detects missing license / engine_cc / insurance_coverage columns', () => {
+    expect(
+      isMissingOnboardingVehicleSchemaError(
+        new Error('column drivers.license_category does not exist'),
+      ),
+    ).toBe(true);
+    expect(
+      isMissingOnboardingVehicleSchemaError(
+        new Error('column vehicles.insurance_coverage_type does not exist'),
+      ),
+    ).toBe(true);
+    expect(
+      isMissingOnboardingVehicleSchemaError(new Error('column vehicles.engine_cc does not exist')),
+    ).toBe(true);
+    expect(
+      isMissingOnboardingVehicleSchemaError(
+        Object.assign(new Error('undefined_column'), { code: '42703' }),
+      ),
+    ).toBe(false);
+    expect(
+      isMissingOnboardingVehicleSchemaError(
+        new Error('column drivers.license_professional_status does not exist'),
+      ),
+    ).toBe(true);
+    expect(isMissingOnboardingVehicleSchemaError(new Error('connection refused'))).toBe(false);
+  });
+
+  test('GET /me/status still 200 when license cols present (happy path regression)', async () => {
+    const { token } = await fullOnboarding('+549****8801', 'testPass123');
+    const { status, data } = await request('GET', '/api/drivers/me/status', undefined, token);
+    expect(status).toBe(200);
+    expect(data.step).toBe('documents');
   });
 });
