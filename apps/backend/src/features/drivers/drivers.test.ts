@@ -2139,7 +2139,7 @@ describe('commission receipt upload', () => {
 });
 
 describe('isMissingOnboardingVehicleSchemaError (wabdd schema drift #451–#453)', () => {
-  test('detects missing license / engine_cc / insurance_coverage columns', () => {
+  test('detects only known onboarding cols — not arbitrary drivers/vehicles columns', () => {
     expect(
       isMissingOnboardingVehicleSchemaError(
         new Error('column drivers.license_category does not exist'),
@@ -2155,14 +2155,25 @@ describe('isMissingOnboardingVehicleSchemaError (wabdd schema drift #451–#453)
     ).toBe(true);
     expect(
       isMissingOnboardingVehicleSchemaError(
-        Object.assign(new Error('undefined_column'), { code: '42703' }),
+        new Error('column drivers.license_professional_status does not exist'),
+      ),
+    ).toBe(true);
+    // Future required col on same tables must NOT be treated as benign drift.
+    expect(
+      isMissingOnboardingVehicleSchemaError(
+        new Error('column drivers.some_future_required_col does not exist'),
       ),
     ).toBe(false);
     expect(
       isMissingOnboardingVehicleSchemaError(
-        new Error('column drivers.license_professional_status does not exist'),
+        new Error('column vehicles.brand does not exist'),
       ),
-    ).toBe(true);
+    ).toBe(false);
+    expect(
+      isMissingOnboardingVehicleSchemaError(
+        Object.assign(new Error('undefined_column'), { code: '42703' }),
+      ),
+    ).toBe(false);
     expect(isMissingOnboardingVehicleSchemaError(new Error('connection refused'))).toBe(false);
   });
 

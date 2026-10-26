@@ -85,21 +85,17 @@ function missingRequiredDocTypes(uploaded: { doc_type: string }[]): string[] {
  * Missing columns surface as Postgres 42703 → safeCall 500 on GET /me/status
  * (SessionRestore) and PUT /me vehicle step. Detect drift so we can soft-fallback.
  */
+/** Only known #451–#453 onboarding cols — never blanket “any drivers/vehicles column”. */
+const ONBOARDING_SCHEMA_COL_RE =
+  /license_category|license_professional_status|professional_license_grace_started_at|professional_license_due_at|engine_cc|insurance_coverage_type/i;
+
 export function isMissingOnboardingVehicleSchemaError(err: unknown): boolean {
   const e = err as { message?: string; code?: string; cause?: { message?: string; code?: string } };
   const msg = String(e?.message ?? e?.cause?.message ?? err ?? '');
   const code = String(e?.code ?? e?.cause?.code ?? '');
   const looksMissing = /does not exist/i.test(msg) || code === '42703' || /42703/.test(msg);
   if (!looksMissing) return false;
-  return (
-    /license_category/i.test(msg) ||
-    /license_professional_status/i.test(msg) ||
-    /professional_license_grace_started_at/i.test(msg) ||
-    /professional_license_due_at/i.test(msg) ||
-    /engine_cc/i.test(msg) ||
-    /insurance_coverage_type/i.test(msg) ||
-    (/column/i.test(msg) && /(drivers|vehicles)/i.test(msg))
-  );
+  return ONBOARDING_SCHEMA_COL_RE.test(msg);
 }
 
 const EMPTY_PROFESSIONAL_LICENSE_ROW = {
@@ -255,6 +251,8 @@ export async function ensureDriverEnteredReview(driverId: string): Promise<boole
   }
 
   let veh: { vehicle_type: string | null; insurance_coverage_type: string | null } | undefined;
+  /** When true, insurance_coverage_type col is absent — do not treat as user missing coverage. */
+  let coverageColMissing = false;
   try {
     const [row] = await db
       .select({
@@ -267,6 +265,7 @@ export async function ensureDriverEnteredReview(driverId: string): Promise<boole
     veh = row;
   } catch (err) {
     if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
+    coverageColMissing = true;
     logger.warn('[DOCS] schema drift — insurance_coverage_type missing; skip coverage gate', {
       driverId: driverId.split('-')[0],
       message: (err as Error).message,
@@ -279,7 +278,10 @@ export async function ensureDriverEnteredReview(driverId: string): Promise<boole
     veh = row ? { vehicle_type: row.vehicle_type, insurance_coverage_type: null } : undefined;
   }
 
-  if (!hasValidMotoInsuranceCoverage(veh?.vehicle_type, veh?.insurance_coverage_type)) {
+  if (
+    !coverageColMissing &&
+    !hasValidMotoInsuranceCoverage(veh?.vehicle_type, veh?.insurance_coverage_type)
+  ) {
     logger.info('[DOCS] Moto missing insurance coverage — not entering review', {
       driverId,
       vehicle_type: veh?.vehicle_type ?? null,
@@ -615,6 +617,7 @@ export const driversService = {
       vehicle_type: string | null;
       insurance_coverage_type: string | null;
     } | null = null;
+    let coverageColMissing = false;
     try {
       const [row] = await db
         .select({
@@ -627,10 +630,14 @@ export const driversService = {
       vehicleRow = row ?? null;
     } catch (err) {
       if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
-      logger.warn('[drivers] getMyStatus schema drift — insurance_coverage_type missing', {
-        driverId: driver.id.slice(0, 8),
-        message: (err as Error).message,
-      });
+      coverageColMissing = true;
+      logger.warn(
+        '[drivers] getMyStatus schema drift — insurance_coverage_type missing; skip coverage gate',
+        {
+          driverId: driver.id.slice(0, 8),
+          message: (err as Error).message,
+        },
+      );
       const [row] = await db
         .select({ vehicle_type: vehicles.vehicle_type })
         .from(vehicles)
@@ -638,10 +645,9 @@ export const driversService = {
         .limit(1);
       vehicleRow = row ? { vehicle_type: row.vehicle_type, insurance_coverage_type: null } : null;
     }
-    const motoCoverageOk = hasValidMotoInsuranceCoverage(
-      vehicleRow?.vehicle_type,
-      vehicleRow?.insurance_coverage_type,
-    );
+    const motoCoverageOk =
+      coverageColMissing ||
+      hasValidMotoInsuranceCoverage(vehicleRow?.vehicle_type, vehicleRow?.insurance_coverage_type);
     const docsAndCoverageComplete = docsComplete && motoCoverageOk;
 
     // Rejected driver: re-enter review when docs complete; else documents step.
@@ -1400,14 +1406,12 @@ export const driversService = {
         await db.update(drivers).set(licensePatch).where(eq(drivers.id, driverId));
       } catch (err) {
         if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
-        logger.warn(
-          '[drivers] updateProfile schema drift — license columns missing; vehicle saved without license persist',
-          {
-            driverId: driverId.slice(0, 8),
-            message: (err as Error).message,
-          },
+        // Same posture as insurance chip-only PUT: never 200 while discarding license.
+        throw new AppError(
+          'El backend aún no tiene las columnas de licencia. Aplicá la migración 0049 en wabdd.',
+          503,
+          'SCHEMA_MIGRATION_REQUIRED',
         );
-        // Soft-fail: do not block vehicle step when only license cols lag.
       }
     }
 
