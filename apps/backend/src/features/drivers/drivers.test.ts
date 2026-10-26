@@ -1932,6 +1932,44 @@ describe('driver storage path naming', () => {
     expect(superseded.length).toBe(2);
   });
 
+  test('POST /me/documents/upload rejects 6th append with DOC_FILE_LIMIT', async () => {
+    const phone = '+5492614444013';
+    const { token, driverId } = await fullOnboarding(phone, 'testPass123');
+    const testStorage = createTestStorage();
+    setStorageForTesting(testStorage);
+
+    async function upload(name: string) {
+      const formData = new FormData();
+      formData.append('file', new Blob([name], { type: 'image/jpeg' }), name);
+      formData.append('doc_type', 'license_front');
+      formData.append('replace_group', 'false');
+      return app.handle(
+        new Request('http://localhost/api/drivers/me/documents/upload', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        }),
+      );
+    }
+
+    for (let i = 0; i < 5; i++) {
+      const r = await upload(`page-${i}.jpg`);
+      expect(r.status).toBe(200);
+    }
+
+    const over = await upload('page-6.jpg');
+    const body = await over.json();
+    expect(over.status).toBe(400);
+    expect(body.error?.code).toBe('DOC_FILE_LIMIT');
+
+    const docs = await getDb()
+      .select()
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId));
+    const active = docs.filter((d) => d.doc_type === 'license_front' && d.status !== 'superseded');
+    expect(active.length).toBe(5);
+  });
+
 test('POST /me/photo uses named avatar path', async () => {
     const { token, driverId } = await fullOnboarding('+5492614444002', 'testPass123');
     const testStorage = createTestStorage();
@@ -1990,6 +2028,38 @@ describe('reuploadDocument storage flow', () => {
     expect(superseded.length).toBe(1);
     expect(pending.length).toBe(1);
     expect(pending[0].file_url).toBe(data.file_url);
+  });
+
+  test('does not delete previous storage when reupload upload fails', async () => {
+    const { token, driverId } = await fullOnboarding('+5492615555556', password);
+    const db = getDb();
+    const oldUrl =
+      'https://example.supabase.co/storage/v1/object/public/driver-documents/drivers/keep-me.png';
+
+    await db.insert(driverDocuments).values({
+      driver_id: driverId,
+      doc_type: 'license_front',
+      file_url: oldUrl,
+      status: 'approved',
+    });
+
+    const testStorage = createTestStorage();
+    testStorage.uploadFile = async () => {
+      throw new Error('storage boom');
+    };
+    setStorageForTesting(testStorage);
+
+    const { status } = await reupload(token, 'license_front');
+    expect(status).toBeGreaterThanOrEqual(400);
+    expect(testStorage.deleted.length).toBe(0);
+
+    const docs = await db
+      .select()
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId));
+    const active = docs.filter((d) => d.status !== 'superseded');
+    expect(active.length).toBe(1);
+    expect(active[0]?.file_url).toBe(oldUrl);
   });
 
   test('re-upload works when there is no previous document', async () => {

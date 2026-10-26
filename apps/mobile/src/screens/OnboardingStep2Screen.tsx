@@ -227,12 +227,16 @@ export const OnboardingStep2Screen: React.FC = () => {
         }
       }
 
-      let uri: string | null = null;
-      let name: string | null = null;
-      let mimeType: string | null = null;
-      let fileSize: number | null = null;
+      type PickedAsset = {
+        uri: string;
+        name: string;
+        mimeType: string;
+        fileSize: number | null;
+      };
 
       try {
+        let picked: PickedAsset[] = [];
+
         if (method === 'pdf') {
           const result = await DocumentPicker.getDocumentAsync({
             type: 'application/pdf',
@@ -241,10 +245,14 @@ export const OnboardingStep2Screen: React.FC = () => {
           });
           if (result.canceled || !result.assets?.[0]) return;
           const asset = result.assets[0];
-          uri = asset.uri;
-          name = asset.name ?? `seguro_${Date.now()}.pdf`;
-          mimeType = asset.mimeType ?? 'application/pdf';
-          fileSize = asset.size ?? null;
+          picked = [
+            {
+              uri: asset.uri,
+              name: asset.name ?? `seguro_${Date.now()}.pdf`,
+              mimeType: asset.mimeType ?? 'application/pdf',
+              fileSize: asset.size ?? null,
+            },
+          ];
         } else if (method === 'camera') {
           const result = await ImagePicker.launchCameraAsync({
             mediaTypes: 'images',
@@ -252,52 +260,42 @@ export const OnboardingStep2Screen: React.FC = () => {
           });
           if (result.canceled || !result.assets?.[0]) return;
           const asset = result.assets[0];
-          uri = asset.uri;
-          name = asset.fileName ?? `photo_${Date.now()}.jpg`;
-          mimeType = asset.mimeType ?? 'image/jpeg';
-          fileSize = asset.fileSize ?? null;
+          picked = [
+            {
+              uri: asset.uri,
+              name: asset.fileName ?? `photo_${Date.now()}.jpg`,
+              mimeType: asset.mimeType ?? 'image/jpeg',
+              fileSize: asset.fileSize ?? null,
+            },
+          ];
         } else {
+          const remaining =
+            mode === 'append'
+              ? Math.max(0, MAX_FILES_PER_DOC_SIDE - (docs[docType][side].files.length || 0))
+              : 1;
+          if (remaining <= 0) {
+            setSideError(docType, side, `Máximo ${MAX_FILES_PER_DOC_SIDE} archivos por documento.`);
+            return;
+          }
           const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: 'images',
             quality: 0.7,
             allowsMultipleSelection: mode === 'append',
-            selectionLimit: mode === 'append' ? MAX_FILES_PER_DOC_SIDE : 1,
+            selectionLimit: mode === 'append' ? remaining : 1,
           });
           if (result.canceled || !result.assets?.[0]) return;
-          // Multi-select from gallery: upload each as append after the first.
-          if (mode === 'append' && result.assets.length > 1) {
-            // Fall through with first asset; remaining handled below after first upload.
-          }
-          const asset = result.assets[0];
-          uri = asset.uri;
-          name = asset.fileName ?? `image_${Date.now()}.jpg`;
-          mimeType = asset.mimeType ?? 'image/jpeg';
-          fileSize = asset.fileSize ?? null;
+          picked = result.assets.map((asset, i) => ({
+            uri: asset.uri,
+            name: asset.fileName ?? `image_${Date.now()}_${i}.jpg`,
+            mimeType: asset.mimeType ?? 'image/jpeg',
+            fileSize: asset.fileSize ?? null,
+          }));
         }
 
-        if (fileSize && fileSize > MAX_FILE_SIZE) {
-          setSideError(docType, side, 'El archivo debe ser menor a 10MB');
-          return;
-        }
-
-        const isPdf =
-          mimeType === 'application/pdf' ||
-          name?.toLowerCase().endsWith('.pdf') === true ||
-          method === 'pdf';
-
-        if (!isPdf) {
-          try {
-            const compressed = await compressImage(uri!);
-            uri = compressed.uri;
-            name = name?.replace(/\.[^.]+$/, '.jpg') ?? `photo_${Date.now()}.jpg`;
-            mimeType = 'image/jpeg';
-          } catch (err) {
-            console.warn('Image compression failed, using original:', err);
-          }
-        } else {
-          mimeType = 'application/pdf';
-          if (!name?.toLowerCase().endsWith('.pdf')) {
-            name = `${name ?? `seguro_${Date.now()}`}.pdf`.replace(/\.pdf\.pdf$/i, '.pdf');
+        for (const asset of picked) {
+          if (asset.fileSize && asset.fileSize > MAX_FILE_SIZE) {
+            setSideError(docType, side, 'El archivo debe ser menor a 10MB');
+            return;
           }
         }
 
@@ -307,54 +305,99 @@ export const OnboardingStep2Screen: React.FC = () => {
             ...prev[docType],
             [side]: {
               ...prev[docType][side],
-              fileUri: uri,
-              fileName: name,
               uploading: true,
               error: null,
             },
           },
         }));
 
-        // First shot of a side replaces the group; extra shots append.
-        const replaceGroup = mode === 'replace';
-        const result = await uploadDocumentToBackend(uri!, name!, mimeType!, docType, side, {
-          replaceGroup,
-        });
+        let lastError: string | null = null;
+        for (let i = 0; i < picked.length; i++) {
+          let { uri, name, mimeType } = picked[i]!;
+          const isPdf =
+            mimeType === 'application/pdf' ||
+            name.toLowerCase().endsWith('.pdf') ||
+            method === 'pdf';
 
-        setDocs((prev) => {
-          const prevSide = prev[docType][side];
-          const newPart = {
-            fileUri: uri,
-            fileName: name,
-            fileUrl: result.file_url,
-            isPdf,
-            serverStatus: 'pending_review' as const,
-          };
-          const files = replaceGroup
-            ? [newPart]
-            : [...prevSide.files, newPart].slice(0, MAX_FILES_PER_DOC_SIDE);
-          const count = files.length;
-          return {
-            ...prev,
-            [docType]: {
-              ...prev[docType],
-              [side]: {
-                ...prevSide,
-                fileUrl: result.file_url,
-                fileName: count > 1 ? `${count} archivos` : name,
+          if (!isPdf) {
+            try {
+              const compressed = await compressImage(uri);
+              uri = compressed.uri;
+              name = name.replace(/\.[^.]+$/, '.jpg') || `photo_${Date.now()}.jpg`;
+              mimeType = 'image/jpeg';
+            } catch (err) {
+              console.warn('Image compression failed, using original:', err);
+            }
+          } else {
+            mimeType = 'application/pdf';
+            if (!name.toLowerCase().endsWith('.pdf')) {
+              name = `${name || `seguro_${Date.now()}`}.pdf`.replace(/\.pdf\.pdf$/i, '.pdf');
+            }
+          }
+
+          // replace mode: first file replaces group; multi gallery append: all append.
+          const replaceGroup = mode === 'replace' && i === 0;
+          try {
+            const result = await uploadDocumentToBackend(uri, name, mimeType, docType, side, {
+              replaceGroup,
+            });
+
+            setDocs((prev) => {
+              const prevSide = prev[docType][side];
+              const newPart = {
                 fileUri: uri,
-                files,
-                uploading: false,
-                uploaded: true,
-                needsReplace: false,
-                replacedInSession: true,
-                serverStatus: 'pending_review',
-                isPdf: files.some((f) => f.isPdf),
-                error: null,
-              },
+                fileName: name,
+                fileUrl: result.file_url,
+                isPdf,
+                serverStatus: 'pending_review' as const,
+              };
+              const files = replaceGroup
+                ? [newPart]
+                : [...prevSide.files, newPart].slice(0, MAX_FILES_PER_DOC_SIDE);
+              const count = files.length;
+              return {
+                ...prev,
+                [docType]: {
+                  ...prev[docType],
+                  [side]: {
+                    ...prevSide,
+                    fileUrl: result.file_url,
+                    fileName: count > 1 ? `${count} archivos` : name,
+                    fileUri: uri,
+                    files,
+                    uploading: i < picked.length - 1,
+                    uploaded: true,
+                    needsReplace: false,
+                    replacedInSession: true,
+                    serverStatus: 'pending_review',
+                    isPdf: files.some((f) => f.isPdf),
+                    error: null,
+                  },
+                },
+              };
+            });
+          } catch (err: unknown) {
+            if (err instanceof ApiError && err.code === 'KYC_REQUIRED') {
+              const kycRoute = STEP_ROUTE.kyc;
+              if (kycRoute) navigation.replace(kycRoute.screen);
+              return;
+            }
+            lastError = err instanceof Error ? err.message : 'Error al subir el documento';
+            break;
+          }
+        }
+
+        setDocs((prev) => ({
+          ...prev,
+          [docType]: {
+            ...prev[docType],
+            [side]: {
+              ...prev[docType][side],
+              uploading: false,
+              ...(lastError ? { error: lastError } : {}),
             },
-          };
-        });
+          },
+        }));
       } catch (err: unknown) {
         if (err instanceof ApiError && err.code === 'KYC_REQUIRED') {
           const kycRoute = STEP_ROUTE.kyc;
@@ -369,7 +412,6 @@ export const OnboardingStep2Screen: React.FC = () => {
             [side]: {
               ...prev[docType][side],
               uploading: false,
-              // Keep prior uploaded state on append failure.
               error: message,
             },
           },

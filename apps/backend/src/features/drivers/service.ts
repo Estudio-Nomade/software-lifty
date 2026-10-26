@@ -99,8 +99,14 @@ function parseReplaceGroupFlag(
   return defaultWhenMissing;
 }
 
-async function countActiveDocsOfType(driverId: string, docType: string): Promise<number> {
-  const [row] = await db
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function countActiveDocsOfType(
+  driverId: string,
+  docType: string,
+  executor: typeof db | DbTx = db,
+): Promise<number> {
+  const [row] = await executor
     .select({ n: count() })
     .from(driverDocuments)
     .where(
@@ -113,8 +119,12 @@ async function countActiveDocsOfType(driverId: string, docType: string): Promise
   return Number(row?.n ?? 0);
 }
 
-async function supersedeActiveDocsOfType(driverId: string, docType: string): Promise<void> {
-  await db
+async function supersedeActiveDocsOfType(
+  driverId: string,
+  docType: string,
+  executor: typeof db | DbTx = db,
+): Promise<void> {
+  await executor
     .update(driverDocuments)
     .set({ status: 'superseded', superseded_at: new Date() })
     .where(
@@ -127,19 +137,71 @@ async function supersedeActiveDocsOfType(driverId: string, docType: string): Pro
 }
 
 /**
- * Prepare a new active row for doc_type.
- * - replaceGroup true → supersede every active file of this type (classic replace).
- * - replaceGroup false → append another page/photo (cap MAX_ACTIVE_FILES_PER_DOC_TYPE).
+ * Insert an active doc row under a driver-row lock so concurrent appends cannot
+ * both pass the MAX_ACTIVE_FILES_PER_DOC_TYPE check.
+ * - replaceGroup true → supersede every active file of this type, then insert.
+ * - replaceGroup false → append if under cap.
  */
-async function prepareDocSlot(
-  driverId: string,
-  docType: string,
-  replaceGroup: boolean,
-): Promise<void> {
-  if (replaceGroup) {
-    await supersedeActiveDocsOfType(driverId, docType);
-    return;
-  }
+async function commitDriverDocument(params: {
+  driverId: string;
+  docType: string;
+  fileUrl: string;
+  replaceGroup: boolean;
+  status?: string;
+}): Promise<{
+  id: string;
+  doc_type: string;
+  file_url: string;
+  status: string;
+}> {
+  const { driverId, docType, fileUrl, replaceGroup, status } = params;
+  return await db.transaction(async (tx) => {
+    await tx
+      .select({ id: drivers.id })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .for('update')
+      .limit(1);
+
+    if (replaceGroup) {
+      await supersedeActiveDocsOfType(driverId, docType, tx);
+    } else {
+      const active = await countActiveDocsOfType(driverId, docType, tx);
+      if (active >= MAX_ACTIVE_FILES_PER_DOC_TYPE) {
+        throw new AppError(
+          `Máximo ${MAX_ACTIVE_FILES_PER_DOC_TYPE} archivos por documento. Sacá o subí menos fotos, o reemplazá el grupo.`,
+          400,
+          'DOC_FILE_LIMIT',
+        );
+      }
+    }
+
+    const values: {
+      driver_id: string;
+      doc_type: string;
+      file_url: string;
+      status?: string;
+    } = {
+      driver_id: driverId,
+      doc_type: docType,
+      file_url: fileUrl,
+    };
+    if (status !== undefined) values.status = status;
+
+    const [doc] = await tx.insert(driverDocuments).values(values).returning({
+      id: driverDocuments.id,
+      doc_type: driverDocuments.doc_type,
+      file_url: driverDocuments.file_url,
+      status: driverDocuments.status,
+    });
+
+    if (!doc) throw new AppError('Failed to upload document', 400, 'BAD_REQUEST');
+    return doc;
+  });
+}
+
+/** Best-effort precheck before storage upload (real gate is commitDriverDocument). */
+async function assertCanAppendDoc(driverId: string, docType: string): Promise<void> {
   const active = await countActiveDocsOfType(driverId, docType);
   if (active >= MAX_ACTIVE_FILES_PER_DOC_TYPE) {
     throw new AppError(
@@ -1648,12 +1710,11 @@ export const driversService = {
     }
 
     // Metadata add always replaces the group (legacy clients send one URL).
-    await prepareDocSlot(driver.id, data.doc_type, true);
-
-    await db.insert(driverDocuments).values({
-      driver_id: driver.id,
-      doc_type: data.doc_type,
-      file_url: data.file_url,
+    await commitDriverDocument({
+      driverId: driver.id,
+      docType: data.doc_type,
+      fileUrl: data.file_url,
+      replaceGroup: true,
     });
 
     // All required docs → review queue (listPending filters status='review').
@@ -1698,7 +1759,9 @@ export const driversService = {
 
     // Default append so multi-page photos accumulate; replace_group=true wipes the set.
     const replaceGroup = parseReplaceGroupFlag(opts?.replaceGroup, false);
-    await prepareDocSlot(driver.id, docType, replaceGroup);
+    if (!replaceGroup) {
+      await assertCanAppendDoc(driver.id, docType);
+    }
 
     const contentType = contentTypeForFile(file);
     const path = buildDriverDocumentPath({
@@ -1709,11 +1772,28 @@ export const driversService = {
     });
     const fileUrl = await _storage.uploadFile(file, path, { contentType });
 
-    await db.insert(driverDocuments).values({
-      driver_id: driver.id,
-      doc_type: docType,
-      file_url: fileUrl,
-    });
+    try {
+      await commitDriverDocument({
+        driverId: driver.id,
+        docType,
+        fileUrl,
+        replaceGroup,
+      });
+    } catch (err) {
+      // New object is orphaned if insert/cap fails; drop it so storage stays clean.
+      const storagePath = _storage.extractStoragePath(fileUrl);
+      if (storagePath) {
+        try {
+          await _storage.deleteFile(storagePath);
+        } catch (delErr) {
+          logger.warn('[DOCS] Failed to roll back orphaned upload', {
+            path: storagePath,
+            error: (delErr as Error).message,
+          });
+        }
+      }
+      throw err;
+    }
 
     await ensureDriverEnteredReview(driver.id);
 
@@ -1816,20 +1896,65 @@ export const driversService = {
 
     const replaceGroup = parseReplaceGroupFlag(opts?.replaceGroup, true);
 
-    // When replacing the whole group, best-effort delete previous storage objects.
-    // Append mode leaves prior files for admin comparison.
-    if (replaceGroup) {
-      const previousDocs = await db
-        .select({ file_url: driverDocuments.file_url })
-        .from(driverDocuments)
-        .where(
-          and(
-            eq(driverDocuments.driver_id, driver.id),
-            eq(driverDocuments.doc_type, docType),
-            ne(driverDocuments.status, 'superseded'),
-          ),
-        );
+    // Capture previous active URLs before supersede; delete storage only after
+    // the new row is committed so a failed upload leaves originals recoverable.
+    const previousDocs = replaceGroup
+      ? await db
+          .select({ file_url: driverDocuments.file_url })
+          .from(driverDocuments)
+          .where(
+            and(
+              eq(driverDocuments.driver_id, driver.id),
+              eq(driverDocuments.doc_type, docType),
+              ne(driverDocuments.status, 'superseded'),
+            ),
+          )
+      : [];
 
+    if (!replaceGroup) {
+      await assertCanAppendDoc(driver.id, docType);
+    }
+
+    const contentType = contentTypeForFile(file);
+    const path = buildDriverDocumentPath({
+      fullName: driver.full_name,
+      driverId: driver.id,
+      docType,
+      file,
+    });
+    const fileUrl = await _storage.uploadFile(file, path, { contentType });
+
+    let doc: {
+      id: string;
+      doc_type: string;
+      file_url: string;
+      status: string;
+    };
+    try {
+      doc = await commitDriverDocument({
+        driverId: driver.id,
+        docType,
+        fileUrl,
+        replaceGroup,
+        status: 'pending_review',
+      });
+    } catch (err) {
+      const storagePath = _storage.extractStoragePath(fileUrl);
+      if (storagePath) {
+        try {
+          await _storage.deleteFile(storagePath);
+        } catch (delErr) {
+          logger.warn('[DOCS] Failed to roll back orphaned reupload', {
+            path: storagePath,
+            error: (delErr as Error).message,
+          });
+        }
+      }
+      throw err;
+    }
+
+    // Safe to drop previous objects only after the new row is live.
+    if (replaceGroup) {
       for (const previousDoc of previousDocs) {
         const storagePath = _storage.extractStoragePath(previousDoc.file_url);
         if (storagePath) {
@@ -1846,34 +1971,6 @@ export const driversService = {
         }
       }
     }
-
-    await prepareDocSlot(driver.id, docType, replaceGroup);
-
-    const contentType = contentTypeForFile(file);
-    const path = buildDriverDocumentPath({
-      fullName: driver.full_name,
-      driverId: driver.id,
-      docType,
-      file,
-    });
-    const fileUrl = await _storage.uploadFile(file, path, { contentType });
-
-    const [doc] = await db
-      .insert(driverDocuments)
-      .values({
-        driver_id: driver.id,
-        doc_type: docType,
-        file_url: fileUrl,
-        status: 'pending_review',
-      })
-      .returning({
-        id: driverDocuments.id,
-        doc_type: driverDocuments.doc_type,
-        file_url: driverDocuments.file_url,
-        status: driverDocuments.status,
-      });
-
-    if (!doc) throw new AppError('Failed to upload document', 400, 'BAD_REQUEST');
 
     const isSensitive = SENSITIVE_DOC_TYPES.has(docType);
 
