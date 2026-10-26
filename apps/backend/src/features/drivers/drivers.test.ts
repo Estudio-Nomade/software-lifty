@@ -837,7 +837,7 @@ describe('Vehicle step (no duplicate form)', () => {
         vehicle_plate: 'MOT150',
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
-        license_category: 'A1.3',
+        license_category: 'A1.2',
       },
       token,
     );
@@ -1032,7 +1032,7 @@ describe('Vehicle step (no duplicate form)', () => {
         vehicle_plate: 'A123BCD',
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
-        license_category: 'A1.3',
+        license_category: 'A1.2',
       },
       token,
     );
@@ -1071,7 +1071,7 @@ describe('Vehicle step (no duplicate form)', () => {
         vehicle_plate: 'MOTCOV',
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
-        license_category: 'A1.3',
+        license_category: 'A1.2',
       },
       token,
     );
@@ -1101,7 +1101,7 @@ describe('Vehicle step (no duplicate form)', () => {
         vehicle_plate: 'MOTBAD',
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
-        license_category: 'A1.3',
+        license_category: 'A1.2',
       },
       token,
     );
@@ -1197,7 +1197,7 @@ describe('Document step completeness', () => {
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
         vehicle_insurance_coverage_type: 'comprehensive',
-        license_category: 'A1.3',
+        license_category: 'A1.2',
       },
       token,
     );
@@ -1231,7 +1231,7 @@ describe('Document step completeness', () => {
         vehicle_plate: 'MOTDOC',
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
-        license_category: 'A1.3',
+        license_category: 'A1.2',
       },
       token,
     );
@@ -1266,7 +1266,7 @@ describe('Document step completeness', () => {
         vehicle_type: 'motorcycle',
         vehicle_engine_cc: 150,
         vehicle_insurance_coverage_type: 'third_party',
-        license_category: 'A1.3',
+        license_category: 'A1.2',
       },
       token,
     );
