@@ -267,25 +267,21 @@ describe('HomeScreen favorite chip focused field', () => {
   });
 
   test('Casa chip fills Origen when pickup is focused', async () => {
-    const { getByPlaceholderText, getByText, getByDisplayValue, queryByDisplayValue } =
-      await openSearch();
+    const { getByPlaceholderText, getByText } = await openSearch();
 
     await fireEvent(getByPlaceholderText('Desde'), 'focus');
     await fireEvent.press(getByText('Casa'));
 
-    expect(getByDisplayValue(casaAddress)).toBeTruthy();
-    expect(queryByDisplayValue(casaAddress)).toBeTruthy();
-    // Destino stays empty (chip went to pickup, not dest)
+    expect(getByPlaceholderText('Desde').props.value).toBe(casaAddress);
     expect(getByPlaceholderText('Hacia').props.value ?? '').toBe('');
   });
 
   test('Casa chip fills Destino when dest is focused', async () => {
-    const { getByPlaceholderText, getByText, getByDisplayValue } = await openSearch();
+    const { getByPlaceholderText, getByText } = await openSearch();
 
     await fireEvent(getByPlaceholderText('Hacia'), 'focus');
     await fireEvent.press(getByText('Casa'));
 
-    expect(getByDisplayValue(casaAddress)).toBeTruthy();
     expect(getByPlaceholderText('Hacia').props.value).toBe(casaAddress);
     expect(getByPlaceholderText('Desde').props.value ?? '').not.toBe(casaAddress);
   });
