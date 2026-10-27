@@ -7,6 +7,19 @@ import { VehicleSelectScreen } from '../../screens/VehicleSelectScreen';
 const mockNavigate = jest.fn();
 let lastMapProps: Record<string, unknown> | null = null;
 
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  const Icon = (props: { name?: string; accessibilityLabel?: string }) =>
+    React.createElement(Text, {
+      accessibilityLabel: props.accessibilityLabel ?? props.name ?? 'icon',
+    });
+  return {
+    Ionicons: Icon,
+    MaterialCommunityIcons: Icon,
+  };
+});
+
 jest.mock('expo-router', () => ({
   useLocalSearchParams: jest.fn(),
 }));
@@ -180,6 +193,14 @@ describe('VehicleSelectScreen fare estimation', () => {
     expect(await findByText('Forma de pago')).toBeTruthy();
     expect(await findByText('Efectivo')).toBeTruthy();
     expect(await findByText('Transferencia')).toBeTruthy();
+  });
+
+  test('Moto card uses motorbike glyph, not bicycle', async () => {
+    const { findByText, getByLabelText, queryByLabelText } = await render(<VehicleSelectScreen />);
+    await findByText('Moto');
+    expect(getByLabelText('motorbike')).toBeTruthy();
+    expect(getByLabelText('car-outline')).toBeTruthy();
+    expect(queryByLabelText('bicycle-outline')).toBeNull();
   });
 
   test('shows a different fare for a farther destination', async () => {
