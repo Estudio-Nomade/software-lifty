@@ -175,7 +175,6 @@ export function generateMapHtml(
   var pendingRoute = null;
   var lastUserLat = null;
   var lastUserLng = null;
-  var followRequested = false;
   var hasCenteredOnUser = false;
   // Architecture: host owns GPS (useLocation → locationStore).
   // This document only draws the pin from host userLocation / recenter messages.
@@ -369,14 +368,7 @@ export function generateMapHtml(
         }
         break;
       case 'followUser':
-        followRequested = !!msg.enabled;
-        if (followRequested) {
-          // Next userLocation may re-run initial center (driver parity).
-          hasCenteredOnUser = false;
-          if (lastUserLat != null && lastUserLng != null) {
-            setUserFix(lastUserLat, lastUserLng, null);
-          }
-        }
+        // Host-owned flag only — no camera side effects (route fit must win).
         break;
       case 'userLocation':
         // Host GPS → pin (web + native). Always draw pin when coords are real.

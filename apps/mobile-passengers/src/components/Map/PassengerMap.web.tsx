@@ -50,9 +50,26 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
   const iframeRef = useRef<any>(null);
   const blobUrlRef = useRef<string | null>(null);
   const pendingRef = useRef<string[]>([]);
+  /** Shared so MapLibre `ready` can cancel the CDN hang fallback. */
+  const loadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [mountKey, setMountKey] = useState(0);
+
+  const clearLoadTimer = useCallback(() => {
+    if (loadTimerRef.current != null) {
+      clearTimeout(loadTimerRef.current);
+      loadTimerRef.current = null;
+    }
+  }, []);
+
+  const flushPending = useCallback(() => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    while (pendingRef.current.length) {
+      win.postMessage(pendingRef.current.shift(), '*');
+    }
+  }, []);
 
   const handleError = useCallback(() => {
     setHasError(true);
@@ -98,13 +115,9 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         if (data?.type === 'ready') {
+          clearLoadTimer();
           setIsLoaded(true);
-          const win = iframeRef.current?.contentWindow;
-          if (win) {
-            while (pendingRef.current.length) {
-              win.postMessage(pendingRef.current.shift(), '*');
-            }
-          }
+          flushPending();
         }
       } catch {
         // non-JSON
@@ -113,7 +126,7 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [handleRawMessage]);
+  }, [handleRawMessage, clearLoadTimer, flushPending]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -121,6 +134,7 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
 
     pendingRef.current = [];
     setIsLoaded(false);
+    clearLoadTimer();
 
     while (container.firstChild) container.removeChild(container.firstChild);
     if (blobUrlRef.current) {
@@ -140,7 +154,8 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:transparent';
 
     // Fallback if MapLibre never posts ready (CDN hang).
-    const loadTimer = setTimeout(() => {
+    loadTimerRef.current = setTimeout(() => {
+      loadTimerRef.current = null;
       setIsLoaded((prev) => {
         if (!prev) {
           const win = iframe.contentWindow;
@@ -160,7 +175,7 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     iframeRef.current = iframe;
 
     return () => {
-      clearTimeout(loadTimer);
+      clearLoadTimer();
       if (blobUrlRef.current) {
         URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = null;
@@ -168,7 +183,7 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
       iframeRef.current = null;
       while (container.firstChild) container.removeChild(container.firstChild);
     };
-  }, [mapHtml, mountKey, handleError]);
+  }, [mapHtml, mountKey, handleError, clearLoadTimer]);
 
   if (hasError) {
     return <MapErrorFallback onRetry={handleRetry} style={style} />;

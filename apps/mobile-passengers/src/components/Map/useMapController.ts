@@ -77,32 +77,24 @@ export function useMapController({
     }
   }, [isLoaded]);
 
-  // Parity with driver MapView: enable follow before first userLocation.
+  /**
+   * Single host→map sync when loaded. Order is intentional:
+   * follow flag → pin → markers/route data → camera (route wins over pin).
+   * mapHtml followUser must NOT re-center (see mapHtml case 'followUser').
+   */
   useEffect(() => {
     if (!isLoaded) return;
+
     postMessage({ type: 'followUser', enabled: followUserLocation });
-  }, [followUserLocation, isLoaded, postMessage]);
 
-  useEffect(() => {
-    if (!isLoaded) return;
-    if (!isRealFix(userLng, userLat)) return;
-    programmaticMoveRef.current = true;
-    suppressMovedUntilProgrammatic.current = false;
-    postMessage({ type: 'userLocation', lat: userLat, lng: userLng });
-  }, [userLat, userLng, isLoaded, postMessage]);
+    if (isRealFix(userLng, userLat)) {
+      // Pin only; camera below owns fit/center so follow does not override route.
+      postMessage({ type: 'userLocation', lat: userLat, lng: userLng });
+    }
 
-  useEffect(() => {
-    if (!isLoaded) return;
     postMessage({ type: 'markers', markers });
-  }, [markers, isLoaded, postMessage]);
-
-  useEffect(() => {
-    if (!isLoaded) return;
     postMessage({ type: 'route', coordinates: routeLine || [] });
-  }, [routeLine, isLoaded, postMessage]);
 
-  useEffect(() => {
-    if (!isLoaded) return;
     if (userManuallyMoved) return;
 
     if (routeLine && routeLine.length >= 2) {
@@ -127,21 +119,29 @@ export function useMapController({
       return;
     }
 
-    // No route / markers / pin yet — still leave null-island if host has a real center.
-    if (isRealFix(centerLng, centerLat) && !isRealFix(userLng, userLat)) {
+    if (isRealFix(userLng, userLat)) {
+      // Home / no route: first pin centers via mapHtml setUserFix (!hasCenteredOnUser).
+      programmaticMoveRef.current = true;
+      suppressMovedUntilProgrammatic.current = false;
+      return;
+    }
+
+    // No route / markers / pin — leave null-island if host has a real center.
+    if (isRealFix(centerLng, centerLat)) {
       programmaticMoveRef.current = true;
       suppressMovedUntilProgrammatic.current = false;
       postMessage({ type: 'setCenter', lng: centerLng, lat: centerLat, zoom });
     }
   }, [
     isLoaded,
-    routeLine,
+    followUserLocation,
+    userLng,
+    userLat,
     markers,
+    routeLine,
     userManuallyMoved,
     centerLng,
     centerLat,
-    userLng,
-    userLat,
     zoom,
     postMessage,
   ]);

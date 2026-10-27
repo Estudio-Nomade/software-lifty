@@ -23,7 +23,8 @@ type AddressLineInputProps = Omit<TextInputProps, 'selection' | 'onSelectionChan
 /**
  * Android single-line TextInput jumps the viewport to the caret (end) when a long
  * value is set programmatically (GPS / place pick). Pin selection to the start
- * whenever the value did not come from keystrokes so Origen/Destino read L→R.
+ * only for external value changes — never after onChangeText (even if parent
+ * normalizes the string), so mid-typing caret stays put.
  */
 function AddressLineInput({
   value,
@@ -34,7 +35,8 @@ function AddressLineInput({
   ...rest
 }: AddressLineInputProps) {
   const focusedRef = useRef(false);
-  const lastTypedRef = useRef<string | null>(null);
+  /** Skip the next value-effect pin; set true only from keystrokes. */
+  const skipNextPinRef = useRef(false);
   const [selection, setSelection] = useState<{ start: number; end: number }>({
     start: 0,
     end: 0,
@@ -45,7 +47,10 @@ function AddressLineInput({
   }, []);
 
   useEffect(() => {
-    if (value === lastTypedRef.current) return;
+    if (skipNextPinRef.current) {
+      skipNextPinRef.current = false;
+      return;
+    }
     // Programmatic fill (GPS, suggestion, chip) — show the start of the street.
     pinStart();
   }, [value, pinStart]);
@@ -65,7 +70,7 @@ function AddressLineInput({
         setSelection(e.nativeEvent.selection);
       }}
       onChangeText={(text) => {
-        lastTypedRef.current = text;
+        skipNextPinRef.current = true;
         onChangeText(text);
       }}
       onFocus={(e) => {

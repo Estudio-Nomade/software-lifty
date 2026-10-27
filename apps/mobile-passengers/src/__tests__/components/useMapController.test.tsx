@@ -121,6 +121,38 @@ describe('useMapController — user pin bridge', () => {
     await waitFor(() => {
       expect(postMessage).toHaveBeenCalledWith({ type: 'fitRoute', coordinates: line });
     });
+
+    const types = postMessage.mock.calls.map((c) => (c[0] as { type?: string }).type);
+    // Camera fit must be last so follow/userLocation cannot override route.
+    expect(types.indexOf('followUser')).toBeLessThan(types.indexOf('fitRoute'));
+    expect(types[types.length - 1]).toBe('fitRoute');
+  });
+
+  it('posts fitRoute after userLocation when both route and pin exist', async () => {
+    const postMessage = jest.fn();
+    const line: Array<[number, number]> = [BA, DEST];
+    renderHook(() =>
+      useMapController(
+        baseProps(postMessage, {
+          userLocation: BA,
+          followUserLocation: true,
+          routeLine: line,
+          markers: [
+            { id: 'o', coordinate: BA },
+            { id: 'd', coordinate: DEST },
+          ],
+        }),
+      ),
+    );
+
+    await waitFor(() => {
+      expect(postMessage).toHaveBeenCalledWith({ type: 'fitRoute', coordinates: line });
+    });
+
+    const types = postMessage.mock.calls.map((c) => (c[0] as { type?: string }).type);
+    expect(types.indexOf('userLocation')).toBeGreaterThanOrEqual(0);
+    expect(types.indexOf('userLocation')).toBeLessThan(types.indexOf('fitRoute'));
+    expect(types[types.length - 1]).toBe('fitRoute');
   });
 
   it('fits markers when there is no route yet', async () => {
