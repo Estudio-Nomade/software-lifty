@@ -1,8 +1,20 @@
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return {
+    Ionicons: (props: { name?: string; accessibilityLabel?: string }) =>
+      React.createElement(Text, {
+        accessibilityLabel: props.accessibilityLabel ?? props.name ?? 'icon',
+      }),
+  };
+});
+
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { geocodeAddress } from '../../api/passenger';
 import { useLocation, requestFreshPosition } from '../../hooks/useLocation';
 import { HomeScreen } from '../../screens/HomeScreen';
+import { SEED_FAVORITES, useFavoritesStore } from '../../store/favoritesStore';
 import { resolveAddressLabel } from '../../utils/resolveAddressLabel';
 
 jest.mock('expo-router', () => ({
@@ -231,5 +243,46 @@ describe('HomeScreen destination confirmation', () => {
     expect(
       getByText('No encontramos esa calle o lugar. Probá otra búsqueda o elegí una sugerencia.'),
     ).toBeTruthy();
+  });
+});
+
+describe('HomeScreen favorite chip focused field', () => {
+  const casaAddress = 'San Martín 450, Villa Dolores';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockRequestFresh.mockResolvedValue(null);
+    mockResolveLabel.mockResolvedValue('Mi ubicación actual');
+    mockUseLocation.mockReturnValue({
+      current: null,
+      locationError: null,
+      refresh: jest.fn().mockResolvedValue(null),
+    });
+    useFavoritesStore.setState({
+      favorites: SEED_FAVORITES.map((f) => ({ ...f })),
+    });
+    useFavoritesStore
+      .getState()
+      .updateFavorite('casa', 'Casa', casaAddress, -31.945, -65.19);
+  });
+
+  test('Casa chip fills Origen when pickup is focused', async () => {
+    const { getByPlaceholderText, getByText } = await openSearch();
+
+    await fireEvent(getByPlaceholderText('Desde'), 'focus');
+    await fireEvent.press(getByText('Casa'));
+
+    expect(getByPlaceholderText('Desde').props.value).toBe(casaAddress);
+    expect(getByPlaceholderText('Hacia').props.value ?? '').toBe('');
+  });
+
+  test('Casa chip fills Destino when dest is focused', async () => {
+    const { getByPlaceholderText, getByText } = await openSearch();
+
+    await fireEvent(getByPlaceholderText('Hacia'), 'focus');
+    await fireEvent.press(getByText('Casa'));
+
+    expect(getByPlaceholderText('Hacia').props.value).toBe(casaAddress);
+    expect(getByPlaceholderText('Desde').props.value ?? '').not.toBe(casaAddress);
   });
 });
