@@ -1,9 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
+  type TextInputProps,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -11,6 +14,79 @@ import type { PlaceSuggestion } from '../../api/types';
 import { theme } from '../../theme';
 import { Button } from '../Button';
 import { QuickChips } from '../QuickChips';
+
+type AddressLineInputProps = Omit<TextInputProps, 'selection' | 'onSelectionChange'> & {
+  value: string;
+  onChangeText: (text: string) => void;
+};
+
+/**
+ * Android single-line TextInput jumps the viewport to the caret (end) when a long
+ * value is set programmatically (GPS / place pick). Pin selection to the start
+ * only for external value changes — never after onChangeText (even if parent
+ * normalizes the string), so mid-typing caret stays put.
+ */
+function AddressLineInput({
+  value,
+  onChangeText,
+  onFocus,
+  onBlur,
+  style,
+  ...rest
+}: AddressLineInputProps) {
+  const focusedRef = useRef(false);
+  /** Skip the next value-effect pin; set true only from keystrokes. */
+  const skipNextPinRef = useRef(false);
+  const [selection, setSelection] = useState<{ start: number; end: number }>({
+    start: 0,
+    end: 0,
+  });
+
+  const pinStart = useCallback(() => {
+    setSelection({ start: 0, end: 0 });
+  }, []);
+
+  useEffect(() => {
+    if (skipNextPinRef.current) {
+      skipNextPinRef.current = false;
+      return;
+    }
+    // Programmatic fill (GPS, suggestion, chip) — show the start of the street.
+    pinStart();
+  }, [value, pinStart]);
+
+  return (
+    <TextInput
+      {...rest}
+      value={value}
+      style={style}
+      scrollEnabled
+      // Keep LTR address reading; Android still needs selection pin below.
+      textAlign="left"
+      {...(Platform.OS === 'android' ? { textAlignVertical: 'center' as const } : null)}
+      selection={selection}
+      onSelectionChange={(e) => {
+        if (!focusedRef.current) return;
+        setSelection(e.nativeEvent.selection);
+      }}
+      onChangeText={(text) => {
+        skipNextPinRef.current = true;
+        onChangeText(text);
+      }}
+      onFocus={(e) => {
+        focusedRef.current = true;
+        // Long autofill: land caret at start so the street name is visible first.
+        pinStart();
+        onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        focusedRef.current = false;
+        pinStart();
+        onBlur?.(e);
+      }}
+    />
+  );
+}
 
 interface ExpandedTripSearchProps {
   pickupAddress: string;
@@ -115,14 +191,13 @@ export function ExpandedTripSearch({
                   <Text style={styles.loadingText}>Obteniendo ubicación…</Text>
                 </View>
               ) : (
-                <TextInput
+                <AddressLineInput
                   style={styles.fieldInput}
                   placeholder="Desde"
                   placeholderTextColor={theme.colors.mediumGray}
                   value={pickupAddress}
                   onFocus={onPickupFocus}
                   onChangeText={onPickupChange}
-                  scrollEnabled
                   accessibilityLabel="Origen"
                 />
               )}
@@ -147,14 +222,13 @@ export function ExpandedTripSearch({
           <View style={styles.fieldContent}>
             <Text style={styles.fieldLabel}>Destino</Text>
             <View style={styles.inputRow}>
-              <TextInput
+              <AddressLineInput
                 style={styles.fieldInput}
                 placeholder="Hacia"
                 placeholderTextColor={theme.colors.mediumGray}
                 value={destAddress}
                 onFocus={onDestFocus}
                 onChangeText={onDestChange}
-                scrollEnabled
                 autoFocus
                 returnKeyType="search"
                 onSubmitEditing={onConfirm}
@@ -349,13 +423,14 @@ const styles = StyleSheet.create({
   },
   fieldInput: {
     flex: 1,
+    minWidth: 0,
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.deepBlue,
     padding: 0,
     minHeight: 28,
-    // Long street/POI labels: allow caret + horizontal scroll (iOS/Android/web).
-    overflow: 'scroll',
+    // Long street/POI labels: horizontal scroll; start pinned via AddressLineInput.
+    overflow: 'hidden',
   },
   loadingRow: {
     flex: 1,

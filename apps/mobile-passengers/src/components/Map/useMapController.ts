@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MarkerData } from './mapHtml';
 
 interface UseMapControllerOptions {
-  /** [lng, lat] — reserved for future camera init; pin uses userLocation. */
+  /** [lng, lat] — camera fallback when no route/markers/user pin. */
   centerCoordinate: [number, number];
   zoom: number;
   markers: MarkerData[];
@@ -23,14 +23,33 @@ function isRealFix(lng: number | null | undefined, lat: number | null | undefine
   return Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
 }
 
+function realMarkerCoords(markers: MarkerData[]): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (const mk of markers) {
+    const lng = mk.coordinate?.[0];
+    const lat = mk.coordinate?.[1];
+    if (isRealFix(lng, lat)) out.push([lng, lat]);
+  }
+  return out;
+}
+
 /**
- * Thin bridge: push markers/route/userLocation/recenter to the MapLibre document.
+ * Thin bridge: push markers/route/userLocation/followUser/recenter to MapLibre.
  * Host owns GPS; mapHtml only draws the pin from userLocation messages.
+ *
+ * Camera priority when map becomes ready (and on data changes, unless user panned):
+ * 1) route polyline fit
+ * 2) origin/dest markers fit
+ * 3) user pin (via setUserFix first-center)
+ * 4) centerCoordinate jump (never null-island)
  */
 export function useMapController({
+  centerCoordinate,
+  zoom,
   markers,
   routeLine,
   userLocation,
+  followUserLocation,
   recenterKey,
   onError,
   isLoaded,
@@ -42,39 +61,90 @@ export function useMapController({
   const [userManuallyMoved, setUserManuallyMoved] = useState(false);
   const lastRecenterKey = useRef<number | null>(null);
   const programmaticMoveRef = useRef(false);
+  /** Absorb MapLibre's initial moveend at WAITING_CENTER [0,0] so fitRoute is not blocked. */
+  const suppressMovedUntilProgrammatic = useRef(true);
 
   const userLng = userLocation?.[0] ?? null;
   const userLat = userLocation?.[1] ?? null;
+  const centerLng = centerCoordinate?.[0] ?? null;
+  const centerLat = centerCoordinate?.[1] ?? null;
 
   useEffect(() => {
     if (!isLoaded) {
       lastRecenterKey.current = null;
+      suppressMovedUntilProgrammatic.current = true;
+      setUserManuallyMoved(false);
     }
   }, [isLoaded]);
 
+  /**
+   * Single host→map sync when loaded. Order is intentional:
+   * follow flag → pin → markers/route data → camera (route wins over pin).
+   * mapHtml followUser must NOT re-center (see mapHtml case 'followUser').
+   */
   useEffect(() => {
     if (!isLoaded) return;
-    if (!isRealFix(userLng, userLat)) return;
-    programmaticMoveRef.current = true;
-    postMessage({ type: 'userLocation', lat: userLat, lng: userLng });
-  }, [userLat, userLng, isLoaded, postMessage]);
 
-  useEffect(() => {
-    if (!isLoaded) return;
+    postMessage({ type: 'followUser', enabled: followUserLocation });
+
+    if (isRealFix(userLng, userLat)) {
+      // Pin only; camera below owns fit/center so follow does not override route.
+      postMessage({ type: 'userLocation', lat: userLat, lng: userLng });
+    }
+
     postMessage({ type: 'markers', markers });
-  }, [markers, isLoaded, postMessage]);
-
-  useEffect(() => {
-    if (!isLoaded) return;
     postMessage({ type: 'route', coordinates: routeLine || [] });
-  }, [routeLine, isLoaded, postMessage]);
 
-  useEffect(() => {
-    if (!isLoaded || !routeLine || routeLine.length < 2) return;
     if (userManuallyMoved) return;
-    programmaticMoveRef.current = true;
-    postMessage({ type: 'fitRoute', coordinates: routeLine });
-  }, [isLoaded, routeLine, userManuallyMoved, postMessage]);
+
+    if (routeLine && routeLine.length >= 2) {
+      programmaticMoveRef.current = true;
+      suppressMovedUntilProgrammatic.current = false;
+      postMessage({ type: 'fitRoute', coordinates: routeLine });
+      return;
+    }
+
+    const pts = realMarkerCoords(markers);
+    if (pts.length >= 2) {
+      programmaticMoveRef.current = true;
+      suppressMovedUntilProgrammatic.current = false;
+      postMessage({ type: 'fitRoute', coordinates: pts });
+      return;
+    }
+
+    if (pts.length === 1) {
+      programmaticMoveRef.current = true;
+      suppressMovedUntilProgrammatic.current = false;
+      postMessage({ type: 'setCenter', lng: pts[0][0], lat: pts[0][1], zoom });
+      return;
+    }
+
+    if (isRealFix(userLng, userLat)) {
+      // Home / no route: first pin centers via mapHtml setUserFix (!hasCenteredOnUser).
+      programmaticMoveRef.current = true;
+      suppressMovedUntilProgrammatic.current = false;
+      return;
+    }
+
+    // No route / markers / pin — leave null-island if host has a real center.
+    if (isRealFix(centerLng, centerLat)) {
+      programmaticMoveRef.current = true;
+      suppressMovedUntilProgrammatic.current = false;
+      postMessage({ type: 'setCenter', lng: centerLng, lat: centerLat, zoom });
+    }
+  }, [
+    isLoaded,
+    followUserLocation,
+    userLng,
+    userLat,
+    markers,
+    routeLine,
+    userManuallyMoved,
+    centerLng,
+    centerLat,
+    zoom,
+    postMessage,
+  ]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -85,6 +155,7 @@ export function useMapController({
     const loc = userLocationRef.current;
     setUserManuallyMoved(false);
     programmaticMoveRef.current = true;
+    suppressMovedUntilProgrammatic.current = false;
     postMessage({
       type: 'recenter',
       lat: loc?.[1] ?? null,
@@ -97,6 +168,9 @@ export function useMapController({
       try {
         const data = JSON.parse(raw);
         if (data.type === 'moved') {
+          if (suppressMovedUntilProgrammatic.current) {
+            return;
+          }
           if (programmaticMoveRef.current) {
             programmaticMoveRef.current = false;
             setUserManuallyMoved(false);

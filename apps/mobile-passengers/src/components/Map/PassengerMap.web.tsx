@@ -50,9 +50,26 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
   const iframeRef = useRef<any>(null);
   const blobUrlRef = useRef<string | null>(null);
   const pendingRef = useRef<string[]>([]);
+  /** Shared so MapLibre `ready` can cancel the CDN hang fallback. */
+  const loadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [mountKey, setMountKey] = useState(0);
+
+  const clearLoadTimer = useCallback(() => {
+    if (loadTimerRef.current != null) {
+      clearTimeout(loadTimerRef.current);
+      loadTimerRef.current = null;
+    }
+  }, []);
+
+  const flushPending = useCallback(() => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    while (pendingRef.current.length) {
+      win.postMessage(pendingRef.current.shift(), '*');
+    }
+  }, []);
 
   const handleError = useCallback(() => {
     setHasError(true);
@@ -95,11 +112,21 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     const onMessage = (event: any) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const raw = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data?.type === 'ready') {
+          clearLoadTimer();
+          setIsLoaded(true);
+          flushPending();
+        }
+      } catch {
+        // non-JSON
+      }
       handleRawMessage(raw);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [handleRawMessage]);
+  }, [handleRawMessage, clearLoadTimer, flushPending]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -107,6 +134,7 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
 
     pendingRef.current = [];
     setIsLoaded(false);
+    clearLoadTimer();
 
     while (container.firstChild) container.removeChild(container.firstChild);
     if (blobUrlRef.current) {
@@ -125,34 +153,29 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
     iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
     iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:transparent';
 
-    const flush = () => {
-      const win = iframe.contentWindow;
-      if (!win) return;
-      while (pendingRef.current.length) {
-        win.postMessage(pendingRef.current.shift(), '*');
-      }
-    };
-
-    let loadTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-      setIsLoaded(true);
-      flush();
+    // Fallback if MapLibre never posts ready (CDN hang).
+    loadTimerRef.current = setTimeout(() => {
+      loadTimerRef.current = null;
+      setIsLoaded((prev) => {
+        if (!prev) {
+          const win = iframe.contentWindow;
+          if (win) {
+            while (pendingRef.current.length) {
+              win.postMessage(pendingRef.current.shift(), '*');
+            }
+          }
+        }
+        return true;
+      });
     }, LOAD_TIMEOUT_MS);
 
-    iframe.onload = () => {
-      if (loadTimer) {
-        clearTimeout(loadTimer);
-        loadTimer = null;
-      }
-      setIsLoaded(true);
-      setTimeout(flush, 0);
-    };
     iframe.onerror = () => handleError();
 
     container.appendChild(iframe);
     iframeRef.current = iframe;
 
     return () => {
-      if (loadTimer) clearTimeout(loadTimer);
+      clearLoadTimer();
       if (blobUrlRef.current) {
         URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = null;
@@ -160,7 +183,7 @@ export const PassengerMap: React.FC<PassengerMapProps> = ({
       iframeRef.current = null;
       while (container.firstChild) container.removeChild(container.firstChild);
     };
-  }, [mapHtml, mountKey, handleError]);
+  }, [mapHtml, mountKey, handleError, clearLoadTimer]);
 
   if (hasError) {
     return <MapErrorFallback onRetry={handleRetry} style={style} />;
