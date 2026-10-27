@@ -138,12 +138,14 @@ export const passengerTripService = {
         duration_minutes: trip.duration_minutes,
       })
         .then((result) => {
-          if (result.drivers_found === 0 && trip.passenger_id) {
-            broadcastPassengerNoDrivers(trip.passenger_id, trip);
-          }
+          // Keep trip pending; client polls + silent retryRide. No immediate NO_NEARBY_DRIVERS broadcast.
+          logger.info('[requestTrip] first match finished', {
+            tripId: trip.id,
+            drivers_found: result.drivers_found,
+          });
         })
         .catch((err) =>
-          logger.error('[requestTrip] broadcast failed', { error: (err as Error).message }),
+          logger.error('[requestTrip] first match failed', { error: (err as Error).message }),
         );
     });
 
