@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -17,16 +17,25 @@ import { type PaymentMethodType, usePaymentStore } from '../store/paymentStore';
 import { theme } from '../theme';
 import { formatCurrency, formatDistanceKm, formatDurationMin } from '../utils/formatters';
 
-interface Vehicle {
-  id: 'auto' | 'moto';
-  name: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  capacity: string;
-}
+type Vehicle =
+  | {
+      id: 'auto';
+      name: string;
+      iconSet: 'ion';
+      icon: keyof typeof Ionicons.glyphMap;
+      capacity: string;
+    }
+  | {
+      id: 'moto';
+      name: string;
+      iconSet: 'mci';
+      icon: keyof typeof MaterialCommunityIcons.glyphMap;
+      capacity: string;
+    };
 
 const VEHICLES: Vehicle[] = [
-  { id: 'auto', name: 'Auto', icon: 'car-outline', capacity: '4 pasajeros' },
-  { id: 'moto', name: 'Moto', icon: 'bicycle-outline', capacity: '1 pasajero' },
+  { id: 'auto', name: 'Auto', iconSet: 'ion', icon: 'car-outline', capacity: '4 pasajeros' },
+  { id: 'moto', name: 'Moto', iconSet: 'mci', icon: 'motorbike', capacity: '1 pasajero' },
 ];
 
 const PAYMENT_OPTIONS: {
@@ -289,7 +298,11 @@ export function VehicleSelectScreen() {
               style={[styles.vehicleCard, selected === v.id && styles.vehicleSelected]}
               onPress={() => setSelected(v.id)}
             >
-              <Ionicons name={v.icon} size={28} color={theme.colors.deepBlue} />
+              {v.iconSet === 'mci' ? (
+                <MaterialCommunityIcons name={v.icon} size={28} color={theme.colors.deepBlue} />
+              ) : (
+                <Ionicons name={v.icon} size={28} color={theme.colors.deepBlue} />
+              )}
               <View style={styles.vehicleInfo}>
                 <Text style={styles.vehicleName}>{v.name}</Text>
                 <View style={styles.vehicleMeta}>
