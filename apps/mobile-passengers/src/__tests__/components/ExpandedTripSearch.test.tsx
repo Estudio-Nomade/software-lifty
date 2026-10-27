@@ -2,6 +2,17 @@ jest.mock('../../hooks/usePlaceAutocomplete', () => ({
   usePlaceAutocomplete: () => ({ suggestions: [], loading: false, error: null }),
 }));
 
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return {
+    Ionicons: (props: { name?: string; accessibilityLabel?: string }) =>
+      React.createElement(Text, {
+        accessibilityLabel: props.accessibilityLabel ?? props.name ?? 'icon',
+      }),
+  };
+});
+
 import { render } from '@testing-library/react-native';
 import React from 'react';
 import { ExpandedTripSearch } from '../../components/home/ExpandedTripSearch';
@@ -44,7 +55,7 @@ describe('ExpandedTripSearch empty gate + address inputs', () => {
     expect(getByText(/No encontramos calles ni lugares/i)).toBeTruthy();
   });
 
-  it('origen and destino TextInputs enable horizontal scroll for long labels', async () => {
+  it('origen and destino pin selection to start for long programmatic labels', async () => {
     const long =
       'San Martín 1234, Villa Dolores, Córdoba, Argentina, etiqueta muy larga para scrollear';
     const { getByLabelText } = await render(
@@ -60,5 +71,9 @@ describe('ExpandedTripSearch empty gate + address inputs', () => {
     const destino = getByLabelText('Destino');
     expect(origen.props.scrollEnabled).toBe(true);
     expect(destino.props.scrollEnabled).toBe(true);
+    expect(origen.props.selection).toEqual({ start: 0, end: 0 });
+    expect(destino.props.selection).toEqual({ start: 0, end: 0 });
+    expect(origen.props.textAlign).toBe('left');
+    expect(destino.props.textAlign).toBe('left');
   });
 });

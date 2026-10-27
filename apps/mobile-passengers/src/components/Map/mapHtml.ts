@@ -175,6 +175,7 @@ export function generateMapHtml(
   var pendingRoute = null;
   var lastUserLat = null;
   var lastUserLng = null;
+  var followRequested = false;
   var hasCenteredOnUser = false;
   // Architecture: host owns GPS (useLocation → locationStore).
   // This document only draws the pin from host userLocation / recenter messages.
@@ -213,6 +214,7 @@ export function generateMapHtml(
 
     var force = opts && opts.force;
     var fly = opts && opts.fly;
+    // First fix or forced recenter. Continuous pan follow is first-fix only (driver parity).
     if (force || !hasCenteredOnUser) {
       if (fly) {
         map.flyTo({ center: [lng, lat], zoom: DEFAULT_ZOOM, duration: 600 });
@@ -221,6 +223,12 @@ export function generateMapHtml(
       }
       hasCenteredOnUser = true;
     }
+  }
+
+  function setCameraCenter(lng, lat, zoom) {
+    if (!isValidLatLng(lat, lng)) return;
+    var z = typeof zoom === 'number' && isFinite(zoom) ? zoom : DEFAULT_ZOOM;
+    map.jumpTo({ center: [lng, lat], zoom: z });
   }
 
   function updateMarkers(newMarkers) {
@@ -355,8 +363,23 @@ export function generateMapHtml(
           map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 600 });
         }
         break;
+      case 'setCenter':
+        if (msg.lng != null && msg.lat != null) {
+          setCameraCenter(Number(msg.lng), Number(msg.lat), msg.zoom);
+        }
+        break;
+      case 'followUser':
+        followRequested = !!msg.enabled;
+        if (followRequested) {
+          // Next userLocation may re-run initial center (driver parity).
+          hasCenteredOnUser = false;
+          if (lastUserLat != null && lastUserLng != null) {
+            setUserFix(lastUserLat, lastUserLng, null);
+          }
+        }
+        break;
       case 'userLocation':
-        // Host GPS → pin (web + native).
+        // Host GPS → pin (web + native). Always draw pin when coords are real.
         if (msg.lat != null && msg.lng != null) {
           setUserFix(Number(msg.lat), Number(msg.lng), null);
         }
