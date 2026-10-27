@@ -213,14 +213,25 @@ export function HomeScreen() {
   };
 
   const handleChipSelect = (selection: { address: string; lat?: number; lng?: number }) => {
-    setDestAddress(selection.address);
-    setDestCoord(
+    const coord =
       selection.lat != null && selection.lng != null
         ? { lat: selection.lat, lng: selection.lng }
-        : null,
-    );
-    setDestPicked(true);
-    setFocusedField(null);
+        : null;
+
+    if (focusedField === 'pickup') {
+      setPickupAddress(selection.address);
+      setPickupCoord(coord);
+      setPickupPicked(true);
+      setPickupFromGps(false);
+      setPickupGpsAutofill(false);
+      setPickupLoading(false);
+      setFocusedField('dest');
+    } else {
+      setDestAddress(selection.address);
+      setDestCoord(coord);
+      setDestPicked(true);
+      setFocusedField(null);
+    }
     Keyboard.dismiss();
   };
 
