@@ -138,16 +138,14 @@ export const passengerTripService = {
         duration_minutes: trip.duration_minutes,
       })
         .then((result) => {
-          // Keep trip pending while passenger search window runs; client polls + silent retry.
-          // Do not broadcast NO_NEARBY_DRIVERS on the first match — that flips empty UI instantly.
-          if (result.drivers_found === 0) {
-            logger.info('[requestTrip] no nearby drivers on first match; trip stays pending', {
-              tripId: trip.id,
-            });
-          }
+          // Keep trip pending; client polls + silent retryRide. No immediate NO_NEARBY_DRIVERS broadcast.
+          logger.info('[requestTrip] first match finished', {
+            tripId: trip.id,
+            drivers_found: result.drivers_found,
+          });
         })
         .catch((err) =>
-          logger.error('[requestTrip] broadcast failed', { error: (err as Error).message }),
+          logger.error('[requestTrip] first match failed', { error: (err as Error).message }),
         );
     });
 

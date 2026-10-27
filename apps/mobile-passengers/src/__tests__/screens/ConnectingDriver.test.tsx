@@ -139,7 +139,7 @@ describe('ConnectingDriverScreen', () => {
     expect(mockReplace).toHaveBeenCalledWith('TripInProgress');
   });
 
-  test('silent retryRide runs during search after early no-drivers', async () => {
+  test('silent retryRide runs on early no-drivers and on interval', async () => {
     const { retryRide } = require('../../api/passenger');
     const { subscribeToPassengerChannel } = require('../../lib/realtime');
     retryRide.mockResolvedValue({ drivers_found: 0, trip: { id: 'trip-123', status: 'pending' } });
@@ -154,7 +154,11 @@ describe('ConnectingDriverScreen', () => {
         drivers_found: 0,
         reason: 'NO_NEARBY_DRIVERS',
       });
+      await Promise.resolve();
+      await Promise.resolve();
     });
+
+    expect(retryRide.mock.calls.length).toBeGreaterThanOrEqual(1);
 
     await act(async () => {
       jest.advanceTimersByTime(SILENT_RETRY_INTERVAL_MS);
@@ -162,8 +166,20 @@ describe('ConnectingDriverScreen', () => {
       await Promise.resolve();
     });
 
-    expect(retryRide.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(retryRide.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(getByText('Buscando conductor')).toBeTruthy();
+  });
+
+  test('cancelled trip replaces to home instead of empty', async () => {
+    const { subscribeToPassengerChannel } = require('../../lib/realtime');
+    await render(<ConnectingDriverScreen />);
+
+    const onTripStatus = subscribeToPassengerChannel.mock.calls[0][1];
+    await act(async () => {
+      await onTripStatus({ id: 'trip-123', status: 'cancelled' });
+    });
+
+    expect(mockReplace).toHaveBeenCalledWith('Home');
   });
 
   test('retry CTA returns to searching and calls retryRide', async () => {

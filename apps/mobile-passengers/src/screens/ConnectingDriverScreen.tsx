@@ -45,6 +45,13 @@ export function ConnectingDriverScreen() {
 
   const showEmpty = timedOut;
 
+  const goHome = useCallback(() => {
+    if (navigatingRef.current) return;
+    navigatingRef.current = true;
+    searchEndedRef.current = true;
+    replace('Home');
+  }, [replace]);
+
   const proceedToTrip = useCallback(
     async (id: string, statusHint?: string) => {
       if (navigatingRef.current) return;
@@ -60,6 +67,40 @@ export function ConnectingDriverScreen() {
     [setActiveTrip, replace],
   );
 
+  const runSilentRetry = useCallback(async () => {
+    if (
+      !tripId ||
+      navigatingRef.current ||
+      searchEndedRef.current ||
+      silentRetryInFlightRef.current ||
+      retryNotAllowedRef.current
+    ) {
+      return;
+    }
+    silentRetryInFlightRef.current = true;
+    try {
+      const res = await retryRide(String(tripId));
+      if (res?.trip && LIVE_STATUSES.has(res.trip.status)) {
+        await proceedToTrip(String(tripId), res.trip.status);
+      }
+    } catch (err: unknown) {
+      const status =
+        typeof err === 'object' && err !== null && 'response' in err
+          ? (err as { response?: { status?: number } }).response?.status
+          : undefined;
+      const code =
+        typeof err === 'object' && err !== null && 'response' in err
+          ? (err as { response?: { data?: { error?: { code?: string } } } }).response?.data?.error
+              ?.code
+          : undefined;
+      if (status === 400 || code === 'BAD_REQUEST') {
+        retryNotAllowedRef.current = true;
+      }
+    } finally {
+      silentRetryInFlightRef.current = false;
+    }
+  }, [tripId, proceedToTrip]);
+
   useEffect(() => {
     searchEndedRef.current = false;
     navigatingRef.current = false;
@@ -72,17 +113,17 @@ export function ConnectingDriverScreen() {
     const unsubscribe = subscribeToPassengerChannel(userId, async (trip: any) => {
       if (!sameTripId(trip?.id, tripId)) return;
       if (CANCELLED_STATUSES.has(trip?.status)) {
-        searchEndedRef.current = true;
-        setTimedOut(true);
+        goHome();
         return;
       }
       if (trip?.drivers_found === 0 || trip?.status === 'expired' || trip?.status === 'rejected') {
+        void runSilentRetry();
         return;
       }
       await proceedToTrip(String(tripId), trip?.status);
     });
     return () => unsubscribe?.();
-  }, [userId, tripId, proceedToTrip, attempt]);
+  }, [userId, tripId, proceedToTrip, runSilentRetry, goHome, attempt]);
 
   useEffect(() => {
     if (!tripId || showEmpty) return;
@@ -98,8 +139,7 @@ export function ConnectingDriverScreen() {
         return;
       }
       if (CANCELLED_STATUSES.has(full.status)) {
-        searchEndedRef.current = true;
-        setTimedOut(true);
+        goHome();
       }
     };
 
@@ -112,57 +152,24 @@ export function ConnectingDriverScreen() {
       cancelled = true;
       clearInterval(poll);
     };
-  }, [tripId, proceedToTrip, attempt, showEmpty]);
+  }, [tripId, proceedToTrip, goHome, attempt, showEmpty]);
 
   useEffect(() => {
     if (!tripId || showEmpty) return;
 
-    let cancelled = false;
-
-    const runSilentRetry = async () => {
-      if (
-        cancelled ||
-        navigatingRef.current ||
-        searchEndedRef.current ||
-        silentRetryInFlightRef.current ||
-        retryNotAllowedRef.current
-      ) {
-        return;
-      }
-      silentRetryInFlightRef.current = true;
-      try {
-        const res = await retryRide(String(tripId));
-        if (cancelled) return;
-        if (res?.trip && LIVE_STATUSES.has(res.trip.status)) {
-          await proceedToTrip(String(tripId), res.trip.status);
-        }
-      } catch (err: unknown) {
-        const status =
-          typeof err === 'object' && err !== null && 'response' in err
-            ? (err as { response?: { status?: number } }).response?.status
-            : undefined;
-        const code =
-          typeof err === 'object' && err !== null && 'response' in err
-            ? (err as { response?: { data?: { error?: { code?: string } } } }).response?.data?.error
-                ?.code
-            : undefined;
-        if (status === 400 || code === 'BAD_REQUEST') {
-          retryNotAllowedRef.current = true;
-        }
-      } finally {
-        silentRetryInFlightRef.current = false;
-      }
-    };
-
+    // First rematch after the requestTrip one-shot match window, then every interval.
+    const first = setTimeout(() => {
+      void runSilentRetry();
+    }, SILENT_RETRY_INTERVAL_MS);
     const interval = setInterval(() => {
       void runSilentRetry();
     }, SILENT_RETRY_INTERVAL_MS);
 
     return () => {
-      cancelled = true;
+      clearTimeout(first);
       clearInterval(interval);
     };
-  }, [tripId, proceedToTrip, attempt, showEmpty]);
+  }, [tripId, runSilentRetry, attempt, showEmpty]);
 
   useEffect(() => {
     setTimedOut(false);
