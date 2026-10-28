@@ -53,6 +53,32 @@ beforeAll(async () => {
       WHERE NOT EXISTS (SELECT 1 FROM "districts" WHERE name = 'Mina Clavero')
     `);
   }
+  // Launch cluster SP/VS: ensure active + terms for GET /districts (migration 0054 may already apply).
+  // INSERT before UPDATE so missing-row DBs get the seed, then COALESCE fills NULL terms.
+  await db.execute(`
+    INSERT INTO "districts" (name, province, status, terms_and_conditions, privacy_policy)
+    SELECT 'San Pedro', 'Córdoba', 'active', 'Terms SP', 'Privacy SP'
+    WHERE NOT EXISTS (SELECT 1 FROM "districts" WHERE name = 'San Pedro' AND province = 'Córdoba')
+  `);
+  await db.execute(`
+    UPDATE "districts"
+    SET status = 'active',
+        terms_and_conditions = COALESCE(terms_and_conditions, 'Terms SP'),
+        privacy_policy = COALESCE(privacy_policy, 'Privacy SP')
+    WHERE name = 'San Pedro' AND province = 'Córdoba'
+  `);
+  await db.execute(`
+    INSERT INTO "districts" (name, province, status, terms_and_conditions, privacy_policy)
+    SELECT 'Villa Sarmiento', 'Córdoba', 'active', 'Terms VS', 'Privacy VS'
+    WHERE NOT EXISTS (SELECT 1 FROM "districts" WHERE name = 'Villa Sarmiento' AND province = 'Córdoba')
+  `);
+  await db.execute(`
+    UPDATE "districts"
+    SET status = 'active',
+        terms_and_conditions = COALESCE(terms_and_conditions, 'Terms VS'),
+        privacy_policy = COALESCE(privacy_policy, 'Privacy VS')
+    WHERE name = 'Villa Sarmiento' AND province = 'Córdoba'
+  `);
   const noTerms: any = await db.execute('SELECT count(*) AS count FROM districts WHERE name = \'Sin Terminos\'');
   if (Number(noTerms.rows[0]?.count ?? 0) === 0) {
     await db.execute(`INSERT INTO "districts" (name, province, status) VALUES ('Sin Terminos', 'Córdoba', 'active')`);
@@ -89,6 +115,8 @@ describe('Districts', () => {
     const names = data.districts.map((d: any) => d.name);
     expect(names).toContain('Villa Dolores');
     expect(names).toContain('Mina Clavero');
+    expect(names).toContain('San Pedro');
+    expect(names).toContain('Villa Sarmiento');
     // 'Sin Terminos' should NOT appear (no terms_and_conditions)
     expect(names).not.toContain('Sin Terminos');
   });
