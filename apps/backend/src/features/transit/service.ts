@@ -1,8 +1,9 @@
-import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { type SQL, and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { districts, drivers, users, vehicles } from '../../shared/db/schema';
 import { ForbiddenError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
+import { getLaunchClusterDistrictIds } from '../../shared/lib/launch-cluster';
 import { logger } from '../../shared/lib/logger';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { transitBridgeService } from '../transit-bridge/service';
@@ -150,9 +151,31 @@ const selectFields = {
 };
 
 export type TransitScope = {
-  /** Forced district for role=transit; optional filter for admin. */
+  /** Binding district of the transit user (or admin filter). */
   districtId: string | null;
+  /**
+   * Districts this actor may see/manage.
+   * Launch hub Villa Dolores → full cluster (VD+SP+VS).
+   * Other transit bindings → [districtId] only.
+   * Admin unscoped → null (all).
+   */
+  visibleDistrictIds: string[] | null;
 };
+
+async function expandVisibleDistrictIds(boundId: string): Promise<string[]> {
+  try {
+    const cluster = await getLaunchClusterDistrictIds();
+    if (boundId === cluster.homeId) {
+      return cluster.clusterIds;
+    }
+  } catch (err) {
+    logger.warn('[TRANSIT] launch cluster resolve failed; falling back to single district', {
+      boundId: boundId.split('-')[0],
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return [boundId];
+}
 
 /** Resolve list/stats scope: transit forced to binding; admin optional query. */
 export async function resolveTransitScope(
@@ -169,22 +192,39 @@ export async function resolveTransitScope(
     if (!bound) {
       throw new ForbiddenError('Transit operator has no municipality assigned');
     }
-    return { districtId: bound };
+    const visibleDistrictIds = await expandVisibleDistrictIds(bound);
+    return { districtId: bound, visibleDistrictIds };
   }
 
-  // admin: optional district filter
+  // admin: optional district filter — same expand when filter is VD hub
   if (queryDistrictId) {
-    return { districtId: queryDistrictId };
+    const visibleDistrictIds = await expandVisibleDistrictIds(queryDistrictId);
+    return { districtId: queryDistrictId, visibleDistrictIds };
   }
-  return { districtId: null };
+  return { districtId: null, visibleDistrictIds: null };
+}
+
+/** Driver visible if operational district OR intended (onboarding) is in scope. */
+function districtVisibilityFilter(scope: TransitScope): SQL | undefined {
+  if (!scope.visibleDistrictIds) return undefined;
+  if (scope.visibleDistrictIds.length === 0) return sql`false`;
+  return or(
+    inArray(drivers.district_id, scope.visibleDistrictIds),
+    inArray(drivers.intended_district_id, scope.visibleDistrictIds),
+  );
 }
 
 function approvedFilters(scope: TransitScope) {
   const filters = [eq(drivers.status, 'approved'), eq(drivers.admin_review_status, 'approved')];
-  if (scope.districtId) {
-    filters.push(eq(drivers.district_id, scope.districtId));
-  }
+  const visibility = districtVisibilityFilter(scope);
+  if (visibility) filters.push(visibility);
   return filters;
+}
+
+function isDistrictInScope(scope: TransitScope, districtId: string | null | undefined): boolean {
+  if (!scope.visibleDistrictIds) return true;
+  if (!districtId) return false;
+  return scope.visibleDistrictIds.includes(districtId);
 }
 
 export const transitService = {
@@ -319,9 +359,8 @@ export const transitService = {
 
   async getDriver(scope: TransitScope, driverId: string) {
     const filters = [eq(drivers.id, driverId)];
-    if (scope.districtId) {
-      filters.push(eq(drivers.district_id, scope.districtId));
-    }
+    const visibility = districtVisibilityFilter(scope);
+    if (visibility) filters.push(visibility);
 
     const [row] = await db
       .select(selectFields)
@@ -342,26 +381,41 @@ export const transitService = {
     body: TransitIssueBody,
   ) {
     const [driver] = await db
-      .select({ id: drivers.id, district_id: drivers.district_id })
+      .select({
+        id: drivers.id,
+        district_id: drivers.district_id,
+        intended_district_id: drivers.intended_district_id,
+      })
       .from(drivers)
       .where(eq(drivers.id, driverId))
       .limit(1);
 
     if (!driver) throw new NotFoundError('Driver not found');
 
-    if (scope.districtId) {
-      // Only block when driver already belongs to a *different* municipality
-      if (driver.district_id && driver.district_id !== scope.districtId) {
-        throw new ForbiddenError('Driver belongs to another municipality');
+    if (scope.visibleDistrictIds) {
+      // Block only when driver already belongs to a district outside scope.
+      // Unassigned (null district + null intended) remains claimable by scoped ops.
+      const hasDistrict = Boolean(driver.district_id);
+      const hasIntended = Boolean(driver.intended_district_id);
+      if (hasDistrict || hasIntended) {
+        const driverInScope =
+          isDistrictInScope(scope, driver.district_id) ||
+          isDistrictInScope(scope, driver.intended_district_id);
+        if (!driverInScope) {
+          throw new ForbiddenError('Driver belongs to another municipality');
+        }
       }
-      // transit (or admin scoped): never allow writing a different district
-      if (body.district_id && body.district_id !== scope.districtId) {
+      if (body.district_id && !isDistrictInScope(scope, body.district_id)) {
         throw new ForbiddenError('Cannot assign identification to another municipality');
       }
     }
 
-    const district_id = scope.districtId
-      ? (body.district_id ?? scope.districtId)
+    // Prefer driver's operational/intended district (keep SP/VS; do not force hub VD).
+    // body.district_id must already be in visibleDistrictIds when scoped.
+    const preferredDistrict =
+      driver.district_id ?? driver.intended_district_id ?? scope.districtId ?? undefined;
+    const district_id = scope.visibleDistrictIds
+      ? (body.district_id ?? preferredDistrict)
       : body.district_id;
 
     const external_ref = body.external_ref ?? body.batch;
