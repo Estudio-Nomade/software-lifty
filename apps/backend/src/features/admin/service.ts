@@ -484,6 +484,16 @@ export const adminService = {
       }
     }
 
+    // Non-empty comment without request_fix would flip ops_ok and leave the
+    // driver un-notified. Admin UI always pairs comment with request_fix.
+    if (trimmedComment && !wantsFix && body.ops_ok !== true) {
+      throw new AppError(
+        'Para guardar un comentario usá request_fix:true (notifica al conductor)',
+        400,
+        'REQUEST_FIX_REQUIRED',
+      );
+    }
+
     if (body.ops_ok === undefined && !wantsFix && !commentProvided) {
       throw new AppError('Nothing to update', 400, 'EMPTY_PATCH');
     }
@@ -508,13 +518,12 @@ export const adminService = {
       patch.review_comment = null;
     } else if (body.ops_ok === false) {
       patch.ops_ok = false;
-      if (commentProvided) {
-        patch.review_comment = trimmedComment;
+      // Explicit null clears stored comment without notifying.
+      if (commentProvided && trimmedComment === null) {
+        patch.review_comment = null;
       }
-    } else if (commentProvided) {
-      // Comment-only without request_fix: store, no notify.
-      patch.review_comment = trimmedComment;
-      if (trimmedComment) patch.ops_ok = false;
+    } else if (commentProvided && trimmedComment === null) {
+      patch.review_comment = null;
     }
 
     const [updated] = await db

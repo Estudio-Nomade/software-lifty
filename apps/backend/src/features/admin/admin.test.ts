@@ -937,6 +937,34 @@ describe('Admin', () => {
     expect(data.error.code).toBe('NOTES_REQUIRED');
   });
 
+  test('PATCH document comment without request_fix returns REQUEST_FIX_REQUIRED', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+    const db = getDb();
+    const [doc] = await db
+      .select({ id: driverDocuments.id })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId))
+      .limit(1);
+
+    const { status, data } = await request(
+      'PATCH',
+      `/api/admin/drivers/${driverId}/documents/${doc!.id}`,
+      { review_comment: 'Foto borrosa del frente' },
+      adminToken,
+    );
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('REQUEST_FIX_REQUIRED');
+
+    const [row] = await db
+      .select({ ops_ok: driverDocuments.ops_ok, review_comment: driverDocuments.review_comment })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.id, doc!.id))
+      .limit(1);
+    expect(row!.ops_ok).toBe(false);
+    expect(row!.review_comment).toBeNull();
+  });
+
   test('PATCH document request_fix stores comment, message and leaves pending_review', async () => {
     const adminToken = await createAdminToken();
     const { driverId, token } = await createReviewDriver();
