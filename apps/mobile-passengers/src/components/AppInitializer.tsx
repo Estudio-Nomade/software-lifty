@@ -11,6 +11,11 @@ import {
   registerForPush,
   setupNotificationHandler,
 } from '../lib/notifications';
+import {
+  outcomeFromAccessToken,
+  shouldApplySessionAfterSettle,
+  shouldClearGhostOnRestoreFailure,
+} from '../lib/sessionRestorePolicy';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { PlatformRealtimeProvider } from './PlatformRealtimeProvider';
@@ -34,39 +39,75 @@ const SESSION_RESTORE_TIMEOUT_MS = 8_000;
 
 function SessionRestore() {
   const setSession = useAuthStore((s) => s.setSession);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
   const setSessionRestored = useAuthStore((s) => s.setSessionRestored);
 
   useEffect(() => {
     let cancelled = false;
+    let sessionConfirmed = false;
+    let restoreSettled = false;
+
     const markRestored = () => {
       if (cancelled) return;
       setSessionRestored(true);
     };
+
+    /** First timeout or getSession outcome wins; late continuations no-op. */
+    const settle = (fn: () => void) => {
+      if (cancelled || restoreSettled) return;
+      restoreSettled = true;
+      clearTimeout(timeoutId);
+      fn();
+    };
+
+    const clearGhostAndRestore = () => {
+      settle(() => {
+        // Drop stale zustand persist so Home is never shown without Supabase session.
+        clearAuth();
+        markRestored();
+      });
+    };
+
     const timeoutId = setTimeout(() => {
       console.log('[SessionRestore] timeout — marking session restored');
-      markRestored();
+      settle(() => {
+        if (shouldClearGhostOnRestoreFailure(sessionConfirmed)) {
+          clearAuth();
+        }
+        markRestored();
+      });
     }, SESSION_RESTORE_TIMEOUT_MS);
 
     const restore = async () => {
       try {
         const { data } = await supabase.auth.getSession();
         if (cancelled) return;
+        if (!shouldApplySessionAfterSettle(restoreSettled)) return;
         const token = data.session?.access_token ?? null;
-        if (!token) {
-          markRestored();
+        if (outcomeFromAccessToken(token) === 'clear_ghost') {
+          clearGhostAndRestore();
           return;
         }
-        const metadata = data.session?.user?.user_metadata as Record<string, unknown> | undefined;
-        setSession(
-          token,
-          data.session?.user?.id ?? null,
-          data.session?.user?.email ?? null,
-          (metadata?.full_name as string) ?? undefined,
-        );
-        markRestored();
+        settle(() => {
+          sessionConfirmed = true;
+          const metadata = data.session?.user?.user_metadata as Record<string, unknown> | undefined;
+          setSession(
+            token,
+            data.session?.user?.id ?? null,
+            data.session?.user?.email ?? null,
+            (metadata?.full_name as string) ?? undefined,
+          );
+          markRestored();
+        });
       } catch (err: unknown) {
         console.log('[SessionRestore] getSession ERROR:', err instanceof Error ? err.message : err);
-        markRestored();
+        if (cancelled) return;
+        if (!shouldApplySessionAfterSettle(restoreSettled)) return;
+        if (shouldClearGhostOnRestoreFailure(sessionConfirmed)) {
+          clearGhostAndRestore();
+          return;
+        }
+        settle(() => markRestored());
       }
     };
     restore();
@@ -74,7 +115,7 @@ function SessionRestore() {
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [setSession, setSessionRestored]);
+  }, [setSession, clearAuth, setSessionRestored]);
 
   return null;
 }
