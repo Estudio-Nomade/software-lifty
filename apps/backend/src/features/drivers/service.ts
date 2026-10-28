@@ -23,7 +23,6 @@ import { logger } from '../../shared/lib/logger';
 import {
   assertMotoLicenseMatchesEngineCc,
   isAllowedMotoLicenseCategory,
-  motoLicenseMatchesEngineCc,
   normalizeMotoLicenseCategory,
 } from '../../shared/lib/moto-license-category';
 import {
@@ -1485,13 +1484,11 @@ export const driversService = {
       await ensureDriverEnteredReview(driverId);
     }
 
-    // License category / professional carnet status (A1.2/A1.3/A1.4 moto ANSV, B/professional auto).
-    // Also re-enter on moto vehicle writes so stored class is re-checked against new cc/type.
-    if (
-      data.license_category != null ||
-      data.license_professional_status != null ||
-      hasVehicleData
-    ) {
+    // License category / professional status — optional self-report (compat old clients).
+    // Onboarding no longer requires category; ops sets it from license photo later.
+    // Omit license_category → leave existing DB value (no null wipe, no forced pending).
+    // assertMotoLicenseMatchesEngineCc only when client sends category.
+    if (data.license_category != null || data.license_professional_status != null) {
       const [veh] = await db
         .select({
           vehicle_type: vehicles.vehicle_type,
@@ -1508,164 +1505,119 @@ export const driversService = {
         null;
       const isMoto = isMotoVehicleType(vehicleType);
 
-      // Vehicle-only auto PUT: no license fields to touch.
+      const normalizeCategory = (raw: string) =>
+        isMoto
+          ? normalizeMotoLicenseCategory(raw)
+          : String(raw).trim().toUpperCase() || String(raw).trim();
+
+      // Request wins; else reuse DB so status-only can still resolve.
+      const requestCategory =
+        data.license_category != null
+          ? normalizeCategory(String(data.license_category))
+          : undefined;
+      const dbCategoryRaw = existing?.license_category ?? null;
+      const dbCategory =
+        dbCategoryRaw != null && String(dbCategoryRaw).trim()
+          ? normalizeCategory(String(dbCategoryRaw))
+          : null;
+      const category = requestCategory !== undefined ? requestCategory : (dbCategory ?? undefined);
+
+      // explicit_status alone does not need vehicle type; category resolve does.
       if (
-        data.license_category == null &&
         data.license_professional_status == null &&
-        !(hasVehicleData && isMoto)
+        category &&
+        (!vehicleType || !String(vehicleType).trim())
       ) {
-        // fall through — no license patch
-      } else {
-        const normalizeCategory = (raw: string) =>
-          isMoto
-            ? normalizeMotoLicenseCategory(raw)
-            : String(raw).trim().toUpperCase() || String(raw).trim();
+        throw new AppError(
+          'Guardá el vehículo (Auto/Moto) antes de la categoría de licencia.',
+          400,
+          'VEHICLE_TYPE_REQUIRED',
+        );
+      }
 
-        // Request wins; else reuse DB so status-only / cc-only can still resolve + soft-heal.
-        const requestCategory =
-          data.license_category != null
-            ? normalizeCategory(String(data.license_category))
-            : undefined;
-        const dbCategoryRaw = existing?.license_category ?? null;
-        const dbCategory =
-          dbCategoryRaw != null && String(dbCategoryRaw).trim()
-            ? normalizeCategory(String(dbCategoryRaw))
+      const engineCc =
+        data.vehicle_engine_cc != null
+          ? Number(data.vehicle_engine_cc)
+          : veh?.engine_cc != null
+            ? Number(veh.engine_cc)
             : null;
-        const category =
-          requestCategory !== undefined ? requestCategory : (dbCategory ?? undefined);
 
-        // explicit_status alone does not need vehicle type; category resolve does.
-        if (
-          data.license_professional_status == null &&
-          category &&
-          (!vehicleType || !String(vehicleType).trim())
-        ) {
-          throw new AppError(
-            'Guardá el vehículo (Auto/Moto) antes de la categoría de licencia.',
-            400,
-            'VEHICLE_TYPE_REQUIRED',
-          );
-        }
+      let canonicalMotoCategory: string | undefined;
+      let writeCategory = data.license_category != null;
 
-        const engineCc =
-          data.vehicle_engine_cc != null
-            ? Number(data.vehicle_engine_cc)
-            : veh?.engine_cc != null
-              ? Number(veh.engine_cc)
-              : null;
-
-        // Hard-validate when client sends category, or moto vehicle/cc is being written.
-        const mustValidateMotoClass =
-          isMoto &&
-          !!category &&
-          (data.license_category != null || hasVehicleData || data.vehicle_engine_cc != null);
-
-        let canonicalMotoCategory: string | undefined;
-        let writeCategory = data.license_category != null;
-
-        if (mustValidateMotoClass) {
-          canonicalMotoCategory = assertMotoLicenseMatchesEngineCc(category, engineCc);
+      // Hard-validate moto class vs cc only when client sends category.
+      if (isMoto && data.license_category != null && category) {
+        canonicalMotoCategory = assertMotoLicenseMatchesEngineCc(category, engineCc);
+        writeCategory = true;
+      } else if (
+        isMoto &&
+        data.license_category == null &&
+        category &&
+        isAllowedMotoLicenseCategory(category)
+      ) {
+        // Status-only: soft-heal legacy A2/A3/A4 → A1.x token when present in DB.
+        const canonical = normalizeMotoLicenseCategory(category);
+        if (canonical !== String(dbCategoryRaw ?? '').trim()) {
+          canonicalMotoCategory = canonical;
           writeCategory = true;
-        } else if (isMoto && category && !isAllowedMotoLicenseCategory(category)) {
-          // Stale out-of-product token in DB (e.g. bare "A1") — clear so driver re-declares.
-          if (data.license_category == null) {
-            canonicalMotoCategory = undefined;
-            writeCategory = true;
-            // force null write below via empty category path
-          }
-        } else if (isMoto && category && isAllowedMotoLicenseCategory(category)) {
-          // Status-only (or no cc yet): soft-heal legacy A2/A3/A4 → A1.x when band matches.
-          const canonical = normalizeMotoLicenseCategory(category);
-          if (
-            engineCc != null &&
-            Number.isInteger(engineCc) &&
-            motoLicenseMatchesEngineCc(canonical, engineCc)
-          ) {
-            canonicalMotoCategory = canonical;
-            if (canonical !== String(dbCategoryRaw ?? '').trim()) writeCategory = true;
-          } else if (canonical !== String(dbCategoryRaw ?? '').trim()) {
-            // Alias normalize without cc (e.g. A2 → A1.2) — heal token only.
-            canonicalMotoCategory = canonical;
-            writeCategory = true;
-          }
+        }
+      }
+
+      const effectiveCategoryForStatus = canonicalMotoCategory ?? category ?? null;
+
+      const status = resolveLicenseProfessionalStatus({
+        vehicle_type: vehicleType,
+        license_category: effectiveCategoryForStatus,
+        explicit_status: data.license_professional_status ?? null,
+      });
+
+      if (
+        data.license_professional_status == null &&
+        effectiveCategoryForStatus &&
+        status === 'unknown' &&
+        (!vehicleType || !String(vehicleType).trim())
+      ) {
+        throw new AppError(
+          'Guardá el vehículo (Auto/Moto) antes de la categoría de licencia.',
+          400,
+          'VEHICLE_TYPE_REQUIRED',
+        );
+      }
+
+      const shouldWriteStatus =
+        data.license_professional_status != null || data.license_category != null || writeCategory;
+
+      if (shouldWriteStatus) {
+        const prevStatus = existing?.license_professional_status ?? null;
+        const licensePatch: {
+          license_category?: string | null;
+          license_professional_status: string;
+          professional_license_grace_started_at?: null;
+          professional_license_due_at?: null;
+          updated_at: Date;
+        } = {
+          license_professional_status: status,
+          updated_at: new Date(),
+        };
+        if (writeCategory) {
+          licensePatch.license_category = (canonicalMotoCategory ?? category) || null;
+        }
+        // Clear grace only on pending → professional/not_required transition.
+        if (shouldClearProfessionalGraceTimestamps(prevStatus, status)) {
+          licensePatch.professional_license_grace_started_at = null;
+          licensePatch.professional_license_due_at = null;
         }
 
-        const effectiveCategoryForStatus =
-          isMoto &&
-          category &&
-          !isAllowedMotoLicenseCategory(category) &&
-          data.license_category == null
-            ? null
-            : (canonicalMotoCategory ?? category ?? null);
-
-        const status = resolveLicenseProfessionalStatus({
-          vehicle_type: vehicleType,
-          // Prefer validated/healed class; else request/DB category; explicit_status still wins inside helper.
-          license_category: effectiveCategoryForStatus,
-          explicit_status: data.license_professional_status ?? null,
-        });
-
-        if (
-          data.license_professional_status == null &&
-          effectiveCategoryForStatus &&
-          status === 'unknown' &&
-          (!vehicleType || !String(vehicleType).trim())
-        ) {
+        try {
+          await db.update(drivers).set(licensePatch).where(eq(drivers.id, driverId));
+        } catch (err) {
+          if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
+          // Same posture as insurance chip-only PUT: never 200 while discarding license.
           throw new AppError(
-            'Guardá el vehículo (Auto/Moto) antes de la categoría de licencia.',
-            400,
-            'VEHICLE_TYPE_REQUIRED',
+            'El backend aún no tiene las columnas de licencia. Aplicá la migración 0049 en wabdd.',
+            503,
+            'SCHEMA_MIGRATION_REQUIRED',
           );
-        }
-
-        // Status-only with explicit status and no category anywhere: still persist status.
-        const shouldWriteStatus =
-          data.license_professional_status != null ||
-          data.license_category != null ||
-          writeCategory ||
-          (hasVehicleData && isMoto && !!category);
-
-        if (shouldWriteStatus) {
-          const prevStatus = existing?.license_professional_status ?? null;
-          const licensePatch: {
-            license_category?: string | null;
-            license_professional_status: string;
-            professional_license_grace_started_at?: null;
-            professional_license_due_at?: null;
-            updated_at: Date;
-          } = {
-            license_professional_status: status,
-            updated_at: new Date(),
-          };
-          if (writeCategory) {
-            if (
-              isMoto &&
-              category &&
-              !isAllowedMotoLicenseCategory(category) &&
-              data.license_category == null
-            ) {
-              licensePatch.license_category = null;
-            } else {
-              licensePatch.license_category = (canonicalMotoCategory ?? category) || null;
-            }
-          }
-          // Clear grace only on pending → professional/not_required transition.
-          if (shouldClearProfessionalGraceTimestamps(prevStatus, status)) {
-            licensePatch.professional_license_grace_started_at = null;
-            licensePatch.professional_license_due_at = null;
-          }
-
-          try {
-            await db.update(drivers).set(licensePatch).where(eq(drivers.id, driverId));
-          } catch (err) {
-            if (!isMissingOnboardingVehicleSchemaError(err)) throw err;
-            // Same posture as insurance chip-only PUT: never 200 while discarding license.
-            throw new AppError(
-              'El backend aún no tiene las columnas de licencia. Aplicá la migración 0049 en wabdd.',
-              503,
-              'SCHEMA_MIGRATION_REQUIRED',
-            );
-          }
         }
       }
     }

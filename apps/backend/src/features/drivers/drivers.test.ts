@@ -949,7 +949,7 @@ describe('Vehicle step (no duplicate form)', () => {
     expect(me.data.license_professional_status).toBe('not_required');
   });
 
-  test('moto vehicle re-save soft-heals legacy A2 to A1.2 when cc matches', async () => {
+  test('vehicle-only PUT preserves existing license_category (omit = leave-as-is)', async () => {
     const { token, driverId } = await fullOnboarding('+549****7013', password);
     const first = await request(
       'PUT',
@@ -968,14 +968,17 @@ describe('Vehicle step (no duplicate form)', () => {
     );
     expect(first.status).toBe(200);
 
-    // Simulate pre-fix row that stored mistaken chip "A2".
+    // Ops/admin (or legacy) already set a category — vehicle re-save must not wipe it.
     const db = getDb();
     await db
       .update(drivers)
-      .set({ license_category: 'A2', updated_at: new Date() })
+      .set({
+        license_category: 'A1.4',
+        license_professional_status: 'not_required',
+        updated_at: new Date(),
+      })
       .where(eq(drivers.id, driverId));
 
-    // Vehicle re-save without license_category must re-validate/heal from DB.
     const resave = await request(
       'PUT',
       '/api/drivers/me',
@@ -993,7 +996,117 @@ describe('Vehicle step (no duplicate form)', () => {
     expect(resave.status).toBe(200);
 
     const me = await request('GET', '/api/drivers/me', undefined, token);
-    expect(me.data.license_category).toBe('A1.2');
+    expect(me.data.license_category).toBe('A1.4');
+    expect(me.data.license_professional_status).toBe('not_required');
+  });
+
+  test('car vehicle PUT without license_category advances step and leaves status unknown', async () => {
+    const { token } = await fullOnboarding('+549****7014', password);
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Toyota',
+        vehicle_model: 'Corolla',
+        vehicle_year: 2022,
+        vehicle_color: 'Blanco',
+        vehicle_plate: 'NOCAT1',
+        vehicle_type: 'car',
+      },
+      token,
+    );
+    expect(status).toBe(200);
+    expect(data.step).toBe('documents');
+
+    const me = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me.data.license_category == null || me.data.license_category === '').toBe(true);
+    expect(
+      me.data.license_professional_status === 'unknown' ||
+        me.data.license_professional_status == null,
+    ).toBe(true);
+    // Onboarding step (not approved): status omits grace banner fields.
+    // evaluateProfessionalLicenseGrace(unknown) → show_banner false (unit-covered).
+  });
+
+  test('moto vehicle PUT with engine_cc and no license_category is 200', async () => {
+    const { token } = await fullOnboarding('+549****7015', password);
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Honda',
+        vehicle_model: 'CG',
+        vehicle_year: 2022,
+        vehicle_color: 'Rojo',
+        vehicle_plate: 'MOTNC1',
+        vehicle_type: 'motorcycle',
+        vehicle_engine_cc: 150,
+      },
+      token,
+    );
+    expect(status).toBe(200);
+    expect(data.step).toBe('documents');
+
+    const me = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me.data.vehicle.engine_cc).toBe(150);
+    expect(me.data.license_category == null || me.data.license_category === '').toBe(true);
+  });
+
+  test('car vehicle PUT preserves prior B category and does not force pending on omit', async () => {
+    const { token, driverId } = await fullOnboarding('+549****7016', password);
+    const seeded = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Toyota',
+        vehicle_model: 'Corolla',
+        vehicle_year: 2022,
+        vehicle_color: 'Blanco',
+        vehicle_plate: 'PRESC1',
+        vehicle_type: 'car',
+        license_category: 'B',
+      },
+      token,
+    );
+    expect(seeded.status).toBe(200);
+
+    const me1 = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me1.data.license_category).toBe('B');
+    expect(me1.data.license_professional_status).toBe('pending_professional');
+
+    // Vehicle-only PUT must preserve category/status (no wipe, no re-stamp).
+    const resave = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        vehicle_brand: 'Toyota',
+        vehicle_model: 'Corolla',
+        vehicle_year: 2023,
+        vehicle_color: 'Negro',
+        vehicle_plate: 'PRESC1',
+        vehicle_type: 'car',
+      },
+      token,
+    );
+    expect(resave.status).toBe(200);
+
+    const me2 = await request('GET', '/api/drivers/me', undefined, token);
+    expect(me2.data.license_category).toBe('B');
+    expect(me2.data.license_professional_status).toBe('pending_professional');
+    expect(me2.data.vehicle.year).toBe(2023);
+
+    // Sanity: row still has the seeded values (omit path never wrote null).
+    const db = getDb();
+    const [row] = await db
+      .select({
+        license_category: drivers.license_category,
+        license_professional_status: drivers.license_professional_status,
+      })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    expect(row?.license_category).toBe('B');
+    expect(row?.license_professional_status).toBe('pending_professional');
   });
 
   test('car vehicle PUT strips engine_cc to null', async () => {
