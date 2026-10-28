@@ -4,6 +4,7 @@
 
 ## Stack
 - **Monorepo**: Bun Workspaces + Turborepo
+- **Node.js**: 24.22.1 (pin `.nvmrc`) + Bun 1.3.x package manager
 - **Backend**: Bun + Elysia + Drizzle ORM + PostgreSQL (Supabase) — `apps/backend`
 - **Mobile (driver)**: Expo SDK 58 + React 19.3 + react-native 0.88 — `apps/mobile`
 - **Mobile (passenger)**: Expo SDK 58 + React 19.3 + react-native 0.88 — `apps/mobile-passengers`
