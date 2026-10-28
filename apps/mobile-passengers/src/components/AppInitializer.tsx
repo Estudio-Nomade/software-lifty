@@ -11,6 +11,10 @@ import {
   registerForPush,
   setupNotificationHandler,
 } from '../lib/notifications';
+import {
+  outcomeFromAccessToken,
+  shouldClearGhostOnRestoreFailure,
+} from '../lib/sessionRestorePolicy';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { PlatformRealtimeProvider } from './PlatformRealtimeProvider';
@@ -34,16 +38,31 @@ const SESSION_RESTORE_TIMEOUT_MS = 8_000;
 
 function SessionRestore() {
   const setSession = useAuthStore((s) => s.setSession);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
   const setSessionRestored = useAuthStore((s) => s.setSessionRestored);
 
   useEffect(() => {
     let cancelled = false;
+    let sessionConfirmed = false;
+
     const markRestored = () => {
       if (cancelled) return;
       setSessionRestored(true);
     };
+
+    const clearGhostAndRestore = () => {
+      if (cancelled) return;
+      // Drop stale zustand persist so Home is never shown without Supabase session.
+      clearAuth();
+      markRestored();
+    };
+
     const timeoutId = setTimeout(() => {
       console.log('[SessionRestore] timeout — marking session restored');
+      if (shouldClearGhostOnRestoreFailure(sessionConfirmed)) {
+        clearGhostAndRestore();
+        return;
+      }
       markRestored();
     }, SESSION_RESTORE_TIMEOUT_MS);
 
@@ -52,10 +71,11 @@ function SessionRestore() {
         const { data } = await supabase.auth.getSession();
         if (cancelled) return;
         const token = data.session?.access_token ?? null;
-        if (!token) {
-          markRestored();
+        if (outcomeFromAccessToken(token) === 'clear_ghost') {
+          clearGhostAndRestore();
           return;
         }
+        sessionConfirmed = true;
         const metadata = data.session?.user?.user_metadata as Record<string, unknown> | undefined;
         setSession(
           token,
@@ -66,6 +86,10 @@ function SessionRestore() {
         markRestored();
       } catch (err: unknown) {
         console.log('[SessionRestore] getSession ERROR:', err instanceof Error ? err.message : err);
+        if (shouldClearGhostOnRestoreFailure(sessionConfirmed)) {
+          clearGhostAndRestore();
+          return;
+        }
         markRestored();
       }
     };
@@ -74,7 +98,7 @@ function SessionRestore() {
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [setSession, setSessionRestored]);
+  }, [setSession, clearAuth, setSessionRestored]);
 
   return null;
 }
