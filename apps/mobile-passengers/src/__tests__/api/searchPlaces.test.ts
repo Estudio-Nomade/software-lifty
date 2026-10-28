@@ -40,6 +40,21 @@ describe('searchPlaces', () => {
     expect(mockGet).toHaveBeenCalled();
   });
 
+  it('sends Villa Dolores bias to backend when GPS lat/lng is missing (Destino Dique)', async () => {
+    mockGet.mockResolvedValue({ data: [] });
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ features: [] }),
+    }) as unknown as typeof fetch;
+
+    await searchPlaces('Dique');
+
+    expect(mockGet).toHaveBeenCalled();
+    const opts = mockGet.mock.calls[0][1] as { params?: { lat?: number; lng?: number } };
+    expect(opts.params?.lat).toBeCloseTo(-31.9456, 2);
+    expect(opts.params?.lng).toBeCloseTo(-65.1895, 2);
+  });
+
   it('falls back to Photon when backend returns empty array', async () => {
     mockGet.mockResolvedValue({ data: [] });
     globalThis.fetch = jest.fn().mockResolvedValue({
