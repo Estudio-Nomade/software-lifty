@@ -36,14 +36,28 @@ describe('expandPlaceQueries', () => {
 
 describe('matchCatalogPlaces', () => {
   it('returns Tandil Lago del Fuerte for dique alias', () => {
-    const hits = matchCatalogPlaces('Dique del Fuerte');
+    const hits = matchCatalogPlaces('Dique del Fuerte', undefined, {
+      biasLat: -31.9456,
+      biasLng: -65.1895,
+    });
     expect(hits[0]?.place_id).toBe('catalog:tandil-lago-del-fuerte');
     expect(hits[0]?.lat).toBeCloseTo(-37.3456714, 4);
   });
 
-  it('matches VD Terminal', () => {
-    const hits = matchCatalogPlaces('Terminal');
+  it('matches VD Terminal near VD bias', () => {
+    const hits = matchCatalogPlaces('Terminal', undefined, {
+      biasLat: -31.9456,
+      biasLng: -65.1895,
+    });
     expect(hits.some((h) => h.place_id.includes('terminal'))).toBe(true);
+  });
+
+  it('does not match VD Terminal with BA bias', () => {
+    const hits = matchCatalogPlaces('Terminal', undefined, {
+      biasLat: -34.6,
+      biasLng: -58.38,
+    });
+    expect(hits.every((h) => !h.place_id.includes('vd-'))).toBe(true);
   });
 });
 

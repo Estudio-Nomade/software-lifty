@@ -89,11 +89,28 @@ describe('places catalog', () => {
     expect(hits[0].description).toMatch(/Lago del Fuerte/i);
   });
 
-  test('VD Terminal / Hospital catalog match', () => {
-    const t = matchCatalogPlaces('Terminal');
+  test('VD Terminal / Hospital catalog match near VD bias', () => {
+    const bias = { biasLat: -31.9456, biasLng: -65.1895 };
+    const t = matchCatalogPlaces('Terminal', undefined, bias);
     expect(t.some((h) => h.place_id.includes('terminal'))).toBe(true);
-    const h = matchCatalogPlaces('Hospital');
+    const h = matchCatalogPlaces('Hospital', undefined, bias);
     expect(h.some((p) => p.description.toLowerCase().includes('hospital'))).toBe(true);
+  });
+
+  test('BA bias does not prepend VD Terminal catalog', () => {
+    const hits = matchCatalogPlaces('Terminal', undefined, {
+      biasLat: -34.6037,
+      biasLng: -58.3816,
+    });
+    expect(hits.every((h) => !h.place_id.includes('vd-'))).toBe(true);
+  });
+
+  test('Dique del Fuerte still catalogs Tandil from VD bias (strong multi-token alias)', () => {
+    const hits = matchCatalogPlaces('Dique del Fuerte', undefined, {
+      biasLat: -31.9456,
+      biasLng: -65.1895,
+    });
+    expect(hits.some((h) => h.place_id === 'catalog:tandil-lago-del-fuerte')).toBe(true);
   });
 
   test('no invented VD dique catalog row', () => {

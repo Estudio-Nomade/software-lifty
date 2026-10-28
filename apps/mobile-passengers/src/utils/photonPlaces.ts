@@ -248,7 +248,10 @@ export async function searchPhotonPlaces(
   const biasLat = typeof lat === 'number' && Number.isFinite(lat) ? lat : DEFAULT_PLACE_BIAS.lat;
   const biasLng = typeof lng === 'number' && Number.isFinite(lng) ? lng : DEFAULT_PLACE_BIAS.lng;
 
-  const catalogHits = matchCatalogPlaces(q) as PlaceSuggestion[];
+  const catalogHits = matchCatalogPlaces(q, undefined, {
+    biasLat,
+    biasLng,
+  }) as PlaceSuggestion[];
   const queries = expandPlaceQueries(q);
 
   const { signal: fetchSignal, cleanup } = mergeAbortSignals(signal, PHOTON_CLIENT_TIMEOUT_MS);
@@ -257,6 +260,7 @@ export async function searchPhotonPlaces(
       queries.map((query) => fetchOnePhotonQuery(query, biasLat, biasLng, fetchSignal)),
     );
 
+    // Caller cancel always wins (hook must not treat as empty hits).
     if (signal?.aborted) {
       const abortErr = new Error('Aborted');
       abortErr.name = 'AbortError';
@@ -264,37 +268,18 @@ export async function searchPhotonPlaces(
     }
 
     const photonLists = settled.map((r) => (r.status === 'fulfilled' ? r.value : []));
+    // Catalog first (bias-filtered); each Photon list already ranked with osm_key intact.
     const merged = mergePlaceResults([catalogHits, ...photonLists]) as PlaceSuggestion[];
-
-    // Keep catalog ahead of Photon re-rank so far curated pins stay visible.
-    const catalogPart = merged.filter((p) => String(p.place_id).startsWith('catalog:'));
-    const photonPart = merged.filter((p) => !String(p.place_id).startsWith('catalog:'));
-    let rankedPhoton = photonPart;
-    if (photonPart.length > 1) {
-      const features: PhotonFeature[] = photonPart.map((p, i) => ({
-        geometry: { coordinates: [p.lng, p.lat] as [number, number] },
-        properties: {
-          osm_id: i,
-          name: p.description.split(',')[0]?.trim() || p.description,
-        },
-      }));
-      const ranked = rankPhotonFeatures(features, q, biasLat, biasLng);
-      rankedPhoton = ranked
-        .map((f) => photonPart[Number(f.properties?.osm_id)])
-        .filter((p): p is PlaceSuggestion => !!p);
-    }
-
-    return [...catalogPart, ...rankedPhoton].slice(0, 10);
+    return merged.slice(0, 10);
   } catch (err) {
+    if (signal?.aborted) {
+      const abortErr = err instanceof Error ? err : new Error('Aborted');
+      abortErr.name = 'AbortError';
+      throw abortErr;
+    }
     const name = (err as { name?: string } | null)?.name;
-    const isAbort = name === 'AbortError' || signal?.aborted || fetchSignal.aborted;
-    if (isAbort) {
-      if (signal?.aborted) {
-        const abortErr = err instanceof Error ? err : new Error('Aborted');
-        abortErr.name = 'AbortError';
-        throw abortErr;
-      }
-      // Local timeout: still surface catalog if any
+    // Local 4s timeout alone → soft empty + catalog (bias-filtered) if any.
+    if (name === 'AbortError' || fetchSignal.aborted) {
       return catalogHits.slice(0, 10);
     }
     return catalogHits.slice(0, 10);

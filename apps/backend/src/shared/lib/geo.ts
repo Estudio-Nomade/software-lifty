@@ -367,7 +367,10 @@ export async function autocomplete(
       return hits;
     }
 
-    const catalogHits = matchCatalogPlaces(trimmed) as PlaceResult[];
+    const catalogHits = matchCatalogPlaces(trimmed, undefined, {
+      biasLat,
+      biasLng,
+    }) as PlaceResult[];
     const queries = expandPlaceQueries(trimmed);
 
     const photonLists = await Promise.allSettled(
@@ -379,6 +382,7 @@ export async function autocomplete(
         url.searchParams.set('lat', String(biasLat));
         url.searchParams.set('lon', String(biasLng));
         const data = await fetchPhoton(url, GEO_AUTOCOMPLETE_TIMEOUT_MS);
+        // Rank once per Photon response (preserves osm_key for poiBoost).
         return featuresToPlaceResults(data.features || [], trimmed, biasLat, biasLng);
       }),
     );
@@ -387,8 +391,7 @@ export async function autocomplete(
       r.status === 'fulfilled' ? r.value : [],
     );
 
-    // Catalog first (preferred), then Photon. Re-rank Photon only so far-away
-    // curated pins (e.g. Tandil Lago) are not buried by VD proximity scoring.
+    // Catalog first (bias-filtered), then Photon lists already ranked — no synthetic re-rank.
     let merged = mergePlaceResults([catalogHits, ...photonResults]) as PlaceResult[];
 
     // Street queries: drop weak catalog noise that does not share query tokens.
@@ -405,24 +408,7 @@ export async function autocomplete(
       });
     }
 
-    const catalogPart = merged.filter((p) => String(p.place_id).startsWith('catalog:'));
-    const photonPart = merged.filter((p) => !String(p.place_id).startsWith('catalog:'));
-    let rankedPhoton = photonPart;
-    if (photonPart.length > 1) {
-      const features: PhotonFeature[] = photonPart.map((p, i) => ({
-        geometry: { coordinates: [p.lng, p.lat] as [number, number] },
-        properties: {
-          osm_id: i,
-          name: p.description.split(',')[0]?.trim() || p.description,
-        },
-      }));
-      const ranked = rankPhotonPlaceFeatures(features, trimmed, biasLat, biasLng);
-      rankedPhoton = ranked
-        .map((f) => photonPart[Number(f.properties.osm_id)])
-        .filter((p): p is PlaceResult => !!p);
-    }
-
-    const results = [...catalogPart, ...rankedPhoton].slice(0, 10);
+    const results = merged.slice(0, 10);
 
     if (results.length > 0) {
       await cacheSet(cacheKey, JSON.stringify(results), GEO_AUTOCOMPLETE_CACHE_TTL);

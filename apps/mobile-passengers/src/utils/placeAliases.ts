@@ -226,9 +226,56 @@ export function catalogToPlaceResult(p: CatalogPlace): PlaceLike {
   };
 }
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+const CATALOG_LOCAL_KM = 40;
+const CATALOG_FAR_ALIAS_KM = 900;
+
+export type MatchCatalogOpts = {
+  biasLat?: number;
+  biasLng?: number;
+};
+
+function allowCatalogByBias(
+  place: CatalogPlace,
+  q: string,
+  score: number,
+  biasLat?: number,
+  biasLng?: number,
+): boolean {
+  if (
+    typeof biasLat !== 'number' ||
+    !Number.isFinite(biasLat) ||
+    typeof biasLng !== 'number' ||
+    !Number.isFinite(biasLng)
+  ) {
+    return true;
+  }
+  const dist = haversineKm(biasLat, biasLng, place.lat, place.lng);
+  if (dist <= CATALOG_LOCAL_KM) return true;
+
+  const cityN = place.city ? normalizePlaceQuery(place.city) : '';
+  if (cityN && (q.includes(cityN) || q.endsWith(` ${cityN}`))) return dist <= CATALOG_FAR_ALIAS_KM;
+
+  // Far pins only for multi-token / specific queries (e.g. "dique fuerte").
+  const qTokens = q.split(/\s+/).filter(Boolean);
+  if (qTokens.length >= 2 && score >= 80 && dist <= CATALOG_FAR_ALIAS_KM) return true;
+
+  return false;
+}
+
 export function matchCatalogPlaces(
   query: string,
   catalog: CatalogPlace[] = PLACES_CATALOG,
+  opts?: MatchCatalogOpts,
 ): PlaceLike[] {
   const q = normalizePlaceQuery(query);
   if (q.length < 2) return [];
@@ -248,7 +295,9 @@ export function matchCatalogPlaces(
         best = Math.max(best, 50 + Math.min(q.length, 15));
       else if (q.length >= 4 && q.includes(alias) && alias.length >= 4) best = Math.max(best, 40);
     }
-    if (best > 0) hits.push({ place, score: best });
+    if (best > 0 && allowCatalogByBias(place, q, best, opts?.biasLat, opts?.biasLng)) {
+      hits.push({ place, score: best });
+    }
   }
 
   hits.sort((a, b) => b.score - a.score || a.place.name.localeCompare(b.place.name));
