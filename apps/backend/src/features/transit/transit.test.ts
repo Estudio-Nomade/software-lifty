@@ -9,6 +9,7 @@ import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
 import { districts, driverDocuments, drivers, users, vehicles } from '../../shared/db/schema';
+import { resetLaunchClusterCache } from '../../shared/lib/launch-cluster';
 import { createTestToken } from '../../shared/testing/utils';
 
 let app: ReturnType<typeof createApp>;
@@ -87,10 +88,11 @@ async function createApprovedDriver(opts?: {
   full_name?: string;
   document_number?: string;
   approved_days_ago?: number;
-  district_id?: string;
+  district_id?: string | null;
+  intended_district_id?: string | null;
   district_name?: string;
   plate?: string;
-}): Promise<{ userId: string; driverId: string; token: string; districtId: string }> {
+}): Promise<{ userId: string; driverId: string; token: string; districtId: string | null }> {
   const db = getDb();
   const [user] = await db
     .insert(users)
@@ -104,7 +106,10 @@ async function createApprovedDriver(opts?: {
     })
     .returning({ id: users.id });
 
-  const districtId = opts?.district_id ?? (await ensureDistrict(opts?.district_name ?? 'Villa Dolores'));
+  const districtId =
+    opts?.district_id === null
+      ? null
+      : (opts?.district_id ?? (await ensureDistrict(opts?.district_name ?? 'Villa Dolores')));
 
   const approvedAt = opts?.approved_days_ago
     ? new Date(Date.now() - opts.approved_days_ago * 24 * 60 * 60 * 1000)
@@ -122,6 +127,7 @@ async function createApprovedDriver(opts?: {
       approved_at: approvedAt,
       admin_reviewed_at: approvedAt,
       district_id: districtId,
+      intended_district_id: opts?.intended_district_id ?? null,
     })
     .returning({ id: drivers.id });
 
@@ -149,6 +155,7 @@ beforeAll(() => {
 
 beforeEach(async () => {
   await truncateTables();
+  resetLaunchClusterCache();
 });
 
 afterAll(async () => {
@@ -475,5 +482,130 @@ describe('Transit API JWT surface', () => {
     expect(data.transit_district_id).toBe(villaId);
     expect(data.district_name).toBe('Villa Dolores');
     expect(data.role).toBe('transit');
+  });
+
+  test('VD transit sees SP/VS cluster drivers; hides Mina Clavero', async () => {
+    const villaId = await ensureDistrict('Villa Dolores');
+    const spId = await ensureDistrict('San Pedro');
+    const vsId = await ensureDistrict('Villa Sarmiento');
+    const mcId = await ensureDistrict('Mina Clavero');
+    const { token } = await createStaff('transit', { transit_district_id: villaId });
+
+    const sp = await createApprovedDriver({
+      full_name: 'SP Driver',
+      document_number: '50111111',
+      district_id: spId,
+    });
+    const vs = await createApprovedDriver({
+      full_name: 'VS Driver',
+      document_number: '50222222',
+      district_id: vsId,
+    });
+    const intendedOnly = await createApprovedDriver({
+      full_name: 'Intended SP',
+      document_number: '50333333',
+      district_id: null,
+      intended_district_id: spId,
+    });
+    const mc = await createApprovedDriver({
+      full_name: 'MC Driver',
+      document_number: '50444444',
+      district_id: mcId,
+    });
+
+    const list = await request('GET', '/api/transit/drivers', undefined, token);
+    expect(list.status).toBe(200);
+    const items = list.data.items as Array<Record<string, unknown>>;
+    expect(items.some((i) => i.id === sp.driverId)).toBe(true);
+    expect(items.some((i) => i.id === vs.driverId)).toBe(true);
+    expect(items.some((i) => i.id === intendedOnly.driverId)).toBe(true);
+    expect(items.some((i) => i.id === mc.driverId)).toBe(false);
+
+    const spDetail = await request('GET', `/api/transit/drivers/${sp.driverId}`, undefined, token);
+    expect(spDetail.status).toBe(200);
+    expect(spDetail.data.id).toBe(sp.driverId);
+
+    const mcDetail = await request('GET', `/api/transit/drivers/${mc.driverId}`, undefined, token);
+    expect(mcDetail.status).toBe(404);
+
+    const stats = await request('GET', '/api/transit/stats', undefined, token);
+    expect(stats.status).toBe(200);
+    expect(stats.data.total_drivers).toBe(3);
+
+    const issueSp = await request(
+      'POST',
+      `/api/transit/drivers/${sp.driverId}/identification/issue`,
+      { district_id: spId, external_ref: 'LOTE-SP-1' },
+      token,
+    );
+    expect(issueSp.status).toBe(200);
+    expect(issueSp.data.ok).toBe(true);
+
+    const issueMc = await request(
+      'POST',
+      `/api/transit/drivers/${mc.driverId}/identification/issue`,
+      {},
+      token,
+    );
+    expect(issueMc.status).toBe(403);
+  });
+
+  test('non-home transit binding does not expand to launch cluster', async () => {
+    const villaId = await ensureDistrict('Villa Dolores');
+    const spId = await ensureDistrict('San Pedro');
+    const mcId = await ensureDistrict('Mina Clavero');
+    const { token } = await createStaff('transit', { transit_district_id: mcId });
+
+    const sp = await createApprovedDriver({
+      full_name: 'SP Hidden',
+      document_number: '50555555',
+      district_id: spId,
+    });
+    const mc = await createApprovedDriver({
+      full_name: 'MC Local',
+      document_number: '50666666',
+      district_id: mcId,
+    });
+    await createApprovedDriver({
+      full_name: 'VD Hidden',
+      document_number: '50777777',
+      district_id: villaId,
+    });
+
+    const { status, data } = await request('GET', '/api/transit/drivers', undefined, token);
+    expect(status).toBe(200);
+    const items = data.items as Array<Record<string, unknown>>;
+    expect(items.some((i) => i.id === mc.driverId)).toBe(true);
+    expect(items.some((i) => i.id === sp.driverId)).toBe(false);
+    expect(items.length).toBe(1);
+  });
+
+  test('admin filter district_id=VD expands to launch cluster', async () => {
+    const villaId = await ensureDistrict('Villa Dolores');
+    const spId = await ensureDistrict('San Pedro');
+    const nonoId = await ensureDistrict('Nono');
+    const { token } = await createStaff('admin');
+
+    const sp = await createApprovedDriver({
+      full_name: 'Admin SP',
+      document_number: '50888888',
+      district_id: spId,
+    });
+    const nono = await createApprovedDriver({
+      full_name: 'Admin Nono',
+      document_number: '50999999',
+      district_id: nonoId,
+    });
+
+    const filtered = await request(
+      'GET',
+      `/api/transit/drivers?district_id=${villaId}`,
+      undefined,
+      token,
+    );
+    expect(filtered.status).toBe(200);
+    const items = filtered.data.items as Array<Record<string, unknown>>;
+    expect(items.some((i) => i.id === sp.driverId)).toBe(true);
+    expect(items.some((i) => i.id === nono.driverId)).toBe(false);
   });
 });

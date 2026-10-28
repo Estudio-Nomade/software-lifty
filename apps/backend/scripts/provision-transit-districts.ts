@@ -1,5 +1,12 @@
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
 /**
  * Provision Auth + public.users transit staff per active district.
+ *
+ * Launch cluster (Villa Dolores + San Pedro + Villa Sarmiento): SP/VS drivers are
+ * managed via the Villa Dolores transit hub — do not require separate SP/VS ops users
+ * for MVP (see launch-cluster.ts + transit scope).
  *
  * Env:
  *   SUPABASE_URL
@@ -12,9 +19,6 @@
  */
 import { createClient } from '@supabase/supabase-js';
 import { eq } from 'drizzle-orm';
-import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
 import { db } from '../src/shared/db/client';
 import { districts, drivers, passengerProfiles, users } from '../src/shared/db/schema';
 
@@ -50,7 +54,9 @@ async function main() {
     process.exit(1);
   }
 
-  const admin = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+  const admin = createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
   const active = await db
     .select({ id: districts.id, name: districts.name })
     .from(districts)
