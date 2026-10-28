@@ -27,6 +27,24 @@ export const VALID_DOC_TYPES = [...DOC_TYPES, ...OPTIONAL_DOC_TYPES] as const;
 
 export type ValidDocType = (typeof VALID_DOC_TYPES)[number];
 
+/** Spanish labels for ops / push / mail (per-doc review). */
+export const DOC_TYPE_LABELS: Record<string, string> = {
+  license_front: 'Licencia (frente)',
+  license_back: 'Licencia (dorso)',
+  registration_front: 'Cédula verde (frente)',
+  registration_back: 'Cédula verde (dorso)',
+  insurance_front: 'Seguro del vehículo',
+  insurance_back: 'Seguro del vehículo (dorso)',
+  platform_rc_insurance_front: 'Seguro RC plataforma',
+  background_check_front: 'Antecedentes penales',
+  background_check_back: 'Antecedentes penales (dorso)',
+  rndg_front: 'RNDG',
+};
+
+export function docTypeLabel(docType: string): string {
+  return DOC_TYPE_LABELS[docType] ?? docType;
+}
+
 /**
  * Max concurrent non-superseded files per (driver_id, doc_type).
  * Lets drivers split long policies / multi-page papers across several photos

@@ -77,6 +77,23 @@ describe('hydrateDocsFromApi', () => {
     // last non-superseded wins in loop order; both processed but superseded skipped
     expect(state.drivers_license.front.serverStatus).toBe('approved');
   });
+
+  it('surfaces review_comment on the side without forcing needsReplace', () => {
+    const state = hydrateDocsFromApi([
+      {
+        id: 'lf-1',
+        doc_type: 'license_front',
+        file_url: 'https://cdn.example.com/f.jpg',
+        status: 'pending_review',
+        created_at: '2026-01-01T00:00:00Z',
+        ops_ok: false,
+        review_comment: 'Foto borrosa del frente',
+      },
+    ]);
+    expect(state.drivers_license.front.reviewComment).toBe('Foto borrosa del frente');
+    expect(state.drivers_license.front.needsReplace).toBe(false);
+    expect(state.drivers_license.front.uploaded).toBe(true);
+  });
 });
 
 describe('sideSatisfied / allDocsSatisfied', () => {

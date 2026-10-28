@@ -13,8 +13,10 @@ import {
   adminTripsQuery,
   commissionReceiptsQuery,
   dashboardSummaryQuery,
+  documentIdParams,
   driverIdParams,
   driverTripsQuery,
+  patchDocumentReviewBody,
   receiptIdParams,
   rejectFraudBody,
   reviewBody,
@@ -187,6 +189,22 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
       );
     },
     { params: driverIdParams, body: reviewBody, requireAuth: true },
+  )
+  .patch(
+    '/drivers/:driver_id/documents/:document_id',
+    ({ user, params, body, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(
+        () =>
+          adminService.reviewDocument(user, params.driver_id, params.document_id, {
+            ops_ok: body.ops_ok,
+            review_comment: body.review_comment,
+            request_fix: body.request_fix,
+          }),
+        set,
+      );
+    },
+    { params: documentIdParams, body: patchDocumentReviewBody, requireAuth: true },
   )
   .get(
     '/commission/phases',

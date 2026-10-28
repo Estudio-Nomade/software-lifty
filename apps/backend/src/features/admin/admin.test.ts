@@ -883,4 +883,251 @@ describe('Admin', () => {
     expect(res.data.currentDay).toBe(1);
     expect(res.data.phase).toBeString();
   });
+
+  test('PATCH /drivers/:id/documents/:docId ops_ok without comment', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId, token } = await createReviewDriver();
+    const db = getDb();
+    const [doc] = await db
+      .select({ id: driverDocuments.id })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId))
+      .limit(1);
+
+    const { status, data } = await request(
+      'PATCH',
+      `/api/admin/drivers/${driverId}/documents/${doc!.id}`,
+      { ops_ok: true },
+      adminToken,
+    );
+    expect(status).toBe(200);
+    expect(data.document.ops_ok).toBe(true);
+    expect(data.document.review_comment).toBeNull();
+    expect(data.account_message).toBeNull();
+
+    const detail = await request('GET', `/api/admin/drivers/${driverId}`, undefined, adminToken);
+    expect(detail.status).toBe(200);
+    const listed = detail.data.documents.find((d: { id: string }) => d.id === doc!.id);
+    expect(listed.ops_ok).toBe(true);
+
+    const meDocs = await request('GET', '/api/drivers/me/documents', undefined, token);
+    expect(meDocs.status).toBe(200);
+    const mine = meDocs.data.find((d: { id: string }) => d.id === doc!.id);
+    expect(mine.ops_ok).toBe(true);
+    expect(mine.review_comment).toBeNull();
+  });
+
+  test('PATCH document request_fix without comment returns NOTES_REQUIRED', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+    const db = getDb();
+    const [doc] = await db
+      .select({ id: driverDocuments.id })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId))
+      .limit(1);
+
+    const { status, data } = await request(
+      'PATCH',
+      `/api/admin/drivers/${driverId}/documents/${doc!.id}`,
+      { request_fix: true },
+      adminToken,
+    );
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('NOTES_REQUIRED');
+  });
+
+  test('PATCH document comment without request_fix returns REQUEST_FIX_REQUIRED', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+    const db = getDb();
+    const [doc] = await db
+      .select({ id: driverDocuments.id })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId))
+      .limit(1);
+
+    const { status, data } = await request(
+      'PATCH',
+      `/api/admin/drivers/${driverId}/documents/${doc!.id}`,
+      { review_comment: 'Foto borrosa del frente' },
+      adminToken,
+    );
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('REQUEST_FIX_REQUIRED');
+
+    const [row] = await db
+      .select({ ops_ok: driverDocuments.ops_ok, review_comment: driverDocuments.review_comment })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.id, doc!.id))
+      .limit(1);
+    expect(row!.ops_ok).toBe(false);
+    expect(row!.review_comment).toBeNull();
+  });
+
+  test('PATCH document request_fix stores comment, message and leaves pending_review', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId, token } = await createReviewDriver();
+    const db = getDb();
+    const [doc] = await db
+      .select({ id: driverDocuments.id, doc_type: driverDocuments.doc_type })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId))
+      .limit(1);
+    const comment = 'Foto borrosa, volvé a sacar el frente';
+
+    const { status, data } = await request(
+      'PATCH',
+      `/api/admin/drivers/${driverId}/documents/${doc!.id}`,
+      { request_fix: true, review_comment: comment },
+      adminToken,
+    );
+    expect(status).toBe(200);
+    expect(data.document.ops_ok).toBe(false);
+    expect(data.document.review_comment).toBe(comment);
+    expect(data.document.status).toBe('pending_review');
+    expect(data.account_message?.body).toContain(comment);
+    expect(data.account_message?.body).toContain('«');
+    expect(['sent', 'zero_tokens', 'failed', 'skipped']).toContain(
+      data.account_message?.push_status,
+    );
+
+    const history = await db
+      .select()
+      .from(driverAccountMessages)
+      .where(eq(driverAccountMessages.driver_id, driverId));
+    expect(history).toHaveLength(1);
+    expect(history[0]!.type).toBe('review_notes');
+
+    const meDocs = await request('GET', '/api/drivers/me/documents', undefined, token);
+    expect(meDocs.status).toBe(200);
+    const mine = meDocs.data.find((d: { id: string }) => d.id === doc!.id);
+    expect(mine.review_comment).toBe(comment);
+    expect(mine.ops_ok).toBe(false);
+  });
+
+  test('PATCH document ops_ok clears prior review_comment', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+    const db = getDb();
+    const [doc] = await db
+      .select({ id: driverDocuments.id })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId))
+      .limit(1);
+
+    await request(
+      'PATCH',
+      `/api/admin/drivers/${driverId}/documents/${doc!.id}`,
+      { request_fix: true, review_comment: 'Falta dorso nítido de la cédula' },
+      adminToken,
+    );
+
+    const ok = await request(
+      'PATCH',
+      `/api/admin/drivers/${driverId}/documents/${doc!.id}`,
+      { ops_ok: true },
+      adminToken,
+    );
+    expect(ok.status).toBe(200);
+    expect(ok.data.document.ops_ok).toBe(true);
+    expect(ok.data.document.review_comment).toBeNull();
+  });
+
+  test('PATCH document non-admin returns 403', async () => {
+    const { token, driverId } = await createReviewDriver();
+    const db = getDb();
+    const [doc] = await db
+      .select({ id: driverDocuments.id })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId))
+      .limit(1);
+
+    const { status } = await request(
+      'PATCH',
+      `/api/admin/drivers/${driverId}/documents/${doc!.id}`,
+      { ops_ok: true },
+      token,
+    );
+    expect(status).toBe(403);
+  });
+
+  test('PATCH document wrong driver returns 404', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+    const db = getDb();
+    const [docA] = await db
+      .select({ id: driverDocuments.id })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId))
+      .limit(1);
+
+    const [otherUser] = await db
+      .insert(users)
+      .values({
+        phone: '+5492617777001',
+        full_name: 'Other Driver',
+        role: 'driver',
+        kyc_status: 'approved',
+      })
+      .returning({ id: users.id });
+    const [otherDriver] = await db
+      .insert(drivers)
+      .values({
+        user_id: otherUser.id,
+        status: 'review',
+        kyc_status: 'approved',
+        admin_review_status: 'pending',
+      })
+      .returning({ id: drivers.id });
+
+    const { status } = await request(
+      'PATCH',
+      `/api/admin/drivers/${otherDriver.id}/documents/${docA!.id}`,
+      { ops_ok: true },
+      adminToken,
+    );
+    expect(status).toBe(404);
+  });
+
+  test('new document row defaults ops_ok false and review_comment null', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+    const db = getDb();
+    const [doc] = await db
+      .select({ id: driverDocuments.id, doc_type: driverDocuments.doc_type })
+      .from(driverDocuments)
+      .where(eq(driverDocuments.driver_id, driverId))
+      .limit(1);
+
+    await request(
+      'PATCH',
+      `/api/admin/drivers/${driverId}/documents/${doc!.id}`,
+      { request_fix: true, review_comment: 'Ilegible, re-subí el frente' },
+      adminToken,
+    );
+
+    // Supersede + insert mirrors commitDriverDocument defaults (reupload path).
+    await db
+      .update(driverDocuments)
+      .set({ status: 'superseded', superseded_at: new Date() })
+      .where(eq(driverDocuments.id, doc!.id));
+    const [fresh] = await db
+      .insert(driverDocuments)
+      .values({
+        driver_id: driverId,
+        doc_type: doc!.doc_type,
+        file_url: 'https://example.com/fresh.pdf',
+        status: 'pending_review',
+      })
+      .returning({
+        ops_ok: driverDocuments.ops_ok,
+        review_comment: driverDocuments.review_comment,
+        status: driverDocuments.status,
+      });
+
+    expect(fresh!.status).toBe('pending_review');
+    expect(fresh!.ops_ok).toBe(false);
+    expect(fresh!.review_comment).toBeNull();
+  });
 });

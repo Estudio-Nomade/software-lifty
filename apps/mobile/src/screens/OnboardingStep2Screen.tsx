@@ -725,6 +725,12 @@ export const OnboardingStep2Screen: React.FC = () => {
                       </View>
                     )}
 
+                    {state.reviewComment ? (
+                      <Text style={styles.docReviewComment}>
+                        Observación de Lifty: {state.reviewComment}
+                      </Text>
+                    ) : null}
+
                     {state.error ? (
                       <View style={styles.errorRow}>
                         <Text style={styles.errorText}>{state.error}</Text>
@@ -794,6 +800,14 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.deepBlue,
+  },
+  docReviewComment: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.dangerRed,
+    width: '100%',
+    lineHeight: 18,
+    marginTop: theme.spacing.xs,
   },
   docCard: {
     gap: theme.spacing.sm,

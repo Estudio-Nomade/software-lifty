@@ -37,10 +37,13 @@ export function driverReviewNotesPush(
   notes?: string | null,
   messageId?: string | null,
   badge?: number | null,
+  extra?: { doc_type?: string | null; document_id?: string | null },
 ) {
   const reason = shortReviewReason(notes);
   const data: Record<string, string> = { type: 'driver:review_notes', reason };
   if (messageId) data.message_id = messageId;
+  if (extra?.doc_type) data.doc_type = extra.doc_type;
+  if (extra?.document_id) data.document_id = extra.document_id;
   return {
     title: 'Necesitamos que corrijas documentación',
     body: reason,
