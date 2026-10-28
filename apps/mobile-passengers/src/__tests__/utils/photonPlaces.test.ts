@@ -159,6 +159,25 @@ describe('rankPhotonFeatures', () => {
     );
     expect(ranked[0].properties?.name).toMatch(/Dique Nivelador/i);
   });
+
+  it('prefers local San Martin highway over far BA with VD bias', () => {
+    const ranked = rankPhotonFeatures(
+      [
+        {
+          geometry: { coordinates: [-58.38, -34.6] },
+          properties: { name: 'San Martín', osm_key: 'highway', city: 'Buenos Aires' },
+        },
+        {
+          geometry: { coordinates: [-65.19, -31.945] },
+          properties: { name: 'San Martín', osm_key: 'highway', city: 'Villa Dolores' },
+        },
+      ],
+      'San Martin',
+      DEFAULT_PLACE_BIAS.lat,
+      DEFAULT_PLACE_BIAS.lng,
+    );
+    expect(ranked[0].geometry?.coordinates?.[0]).toBeCloseTo(-65.19, 1);
+  });
 });
 
 describe('DEFAULT_PLACE_BIAS', () => {
@@ -197,14 +216,25 @@ describe('searchPhotonPlaces timeout/abort', () => {
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 
-  it('returns [] on non-OK Photon HTTP (soft fail; searchPlaces decides total-network error)', async () => {
+  it('returns [] on non-OK Photon HTTP for unmatched query (soft fail)', async () => {
     globalThis.fetch = jest.fn().mockResolvedValue({
       ok: false,
       status: 503,
       json: async () => ({}),
     }) as unknown as typeof fetch;
 
-    await expect(searchPhotonPlaces('Dique', -31.9, -65.1)).resolves.toEqual([]);
+    await expect(searchPhotonPlaces('XyzzyNoMatch99', -31.9, -65.1)).resolves.toEqual([]);
+  });
+
+  it('returns catalog Lago del Fuerte when Photon empty for Dique del Fuerte', async () => {
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ features: [] }),
+    }) as unknown as typeof fetch;
+
+    const places = await searchPhotonPlaces('Dique del Fuerte', -31.9, -65.1);
+    expect(places.some((p) => /Lago del Fuerte/i.test(p.description))).toBe(true);
+    expect(places.some((p) => String(p.place_id).startsWith('catalog:'))).toBe(true);
   });
 
   it('returns [] on local timeout without caller abort (soft fail, not sticky UI error)', async () => {
@@ -223,7 +253,7 @@ describe('searchPhotonPlaces timeout/abort', () => {
       });
     }) as unknown as typeof fetch;
 
-    const pending = searchPhotonPlaces('Dique', -31.9, -65.1);
+    const pending = searchPhotonPlaces('XyzzyNoMatch99', -31.9, -65.1);
     await jest.advanceTimersByTimeAsync(4000);
     await expect(pending).resolves.toEqual([]);
     jest.useRealTimers();
