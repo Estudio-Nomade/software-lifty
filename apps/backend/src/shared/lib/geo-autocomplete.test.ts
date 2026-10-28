@@ -72,6 +72,31 @@ describe('rankPhotonPlaceFeatures', () => {
     );
     expect(ranked[0].properties.osm_id).toBe(2);
   });
+
+  test('Dique near Villa Dolores outranks far homonym with VD bias', () => {
+    const ranked = rankPhotonPlaceFeatures(
+      [
+        {
+          geometry: { coordinates: [-58.36, -34.61] },
+          properties: { osm_id: 10, name: 'Dique', osm_key: 'place' },
+        },
+        {
+          geometry: { coordinates: [-65.1126, -31.9131] },
+          properties: {
+            osm_id: 11,
+            name: 'Dique Nivelador Boca del Río',
+            osm_key: 'waterway',
+            osm_value: 'dam',
+          },
+        },
+      ],
+      'Dique',
+      -31.9456,
+      -65.1895,
+    );
+    expect(ranked[0].properties.osm_id).toBe(11);
+    expect(ranked[0].properties.name).toMatch(/Dique Nivelador/i);
+  });
 });
 
 describe('geo.autocomplete Photon path', () => {
@@ -113,6 +138,15 @@ describe('geo.autocomplete Photon path', () => {
     const calledUrl = String(fetchSpy.mock.calls[0][0]);
     expect(calledUrl).toContain('lang=default');
     expect(calledUrl).not.toContain('lang=es');
+  });
+
+  test('without GPS still biases Photon toward Villa Dolores launch footprint', async () => {
+    await autocomplete(`dique-bias-${Date.now()}`);
+    expect(fetchSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
+    const calledUrl = String(fetchSpy.mock.calls[0][0]);
+    const u = new URL(calledUrl);
+    expect(Number(u.searchParams.get('lat'))).toBeCloseTo(-31.9456, 2);
+    expect(Number(u.searchParams.get('lon'))).toBeCloseTo(-65.1895, 2);
   });
 
   test('maps Photon features to PlaceResult', async () => {

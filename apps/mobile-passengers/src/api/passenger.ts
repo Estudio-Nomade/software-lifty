@@ -1,4 +1,4 @@
-import { searchPhotonPlaces } from '../utils/photonPlaces';
+import { DEFAULT_PLACE_BIAS, searchPhotonPlaces } from '../utils/photonPlaces';
 import { api } from './client';
 import type {
   DirectionsResult,
@@ -284,9 +284,14 @@ export async function searchPlaces(
   const q = input.trim();
   if (q.length < 2) return [];
 
+  // Always bias (GPS when available, else Villa Dolores). Bare Photon without bias
+  // returns global homonyms — Destino "Dique" never surfaces local dams.
+  const biasLat = typeof lat === 'number' && Number.isFinite(lat) ? lat : DEFAULT_PLACE_BIAS.lat;
+  const biasLng = typeof lng === 'number' && Number.isFinite(lng) ? lng : DEFAULT_PLACE_BIAS.lng;
+
   try {
     const { data } = await api.get<PlaceSuggestion[]>('/maps/places/autocomplete', {
-      params: { input: q, lat, lng },
+      params: { input: q, lat: biasLat, lng: biasLng },
       timeout: 5000,
       signal,
     });
@@ -304,7 +309,7 @@ export async function searchPlaces(
   }
 
   try {
-    return await searchPhotonPlaces(q, lat, lng, signal);
+    return await searchPhotonPlaces(q, biasLat, biasLng, signal);
   } catch (err) {
     if (isAbortError(err, signal)) throw err;
     // Photon soft-fail path should return []; any unexpected throw → empty, not sticky error.

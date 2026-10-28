@@ -136,6 +136,29 @@ describe('rankPhotonFeatures', () => {
     expect(ranked[0].properties?.name).toMatch(/Calvario/);
     expect(ranked[0].geometry?.coordinates?.[0]).toBeCloseTo(-59.15, 1);
   });
+
+  it('ranks local Dique POI above far Dique with Villa Dolores bias', () => {
+    const ranked = rankPhotonFeatures(
+      [
+        {
+          geometry: { coordinates: [-58.36, -34.61] },
+          properties: { name: 'Dique', osm_key: 'place' },
+        },
+        {
+          geometry: { coordinates: [-65.1126, -31.9131] },
+          properties: {
+            name: 'Dique Nivelador Boca del Río',
+            osm_key: 'waterway',
+            osm_value: 'dam',
+          },
+        },
+      ],
+      'Dique',
+      DEFAULT_PLACE_BIAS.lat,
+      DEFAULT_PLACE_BIAS.lng,
+    );
+    expect(ranked[0].properties?.name).toMatch(/Dique Nivelador/i);
+  });
 });
 
 describe('DEFAULT_PLACE_BIAS', () => {

@@ -11,12 +11,15 @@ const GEO_AUTOCOMPLETE_TIMEOUT_MS = Number(process.env.GEO_AUTOCOMPLETE_TIMEOUT_
 const GEO_AUTOCOMPLETE_CACHE_TTL = 7 * 24 * 60 * 60;
 /** ~5 km buckets so nearby users share cache without leaking exact pin. */
 const GEO_BIAS_BUCKET = 0.05;
+/** Villa Dolores launch footprint — bias when caller omits GPS (same as passenger client). */
+const GEO_LAUNCH_LAT = -31.9456;
+const GEO_LAUNCH_LNG = -65.1895;
 const GEO_DEFAULT_LAT = process.env.GEO_DEFAULT_LAT
   ? Number(process.env.GEO_DEFAULT_LAT)
-  : undefined;
+  : GEO_LAUNCH_LAT;
 const GEO_DEFAULT_LNG = process.env.GEO_DEFAULT_LNG
   ? Number(process.env.GEO_DEFAULT_LNG)
-  : undefined;
+  : GEO_LAUNCH_LNG;
 
 const GEO_CACHE_TTL = 24 * 60 * 60;
 
