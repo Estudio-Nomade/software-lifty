@@ -16,12 +16,19 @@ export type LaunchClusterDistrictIds = {
   clusterIds: string[];
 };
 
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
 let cached: LaunchClusterDistrictIds | null = null;
+let cachedAt = 0;
 let cachePromise: Promise<LaunchClusterDistrictIds> | null = null;
+
+function isCacheFresh(): boolean {
+  return cached !== null && Date.now() - cachedAt < CACHE_TTL_MS;
+}
 
 /** Resolve launch-cluster UUIDs from DB by name (Córdoba, active). No hardcoded IDs. */
 export async function getLaunchClusterDistrictIds(): Promise<LaunchClusterDistrictIds> {
-  if (cached) return cached;
+  if (isCacheFresh()) return cached!;
   if (cachePromise) return cachePromise;
 
   cachePromise = (async () => {
@@ -50,6 +57,7 @@ export async function getLaunchClusterDistrictIds(): Promise<LaunchClusterDistri
     const homeId = byName.get(LAUNCH_CLUSTER_TRANSIT_HOME_NAME)!;
     const clusterIds = LAUNCH_CLUSTER_DISTRICT_NAMES.map((n) => byName.get(n)!);
     cached = { homeId, clusterIds };
+    cachedAt = Date.now();
     return cached;
   })();
 
@@ -63,5 +71,6 @@ export async function getLaunchClusterDistrictIds(): Promise<LaunchClusterDistri
 /** Test helper: drop memo so ensureDistrict fixtures re-resolve. */
 export function resetLaunchClusterCache(): void {
   cached = null;
+  cachedAt = 0;
   cachePromise = null;
 }

@@ -410,6 +410,8 @@ export const transitService = {
       }
     }
 
+    // Prefer driver's operational/intended district (keep SP/VS; do not force hub VD).
+    // body.district_id must already be in visibleDistrictIds when scoped.
     const preferredDistrict =
       driver.district_id ?? driver.intended_district_id ?? scope.districtId ?? undefined;
     const district_id = scope.visibleDistrictIds
