@@ -19,3 +19,11 @@ export function outcomeFromAccessToken(
 export function shouldClearGhostOnRestoreFailure(sessionConfirmed: boolean): boolean {
   return !sessionConfirmed;
 }
+
+/**
+ * After timeout already settled restore, a late getSession must not re-apply
+ * setSession (would undo clearAuth and bounce Welcome → Home).
+ */
+export function shouldApplySessionAfterSettle(restoreSettled: boolean): boolean {
+  return !restoreSettled;
+}

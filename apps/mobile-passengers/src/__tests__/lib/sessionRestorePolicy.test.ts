@@ -1,5 +1,6 @@
 import {
   outcomeFromAccessToken,
+  shouldApplySessionAfterSettle,
   shouldClearGhostOnRestoreFailure,
 } from '../../lib/sessionRestorePolicy';
 
@@ -22,5 +23,15 @@ describe('shouldClearGhostOnRestoreFailure', () => {
 
   it('does not clear after a confirmed Supabase session', () => {
     expect(shouldClearGhostOnRestoreFailure(true)).toBe(false);
+  });
+});
+
+describe('shouldApplySessionAfterSettle', () => {
+  it('blocks setSession after timeout already settled restore', () => {
+    expect(shouldApplySessionAfterSettle(true)).toBe(false);
+  });
+
+  it('allows setSession when restore has not settled yet', () => {
+    expect(shouldApplySessionAfterSettle(false)).toBe(true);
   });
 });
