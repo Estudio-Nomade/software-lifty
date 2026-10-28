@@ -31,6 +31,9 @@ const ALIASES: Record<string, string> = {
   'v. dolores': 'villa dolores',
   'villa d': 'villa dolores',
   vd: 'villa dolores',
+  'v sarmiento': 'villa sarmiento',
+  'v. sarmiento': 'villa sarmiento',
+  'villa sarmiento cordoba': 'villa sarmiento',
 };
 
 /** Strip accents, lowercase, collapse whitespace and punctuation for fuzzy match. */

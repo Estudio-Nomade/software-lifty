@@ -79,6 +79,34 @@ describe('municipality match helpers', () => {
     expect(matchDistrict('Córdoba', 'Córdoba', candidates)).toBeNull();
   });
 
+  test('matchDistrict finds San Pedro (Córdoba)', () => {
+    const candidates = [
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+      { id: 'sp', name: 'San Pedro', province: 'Córdoba', status: 'active' },
+      { id: 'vs', name: 'Villa Sarmiento', province: 'Córdoba', status: 'active' },
+    ];
+    const m = matchDistrict('San Pedro', 'Córdoba', candidates);
+    expect(m?.id).toBe('sp');
+  });
+
+  test('matchDistrict finds Villa Sarmiento (Córdoba)', () => {
+    const candidates = [
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+      { id: 'sp', name: 'San Pedro', province: 'Córdoba', status: 'active' },
+      { id: 'vs', name: 'Villa Sarmiento', province: 'Córdoba', status: 'active' },
+    ];
+    const m = matchDistrict('Villa Sarmiento', 'Córdoba', candidates);
+    expect(m?.id).toBe('vs');
+  });
+
+  test('matchDistrict resolves v sarmiento alias', () => {
+    const candidates = [
+      { id: 'vs', name: 'Villa Sarmiento', province: 'Córdoba', status: 'active' },
+    ];
+    const m = matchDistrict('V Sarmiento', 'Córdoba', candidates);
+    expect(m?.id).toBe('vs');
+  });
+
   test('parseLocalityFromFormatted', () => {
     const p = parseLocalityFromFormatted('San Martín 123, Villa Dolores, Córdoba, Argentina');
     expect(p.city).toBe('Villa Dolores');
