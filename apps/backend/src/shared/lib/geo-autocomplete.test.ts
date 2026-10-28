@@ -8,6 +8,7 @@ import {
   autocompleteCacheKey,
   formatPhotonAddress,
   normalizeAutocompleteQuery,
+  parseGeoDefaultCoord,
   rankPhotonPlaceFeatures,
 } from './geo';
 
@@ -24,6 +25,15 @@ describe('geo autocomplete helpers', () => {
     expect(a).toBe(b);
     expect(a).toContain('geo:ac:v2:san martin:');
     expect(autocompleteCacheKey('x')).toContain(':none:none');
+  });
+
+  test('parseGeoDefaultCoord rejects NaN / empty and keeps finite overrides', () => {
+    expect(parseGeoDefaultCoord(undefined, -31.9456)).toBe(-31.9456);
+    expect(parseGeoDefaultCoord('', -31.9456)).toBe(-31.9456);
+    expect(parseGeoDefaultCoord('  ', -31.9456)).toBe(-31.9456);
+    expect(parseGeoDefaultCoord('not-a-number', -31.9456)).toBe(-31.9456);
+    expect(parseGeoDefaultCoord('NaN', -65.1895)).toBe(-65.1895);
+    expect(parseGeoDefaultCoord('-31.94', -31.9456)).toBeCloseTo(-31.94, 2);
   });
 });
 

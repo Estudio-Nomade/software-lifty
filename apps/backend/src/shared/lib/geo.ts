@@ -14,12 +14,16 @@ const GEO_BIAS_BUCKET = 0.05;
 /** Villa Dolores launch footprint — bias when caller omits GPS (same as passenger client). */
 const GEO_LAUNCH_LAT = -31.9456;
 const GEO_LAUNCH_LNG = -65.1895;
-const GEO_DEFAULT_LAT = process.env.GEO_DEFAULT_LAT
-  ? Number(process.env.GEO_DEFAULT_LAT)
-  : GEO_LAUNCH_LAT;
-const GEO_DEFAULT_LNG = process.env.GEO_DEFAULT_LNG
-  ? Number(process.env.GEO_DEFAULT_LNG)
-  : GEO_LAUNCH_LNG;
+
+/** Env override only when finite; empty/NaN → launch footprint (never send NaN to Photon). */
+export function parseGeoDefaultCoord(raw: string | undefined, fallback: number): number {
+  if (raw == null || String(raw).trim() === '') return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+const GEO_DEFAULT_LAT = parseGeoDefaultCoord(process.env.GEO_DEFAULT_LAT, GEO_LAUNCH_LAT);
+const GEO_DEFAULT_LNG = parseGeoDefaultCoord(process.env.GEO_DEFAULT_LNG, GEO_LAUNCH_LNG);
 
 const GEO_CACHE_TTL = 24 * 60 * 60;
 
