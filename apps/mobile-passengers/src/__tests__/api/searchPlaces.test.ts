@@ -164,6 +164,17 @@ describe('searchPlaces', () => {
     mockGet.mockRejectedValue(new Error('network'));
     globalThis.fetch = jest.fn().mockRejectedValue(new Error('Photon request failed'));
 
-    await expect(searchPlaces('Belgrano', -31.9, -65.1)).resolves.toEqual([]);
+    await expect(searchPlaces('BelgranoNoMatch99', -31.9, -65.1)).resolves.toEqual([]);
+  });
+
+  it('Photon fallback surfaces catalog for Dique del Fuerte alias', async () => {
+    mockGet.mockResolvedValue({ data: [] });
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ features: [] }),
+    }) as unknown as typeof fetch;
+
+    const places = await searchPlaces('Dique del Fuerte', -31.945, -65.19);
+    expect(places.some((p) => /Lago del Fuerte/i.test(p.description))).toBe(true);
   });
 });

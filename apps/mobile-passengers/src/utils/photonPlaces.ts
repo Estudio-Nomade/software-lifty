@@ -1,4 +1,10 @@
 import type { PlaceSuggestion } from '../api/types';
+import {
+  VD_CENTER,
+  expandPlaceQueries,
+  matchCatalogPlaces,
+  mergePlaceResults,
+} from './placeAliases';
 
 /** Villa Dolores launch footprint — bias when GPS is unknown. */
 export const DEFAULT_PLACE_BIAS = { lat: -31.9456, lng: -65.1895 } as const;
@@ -7,6 +13,9 @@ const PHOTON_API = 'https://photon.komoot.io/api/';
 const PHOTON_LIMIT = 10;
 /** Client-side ceiling so a hung Komoot host cannot spin the Destino spinner forever. */
 export const PHOTON_CLIENT_TIMEOUT_MS = 4000;
+const LOCAL_BIAS_KM = 20;
+const LOCAL_IN_BBOX_BOOST = 40;
+const WATER_POI_KEYS = new Set(['water', 'waterway', 'natural', 'tourism', 'leisure']);
 
 function mergeAbortSignals(
   external: AbortSignal | undefined,
@@ -113,7 +122,11 @@ function normalizeMatch(s: string): string {
   return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 }
 
-/** Soft-rank: name match to query + proximity to bias (GPS or default). */
+function isBiasNearVillaDolores(biasLat: number, biasLng: number): boolean {
+  return haversineKm(biasLat, biasLng, VD_CENTER.lat, VD_CENTER.lng) <= LOCAL_BIAS_KM;
+}
+
+/** Soft-rank: name match + proximity + local-bbox boost near VD. */
 export function rankPhotonFeatures(
   features: PhotonFeature[],
   query: string,
@@ -122,6 +135,9 @@ export function rankPhotonFeatures(
 ): PhotonFeature[] {
   const q = normalizeMatch(query);
   if (!q || features.length <= 1) return features;
+
+  const preferLocal = isBiasNearVillaDolores(biasLat, biasLng);
+  const queryHasDigits = /\d/.test(query);
 
   const scored = features.map((f, index) => {
     const props = f.properties ?? {};
@@ -141,9 +157,17 @@ export function rankPhotonFeatures(
         distKm = haversineKm(biasLat, biasLng, lat, lng);
       }
     }
-    // Proximity within ~150 km can outrank a far exact homonym (e.g. Calvario PH vs Tandil).
     const proximity = Number.isFinite(distKm) ? Math.max(0, 150 - distKm) : 0;
-    const score = match + proximity;
+    let localBoost = 0;
+    if (preferLocal && Number.isFinite(distKm) && distKm <= LOCAL_BIAS_KM) {
+      localBoost = LOCAL_IN_BBOX_BOOST;
+    }
+    let poiBoost = 0;
+    const osmKey = typeof props.osm_key === 'string' ? props.osm_key : '';
+    if (!queryHasDigits && WATER_POI_KEYS.has(osmKey) && match > 0) {
+      poiBoost = 12;
+    }
+    const score = match + proximity + localBoost + poiBoost;
     return { f, score, index };
   });
 
@@ -188,9 +212,29 @@ export function mapPhotonFeaturesToPlaces(
   return out;
 }
 
+async function fetchOnePhotonQuery(
+  q: string,
+  biasLat: number,
+  biasLng: number,
+  fetchSignal: AbortSignal,
+): Promise<PlaceSuggestion[]> {
+  const url = new URL(PHOTON_API);
+  url.searchParams.set('q', q);
+  url.searchParams.set('limit', String(PHOTON_LIMIT));
+  url.searchParams.set('lang', 'default');
+  url.searchParams.set('lat', String(biasLat));
+  url.searchParams.set('lon', String(biasLng));
+
+  const res = await fetch(url.toString(), { signal: fetchSignal });
+  if (!res.ok) return [];
+  const data = (await res.json()) as PhotonResponse;
+  return mapPhotonFeaturesToPlaces(data, { query: q, biasLat, biasLng });
+}
+
 /**
  * Direct Photon autocomplete (no backend). Used when /maps/places/autocomplete
  * fails, times out empty, or is unreachable from Expo Go.
+ * Expands aliases (≤3 queries) + prepends curated catalog hits.
  */
 export async function searchPhotonPlaces(
   input: string,
@@ -204,36 +248,41 @@ export async function searchPhotonPlaces(
   const biasLat = typeof lat === 'number' && Number.isFinite(lat) ? lat : DEFAULT_PLACE_BIAS.lat;
   const biasLng = typeof lng === 'number' && Number.isFinite(lng) ? lng : DEFAULT_PLACE_BIAS.lng;
 
-  const url = new URL(PHOTON_API);
-  url.searchParams.set('q', q);
-  url.searchParams.set('limit', String(PHOTON_LIMIT));
-  url.searchParams.set('lang', 'default');
-  url.searchParams.set('lat', String(biasLat));
-  url.searchParams.set('lon', String(biasLng));
+  const catalogHits = matchCatalogPlaces(q, undefined, {
+    biasLat,
+    biasLng,
+  }) as PlaceSuggestion[];
+  const queries = expandPlaceQueries(q);
 
   const { signal: fetchSignal, cleanup } = mergeAbortSignals(signal, PHOTON_CLIENT_TIMEOUT_MS);
   try {
-    const res = await fetch(url.toString(), { signal: fetchSignal });
-    if (!res.ok) {
-      // Soft-fail: searchPlaces treats empty as "no hits", not sticky UI error.
-      return [];
+    const settled = await Promise.allSettled(
+      queries.map((query) => fetchOnePhotonQuery(query, biasLat, biasLng, fetchSignal)),
+    );
+
+    // Caller cancel always wins (hook must not treat as empty hits).
+    if (signal?.aborted) {
+      const abortErr = new Error('Aborted');
+      abortErr.name = 'AbortError';
+      throw abortErr;
     }
-    const data = (await res.json()) as PhotonResponse;
-    return mapPhotonFeaturesToPlaces(data, { query: q, biasLat, biasLng });
+
+    const photonLists = settled.map((r) => (r.status === 'fulfilled' ? r.value : []));
+    // Catalog first (bias-filtered); each Photon list already ranked with osm_key intact.
+    const merged = mergePlaceResults([catalogHits, ...photonLists]) as PlaceSuggestion[];
+    return merged.slice(0, 10);
   } catch (err) {
-    const name = (err as { name?: string } | null)?.name;
-    const isAbort = name === 'AbortError' || signal?.aborted || fetchSignal.aborted;
-    if (isAbort) {
-      // Caller cancelled (re-type) → AbortError so hook does not setError / false empty.
-      if (signal?.aborted) {
-        const abortErr = err instanceof Error ? err : new Error('Aborted');
-        abortErr.name = 'AbortError';
-        throw abortErr;
-      }
-      // Local 4s deadline alone → soft empty (not «No pudimos buscar»).
-      return [];
+    if (signal?.aborted) {
+      const abortErr = err instanceof Error ? err : new Error('Aborted');
+      abortErr.name = 'AbortError';
+      throw abortErr;
     }
-    return [];
+    const name = (err as { name?: string } | null)?.name;
+    // Local 4s timeout alone → soft empty + catalog (bias-filtered) if any.
+    if (name === 'AbortError' || fetchSignal.aborted) {
+      return catalogHits.slice(0, 10);
+    }
+    return catalogHits.slice(0, 10);
   } finally {
     cleanup();
   }

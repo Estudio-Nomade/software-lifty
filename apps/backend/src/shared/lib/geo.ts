@@ -1,4 +1,6 @@
 import { logger } from './logger';
+import { expandPlaceQueries, mergePlaceResults } from './place-aliases';
+import { VD_CENTER, matchCatalogPlaces } from './places-catalog';
 import { getRedis } from './redis';
 
 const PHOTON_URL = process.env.PHOTON_URL || 'https://photon.komoot.io';
@@ -14,6 +16,11 @@ const GEO_BIAS_BUCKET = 0.05;
 /** Villa Dolores launch footprint — bias when caller omits GPS (same as passenger client). */
 const GEO_LAUNCH_LAT = -31.9456;
 const GEO_LAUNCH_LNG = -65.1895;
+/** Local preference radius when bias is in launch footprint (km). */
+const GEO_LOCAL_BIAS_KM = 20;
+/** Extra score for features inside local radius when bias is near VD. */
+const GEO_LOCAL_IN_BBOX_BOOST = 40;
+const WATER_POI_KEYS = new Set(['water', 'waterway', 'natural', 'tourism', 'leisure']);
 
 /** Env override only when finite; empty/NaN → launch footprint (never send NaN to Photon). */
 export function parseGeoDefaultCoord(raw: string | undefined, fallback: number): number {
@@ -176,7 +183,20 @@ function normalizePlaceMatch(s: string): string {
   return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 }
 
-/** Soft-rank Photon hits: query name match + proximity to bias. */
+/** True when bias is inside Villa Dolores launch service footprint. */
+export function isBiasNearVillaDolores(biasLat?: number, biasLng?: number): boolean {
+  if (
+    typeof biasLat !== 'number' ||
+    !Number.isFinite(biasLat) ||
+    typeof biasLng !== 'number' ||
+    !Number.isFinite(biasLng)
+  ) {
+    return false;
+  }
+  return haversineDistance(biasLat, biasLng, VD_CENTER.lat, VD_CENTER.lng) <= GEO_LOCAL_BIAS_KM;
+}
+
+/** Soft-rank Photon hits: query name match + proximity + local-bbox boost near VD. */
 export function rankPhotonPlaceFeatures(
   features: PhotonFeature[],
   query: string,
@@ -191,6 +211,8 @@ export function rankPhotonPlaceFeatures(
     Number.isFinite(biasLat) &&
     typeof biasLng === 'number' &&
     Number.isFinite(biasLng);
+  const preferLocal = hasBias && isBiasNearVillaDolores(biasLat, biasLng);
+  const queryHasDigits = /\d/.test(query);
 
   const scored = features.map((f, index) => {
     const props = f.properties ?? {};
@@ -210,7 +232,16 @@ export function rankPhotonPlaceFeatures(
       }
     }
     const proximity = Number.isFinite(distKm) ? Math.max(0, 150 - distKm) : 0;
-    const score = match + proximity;
+    let localBoost = 0;
+    if (preferLocal && Number.isFinite(distKm) && distKm <= GEO_LOCAL_BIAS_KM) {
+      localBoost = GEO_LOCAL_IN_BBOX_BOOST;
+    }
+    let poiBoost = 0;
+    const osmKey = props.osm_key ? String(props.osm_key) : '';
+    if (!queryHasDigits && WATER_POI_KEYS.has(osmKey) && match > 0) {
+      poiBoost = 12;
+    }
+    const score = match + proximity + localBoost + poiBoost;
     return { f, score, index };
   });
 
@@ -254,9 +285,44 @@ function biasBucket(value: number | undefined): string {
   return String(Math.round(value / GEO_BIAS_BUCKET) * GEO_BIAS_BUCKET);
 }
 
-/** Exported for unit tests — do not use as public API. */
+/** Exported for unit tests — do not use as public API. Cache v3 = aliases + catalog. */
 export function autocompleteCacheKey(query: string, lat?: number, lng?: number): string {
-  return `geo:ac:v2:${normalizeAutocompleteQuery(query)}:${biasBucket(lat)}:${biasBucket(lng)}`;
+  return `geo:ac:v3:${normalizeAutocompleteQuery(query)}:${biasBucket(lat)}:${biasBucket(lng)}`;
+}
+
+function featuresToPlaceResults(
+  features: PhotonFeature[],
+  query: string,
+  biasLat: number,
+  biasLng: number,
+): PlaceResult[] {
+  const ranked = rankPhotonPlaceFeatures(features, query, biasLat, biasLng);
+  const results: PlaceResult[] = [];
+  for (const f of ranked) {
+    const description = formatPhotonAddress(f.properties);
+    if (!description) continue;
+    const [flng, flat] = f.geometry.coordinates;
+    if (!Number.isFinite(flat) || !Number.isFinite(flng)) continue;
+    if (flat === 0 && flng === 0) continue;
+    results.push({
+      description,
+      place_id: String(f.properties.osm_id),
+      lat: flat,
+      lng: flng,
+    });
+  }
+  return results;
+}
+
+function isStreetishQuery(q: string): boolean {
+  // Short generic POI tokens get catalog; multi-token street names should not
+  // be replaced solely by unrelated catalog noise when Photon has highways.
+  const n = normalizePlaceMatch(q);
+  if (!n) return false;
+  if (/\d/.test(n)) return true;
+  const tokens = n.split(/\s+/).filter(Boolean);
+  if (tokens.length >= 2) return true;
+  return false;
 }
 
 export async function autocomplete(
@@ -287,7 +353,8 @@ export async function autocomplete(
 
     const biasLat = lat ?? GEO_DEFAULT_LAT;
     const biasLng = lng ?? GEO_DEFAULT_LNG;
-    const cacheKey = autocompleteCacheKey(input, biasLat, biasLng);
+    const trimmed = input.trim();
+    const cacheKey = autocompleteCacheKey(trimmed, biasLat, biasLng);
     const cached = await cacheGet(cacheKey);
     if (cached) {
       const hits = JSON.parse(cached) as PlaceResult[];
@@ -295,37 +362,53 @@ export async function autocomplete(
         ms: Date.now() - t0,
         cache: 'hit',
         count: hits.length,
-        qLen: input.trim().length,
+        qLen: trimmed.length,
       });
       return hits;
     }
 
-    const url = new URL(`${PHOTON_URL}/api/`);
-    url.searchParams.set('q', input.trim());
-    url.searchParams.set('limit', '10');
-    url.searchParams.set('lang', 'default');
-    if (biasLat != null && biasLng != null) {
-      url.searchParams.set('lat', String(biasLat));
-      url.searchParams.set('lon', String(biasLng));
-    }
+    const catalogHits = matchCatalogPlaces(trimmed, undefined, {
+      biasLat,
+      biasLng,
+    }) as PlaceResult[];
+    const queries = expandPlaceQueries(trimmed);
 
-    const data = await fetchPhoton(url, GEO_AUTOCOMPLETE_TIMEOUT_MS);
-    const ranked = rankPhotonPlaceFeatures(data.features || [], input.trim(), biasLat, biasLng);
+    const photonLists = await Promise.allSettled(
+      queries.map(async (q) => {
+        const url = new URL(`${PHOTON_URL}/api/`);
+        url.searchParams.set('q', q);
+        url.searchParams.set('limit', '10');
+        url.searchParams.set('lang', 'default');
+        url.searchParams.set('lat', String(biasLat));
+        url.searchParams.set('lon', String(biasLng));
+        const data = await fetchPhoton(url, GEO_AUTOCOMPLETE_TIMEOUT_MS);
+        // Rank once per Photon response (preserves osm_key for poiBoost).
+        return featuresToPlaceResults(data.features || [], trimmed, biasLat, biasLng);
+      }),
+    );
 
-    const results: PlaceResult[] = [];
-    for (const f of ranked) {
-      const description = formatPhotonAddress(f.properties);
-      if (!description) continue;
-      const [lng, lat] = f.geometry.coordinates;
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-      if (lat === 0 && lng === 0) continue;
-      results.push({
-        description,
-        place_id: String(f.properties.osm_id),
-        lat,
-        lng,
+    const photonResults: PlaceResult[][] = photonLists.map((r) =>
+      r.status === 'fulfilled' ? r.value : [],
+    );
+
+    // Catalog first (bias-filtered), then Photon lists already ranked — no synthetic re-rank.
+    let merged = mergePlaceResults([catalogHits, ...photonResults]) as PlaceResult[];
+
+    // Street queries: drop weak catalog noise that does not share query tokens.
+    if (isStreetishQuery(trimmed) && photonResults.some((l) => l.length > 0)) {
+      const qn = normalizePlaceMatch(trimmed);
+      const qTokens = new Set(qn.split(/\s+/).filter((t) => t.length >= 3));
+      merged = merged.filter((p) => {
+        if (!String(p.place_id).startsWith('catalog:')) return true;
+        const dn = normalizePlaceMatch(p.description);
+        for (const t of qTokens) {
+          if (dn.includes(t)) return true;
+        }
+        return false;
       });
     }
+
+    const results = merged.slice(0, 10);
 
     if (results.length > 0) {
       await cacheSet(cacheKey, JSON.stringify(results), GEO_AUTOCOMPLETE_CACHE_TTL);
@@ -335,7 +418,8 @@ export async function autocomplete(
       ms: Date.now() - t0,
       cache: 'miss',
       count: results.length,
-      qLen: input.trim().length,
+      qLen: trimmed.length,
+      queries: queries.length,
     });
     return results;
   } catch (err) {
