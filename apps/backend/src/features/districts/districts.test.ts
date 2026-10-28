@@ -54,6 +54,7 @@ beforeAll(async () => {
     `);
   }
   // Launch cluster SP/VS: ensure active + terms for GET /districts (migration 0054 may already apply).
+  // INSERT before UPDATE so missing-row DBs get the seed, then COALESCE fills NULL terms.
   await db.execute(`
     INSERT INTO "districts" (name, province, status, terms_and_conditions, privacy_policy)
     SELECT 'San Pedro', 'Córdoba', 'active', 'Terms SP', 'Privacy SP'
@@ -67,16 +68,16 @@ beforeAll(async () => {
     WHERE name = 'San Pedro' AND province = 'Córdoba'
   `);
   await db.execute(`
+    INSERT INTO "districts" (name, province, status, terms_and_conditions, privacy_policy)
+    SELECT 'Villa Sarmiento', 'Córdoba', 'active', 'Terms VS', 'Privacy VS'
+    WHERE NOT EXISTS (SELECT 1 FROM "districts" WHERE name = 'Villa Sarmiento' AND province = 'Córdoba')
+  `);
+  await db.execute(`
     UPDATE "districts"
     SET status = 'active',
         terms_and_conditions = COALESCE(terms_and_conditions, 'Terms VS'),
         privacy_policy = COALESCE(privacy_policy, 'Privacy VS')
     WHERE name = 'Villa Sarmiento' AND province = 'Córdoba'
-  `);
-  await db.execute(`
-    INSERT INTO "districts" (name, province, status, terms_and_conditions, privacy_policy)
-    SELECT 'Villa Sarmiento', 'Córdoba', 'active', 'Terms VS', 'Privacy VS'
-    WHERE NOT EXISTS (SELECT 1 FROM "districts" WHERE name = 'Villa Sarmiento' AND province = 'Córdoba')
   `);
   const noTerms: any = await db.execute('SELECT count(*) AS count FROM districts WHERE name = \'Sin Terminos\'');
   if (Number(noTerms.rows[0]?.count ?? 0) === 0) {

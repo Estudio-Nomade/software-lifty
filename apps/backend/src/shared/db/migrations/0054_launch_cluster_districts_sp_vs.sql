@@ -3,8 +3,8 @@
 -- Hubs (reference only; geofence = later PR):
 --   San Pedro: -31.936553, -65.2189268
 --   Villa Sarmiento: -31.9358863, -65.1915949
--- Choice: always overwrite terms/privacy with this draft family for SP/VS
--- (same structure as VD; does not touch Villa Dolores).
+-- Choice: fill terms when NULL or still draft AVISO family only.
+-- Does not clobber finalized legal text; does not touch Villa Dolores.
 
 -- 1) San Pedro row if missing
 INSERT INTO "districts" (name, province, status)
@@ -78,7 +78,11 @@ Podés ejercer derechos de acceso, rectificación, actualización y supresión e
 La geolocalización es necesaria para la prestación del servicio. El detalle de bases de legitimación, encargados, plazos de conservación y transferencias se publicará en la Política completa.
 $privacy_sp$
 WHERE name = 'San Pedro'
-  AND province = 'Córdoba';
+  AND province = 'Córdoba'
+  AND (
+    terms_and_conditions IS NULL
+    OR terms_and_conditions LIKE 'AVISO:%'
+  );
 
 -- 3b) Terms + privacy — Villa Sarmiento
 UPDATE "districts"
@@ -134,4 +138,8 @@ Podés ejercer derechos de acceso, rectificación, actualización y supresión e
 La geolocalización es necesaria para la prestación del servicio. El detalle de bases de legitimación, encargados, plazos de conservación y transferencias se publicará en la Política completa.
 $privacy_vs$
 WHERE name = 'Villa Sarmiento'
-  AND province = 'Córdoba';
+  AND province = 'Córdoba'
+  AND (
+    terms_and_conditions IS NULL
+    OR terms_and_conditions LIKE 'AVISO:%'
+  );
