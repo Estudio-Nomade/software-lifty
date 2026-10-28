@@ -15,7 +15,7 @@ import {
   broadcastPlatformConfigUpdated,
 } from '../../shared/lib/broadcast';
 import { getCommissionConfig } from '../../shared/lib/commission';
-import { DOC_TYPES, VALID_DOC_TYPES } from '../../shared/lib/documents';
+import { DOC_TYPES, VALID_DOC_TYPES, docTypeLabel } from '../../shared/lib/documents';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
 import { logger } from '../../shared/lib/logger';
@@ -346,6 +346,10 @@ export const adminService = {
         status: driverDocuments.status,
         superseded_at: driverDocuments.superseded_at,
         created_at: driverDocuments.created_at,
+        ops_ok: driverDocuments.ops_ok,
+        review_comment: driverDocuments.review_comment,
+        ops_reviewed_at: driverDocuments.ops_reviewed_at,
+        ops_reviewed_by: driverDocuments.ops_reviewed_by,
       })
       .from(driverDocuments)
       .where(eq(driverDocuments.driver_id, driver.id))
@@ -419,6 +423,246 @@ export const adminService = {
       vehicles: vehicleRows,
       documents: documentRows,
       account_messages,
+    };
+  },
+
+  /**
+   * Per-document ops review: tick OK and/or request a fix with a comment.
+   * Does not approve/reject the driver account (global review still separate).
+   */
+  async reviewDocument(
+    adminUser: AuthUser,
+    driverId: string,
+    documentId: string,
+    body: {
+      ops_ok?: boolean;
+      review_comment?: string | null;
+      request_fix?: boolean;
+    },
+  ) {
+    const [driver] = await db
+      .select({ id: drivers.id })
+      .from(drivers)
+      .where(eq(drivers.id, driverId))
+      .limit(1);
+    if (!driver) throw new NotFoundError('Driver not found');
+
+    const [doc] = await db
+      .select({
+        id: driverDocuments.id,
+        driver_id: driverDocuments.driver_id,
+        doc_type: driverDocuments.doc_type,
+        status: driverDocuments.status,
+        ops_ok: driverDocuments.ops_ok,
+        review_comment: driverDocuments.review_comment,
+      })
+      .from(driverDocuments)
+      .where(and(eq(driverDocuments.id, documentId), eq(driverDocuments.driver_id, driverId)))
+      .limit(1);
+
+    if (!doc) throw new NotFoundError('Document not found');
+    if (doc.status === 'superseded') {
+      throw new AppError('Document is superseded and not editable', 400, 'DOC_SUPERSEDED');
+    }
+
+    const wantsFix = body.request_fix === true;
+    const commentRaw =
+      body.review_comment === undefined || body.review_comment === null
+        ? body.review_comment
+        : body.review_comment.trim();
+    const commentProvided = body.review_comment !== undefined;
+    const trimmedComment =
+      typeof commentRaw === 'string' && commentRaw.length > 0 ? commentRaw : null;
+
+    if (wantsFix) {
+      if (!trimmedComment || trimmedComment.length < 5) {
+        throw new AppError(
+          'Indicá qué corregir en este documento (mín. 5 caracteres)',
+          400,
+          'NOTES_REQUIRED',
+        );
+      }
+    }
+
+    if (body.ops_ok === undefined && !wantsFix && !commentProvided) {
+      throw new AppError('Nothing to update', 400, 'EMPTY_PATCH');
+    }
+
+    const now = new Date();
+    const patch: {
+      ops_ok?: boolean;
+      review_comment?: string | null;
+      ops_reviewed_at: Date;
+      ops_reviewed_by: string;
+    } = {
+      ops_reviewed_at: now,
+      ops_reviewed_by: adminUser.id,
+    };
+
+    if (wantsFix) {
+      patch.ops_ok = false;
+      patch.review_comment = trimmedComment;
+    } else if (body.ops_ok === true) {
+      // OK tick clears prior fix comment (doc already verified).
+      patch.ops_ok = true;
+      patch.review_comment = null;
+    } else if (body.ops_ok === false) {
+      patch.ops_ok = false;
+      if (commentProvided) {
+        patch.review_comment = trimmedComment;
+      }
+    } else if (commentProvided) {
+      // Comment-only without request_fix: store, no notify.
+      patch.review_comment = trimmedComment;
+      if (trimmedComment) patch.ops_ok = false;
+    }
+
+    const [updated] = await db
+      .update(driverDocuments)
+      .set(patch)
+      .where(eq(driverDocuments.id, documentId))
+      .returning({
+        id: driverDocuments.id,
+        doc_type: driverDocuments.doc_type,
+        file_url: driverDocuments.file_url,
+        status: driverDocuments.status,
+        superseded_at: driverDocuments.superseded_at,
+        created_at: driverDocuments.created_at,
+        ops_ok: driverDocuments.ops_ok,
+        review_comment: driverDocuments.review_comment,
+        ops_reviewed_at: driverDocuments.ops_reviewed_at,
+        ops_reviewed_by: driverDocuments.ops_reviewed_by,
+      });
+
+    if (!updated) throw new NotFoundError('Document not found');
+
+    let account_message: {
+      id: string;
+      type: string;
+      body: string;
+      created_at: Date;
+      email_status: string | null;
+      push_status: string | null;
+    } | null = null;
+
+    if (wantsFix && trimmedComment) {
+      const messageBody = `«${docTypeLabel(updated.doc_type)}»: ${trimmedComment}`;
+
+      const [inserted] = await db
+        .insert(driverAccountMessages)
+        .values({
+          driver_id: driverId,
+          author_admin_user_id: adminUser.id,
+          type: 'review_notes',
+          body: messageBody,
+        })
+        .returning({
+          id: driverAccountMessages.id,
+          body: driverAccountMessages.body,
+          type: driverAccountMessages.type,
+          created_at: driverAccountMessages.created_at,
+        });
+
+      // Soft global notes stay in sync with last ops message (non-terminal).
+      await db
+        .update(drivers)
+        .set({
+          admin_review_notes: messageBody,
+          updated_at: now,
+        })
+        .where(eq(drivers.id, driverId));
+
+      const [driverUser] = await db
+        .select({
+          user_id: users.id,
+          email: users.email,
+          full_name: users.full_name,
+        })
+        .from(users)
+        .innerJoin(drivers, eq(drivers.user_id, users.id))
+        .where(eq(drivers.id, driverId))
+        .limit(1);
+
+      let emailStatus: string | null = null;
+      let pushStatus: string | null = null;
+
+      const [unreadRow] = await db
+        .select({ count: count() })
+        .from(driverAccountMessages)
+        .where(
+          and(eq(driverAccountMessages.driver_id, driverId), isNull(driverAccountMessages.read_at)),
+        );
+      const unreadBadge = Number(unreadRow?.count ?? 0);
+
+      if (driverUser) {
+        const name = driverUser.full_name ?? 'Driver';
+        if (driverUser.email) {
+          const emailOk = await notifyDriverReviewNotes(driverUser.email, name, messageBody);
+          emailStatus = emailOk ? 'sent' : 'failed';
+        } else {
+          emailStatus = 'skipped';
+          logger.info('[DRIVER-NOTIFY] Skip doc-review email — no email', {
+            driverId: driverId.split('-')[0],
+          });
+        }
+
+        const notesPush = driverReviewNotesPush(messageBody, inserted?.id, unreadBadge, {
+          doc_type: updated.doc_type,
+          document_id: updated.id,
+        });
+        try {
+          const pushResult = await sendPushToUserDetailed(driverUser.user_id, notesPush);
+          pushStatus = pushResult.status;
+          logger.info('[DRIVER-NOTIFY] Doc-review push', {
+            userId: driverUser.user_id.slice(0, 8),
+            messageId: inserted?.id?.slice(0, 8),
+            docType: updated.doc_type,
+            tokenCount: pushResult.tokenCount,
+            push_status: pushResult.status,
+            badge: unreadBadge,
+          });
+        } catch (err) {
+          pushStatus = 'failed';
+          logger.error('[DRIVER-NOTIFY] Doc-review push failed', (err as Error).message);
+        }
+      } else {
+        emailStatus = 'skipped';
+        pushStatus = 'zero_tokens';
+      }
+
+      if (inserted?.id) {
+        await db
+          .update(driverAccountMessages)
+          .set({
+            email_status: emailStatus,
+            push_status: pushStatus,
+          })
+          .where(eq(driverAccountMessages.id, inserted.id));
+      }
+
+      account_message = inserted
+        ? {
+            id: inserted.id,
+            type: inserted.type,
+            body: inserted.body,
+            created_at: inserted.created_at,
+            email_status: emailStatus,
+            push_status: pushStatus,
+          }
+        : null;
+
+      broadcastDriverAccountUpdated(driverId, {
+        reason: 'review',
+        action: 'doc_comment',
+        document_id: updated.id,
+        doc_type: updated.doc_type,
+        message_id: inserted?.id ?? null,
+      });
+    }
+
+    return {
+      document: updated,
+      account_message,
     };
   },
 

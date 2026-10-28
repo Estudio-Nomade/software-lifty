@@ -1859,6 +1859,8 @@ export const driversService = {
         verified_at: driverDocuments.verified_at,
         expires_at: driverDocuments.expires_at,
         created_at: driverDocuments.created_at,
+        ops_ok: driverDocuments.ops_ok,
+        review_comment: driverDocuments.review_comment,
       })
       .from(driverDocuments)
       .where(

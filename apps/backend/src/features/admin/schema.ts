@@ -10,6 +10,18 @@ export const driverIdParams = t.Object({
   driver_id: t.String(),
 });
 
+export const documentIdParams = t.Object({
+  driver_id: t.String(),
+  document_id: t.String(),
+});
+
+/** Per-document ops review (OK tick + optional fix request). */
+export const patchDocumentReviewBody = t.Object({
+  ops_ok: t.Optional(t.Boolean()),
+  review_comment: t.Optional(t.Union([t.String({ maxLength: 500 }), t.Null()])),
+  request_fix: t.Optional(t.Boolean()),
+});
+
 export const updatePhaseSchema = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
   day_start: t.Optional(t.Number({ minimum: 1 })),

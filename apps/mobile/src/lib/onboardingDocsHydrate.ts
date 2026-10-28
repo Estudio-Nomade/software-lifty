@@ -45,6 +45,7 @@ export type HydratedFilePart = {
   fileUrl: string | null;
   isPdf: boolean;
   serverStatus: ServerDocStatus;
+  reviewComment: string | null;
 };
 
 export type HydratedSideState = {
@@ -61,6 +62,8 @@ export type HydratedSideState = {
   files: HydratedFilePart[];
   uploading: boolean;
   error: string | null;
+  /** Ops comment on this side (any active file with review_comment). */
+  reviewComment: string | null;
 };
 
 export type HydratedDocsState = Record<DocBase, Record<DocSide, HydratedSideState>>;
@@ -78,6 +81,7 @@ function emptySide(): HydratedSideState {
     files: [],
     uploading: false,
     error: null,
+    reviewComment: null,
   };
 }
 
@@ -152,6 +156,7 @@ export function hydrateDocsFromApi(documents: DriverDocument[]): HydratedDocsSta
       fileUrl: row.file_url ?? null,
       isPdf: isPdfUrl(row.file_url),
       serverStatus: status,
+      reviewComment: row.review_comment?.trim() || null,
     };
     const list = buckets.get(key) ?? [];
     list.push(part);
@@ -170,6 +175,8 @@ export function hydrateDocsFromApi(documents: DriverDocument[]): HydratedDocsSta
     const rejected = status === 'rejected';
     const ok = status === 'approved' || status === 'pending_review';
     const primary = labeled[labeled.length - 1]!;
+    const reviewComment =
+      labeled.map((p) => p.reviewComment).find((c) => c && c.length > 0) ?? null;
 
     state[base][side] = {
       uploaded: ok,
@@ -191,6 +198,7 @@ export function hydrateDocsFromApi(documents: DriverDocument[]): HydratedDocsSta
       files: labeled,
       uploading: false,
       error: null,
+      reviewComment,
     };
   }
 
