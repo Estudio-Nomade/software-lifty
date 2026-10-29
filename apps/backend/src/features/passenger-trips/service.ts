@@ -15,6 +15,7 @@ import { calculateFare } from '../../shared/lib/fuel-pricing';
 import { geocode, resolveRouteDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
+import { assertTripInsideLaunchCluster } from '../../shared/lib/service-area';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { cancellationService } from '../cancellations/service';
 import { matchAndBroadcast } from './matching.service';
@@ -55,6 +56,12 @@ export const passengerTripService = {
     },
   ) {
     const gate = await cancellationService.assertPassengerCanRequest(user.id);
+
+    assertTripInsideLaunchCluster(
+      { lat: data.origin_lat, lng: data.origin_lng },
+      { lat: data.dest_lat, lng: data.dest_lng },
+    );
+
     const commissionRate = await getCommissionRate(getDb());
 
     // Server-side route resolution: never trust the client-provided distance,
