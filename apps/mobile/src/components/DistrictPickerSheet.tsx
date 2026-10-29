@@ -203,7 +203,9 @@ export const DistrictPickerSheet: React.FC<DistrictPickerSheetProps> = ({
             <View style={styles.body}>
               <Text style={styles.title}>Elegí tu municipio</Text>
               <Text style={styles.subtitle}>
-                Vas a trabajar solo en esa zona. La elección no se puede cambiar.
+                Elegí el municipio de registro (anexo y términos). La zona de viajes de lanzamiento
+                es el cluster Lifty: Villa Dolores, San Pedro y Villa Sarmiento. La elección de
+                municipio no se puede cambiar.
               </Text>
               {loadingList ? (
                 <ActivityIndicator

@@ -36,16 +36,59 @@ async function request(method: string, path: string, body?: object, token?: stri
 }
 
 let villaDoloresId: string;
+let sanPedroId: string;
+let villaSarmientoId: string;
 
 beforeAll(async () => {
   app = createApp(createTestAuthPlugin());
   const db = getDb();
+
+  // Launch cluster SP/VS: ensure active rows (migration 0054 may already apply).
+  await db.execute(`
+    INSERT INTO "districts" (name, province, status, terms_and_conditions, privacy_policy)
+    SELECT 'San Pedro', 'Córdoba', 'active', 'Terms SP', 'Privacy SP'
+    WHERE NOT EXISTS (SELECT 1 FROM "districts" WHERE name = 'San Pedro' AND province = 'Córdoba')
+  `);
+  await db.execute(`
+    UPDATE "districts"
+    SET status = 'active',
+        terms_and_conditions = COALESCE(terms_and_conditions, 'Terms SP'),
+        privacy_policy = COALESCE(privacy_policy, 'Privacy SP')
+    WHERE name = 'San Pedro' AND province = 'Córdoba'
+  `);
+  await db.execute(`
+    INSERT INTO "districts" (name, province, status, terms_and_conditions, privacy_policy)
+    SELECT 'Villa Sarmiento', 'Córdoba', 'active', 'Terms VS', 'Privacy VS'
+    WHERE NOT EXISTS (SELECT 1 FROM "districts" WHERE name = 'Villa Sarmiento' AND province = 'Córdoba')
+  `);
+  await db.execute(`
+    UPDATE "districts"
+    SET status = 'active',
+        terms_and_conditions = COALESCE(terms_and_conditions, 'Terms VS'),
+        privacy_policy = COALESCE(privacy_policy, 'Privacy VS')
+    WHERE name = 'Villa Sarmiento' AND province = 'Córdoba'
+  `);
+
   const [d] = await db
     .select({ id: districtsTable.id })
     .from(districtsTable)
     .where(eq(districtsTable.name, 'Villa Dolores'))
     .limit(1);
   villaDoloresId = d.id;
+
+  const [sp] = await db
+    .select({ id: districtsTable.id })
+    .from(districtsTable)
+    .where(eq(districtsTable.name, 'San Pedro'))
+    .limit(1);
+  sanPedroId = sp.id;
+
+  const [vs] = await db
+    .select({ id: districtsTable.id })
+    .from(districtsTable)
+    .where(eq(districtsTable.name, 'Villa Sarmiento'))
+    .limit(1);
+  villaSarmientoId = vs.id;
 });
 
 beforeEach(async () => {
@@ -107,6 +150,16 @@ describe('municipality match helpers', () => {
     expect(m?.id).toBe('vs');
   });
 
+  test('matchDistrict resolves S Pedro / San Pedro Córdoba aliases', () => {
+    const candidates = [
+      { id: 'sp', name: 'San Pedro', province: 'Córdoba', status: 'active' },
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+    ];
+    expect(matchDistrict('S Pedro', 'Córdoba', candidates)?.id).toBe('sp');
+    expect(matchDistrict('San Pedro Córdoba', 'Córdoba', candidates)?.id).toBe('sp');
+    expect(matchDistrict('S. Pedro', 'Córdoba', candidates)?.id).toBe('sp');
+  });
+
   test('parseLocalityFromFormatted', () => {
     const p = parseLocalityFromFormatted('San Martín 123, Villa Dolores, Córdoba, Argentina');
     expect(p.city).toBe('Villa Dolores');
@@ -165,6 +218,76 @@ describe('Driver address municipality eligibility', () => {
     expect(statusRes.data.intended_district_id).toBe(villaDoloresId);
     expect(statusRes.data.show_municipality_waitlist_banner).toBe(false);
     expect(statusRes.data.intended_district_name).toBe('Villa Dolores');
+  });
+
+  test('PUT /drivers/me with San Pedro address → operational + intended_district_id', async () => {
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({ phone: '+5492619000011', full_name: 'SP Driver', role: 'driver' })
+      .returning({ id: users.id });
+    const token = createTestToken(user.id);
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Pedro',
+        last_name: 'San',
+        phone: '+5492619000011',
+        address_line: 'Belgrano 50, San Pedro, Córdoba',
+        photo_url:
+          'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
+      },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.municipality_status).toBe('operational');
+    expect(data.intended_district_id).toBe(sanPedroId);
+    expect(data.address_resolved_city).toBe('San Pedro');
+
+    const statusRes = await request('GET', '/api/drivers/me/status', undefined, token);
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.data.municipality_status).toBe('operational');
+    expect(statusRes.data.intended_district_id).toBe(sanPedroId);
+    expect(statusRes.data.show_municipality_waitlist_banner).toBe(false);
+    expect(statusRes.data.intended_district_name).toBe('San Pedro');
+  });
+
+  test('PUT /drivers/me with Villa Sarmiento address → operational + intended_district_id', async () => {
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({ phone: '+5492619000012', full_name: 'VS Driver', role: 'driver' })
+      .returning({ id: users.id });
+    const token = createTestToken(user.id);
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Sara',
+        last_name: 'Miento',
+        phone: '+5492619000012',
+        address_line: 'San Martín 10, Villa Sarmiento, Córdoba',
+        photo_url:
+          'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
+      },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.municipality_status).toBe('operational');
+    expect(data.intended_district_id).toBe(villaSarmientoId);
+    expect(data.address_resolved_city).toBe('Villa Sarmiento');
+
+    const statusRes = await request('GET', '/api/drivers/me/status', undefined, token);
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.data.municipality_status).toBe('operational');
+    expect(statusRes.data.intended_district_id).toBe(villaSarmientoId);
+    expect(statusRes.data.show_municipality_waitlist_banner).toBe(false);
+    expect(statusRes.data.intended_district_name).toBe('Villa Sarmiento');
   });
 
   test('PUT /drivers/me with Córdoba capital → waitlisted', async () => {
