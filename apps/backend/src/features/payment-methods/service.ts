@@ -3,12 +3,15 @@ import { db } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
 import { drivers, payoutMethods } from '../../shared/db/schema';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
+import { logger } from '../../shared/lib/logger';
 import type { AuthUser } from '../../shared/middleware/auth';
 
 function maskAccount(num: string): string {
   if (num.length <= 4) return '****';
   return `****${num.slice(-4)}`;
 }
+
+const payLog = logger.scoped({ domain: 'payment' });
 
 export const paymentMethodsService = {
   async addMethod(
@@ -36,6 +39,14 @@ export const paymentMethodsService = {
       });
 
     if (!method) throw new AppError('Failed to create payment method', 400, 'BAD_REQUEST');
+
+    payLog.info('[PAY] payout_method.add', {
+      event: 'payout_method.add',
+      driver_id: driverId,
+      method_id: method.id,
+      method_type: methodType,
+      account_masked: maskAccount(accountNumber),
+    });
 
     return { ...method, message: 'Payment method added' };
   },
@@ -74,6 +85,12 @@ export const paymentMethodsService = {
     if (!method) throw new NotFoundError('Payment method not found');
 
     await db.delete(payoutMethods).where(eq(payoutMethods.id, methodId));
+
+    payLog.info('[PAY] payout_method.delete', {
+      event: 'payout_method.delete',
+      driver_id: driverId,
+      method_id: methodId,
+    });
 
     return { message: 'Payment method removed' };
   },

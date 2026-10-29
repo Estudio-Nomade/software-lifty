@@ -279,6 +279,7 @@ export const adminCommissionDebtService = {
     }
 
     const now = new Date();
+    let firstTransition = false;
     const updated = await db.transaction(async (tx) => {
       const [row] = await tx
         .update(driverCommissionReceipts)
@@ -307,6 +308,7 @@ export const adminCommissionDebtService = {
         throw new AppError('Receipt could not be approved', 409, 'RECEIPT_NOT_PENDING');
       }
 
+      firstTransition = true;
       // Only clear fraud on first transition pending → approved.
       await tx
         .update(drivers)
@@ -318,6 +320,18 @@ export const adminCommissionDebtService = {
 
       return row;
     });
+
+    if (firstTransition) {
+      logger.scoped({ domain: 'payment' }).info('[PAY] commission.receipt.approve', {
+        event: 'commission.receipt.approve',
+        receipt_id: id,
+        driver_id: existing.driver_id,
+        admin_user_id: adminUser.id,
+        amount_ars: Math.round(Number(existing.amount_ars)),
+        debt_before_ars: Math.round(Number(existing.debt_before_ars ?? 0)),
+        cleared_fraud_block: true,
+      });
+    }
 
     broadcastDriverAccountUpdated(existing.driver_id, {
       reason: 'commission_receipt',
@@ -425,6 +439,18 @@ export const adminCommissionDebtService = {
         userId: driver.user_id,
         restoredDebt,
       };
+    });
+
+    logger.scoped({ domain: 'payment' }).info('[PAY] commission.receipt.reject_fraud', {
+      event: 'commission.receipt.reject_fraud',
+      receipt_id: id,
+      driver_id: existing.driver_id,
+      admin_user_id: adminUser.id,
+      amount_ars: Math.round(Number(existing.amount_ars)),
+      debt_before_ars: debtBefore,
+      note_present: trimmedNote != null,
+      fraud_block: true,
+      restored_debt_ars: result.restoredDebt,
     });
 
     void sendPushToUser(result.userId, {

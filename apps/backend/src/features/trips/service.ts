@@ -848,58 +848,85 @@ export const tripService = {
       throw new AppError('Payment already collected for this trip', 400, 'BAD_REQUEST');
     }
 
-    return db.transaction(async (tx) => {
-      const trip = await findTrip(driverId, tripId, tx);
+    return db
+      .transaction(async (tx) => {
+        const trip = await findTrip(driverId, tripId, tx);
 
-      // A trip must be completed to be collected, but it may already have been
-      // rated by the passenger (completed → rated). Rating is independent of
-      // payment, so a rated trip must still be collectable — otherwise the
-      // platform fee would never be accrued for trips rated before collection.
-      if (trip.status !== 'completed' && trip.status !== 'rated') {
-        throw new AppError('Trip must be completed before collecting payment', 400, 'BAD_REQUEST');
-      }
+        // A trip must be completed to be collected, but it may already have been
+        // rated by the passenger (completed → rated). Rating is independent of
+        // payment, so a rated trip must still be collectable — otherwise the
+        // platform fee would never be accrued for trips rated before collection.
+        if (trip.status !== 'completed' && trip.status !== 'rated') {
+          throw new AppError(
+            'Trip must be completed before collecting payment',
+            400,
+            'BAD_REQUEST',
+          );
+        }
 
-      if (trip.is_collected) {
-        throw new AppError('Payment already collected for this trip', 400, 'BAD_REQUEST');
-      }
+        if (trip.is_collected) {
+          throw new AppError('Payment already collected for this trip', 400, 'BAD_REQUEST');
+        }
 
-      // Never collect a trip with a missing/invalid fare: the passenger must
-      // always be charged the frozen fare agreed at trip creation. If for any
-      // reason the stored fare is absent or non-positive, fail loudly instead
-      // of charging zero (which would undercharge the passenger).
-      const totalFare = Number(trip.total_fare);
-      if (!Number.isFinite(totalFare) || totalFare <= 0) {
-        logger.error('[collectTrip] Trip has no valid total_fare', { tripId });
-        throw new AppError('Trip has no valid fare. Cannot collect payment.', 500, 'INVALID_FARE');
-      }
+        // Never collect a trip with a missing/invalid fare: the passenger must
+        // always be charged the frozen fare agreed at trip creation. If for any
+        // reason the stored fare is absent or non-positive, fail loudly instead
+        // of charging zero (which would undercharge the passenger).
+        const totalFare = Number(trip.total_fare);
+        if (!Number.isFinite(totalFare) || totalFare <= 0) {
+          logger.error('[collectTrip] Trip has no valid total_fare', { tripId });
+          throw new AppError(
+            'Trip has no valid fare. Cannot collect payment.',
+            500,
+            'INVALID_FARE',
+          );
+        }
 
-      const platformFee = Number(trip.platform_fee ?? 0);
+        const platformFee = Number(trip.platform_fee ?? 0);
 
-      const [updated] = await tx
-        .update(trips)
-        .set({ is_collected: true, payment_method: paymentMethod, updated_at: new Date() })
-        .where(eq(trips.id, tripId))
-        .returning();
+        const [updated] = await tx
+          .update(trips)
+          .set({ is_collected: true, payment_method: paymentMethod, updated_at: new Date() })
+          .where(eq(trips.id, tripId))
+          .returning();
 
-      // Accrue commission debt on cash and transfer. Online gate enforces the
-      // cap; in-progress trips must still be collectable past N.
-      if (platformFee > 0) {
-        await tx
-          .update(drivers)
-          .set({
-            platform_debt: sql`${drivers.platform_debt} + ${platformFee}`,
-            updated_at: new Date(),
-          })
-          .where(eq(drivers.id, driverId));
-      }
+        // Accrue commission debt on cash and transfer. Online gate enforces the
+        // cap; in-progress trips must still be collectable past N.
+        if (platformFee > 0) {
+          await tx
+            .update(drivers)
+            .set({
+              platform_debt: sql`${drivers.platform_debt} + ${platformFee}`,
+              updated_at: new Date(),
+            })
+            .where(eq(drivers.id, driverId));
+        }
 
-      const debt =
-        trip.passenger_id != null
-          ? await cancellationService.attachDebtOnCollect(tx, trip.passenger_id, totalFare)
-          : { debt_applied_ars: 0, total_due_ars: totalFare };
+        const debt =
+          trip.passenger_id != null
+            ? await cancellationService.attachDebtOnCollect(tx, trip.passenger_id, totalFare)
+            : { debt_applied_ars: 0, total_due_ars: totalFare };
 
-      return { ...updated, ...debt };
-    });
+        return { ...updated, ...debt };
+      })
+      .then((result) => {
+        const platformFee = Number(result.platform_fee ?? 0);
+        const accrued = platformFee > 0 ? platformFee : 0;
+        logger.scoped({ domain: 'payment' }).info('[PAY] trip.collect', {
+          event: 'trip.collect',
+          trip_id: tripId,
+          driver_id: driverId,
+          passenger_id: result.passenger_id ?? null,
+          payment_method: paymentMethod,
+          total_fare: Number(result.total_fare),
+          platform_fee: platformFee,
+          driver_earnings: Number(result.driver_earnings ?? 0),
+          debt_applied_ars: result.debt_applied_ars,
+          total_due_ars: result.total_due_ars,
+          accrued_platform_fee: accrued,
+        });
+        return result;
+      });
   },
 
   async claimTrip(user: AuthUser, tripId: string) {
