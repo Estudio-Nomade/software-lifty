@@ -40,13 +40,17 @@ export const paymentMethodsService = {
 
     if (!method) throw new AppError('Failed to create payment method', 400, 'BAD_REQUEST');
 
-    payLog.info('[PAY] payout_method.add', {
-      event: 'payout_method.add',
-      driver_id: driverId,
-      method_id: method.id,
-      method_type: methodType,
-      account_masked: maskAccount(accountNumber),
-    });
+    try {
+      payLog.info('[PAY] payout_method.add', {
+        event: 'payout_method.add',
+        driver_id: driverId,
+        method_id: method.id,
+        method_type: methodType,
+        account_masked: maskAccount(accountNumber),
+      });
+    } catch {
+      // logging must never fail a committed payout method write
+    }
 
     return { ...method, message: 'Payment method added' };
   },
@@ -86,11 +90,15 @@ export const paymentMethodsService = {
 
     await db.delete(payoutMethods).where(eq(payoutMethods.id, methodId));
 
-    payLog.info('[PAY] payout_method.delete', {
-      event: 'payout_method.delete',
-      driver_id: driverId,
-      method_id: methodId,
-    });
+    try {
+      payLog.info('[PAY] payout_method.delete', {
+        event: 'payout_method.delete',
+        driver_id: driverId,
+        method_id: methodId,
+      });
+    } catch {
+      // logging must never fail a committed payout method write
+    }
 
     return { message: 'Payment method removed' };
   },

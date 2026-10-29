@@ -910,21 +910,25 @@ export const tripService = {
         return { ...updated, ...debt };
       })
       .then((result) => {
-        const platformFee = Number(result.platform_fee ?? 0);
-        const accrued = platformFee > 0 ? platformFee : 0;
-        logger.scoped({ domain: 'payment' }).info('[PAY] trip.collect', {
-          event: 'trip.collect',
-          trip_id: tripId,
-          driver_id: driverId,
-          passenger_id: result.passenger_id ?? null,
-          payment_method: paymentMethod,
-          total_fare: Number(result.total_fare),
-          platform_fee: platformFee,
-          driver_earnings: Number(result.driver_earnings ?? 0),
-          debt_applied_ars: result.debt_applied_ars,
-          total_due_ars: result.total_due_ars,
-          accrued_platform_fee: accrued,
-        });
+        try {
+          const platformFee = Number(result.platform_fee ?? 0);
+          const accrued = platformFee > 0 ? platformFee : 0;
+          logger.scoped({ domain: 'payment' }).info('[PAY] trip.collect', {
+            event: 'trip.collect',
+            trip_id: tripId,
+            driver_id: driverId,
+            passenger_id: result.passenger_id ?? null,
+            payment_method: paymentMethod,
+            total_fare: Number(result.total_fare),
+            platform_fee: platformFee,
+            driver_earnings: Number(result.driver_earnings ?? 0),
+            debt_applied_ars: result.debt_applied_ars,
+            total_due_ars: result.total_due_ars,
+            accrued_platform_fee: accrued,
+          });
+        } catch {
+          // logging must never fail a committed collect
+        }
         return result;
       });
   },

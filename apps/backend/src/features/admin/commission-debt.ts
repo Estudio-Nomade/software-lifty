@@ -279,8 +279,7 @@ export const adminCommissionDebtService = {
     }
 
     const now = new Date();
-    let firstTransition = false;
-    const updated = await db.transaction(async (tx) => {
+    const { receipt: updated, firstTransition } = await db.transaction(async (tx) => {
       const [row] = await tx
         .update(driverCommissionReceipts)
         .set({
@@ -303,12 +302,11 @@ export const adminCommissionDebtService = {
           .where(eq(driverCommissionReceipts.id, id))
           .limit(1);
         if (again?.status === 'approved') {
-          return again;
+          return { receipt: again, firstTransition: false as const };
         }
         throw new AppError('Receipt could not be approved', 409, 'RECEIPT_NOT_PENDING');
       }
 
-      firstTransition = true;
       // Only clear fraud on first transition pending → approved.
       await tx
         .update(drivers)
@@ -318,19 +316,23 @@ export const adminCommissionDebtService = {
         })
         .where(eq(drivers.id, existing.driver_id));
 
-      return row;
+      return { receipt: row, firstTransition: true as const };
     });
 
     if (firstTransition) {
-      logger.scoped({ domain: 'payment' }).info('[PAY] commission.receipt.approve', {
-        event: 'commission.receipt.approve',
-        receipt_id: id,
-        driver_id: existing.driver_id,
-        admin_user_id: adminUser.id,
-        amount_ars: Math.round(Number(existing.amount_ars)),
-        debt_before_ars: Math.round(Number(existing.debt_before_ars ?? 0)),
-        cleared_fraud_block: true,
-      });
+      try {
+        logger.scoped({ domain: 'payment' }).info('[PAY] commission.receipt.approve', {
+          event: 'commission.receipt.approve',
+          receipt_id: id,
+          driver_id: existing.driver_id,
+          admin_user_id: adminUser.id,
+          amount_ars: Math.round(Number(existing.amount_ars)),
+          debt_before_ars: Math.round(Number(existing.debt_before_ars ?? 0)),
+          cleared_fraud_block: true,
+        });
+      } catch {
+        // logging must never fail a committed approve
+      }
     }
 
     broadcastDriverAccountUpdated(existing.driver_id, {
@@ -441,17 +443,21 @@ export const adminCommissionDebtService = {
       };
     });
 
-    logger.scoped({ domain: 'payment' }).info('[PAY] commission.receipt.reject_fraud', {
-      event: 'commission.receipt.reject_fraud',
-      receipt_id: id,
-      driver_id: existing.driver_id,
-      admin_user_id: adminUser.id,
-      amount_ars: Math.round(Number(existing.amount_ars)),
-      debt_before_ars: debtBefore,
-      note_present: trimmedNote != null,
-      fraud_block: true,
-      restored_debt_ars: result.restoredDebt,
-    });
+    try {
+      logger.scoped({ domain: 'payment' }).info('[PAY] commission.receipt.reject_fraud', {
+        event: 'commission.receipt.reject_fraud',
+        receipt_id: id,
+        driver_id: existing.driver_id,
+        admin_user_id: adminUser.id,
+        amount_ars: Math.round(Number(existing.amount_ars)),
+        debt_before_ars: debtBefore,
+        note_present: trimmedNote != null,
+        fraud_block: true,
+        restored_debt_ars: result.restoredDebt,
+      });
+    } catch {
+      // logging must never fail a committed reject
+    }
 
     void sendPushToUser(result.userId, {
       title: 'Comprobante de comisión rechazado',
