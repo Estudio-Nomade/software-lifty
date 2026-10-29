@@ -451,6 +451,29 @@ export async function geocode(params: {
           province: 'Córdoba',
         };
       }
+      if (
+        addr.includes('villa sarmiento') ||
+        addr.includes('v. sarmiento') ||
+        addr.includes('v sarmiento')
+      ) {
+        return {
+          lat: -31.9358863,
+          lng: -65.1915949,
+          formatted_address: params.address ?? 'Villa Sarmiento, Córdoba, Argentina',
+          city: 'Villa Sarmiento',
+          province: 'Córdoba',
+        };
+      }
+      // San Pedro (Córdoba launch) before generic "pedro" — not BA San Pedro.
+      if (addr.includes('san pedro') || addr.includes('s. pedro') || /\bs pedro\b/.test(addr)) {
+        return {
+          lat: -31.936553,
+          lng: -65.2189268,
+          formatted_address: params.address ?? 'San Pedro, Córdoba, Argentina',
+          city: 'San Pedro',
+          province: 'Córdoba',
+        };
+      }
       if (addr.includes('córdoba capital') || addr.includes('cordoba capital')) {
         return {
           lat: -31.4201,

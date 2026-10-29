@@ -21,7 +21,7 @@ export const GENERAL_TERMS_SUMMARY: TermsBlock[] = [
   },
   {
     heading: '2. Aceptación',
-    body: 'Al usar la aplicación aceptás estos Términos Generales, la Política de Privacidad publicada en https://web.liftyviajes.com/privacidad y, cuando corresponda, el Anexo de la jurisdicción donde se presta el viaje (por ejemplo, Villa Dolores). Los términos completos están en https://web.liftyviajes.com/terminos. Si no estás de acuerdo, no uses la plataforma. Ninguna cláusula puede interpretarse como renuncia a derechos irrenunciables del consumidor (Ley 24.240).',
+    body: 'Al usar la aplicación aceptás estos Términos Generales, la Política de Privacidad publicada en https://web.liftyviajes.com/privacidad y, cuando corresponda, el Anexo de la jurisdicción donde se presta el viaje (por ejemplo, zona Lifty: Villa Dolores, San Pedro y Villa Sarmiento). Los términos completos están en https://web.liftyviajes.com/terminos. Si no estás de acuerdo, no uses la plataforma. Ninguna cláusula puede interpretarse como renuncia a derechos irrenunciables del consumidor (Ley 24.240).',
   },
   {
     heading: '3. Cuenta y verificación',
@@ -45,7 +45,7 @@ export const GENERAL_TERMS_SUMMARY: TermsBlock[] = [
   },
   {
     heading: '8. Jurisdicción inicial y anexos',
-    body: 'El servicio inicial está pensado para Villa Dolores, Córdoba (servicio urbano). Cada municipio puede tener un Anexo de condiciones particulares. Si hay contradicción entre estos términos generales y una norma imperativa local, prevalece la norma. Al elegir un municipio como conductor, debés aceptar también sus términos específicos.',
+    body: 'El servicio inicial está pensado para la zona Lifty en Córdoba: Villa Dolores, San Pedro y Villa Sarmiento (servicio urbano del cluster de lanzamiento). Cada municipio puede tener un Anexo de condiciones particulares. Si hay contradicción entre estos términos generales y una norma imperativa local, prevalece la norma. Al elegir un municipio como conductor, debés aceptar también sus términos específicos.',
   },
   {
     heading: '9. Comisión (conductores)',
