@@ -143,8 +143,9 @@ afterAll(async () => {
 });
 
 describe('Passenger Trips', () => {
-  const origin = { lat: -32.889, lng: -68.845 };
-  const dest = { lat: -32.897, lng: -68.831 };
+  // Launch cluster (VD) — outside coords must not expect 200 after service-area gate.
+  const origin = { lat: -31.9449, lng: -65.1906 };
+  const dest = { lat: -31.9525, lng: -65.174 };
 
   async function createTrip(token: string) {
     return request('POST', '/api/passenger/trips/request', {
@@ -152,8 +153,8 @@ describe('Passenger Trips', () => {
       origin_lng: origin.lng,
       dest_lat: dest.lat,
       dest_lng: dest.lng,
-      origin_address: 'Av. San Martin 1000, Mendoza',
-      dest_address: 'Av. Las Heras 500, Mendoza',
+      origin_address: 'Plaza Mitre, Villa Dolores',
+      dest_address: 'Plaza San Martín, Villa Dolores',
       vehicle_type: 'auto',
       distance_km: 3.2,
       duration_minutes: 12,
@@ -170,6 +171,29 @@ describe('Passenger Trips', () => {
     expect(data.driver_id).toBeNull();
     expect(data.total_fare).toBeGreaterThan(0);
     expect(data.passenger_id).toBeTruthy();
+  });
+
+  test('POST /request rejects origin/dest outside launch cluster', async () => {
+    const token = await createPassengerToken();
+    const { status, data } = await request(
+      'POST',
+      '/api/passenger/trips/request',
+      {
+        origin_lat: -32.889,
+        origin_lng: -68.845,
+        dest_lat: -32.897,
+        dest_lng: -68.831,
+        origin_address: 'Av. San Martin 1000, Mendoza',
+        dest_address: 'Av. Las Heras 500, Mendoza',
+        vehicle_type: 'auto',
+        distance_km: 3.2,
+        duration_minutes: 12,
+      },
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('OUT_OF_SERVICE_AREA');
   });
 
   test('POST /request validates required fields', async () => {

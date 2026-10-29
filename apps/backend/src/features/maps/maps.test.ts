@@ -189,11 +189,11 @@ describe('Maps Proxy', () => {
       'POST',
       '/api/maps/fare-estimate',
       {
-        origin_lat: -34.6037,
-        origin_lng: -58.3816,
-        dest_lat: -34.6158,
-        dest_lng: -58.4333,
-        vehicle_type: 'car',
+        origin_lat: -31.9449,
+        origin_lng: -65.1906,
+        dest_lat: -31.9525,
+        dest_lng: -65.174,
+        vehicle_type: 'auto',
       },
       token,
     );
@@ -209,7 +209,7 @@ describe('Maps Proxy', () => {
     expect(data.driver_earnings).toBeGreaterThan(0);
   });
 
-  test('fare-estimate with invalid vehicle_type returns error', async () => {
+  test('fare-estimate rejects origin/dest outside launch cluster', async () => {
     const token = await registerAndGetToken(phone, password);
 
     const { status, data } = await request(
@@ -220,6 +220,46 @@ describe('Maps Proxy', () => {
         origin_lng: -58.3816,
         dest_lat: -34.6158,
         dest_lng: -58.4333,
+        vehicle_type: 'auto',
+      },
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('OUT_OF_SERVICE_AREA');
+  });
+
+  test('fare-estimate rejects when only destination is outside cluster', async () => {
+    const token = await registerAndGetToken(phone, password);
+
+    const { status, data } = await request(
+      'POST',
+      '/api/maps/fare-estimate',
+      {
+        origin_lat: -31.9449,
+        origin_lng: -65.1906,
+        dest_lat: -34.6037,
+        dest_lng: -58.3816,
+        vehicle_type: 'auto',
+      },
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('OUT_OF_SERVICE_AREA');
+  });
+
+  test('fare-estimate with invalid vehicle_type returns error', async () => {
+    const token = await registerAndGetToken(phone, password);
+
+    const { status, data } = await request(
+      'POST',
+      '/api/maps/fare-estimate',
+      {
+        origin_lat: -31.9449,
+        origin_lng: -65.1906,
+        dest_lat: -31.9525,
+        dest_lng: -65.174,
         vehicle_type: 'helicopter',
       },
       token,
@@ -232,11 +272,11 @@ describe('Maps Proxy', () => {
 
   test('fare-estimate without auth returns 401', async () => {
     const { status, data } = await request('POST', '/api/maps/fare-estimate', {
-      origin_lat: -34.6037,
-      origin_lng: -58.3816,
-      dest_lat: -34.6158,
-      dest_lng: -58.4333,
-      vehicle_type: 'car',
+      origin_lat: -31.9449,
+      origin_lng: -65.1906,
+      dest_lat: -31.9525,
+      dest_lng: -65.174,
+      vehicle_type: 'auto',
     });
 
     expect(status).toBe(401);

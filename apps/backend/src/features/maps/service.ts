@@ -12,6 +12,7 @@ import {
   distanceMatrix as geoDistanceMatrix,
   geocode as geoGeocode,
 } from '../../shared/lib/geo';
+import { assertTripInsideLaunchCluster } from '../../shared/lib/service-area';
 import { type HeatmapBounds, type HeatmapPoint, computeHeatmap } from './heatmap-service';
 
 export interface FareEstimateResult extends FareResult {
@@ -50,6 +51,11 @@ export const mapsService = {
     dest_lng: number,
     vehicle_type: string,
   ): Promise<FareEstimateResult> {
+    assertTripInsideLaunchCluster(
+      { lat: origin_lat, lng: origin_lng },
+      { lat: dest_lat, lng: dest_lng },
+    );
+
     const matrix: DistanceMatrixResult = await geoDistanceMatrix(
       origin_lat,
       origin_lng,
