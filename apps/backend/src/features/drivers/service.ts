@@ -2556,6 +2556,21 @@ export const driversService = {
         return row;
       });
 
+      try {
+        logger.scoped({ domain: 'payment' }).info('[PAY] commission.receipt.submit', {
+          event: 'commission.receipt.submit',
+          driver_id: driver.id,
+          receipt_id: receipt.id,
+          amount_ars: Math.round(Number(receipt.amount_ars)),
+          debt_before_ars: Math.round(Number(receipt.debt_before_ars)),
+          platform_debt_after: 0,
+          content_type: contentType,
+          storage_path_prefix: 'commission-receipts/',
+        });
+      } catch {
+        // logging must never fail a committed receipt submit
+      }
+
       return {
         receipt: {
           id: receipt.id,
