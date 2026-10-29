@@ -464,8 +464,12 @@ export async function geocode(params: {
           province: 'Córdoba',
         };
       }
-      // San Pedro (Córdoba launch) before generic "pedro" — not BA San Pedro.
-      if (addr.includes('san pedro') || addr.includes('s. pedro') || /\bs pedro\b/.test(addr)) {
+      // San Pedro Córdoba only — require province cue (not BA San Pedro).
+      const isSanPedroName =
+        addr.includes('san pedro') || addr.includes('s. pedro') || /\bs pedro\b/.test(addr);
+      const isCordobaCue =
+        addr.includes('córdoba') || addr.includes('cordoba') || addr.includes('cba');
+      if (isSanPedroName && isCordobaCue) {
         return {
           lat: -31.936553,
           lng: -65.2189268,
