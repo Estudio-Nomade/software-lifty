@@ -209,7 +209,7 @@ describe('Maps Proxy', () => {
     expect(data.driver_earnings).toBeGreaterThan(0);
   });
 
-  test('fare-estimate rejects origin/dest outside launch cluster', async () => {
+  test('fare-estimate rejects origin outside pickup area', async () => {
     const token = await registerAndGetToken(phone, password);
 
     const { status, data } = await request(
@@ -226,10 +226,10 @@ describe('Maps Proxy', () => {
     );
 
     expect(status).toBe(400);
-    expect(data.error.code).toBe('OUT_OF_SERVICE_AREA');
+    expect(data.error.code).toBe('OUT_OF_PICKUP_AREA');
   });
 
-  test('fare-estimate rejects when only destination is outside cluster', async () => {
+  test('fare-estimate rejects when only destination is outside dropoff', async () => {
     const token = await registerAndGetToken(phone, password);
 
     const { status, data } = await request(
@@ -246,7 +246,7 @@ describe('Maps Proxy', () => {
     );
 
     expect(status).toBe(400);
-    expect(data.error.code).toBe('OUT_OF_SERVICE_AREA');
+    expect(data.error.code).toBe('OUT_OF_DROPOFF_AREA');
   });
 
   test('fare-estimate with invalid vehicle_type returns error', async () => {
