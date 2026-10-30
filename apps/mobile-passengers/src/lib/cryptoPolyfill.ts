@@ -4,8 +4,15 @@ const g = globalThis as any;
 
 type AlgorithmIdentifier = string | { name: string };
 
-function toBufferSource(data: BufferSource): BufferSource {
-  return data;
+/**
+ * Normalize BufferSource to a contiguous Uint8Array owned copy of the view window.
+ * Honors byteOffset/byteLength so subarrays / DataView never hash the full backing store.
+ */
+function toOwnedBytes(data: BufferSource): Uint8Array {
+  if (ArrayBuffer.isView(data)) {
+    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength).slice();
+  }
+  return new Uint8Array(data);
 }
 
 function resolveSha256Algorithm(algorithm: AlgorithmIdentifier): void {
@@ -27,7 +34,7 @@ export async function digestSha256(
   data: BufferSource,
 ): Promise<ArrayBuffer> {
   resolveSha256Algorithm(algorithm);
-  return Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, toBufferSource(data));
+  return Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, toOwnedBytes(data));
 }
 
 if (!g.crypto) {
@@ -46,6 +53,7 @@ if (!g.crypto.getRandomValues) {
 
 if (!g.crypto.subtle?.digest) {
   g.crypto.subtle = {
+    ...(g.crypto.subtle ?? {}),
     digest: digestSha256,
   };
 }

@@ -61,4 +61,18 @@ describe('digestSha256 (crypto polyfill path)', () => {
     const expected = createHash('sha256').update(Buffer.from(data)).digest('hex');
     expect(hex(buf)).toBe(expected);
   });
+
+  it('honors TypedArray subarray window (byteOffset/byteLength)', async () => {
+    const backing = new Uint8Array([0xaa, 0x61, 0x62, 0x63, 0xbb]); // ... "abc" ...
+    const view = backing.subarray(1, 4); // "abc"
+    const buf = await digestSha256('SHA-256', view);
+    expect(hex(buf)).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  });
+
+  it('honors DataView window', async () => {
+    const backing = new Uint8Array([0x00, 0x61, 0x62, 0x63, 0xff]);
+    const view = new DataView(backing.buffer, 1, 3);
+    const buf = await digestSha256('SHA-256', view);
+    expect(hex(buf)).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+  });
 });
