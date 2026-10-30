@@ -1,3 +1,4 @@
+import { invalidatePassengerProfileCompleteCache } from '../lib/passengerProfileGate';
 import { DEFAULT_PLACE_BIAS, searchPhotonPlaces } from '../utils/photonPlaces';
 import { api } from './client';
 import type {
@@ -17,6 +18,8 @@ export async function registerPassenger(
   if (phone) body.phone = phone;
   if (fullName?.trim()) body.full_name = fullName.trim();
   const { data } = await api.post<PassengerProfile>('/passenger/register', body);
+  // Profile row may lack phone — force watchers to re-fetch completeness.
+  invalidatePassengerProfileCompleteCache();
   return data;
 }
 
@@ -41,7 +44,10 @@ export async function getProfile(): Promise<PassengerProfile> {
 
 export async function updateProfile(profile: Partial<PassengerProfile>): Promise<PassengerProfile> {
   const { data } = await api.put<PassengerProfile>('/passenger/profile', profile);
-  return assertProfilePayload(data, 'guardar el perfil');
+  const updated = assertProfilePayload(data, 'guardar el perfil');
+  // Edits (incl. clearing phone) must not leave a stale "complete" cache.
+  invalidatePassengerProfileCompleteCache();
+  return updated;
 }
 
 export async function uploadProfilePhoto(
