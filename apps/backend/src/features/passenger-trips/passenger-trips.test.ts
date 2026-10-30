@@ -143,7 +143,7 @@ afterAll(async () => {
 });
 
 describe('Passenger Trips', () => {
-  // Launch cluster (VD) — outside coords must not expect 200 after service-area gate.
+  // Pickup 8 km / dropoff 50 km from VD hub — outside coords must not expect 200.
   const origin = { lat: -31.9449, lng: -65.1906 };
   const dest = { lat: -31.9525, lng: -65.174 };
 
@@ -173,7 +173,7 @@ describe('Passenger Trips', () => {
     expect(data.passenger_id).toBeTruthy();
   });
 
-  test('POST /request rejects origin/dest outside launch cluster', async () => {
+  test('POST /request rejects origin outside pickup area', async () => {
     const token = await createPassengerToken();
     const { status, data } = await request(
       'POST',
@@ -193,7 +193,7 @@ describe('Passenger Trips', () => {
     );
 
     expect(status).toBe(400);
-    expect(data.error.code).toBe('OUT_OF_SERVICE_AREA');
+    expect(data.error.code).toBe('OUT_OF_PICKUP_AREA');
   });
 
   test('POST /request validates required fields', async () => {

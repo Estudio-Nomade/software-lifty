@@ -2,49 +2,82 @@ import { AppError } from './errors';
 import { haversineDistance } from './geo';
 import { logger } from './logger';
 
-/** Geofence radius per launch hub (km). Product lock: 20 km × 3. */
-export const LAUNCH_CLUSTER_RADIUS_KM = 20;
+/** Single launch hub — Villa Dolores (product lock LOCK D). */
+export const SERVICE_AREA_HUB = {
+  name: 'Villa Dolores',
+  lat: -31.9449464,
+  lng: -65.1905677,
+} as const;
 
-/** Launch hubs — Villa Dolores + San Pedro + Villa Sarmiento (Maps lock). */
-export const LAUNCH_CLUSTER_HUBS = [
-  { name: 'Villa Dolores', lat: -31.9449464, lng: -65.1905677 },
-  { name: 'San Pedro', lat: -31.936553, lng: -65.2189268 },
-  { name: 'Villa Sarmiento', lat: -31.9358863, lng: -65.1915949 },
-] as const;
+/** Max distance from hub to request a trip (pickup / origin). */
+export const PICKUP_RADIUS_KM = 8;
 
-const OUT_OF_SERVICE_MESSAGE =
-  'El origen o destino está fuera de la zona de servicio Lifty (Villa Dolores, San Pedro, Villa Sarmiento).';
+/** Max distance from hub for destination (dropoff). */
+export const DROPOFF_RADIUS_KM = 50;
 
-/** True if point is within 20 km of any launch hub. */
-export function isInsideLaunchCluster(lat: number, lng: number): boolean {
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
-  return LAUNCH_CLUSTER_HUBS.some(
-    (hub) => haversineDistance(lat, lng, hub.lat, hub.lng) <= LAUNCH_CLUSTER_RADIUS_KM,
-  );
+const OUT_OF_PICKUP_MESSAGE =
+  'No pedimos viajes desde esa zona. El origen debe estar cerca de Villa Dolores (hasta ~8 km).';
+
+const OUT_OF_DROPOFF_MESSAGE = 'Destino fuera del alcance Lifty (~50 km desde Villa Dolores).';
+
+function distanceFromHubKm(lat: number, lng: number): number {
+  return haversineDistance(lat, lng, SERVICE_AREA_HUB.lat, SERVICE_AREA_HUB.lng);
 }
 
-export function assertInsideLaunchCluster(
+/** True if point is within pickup radius of Villa Dolores hub. */
+export function isInsidePickupArea(lat: number, lng: number): boolean {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  return distanceFromHubKm(lat, lng) <= PICKUP_RADIUS_KM;
+}
+
+/** True if point is within dropoff radius of Villa Dolores hub. */
+export function isInsideDropoffArea(lat: number, lng: number): boolean {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  return distanceFromHubKm(lat, lng) <= DROPOFF_RADIUS_KM;
+}
+
+export function assertInsidePickupArea(
   lat: number,
   lng: number,
   label: 'origin' | 'destination' | string = 'point',
 ): void {
-  if (isInsideLaunchCluster(lat, lng)) return;
+  if (isInsidePickupArea(lat, lng)) return;
 
-  logger.warn('[SERVICE_AREA] point outside launch cluster', {
-    code: 'OUT_OF_SERVICE_AREA',
+  logger.warn('[SERVICE_AREA] point outside pickup area', {
+    code: 'OUT_OF_PICKUP_AREA',
     label,
     lat,
     lng,
   });
 
-  throw new AppError(OUT_OF_SERVICE_MESSAGE, 400, 'OUT_OF_SERVICE_AREA');
+  throw new AppError(OUT_OF_PICKUP_MESSAGE, 400, 'OUT_OF_PICKUP_AREA');
 }
 
-/** Reject fare/trip when origin or destination is outside the launch cluster. */
-export function assertTripInsideLaunchCluster(
+export function assertInsideDropoffArea(
+  lat: number,
+  lng: number,
+  label: 'origin' | 'destination' | string = 'point',
+): void {
+  if (isInsideDropoffArea(lat, lng)) return;
+
+  logger.warn('[SERVICE_AREA] point outside dropoff area', {
+    code: 'OUT_OF_DROPOFF_AREA',
+    label,
+    lat,
+    lng,
+  });
+
+  throw new AppError(OUT_OF_DROPOFF_MESSAGE, 400, 'OUT_OF_DROPOFF_AREA');
+}
+
+/**
+ * Origin must be in pickup (8 km); destination in dropoff (50 km).
+ * Checks origin first, then destination.
+ */
+export function assertTripInsideServiceArea(
   origin: { lat: number; lng: number },
   dest: { lat: number; lng: number },
 ): void {
-  assertInsideLaunchCluster(origin.lat, origin.lng, 'origin');
-  assertInsideLaunchCluster(dest.lat, dest.lng, 'destination');
+  assertInsidePickupArea(origin.lat, origin.lng, 'origin');
+  assertInsideDropoffArea(dest.lat, dest.lng, 'destination');
 }
