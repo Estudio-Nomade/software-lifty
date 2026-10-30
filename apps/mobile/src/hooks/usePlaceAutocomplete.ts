@@ -8,8 +8,14 @@ export type PlaceSuggestion = {
   lng: number;
 };
 
-export function usePlaceAutocomplete(query: string): PlaceSuggestion[] {
+/** Optional GPS bias improves ranking near the driver (maps autocomplete lat/lng). */
+export function usePlaceAutocomplete(
+  query: string,
+  bias?: { lat: number; lng: number } | null,
+): PlaceSuggestion[] {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const biasLat = bias?.lat;
+  const biasLng = bias?.lng;
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -20,8 +26,18 @@ export function usePlaceAutocomplete(query: string): PlaceSuggestion[] {
 
     const timeout = setTimeout(async () => {
       try {
+        const params: Record<string, string | number> = { input: trimmed };
+        if (
+          biasLat != null &&
+          biasLng != null &&
+          Number.isFinite(biasLat) &&
+          Number.isFinite(biasLng)
+        ) {
+          params.lat = biasLat;
+          params.lng = biasLng;
+        }
         const { data } = await apiClient.get<PlaceSuggestion[]>('/maps/places/autocomplete', {
-          params: { input: trimmed },
+          params,
         });
         setSuggestions(Array.isArray(data) ? data : []);
       } catch {
@@ -30,7 +46,7 @@ export function usePlaceAutocomplete(query: string): PlaceSuggestion[] {
     }, 300);
 
     return () => clearTimeout(timeout);
-  }, [query]);
+  }, [query, biasLat, biasLng]);
 
   return suggestions;
 }
