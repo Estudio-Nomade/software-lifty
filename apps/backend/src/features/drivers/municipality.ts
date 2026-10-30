@@ -1,3 +1,5 @@
+import { isInsidePickupArea } from '../../shared/lib/service-area';
+
 export type MunicipalityStatus = 'unset' | 'operational' | 'waitlisted';
 
 export interface ResolvedAddress {
@@ -92,6 +94,13 @@ export function matchDistrict(
   return nameMatches[0];
 }
 
+/**
+ * Operational only when BOTH:
+ * 1) coords resolve inside pickup area (≤8 km VD hub) — anti-spoof hard gate
+ * 2) city/province matches an active district (label / intended_district)
+ *
+ * Name match alone never grants operational (e.g. “… Villa Dolores” + far pin).
+ */
 export function buildMunicipalityResult(
   addressLine: string,
   resolved: {
@@ -102,7 +111,15 @@ export function buildMunicipalityResult(
   },
   match: DistrictMatchCandidate | null,
 ): MunicipalityResolveResult {
-  if (match) {
+  const hasCoords =
+    resolved.lat != null &&
+    resolved.lng != null &&
+    Number.isFinite(resolved.lat) &&
+    Number.isFinite(resolved.lng);
+  const insidePickup =
+    hasCoords && isInsidePickupArea(resolved.lat as number, resolved.lng as number);
+
+  if (match && insidePickup) {
     return {
       municipality_status: 'operational',
       intended_district_id: match.id,
