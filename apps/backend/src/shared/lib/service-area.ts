@@ -81,9 +81,3 @@ export function assertTripInsideServiceArea(
   assertInsidePickupArea(origin.lat, origin.lng, 'origin');
   assertInsideDropoffArea(dest.lat, dest.lng, 'destination');
 }
-
-/** @deprecated Prefer isInsidePickupArea (same 8 km hub VD). */
-export const isInsideLaunchCluster = isInsidePickupArea;
-
-/** @deprecated Prefer assertTripInsideServiceArea (asymmetric 8/50). */
-export const assertTripInsideLaunchCluster = assertTripInsideServiceArea;

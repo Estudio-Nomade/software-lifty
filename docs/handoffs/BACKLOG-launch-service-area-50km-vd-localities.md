@@ -111,7 +111,7 @@ SP/VS ya seeded (#472): se pueden **seguir listando** en picker si tienen terms,
 2. `matchDistrict(city, province, activeDistricts)` **solo por nombre**  
 3. Si matchea → `operational`
 
-**No** exige `isInsideLaunchCluster(lat,lng)`.
+**No** exige `isInsidePickupArea(lat,lng)`.
 
 Ataque trivial: texto/place “…, Villa Dolores, Córdoba” con coords lejos, o city parseable a un district activo sin estar en la zona.  
 También: `cityNorm.includes(nameNorm)` es permisivo.
