@@ -167,9 +167,10 @@ describe('municipality match helpers', () => {
   });
 
   test('buildMunicipalityResult operational vs waitlisted', () => {
+    // Hub VD coords (inside pickup 8 km)
     const op = buildMunicipalityResult(
       'Calle 1, Villa Dolores',
-      { lat: -31.9, lng: -65.1, city: 'Villa Dolores', province: 'Córdoba' },
+      { lat: -31.9449464, lng: -65.1905677, city: 'Villa Dolores', province: 'Córdoba' },
       { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
     );
     expect(op.municipality_status).toBe('operational');
@@ -182,6 +183,44 @@ describe('municipality match helpers', () => {
     );
     expect(wl.municipality_status).toBe('waitlisted');
     expect(wl.intended_district_id).toBeNull();
+  });
+
+  test('buildMunicipalityResult: district name match + coords outside pickup → waitlisted', () => {
+    // ~13 km east of hub (Rosas-like) — name says Villa Dolores but pin is outside 8 km
+    const latRad = (-31.9449464 * Math.PI) / 180;
+    const degPerKm = 1 / (111.32 * Math.cos(latRad));
+    const farLat = -31.9449464;
+    const farLng = -65.1905677 + 13 * degPerKm;
+
+    const spoof = buildMunicipalityResult(
+      'Calle Falsa 123, Villa Dolores, Córdoba',
+      { lat: farLat, lng: farLng, city: 'Villa Dolores', province: 'Córdoba' },
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+    );
+    expect(spoof.municipality_status).toBe('waitlisted');
+    expect(spoof.intended_district_id).toBeNull();
+    expect(spoof.address_lat).toBe(farLat);
+    expect(spoof.address_lng).toBe(farLng);
+  });
+
+  test('buildMunicipalityResult: CABA coords + VD name match → waitlisted', () => {
+    const spoof = buildMunicipalityResult(
+      'Av Siempre Viva, Villa Dolores',
+      { lat: -34.6037, lng: -58.3816, city: 'Villa Dolores', province: 'Córdoba' },
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+    );
+    expect(spoof.municipality_status).toBe('waitlisted');
+    expect(spoof.intended_district_id).toBeNull();
+  });
+
+  test('buildMunicipalityResult: SP coords + SP match → operational', () => {
+    const op = buildMunicipalityResult(
+      'Belgrano 50, San Pedro, Córdoba',
+      { lat: -31.936553, lng: -65.2189268, city: 'San Pedro', province: 'Córdoba' },
+      { id: 'sp', name: 'San Pedro', province: 'Córdoba', status: 'active' },
+    );
+    expect(op.municipality_status).toBe('operational');
+    expect(op.intended_district_id).toBe('sp');
   });
 });
 
@@ -294,7 +333,7 @@ describe('Driver address municipality eligibility', () => {
     const db = getDb();
     const [user] = await db
       .insert(users)
-      .values({ phone: '+5492619000002', full_name: 'Wait Driver', role: 'driver' })
+      .values({ phone: '+549****0002', full_name: 'Wait Driver', role: 'driver' })
       .returning({ id: users.id });
     const token = createTestToken(user.id);
 
@@ -304,7 +343,7 @@ describe('Driver address municipality eligibility', () => {
       {
         first_name: 'Ana',
         last_name: 'Lopez',
-        phone: '+5492619000002',
+        phone: '+549****0002',
         address_line: 'Av Colón 500, Córdoba capital',
         photo_url: 'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
       },
@@ -318,6 +357,76 @@ describe('Driver address municipality eligibility', () => {
     const statusRes = await request('GET', '/api/drivers/me/status', undefined, token);
     expect(statusRes.data.municipality_status).toBe('waitlisted');
     expect(statusRes.data.show_municipality_waitlist_banner).toBe(true);
+  });
+
+  test('PUT /drivers/me: Villa Dolores text + pin ~13km outside pickup → waitlisted', async () => {
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({ phone: '+549****0013', full_name: 'Spoof Driver', role: 'driver' })
+      .returning({ id: users.id });
+    const token = createTestToken(user.id);
+
+    // ~13 km east of VD hub — reverse geocode mock still labels Villa Dolores
+    const hubLat = -31.9449464;
+    const hubLng = -65.1905677;
+    const latRad = (hubLat * Math.PI) / 180;
+    const degPerKm = 1 / (111.32 * Math.cos(latRad));
+    const farLng = hubLng + 13 * degPerKm;
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Falso',
+        last_name: 'Dolores',
+        phone: '+549****0013',
+        address_line: 'Calle Inventada 1, Villa Dolores, Córdoba',
+        address_lat: hubLat,
+        address_lng: farLng,
+        photo_url:
+          'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
+      },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.municipality_status).toBe('waitlisted');
+    expect(data.intended_district_id).toBeNull();
+
+    const statusRes = await request('GET', '/api/drivers/me/status', undefined, token);
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.data.municipality_status).toBe('waitlisted');
+    expect(statusRes.data.show_municipality_waitlist_banner).toBe(true);
+  });
+
+  test('PUT /drivers/me: CABA pin + Villa Dolores free-text → waitlisted', async () => {
+    const db = getDb();
+    const [user] = await db
+      .insert(users)
+      .values({ phone: '+549****0014', full_name: 'Caba Spoof', role: 'driver' })
+      .returning({ id: users.id });
+    const token = createTestToken(user.id);
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Caba',
+        last_name: 'Spoof',
+        phone: '+549****0014',
+        address_line: 'Obelisco, Villa Dolores, Córdoba',
+        address_lat: -34.6037,
+        address_lng: -58.3816,
+        photo_url:
+          'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
+      },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.municipality_status).toBe('waitlisted');
+    expect(data.intended_district_id).toBeNull();
   });
 
   test('waitlisted driver cannot go online → MUNICIPALITY_NOT_ENABLED', async () => {
