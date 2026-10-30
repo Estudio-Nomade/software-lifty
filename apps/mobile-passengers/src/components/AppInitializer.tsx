@@ -2,7 +2,7 @@ import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { api } from '../api/client';
-import { registerPassenger } from '../api/passenger';
+import { getActiveRide, getProfile, registerPassenger } from '../api/passenger';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { shouldKickAuthedUserToHome } from '../lib/authRouteGate';
 import {
@@ -12,12 +12,19 @@ import {
   setupNotificationHandler,
 } from '../lib/notifications';
 import {
+  invalidatePassengerProfileCompleteCache,
+  isPassengerProfileComplete,
+  readPassengerProfileCompleteCache,
+  writePassengerProfileCompleteCache,
+} from '../lib/passengerProfileGate';
+import {
   outcomeFromAccessToken,
   shouldApplySessionAfterSettle,
   shouldClearGhostOnRestoreFailure,
 } from '../lib/sessionRestorePolicy';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
+import { useRideStore } from '../store/rideStore';
 import { PlatformRealtimeProvider } from './PlatformRealtimeProvider';
 
 /**
@@ -36,6 +43,26 @@ function runAfterInteractions(task: () => void): void {
 }
 
 const SESSION_RESTORE_TIMEOUT_MS = 8_000;
+
+async function resolvePassengerProfileComplete(userId: string | null): Promise<boolean> {
+  if (!userId) return false;
+  const cached = readPassengerProfileCompleteCache(userId);
+  if (cached !== null) return cached;
+
+  try {
+    let profile = await getProfile().catch(() => null);
+    if (!profile) {
+      await registerPassenger().catch(() => null);
+      profile = await getProfile().catch(() => null);
+    }
+    const complete = profile ? isPassengerProfileComplete(profile) : false;
+    writePassengerProfileCompleteCache(userId, complete);
+    return complete;
+  } catch {
+    writePassengerProfileCompleteCache(userId, false);
+    return false;
+  }
+}
 
 function SessionRestore() {
   const setSession = useAuthStore((s) => s.setSession);
@@ -128,8 +155,16 @@ function PassengerProfileRegistrar() {
   useEffect(() => {
     if (!isAuthenticated || registeredRef.current) return;
     registeredRef.current = true;
+    // Minimal row only — phone/name completion happens on CompleteProfile or email path.
     registerPassenger(undefined, fullName ?? undefined).catch(() => {});
   }, [isAuthenticated, fullName]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      registeredRef.current = false;
+      invalidatePassengerProfileCompleteCache();
+    }
+  }, [isAuthenticated]);
 
   return null;
 }
@@ -138,6 +173,7 @@ function AuthRedirectWatcher() {
   const needsRedirect = useAuthStore((s) => s.needsRedirect);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const sessionRestored = useAuthStore((s) => s.sessionRestored);
+  const userId = useAuthStore((s) => s.userId);
   const resetRedirect = useAuthStore((s) => s.resetRedirect);
   const router = useRouter();
   const segments = useSegments();
@@ -145,6 +181,7 @@ function AuthRedirectWatcher() {
   useEffect(() => {
     if (needsRedirect) {
       resetRedirect();
+      invalidatePassengerProfileCompleteCache();
       const current = segments[0] ?? '';
       if (current !== '' && current !== 'home') {
         router.replace('/');
@@ -157,27 +194,95 @@ function AuthRedirectWatcher() {
     if (!isAuthenticated) return;
 
     const current = segments[0] ?? '';
-    if (shouldKickAuthedUserToHome(current)) {
-      router.replace('/home');
-    }
-  }, [sessionRestored, isAuthenticated, segments, router]);
+    // OAuth exchange in flight — do not race complete-profile.
+    if (current === 'auth-callback') return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const complete = await resolvePassengerProfileComplete(userId);
+      if (cancelled) return;
+
+      if (!complete) {
+        if (current !== 'complete-profile') {
+          router.replace('/complete-profile');
+        }
+        return;
+      }
+
+      // complete-profile / location-permissions stay (POST_AUTH_FLOW); screen owns next hop.
+      if (shouldKickAuthedUserToHome(current)) {
+        router.replace('/home');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionRestored, isAuthenticated, segments, router, userId]);
 
   return null;
 }
 
+/**
+ * Recover an in-progress trip after cold start. Does NOT force Home —
+ * incomplete-profile gates and AuthRedirectWatcher own post-auth routing.
+ */
 function ActiveTripRecovery() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const sessionRestored = useAuthStore((s) => s.sessionRestored);
+  const userId = useAuthStore((s) => s.userId);
+  const setActiveTrip = useRideStore((s) => s.setActiveTrip);
   const router = useRouter();
-  const navigatedRef = useRef(false);
+  const segments = useSegments();
+  const attemptedRef = useRef(false);
 
   useEffect(() => {
-    if (!sessionRestored || !isAuthenticated || navigatedRef.current) return;
-    navigatedRef.current = true;
+    if (!isAuthenticated) {
+      attemptedRef.current = false;
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!sessionRestored || !isAuthenticated || attemptedRef.current) return;
+
+    const current = segments[0] ?? '';
+    if (current === 'auth-callback' || current === 'complete-profile') return;
+
+    attemptedRef.current = true;
+    let cancelled = false;
+
     runAfterInteractions(() => {
-      router.replace('/home');
+      void (async () => {
+        const complete = await resolvePassengerProfileComplete(userId);
+        if (cancelled || !complete) return;
+
+        const trip = await getActiveRide().catch(() => null);
+        if (cancelled || !trip) return;
+
+        if (trip.status === 'pending' || trip.status === 'offered') {
+          router.replace({
+            pathname: '/connecting-driver',
+            params: { tripId: trip.id },
+          });
+          return;
+        }
+        if (['accepted', 'en_route', 'waiting', 'in_trip'].includes(trip.status)) {
+          setActiveTrip(trip);
+          router.replace('/trip-in-progress');
+          return;
+        }
+        if (trip.status === 'completed') {
+          setActiveTrip(trip);
+          router.replace('/trip-complete');
+        }
+      })();
     });
-  }, [sessionRestored, isAuthenticated, router]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionRestored, isAuthenticated, router, segments, userId, setActiveTrip]);
 
   return null;
 }

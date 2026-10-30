@@ -12,6 +12,7 @@ const SCREEN_TO_ROUTE = {
   VerifyEmail: '/verify-email',
   AuthCallback: '/auth-callback',
   Terms: '/terms',
+  CompleteProfile: '/complete-profile',
   Home: '/home',
   LocationPermissions: '/location-permissions',
   TripRequest: '/trip-request',

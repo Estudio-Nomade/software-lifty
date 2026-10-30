@@ -17,6 +17,10 @@ import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
+import {
+  isPassengerProfileComplete,
+  writePassengerProfileCompleteCache,
+} from '../lib/passengerProfileGate';
 import { classifySignUpResult } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
 import { useRegistrationDraftStore } from '../store/registrationDraftStore';
@@ -77,7 +81,13 @@ export function LoginCredentialsScreen() {
         const outcome = classifySignUpResult(data, trimmedEmail);
         if (outcome.kind === 'session') {
           clearDraft();
-          registerPassenger(phoneTrimmed, fullName ?? undefined).catch(() => {});
+          const profile = await registerPassenger(phoneTrimmed, fullName ?? undefined).catch(
+            () => null,
+          );
+          const uid = data.session?.user?.id;
+          if (uid && profile && isPassengerProfileComplete(profile)) {
+            writePassengerProfileCompleteCache(uid, true);
+          }
           replace('LocationPermissions');
         } else if (outcome.kind === 'needs_verify') {
           replace('VerifyEmail', { email: trimmedEmail });
