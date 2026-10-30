@@ -8,6 +8,7 @@ import { Input } from '../components/Input';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
   isPassengerPhoneComplete,
+  isPassengerProfileComplete,
   joinFullName,
   splitGoogleName,
   writePassengerProfileCompleteCache,
@@ -98,7 +99,12 @@ export function CompleteProfileScreen() {
         updated = await registerPassenger(phone.trim(), fullName);
       }
 
+      if (!isPassengerProfileComplete(updated)) {
+        setError('No se pudo guardar nombre y teléfono. Revisá los datos e intentá de nuevo.');
+        return;
+      }
       if (updated.full_name) setFullName(updated.full_name);
+      // Only mark complete after server payload passes the same gate as the watcher.
       if (userId) writePassengerProfileCompleteCache(userId, true);
       replace('LocationPermissions');
     } catch (err) {

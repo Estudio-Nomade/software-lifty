@@ -1,9 +1,12 @@
 import {
+  invalidatePassengerProfileCompleteCache,
   isPassengerPhoneComplete,
   isPassengerProfileComplete,
   joinFullName,
   phoneDigitCount,
+  readPassengerProfileCompleteCache,
   splitGoogleName,
+  writePassengerProfileCompleteCache,
 } from '../../lib/passengerProfileGate';
 
 describe('splitGoogleName', () => {
@@ -71,5 +74,23 @@ describe('isPassengerProfileComplete', () => {
     expect(isPassengerProfileComplete({ full_name: 'Ana Pérez', phone: '123' })).toBe(false);
     expect(isPassengerProfileComplete({ full_name: null, phone: '1123456789' })).toBe(false);
     expect(isPassengerProfileComplete({ full_name: '  ', phone: '1123456789' })).toBe(false);
+  });
+});
+
+describe('passenger profile complete cache', () => {
+  afterEach(() => {
+    invalidatePassengerProfileCompleteCache();
+  });
+
+  it('stores and reads per userId', () => {
+    writePassengerProfileCompleteCache('u1', true);
+    expect(readPassengerProfileCompleteCache('u1')).toBe(true);
+    expect(readPassengerProfileCompleteCache('u2')).toBe(null);
+  });
+
+  it('invalidates so callers must re-resolve', () => {
+    writePassengerProfileCompleteCache('u1', true);
+    invalidatePassengerProfileCompleteCache();
+    expect(readPassengerProfileCompleteCache('u1')).toBe(null);
   });
 });
