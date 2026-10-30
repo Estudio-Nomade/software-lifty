@@ -55,6 +55,7 @@ export function setStorageForTesting(sp: StorageProvider) {
   _storage = sp;
 }
 import { geocode } from '../../shared/lib/geo';
+import { isInsidePickupArea } from '../../shared/lib/service-area';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { notifyAdminNewDriver, notifyAdminsDriverDocsResubmitted } from '../admin/notifications';
 import { upsertLocation } from '../location/service';
@@ -2337,6 +2338,18 @@ export const driversService = {
       );
     }
 
+    // Geo hard gate (LOCK D A2): name match alone cannot make operational.
+    if (!isInsidePickupArea(lat, lng)) {
+      logger.warn('[DRIVERS] address outside pickup area', {
+        code: 'ADDRESS_OUT_OF_PICKUP_AREA',
+        lat,
+        lng,
+        city,
+        province,
+        address_line: addressLine,
+      });
+    }
+
     const activeDistricts = await db
       .select({
         id: districts.id,
@@ -2347,6 +2360,8 @@ export const driversService = {
       .from(districts)
       .where(eq(districts.status, 'active'));
 
+    // District match only labels intended_district after coords pass pickup gate
+    // inside buildMunicipalityResult.
     const match = matchDistrict(city, province, activeDistricts);
     return buildMunicipalityResult(addressLine, { lat, lng, city, province }, match);
   },
