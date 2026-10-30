@@ -32,8 +32,10 @@ import {
   isDriverProfilePhotoRemote,
 } from '../lib/driverProfilePhoto';
 import { exitOnboardingToWelcome } from '../lib/exitOnboardingToWelcome';
+import { getCurrentPosition } from '../lib/location';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
+import { useLocationStore } from '../store/locationStore';
 import { theme } from '../theme';
 import { compressImage } from '../utils/image';
 import { uploadPhotoToBackend } from '../utils/upload';
@@ -71,6 +73,7 @@ const isFormValid = (
   addressLine: string,
   termsAccepted: boolean,
   photoUri: string | null,
+  hasResolvedPlace: boolean,
 ) => {
   return (
     firstName.trim() !== '' &&
@@ -79,10 +82,17 @@ const isFormValid = (
     !validateName(lastName) &&
     phoneDigits.length >= MIN_PHONE_DIGITS &&
     addressLine.trim().length >= MIN_ADDRESS_CHARS &&
+    hasResolvedPlace &&
     termsAccepted &&
     isDriverProfilePhotoPresent(photoUri)
   );
 };
+
+const WAITLIST_MSG =
+  'Tu domicilio quedó fuera de la zona donde opera Lifty por ahora. Podés seguir el alta; te avisamos cuando abramos en tu zona.';
+
+const ADDRESS_PICK_REQUIRED_MSG =
+  'Elegí una dirección de la lista o tocá “Usar mi ubicación” para que el sistema la valide.';
 
 export const OnboardingStep1Screen: React.FC = () => {
   const navigation = useAppNavigation();
@@ -111,11 +121,17 @@ export const OnboardingStep1Screen: React.FC = () => {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitError, setSubmitError] = useState('');
   const profileLoaded = useRef(false);
 
-  const suggestions = usePlaceAutocomplete(showSuggestions ? addressLine : '');
+  const gpsLat = useLocationStore((s) => s.lat);
+  const gpsLng = useLocationStore((s) => s.lng);
+  const locationError = useLocationStore((s) => s.locationError);
+  const placeBias = gpsLat != null && gpsLng != null ? { lat: gpsLat, lng: gpsLng } : null;
+
+  const suggestions = usePlaceAutocomplete(showSuggestions ? addressLine : '', placeBias);
 
   useEffect(() => {
     if (profileLoaded.current) return;
@@ -198,10 +214,71 @@ export const OnboardingStep1Screen: React.FC = () => {
     setError('address', undefined);
   };
 
+  /** GPS → reverse geocode → pin with lat/lng for backend municipality gate. */
+  const handleUseMyLocation = async () => {
+    setLocating(true);
+    setSubmitError('');
+    setError('address', undefined);
+    try {
+      await getCurrentPosition();
+      const { lat, lng, locationError: geoErr } = useLocationStore.getState();
+      if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+        setError(
+          'address',
+          geoErr || locationError || 'No pudimos obtener tu ubicación. Activá el GPS.',
+        );
+        return;
+      }
+
+      const { data } = await apiClient.get<{
+        formatted_address?: string;
+        lat?: number;
+        lng?: number;
+        city?: string | null;
+      }>('/maps/geocode', { params: { lat, lng } });
+
+      const label =
+        (data?.formatted_address && String(data.formatted_address).trim()) ||
+        [data?.city, 'Córdoba'].filter(Boolean).join(', ') ||
+        `Ubicación actual (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+
+      const place: PlaceSuggestion = {
+        description: label,
+        place_id: `gps:${lat.toFixed(6)},${lng.toFixed(6)}`,
+        lat: Number(data?.lat ?? lat),
+        lng: Number(data?.lng ?? lng),
+      };
+      setAddressLine(place.description);
+      setSelectedPlace(place);
+      setShowSuggestions(false);
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message?: string }).message)
+          : 'No pudimos ubicar tu posición.';
+      setError('address', msg || 'No pudimos ubicar tu posición.');
+    } finally {
+      setLocating(false);
+    }
+  };
+
   const handleContinue = async () => {
-    if (!isFormValid(firstName, lastName, phoneDigits, addressLine, termsAccepted, photoUri)) {
+    if (
+      !isFormValid(
+        firstName,
+        lastName,
+        phoneDigits,
+        addressLine,
+        termsAccepted,
+        photoUri,
+        !!selectedPlace,
+      )
+    ) {
       if (!isDriverProfilePhotoPresent(photoUri)) {
         setError('photo', DRIVER_PROFILE_PHOTO_REQUIRED_MSG);
+      }
+      if (!selectedPlace) {
+        setError('address', ADDRESS_PICK_REQUIRED_MSG);
       }
       return;
     }
@@ -232,15 +309,21 @@ export const OnboardingStep1Screen: React.FC = () => {
         phone: `+54${phoneDigits}`,
         address_line: addressLine.trim(),
         photo_url: uploadedPhotoUrl,
+        address_lat: selectedPlace!.lat,
+        address_lng: selectedPlace!.lng,
       };
-
-      if (selectedPlace) {
-        payload.address_lat = selectedPlace.lat;
-        payload.address_lng = selectedPlace.lng;
-        if (selectedPlace.place_id) payload.address_place_id = selectedPlace.place_id;
-      }
+      if (selectedPlace!.place_id) payload.address_place_id = selectedPlace!.place_id;
 
       const { data } = await apiClient.put('/drivers/me', payload);
+
+      const municipalityStatus = data?.municipality_status as string | undefined;
+      if (municipalityStatus === 'waitlisted') {
+        await new Promise<void>((resolve) => {
+          Alert.alert('Zona en lista de espera', WAITLIST_MSG, [
+            { text: 'Entendido', onPress: () => resolve() },
+          ]);
+        });
+      }
 
       const step: string = data?.step ?? data?.data?.step ?? 'kyc';
       useAuthStore.getState().setOnboardingStep(step);
@@ -264,6 +347,7 @@ export const OnboardingStep1Screen: React.FC = () => {
     addressLine,
     termsAccepted,
     photoUri,
+    !!selectedPlace,
   );
 
   const formBody = (
@@ -345,6 +429,9 @@ export const OnboardingStep1Screen: React.FC = () => {
 
         <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Domicilio</Text>
+          <Text style={styles.addressHint}>
+            Elegí de la lista o usá tu ubicación. El sistema valida que estés en la zona Lifty.
+          </Text>
           <View style={styles.addressBlock}>
             <Input
               placeholder="Calle, altura, ciudad…"
@@ -361,6 +448,8 @@ export const OnboardingStep1Screen: React.FC = () => {
                   addressLine.trim().length < MIN_ADDRESS_CHARS
                 ) {
                   setError('address', 'Ingresá un domicilio más completo');
+                } else if (addressLine.trim().length >= MIN_ADDRESS_CHARS && !selectedPlace) {
+                  setError('address', ADDRESS_PICK_REQUIRED_MSG);
                 }
               }}
               onFocus={() => setShowSuggestions(true)}
@@ -369,6 +458,24 @@ export const OnboardingStep1Screen: React.FC = () => {
               maxLength={200}
               autoCorrect={false}
             />
+            <TouchableOpacity
+              style={styles.useLocationBtn}
+              onPress={handleUseMyLocation}
+              disabled={locating || loading}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Usar mi ubicación actual"
+            >
+              <Ionicons name="navigate-outline" size={18} color={theme.colors.primary} />
+              <Text style={styles.useLocationText}>
+                {locating ? 'Obteniendo ubicación…' : 'Usar mi ubicación'}
+              </Text>
+            </TouchableOpacity>
+            {selectedPlace ? (
+              <Text style={styles.addressResolved} numberOfLines={2}>
+                Ubicación lista para validar
+              </Text>
+            ) : null}
             {showSuggestions && suggestions.length > 0 && (
               <View style={styles.suggestions}>
                 {suggestions.map((s) => (
@@ -522,12 +629,36 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.medium,
     color: theme.colors.deepBlue,
   },
+  addressHint: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+    marginBottom: 2,
+  },
   input: {
     width: '100%',
   },
   addressBlock: {
     width: '100%',
     zIndex: 10,
+    gap: theme.spacing.xs,
+  },
+  useLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    minHeight: 44,
+    paddingVertical: theme.spacing.xs,
+  },
+  useLocationText: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.primary,
+  },
+  addressResolved: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.turquoise,
   },
   suggestions: {
     marginTop: 4,
