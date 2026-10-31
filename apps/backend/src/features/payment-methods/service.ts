@@ -1,7 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
-import { drivers, payoutMethods } from '../../shared/db/schema';
+import { payoutMethods } from '../../shared/db/schema';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { logger } from '../../shared/lib/logger';
 import type { AuthUser } from '../../shared/middleware/auth';
@@ -12,6 +12,73 @@ function maskAccount(num: string): string {
 }
 
 const payLog = logger.scoped({ domain: 'payment' });
+
+export type DriverTransferDetails = {
+  alias: string | null;
+  cbu_cvu: string | null;
+  holder: string | null;
+  bank: string | null;
+};
+
+type PrimaryPayoutMethod = {
+  id: string;
+  method_type: string;
+  account_number: string;
+  titular_name: string | null;
+  wallet: string | null;
+};
+
+/**
+ * Full (unmasked) payout method for passenger transfer UI.
+ * No is_default column exists — v1 uses the latest row by created_at.
+ * Passenger-trip scoped only (never expose via public driver list).
+ */
+export async function getPrimaryMethodForDriver(
+  driverId: string,
+): Promise<PrimaryPayoutMethod | null> {
+  const [method] = await db
+    .select({
+      id: payoutMethods.id,
+      method_type: payoutMethods.method_type,
+      account_number: payoutMethods.account_number,
+      titular_name: payoutMethods.titular_name,
+      wallet: payoutMethods.wallet,
+    })
+    .from(payoutMethods)
+    .where(eq(payoutMethods.driver_id, driverId))
+    .orderBy(desc(payoutMethods.created_at))
+    .limit(1);
+
+  return method ?? null;
+}
+
+/**
+ * Driver PaymentMethodScreen stores:
+ * - method_type 'cvu'|'cbu': account_number = CBU/CVU digits, titular_name = transfer **alias**
+ * - method_type 'alias': account_number = alias string, titular_name optional real holder
+ * There is no dedicated alias column.
+ */
+export function toDriverTransferDetails(
+  method: PrimaryPayoutMethod | null,
+): DriverTransferDetails | null {
+  if (!method) return null;
+
+  if (method.method_type === 'alias') {
+    return {
+      alias: method.account_number,
+      cbu_cvu: null,
+      holder: method.titular_name ?? null,
+      bank: method.wallet ?? null,
+    };
+  }
+
+  return {
+    alias: method.titular_name ?? null,
+    cbu_cvu: method.account_number,
+    holder: null,
+    bank: method.wallet ?? null,
+  };
+}
 
 export const paymentMethodsService = {
   async addMethod(

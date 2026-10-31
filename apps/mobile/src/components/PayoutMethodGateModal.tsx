@@ -21,8 +21,8 @@ export const PayoutMethodGateModal: React.FC<PayoutMethodGateModalProps> = ({
         <View style={styles.card} accessibilityViewIsModal>
           <Text style={styles.title}>Necesitamos tu medio de cobro</Text>
           <Text style={styles.body}>
-            Para pagarte los viajes, cargá un CBU/CVU con alias (y banco o wallet si querés). Sin
-            eso no podés conectarte.
+            Cargá un CBU/CVU y un alias. Cuando el pasajero elija pagar por transferencia, va a ver
+            estos datos para enviarte el monto del viaje. Sin medio de cobro no podés conectarte.
           </Text>
           <Button title="CARGAR MEDIO DE COBRO" onPress={onAddMethod} style={styles.primary} />
           <Button

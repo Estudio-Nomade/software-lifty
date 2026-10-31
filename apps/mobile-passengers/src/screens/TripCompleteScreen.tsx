@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { rateRide, setTripPaymentMethod } from '../api/passenger';
+import type { DriverTransferDetails } from '../api/types';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { type PaymentMethodType, usePaymentStore } from '../store/paymentStore';
@@ -30,6 +32,75 @@ function getErrorMessage(err: unknown): { code?: string; message: string } {
 
 function paymentTitle(type: PaymentMethodType): string {
   return type === 'transfer' ? 'Transferencia' : 'Efectivo';
+}
+
+async function copyText(label: string, value: string) {
+  try {
+    await Clipboard.setStringAsync(value);
+    Alert.alert('Copiado', `${label} copiado al portapapeles.`);
+  } catch {
+    Alert.alert(label, value);
+  }
+}
+
+function DriverTransferCard({ transfer }: { transfer: DriverTransferDetails | null | undefined }) {
+  if (!transfer || (!transfer.alias && !transfer.cbu_cvu)) {
+    return (
+      <View style={styles.transferCard}>
+        <Text style={styles.transferWarning}>
+          El conductor no cargó medio de cobro; pagá en efectivo o contactalo.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.transferCard}>
+      <Text style={styles.transferHint}>
+        Transferí el total a la cuenta del conductor y confirmá el pago.
+      </Text>
+      {transfer.alias ? (
+        <View style={styles.transferRow}>
+          <View style={styles.transferInfo}>
+            <Text style={styles.transferLabel}>Alias</Text>
+            <Text style={styles.transferValue} selectable>
+              {transfer.alias}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => copyText('Alias', transfer.alias!)}
+            style={styles.copyBtn}
+            accessibilityLabel="Copiar alias"
+          >
+            <Ionicons name="copy-outline" size={18} color={theme.colors.primary} />
+            <Text style={styles.copyBtnText}>Copiar</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      {transfer.cbu_cvu ? (
+        <View style={styles.transferRow}>
+          <View style={styles.transferInfo}>
+            <Text style={styles.transferLabel}>CBU / CVU</Text>
+            <Text style={styles.transferValue} selectable>
+              {transfer.cbu_cvu}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => copyText('CBU/CVU', transfer.cbu_cvu!)}
+            style={styles.copyBtn}
+            accessibilityLabel="Copiar CBU"
+          >
+            <Ionicons name="copy-outline" size={18} color={theme.colors.primary} />
+            <Text style={styles.copyBtnText}>Copiar</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      {transfer.holder ? (
+        <Text style={styles.transferMeta}>Titular · {transfer.holder}</Text>
+      ) : null}
+      {transfer.bank ? <Text style={styles.transferMeta}>Banco · {transfer.bank}</Text> : null}
+    </View>
+  );
 }
 
 export function TripCompleteScreen() {
@@ -177,6 +248,9 @@ export function TripCompleteScreen() {
                   );
                 })}
               </View>
+              {paymentMethod === 'transfer' ? (
+                <DriverTransferCard transfer={trip?.driver_transfer} />
+              ) : null}
               {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
               <Button
                 variant="primary"
@@ -339,6 +413,63 @@ const styles = StyleSheet.create({
   },
   paymentChipTextActive: {
     color: theme.colors.white,
+  },
+  transferCard: {
+    width: '100%',
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  transferHint: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+    textAlign: 'center',
+  },
+  transferWarning: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.amber,
+    textAlign: 'center',
+  },
+  transferRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  transferInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  transferLabel: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+  },
+  transferValue: {
+    fontSize: theme.fontSize.md,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.deepBlue,
+  },
+  transferMeta: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+  },
+  copyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.white,
+  },
+  copyBtnText: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.primary,
   },
   paidBadge: {
     flexDirection: 'row',

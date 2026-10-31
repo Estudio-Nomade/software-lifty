@@ -287,7 +287,9 @@ export const ActiveScreen: React.FC = () => {
     }
 
     if (needsPayoutMethod) {
-      setToggleError('Necesitamos tu medio de cobro (CBU/CVU + alias) antes de conectarte.');
+      setToggleError(
+        'Cargá CBU/CVU + alias para que el pasajero te transfiera. Sin eso no podés conectarte.',
+      );
       return;
     }
 
