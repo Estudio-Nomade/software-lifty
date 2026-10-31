@@ -1,6 +1,7 @@
 import type { DriverDocument } from '../../api/types';
 import {
   allDocsSatisfied,
+  clearSideForReplaceUi,
   DOC_SIDES,
   type DocBase,
   emptyHydratedDocs,
@@ -134,5 +135,98 @@ describe('sideSatisfied / allDocsSatisfied', () => {
   it('allDocsSatisfied false when one side missing', () => {
     const state = emptyHydratedDocs();
     expect(allDocsSatisfied(state)).toBe(false);
+  });
+});
+
+describe('clearSideForReplaceUi', () => {
+  it('clears pending/approved side so UI and CTA treat it as unsatisfied', () => {
+    const pending = {
+      ...emptyHydratedDocs().background_check.front,
+      uploaded: true,
+      serverStatus: 'pending_review' as const,
+      fileName: 'PDF cargado',
+      fileUrl: 'https://cdn.example.com/a.pdf',
+      files: [
+        {
+          fileUri: null,
+          fileName: 'PDF cargado',
+          fileUrl: 'https://cdn.example.com/a.pdf',
+          isPdf: true,
+          serverStatus: 'pending_review' as const,
+          reviewComment: null,
+        },
+      ],
+      isPdf: true,
+      reviewComment: 'Foto borrosa',
+    };
+
+    const cleared = clearSideForReplaceUi(pending);
+    expect(cleared.serverStatus).toBeNull();
+    expect(cleared.uploaded).toBe(false);
+    expect(cleared.files).toEqual([]);
+    expect(cleared.fileName).toBeNull();
+    expect(cleared.fileUrl).toBeNull();
+    expect(cleared.reviewComment).toBeNull();
+    expect(sideSatisfied(cleared)).toBe(false);
+    expect(
+      allDocsSatisfied({
+        ...emptyHydratedDocs(),
+        background_check: {
+          front: cleared,
+          back: emptyHydratedDocs().background_check.back,
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('clears approved side the same way as pending_review', () => {
+    const approved = {
+      ...emptyHydratedDocs().rndg.front,
+      uploaded: true,
+      serverStatus: 'approved' as const,
+      fileName: 'Documento cargado',
+      fileUrl: 'https://cdn.example.com/ok.pdf',
+      files: [
+        {
+          fileUri: null,
+          fileName: 'Documento cargado',
+          fileUrl: 'https://cdn.example.com/ok.pdf',
+          isPdf: true,
+          serverStatus: 'approved' as const,
+          reviewComment: null,
+        },
+      ],
+      isPdf: true,
+    };
+    const cleared = clearSideForReplaceUi(approved);
+    expect(cleared.serverStatus).toBeNull();
+    expect(sideSatisfied(cleared)).toBe(false);
+  });
+
+  it('keeps rejected rehacer hints without flipping needsReplace', () => {
+    const rejected = {
+      ...emptyHydratedDocs().rndg.front,
+      needsReplace: true,
+      serverStatus: 'rejected' as const,
+      fileName: 'Rehacer',
+      fileUrl: 'https://cdn.example.com/old.pdf',
+      files: [
+        {
+          fileUri: null,
+          fileName: 'Rehacer',
+          fileUrl: 'https://cdn.example.com/old.pdf',
+          isPdf: true,
+          serverStatus: 'rejected' as const,
+          reviewComment: null,
+        },
+      ],
+    };
+
+    const cleared = clearSideForReplaceUi(rejected);
+    expect(cleared.needsReplace).toBe(true);
+    expect(cleared.serverStatus).toBe('rejected');
+    expect(cleared.fileName).toBe('Rehacer');
+    expect(cleared.files).toHaveLength(1);
+    expect(sideSatisfied(cleared)).toBe(false);
   });
 });
