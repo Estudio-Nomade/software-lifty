@@ -102,9 +102,10 @@ export const PaymentMethodScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <Navbar title="Metodo de cobro" onBack={() => navigation.goBack()} />
+      <Navbar title="Medio de cobro" onBack={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Tus metodos de pago</Text>
+        <Text style={styles.title}>Tu medio de cobro</Text>
+        <Text style={styles.intro}>Estos datos los ve el pasajero si paga por transferencia.</Text>
 
         {isLoading ? (
           <>
@@ -133,7 +134,9 @@ export const PaymentMethodScreen: React.FC = () => {
           ))
         ) : (
           <Card style={styles.emptyCard} padding={theme.spacing.lg}>
-            <Text style={styles.emptyText}>Agrega un CVU para recibir transferencias</Text>
+            <Text style={styles.emptyText}>
+              Agregá un CBU/CVU con alias. El pasajero los usa si elige transferencia.
+            </Text>
           </Card>
         )}
 
@@ -215,6 +218,14 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 480,
     alignSelf: 'center',
+  },
+  intro: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.mediumGray,
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
+    lineHeight: 20,
   },
   methodCard: {
     width: '100%',
