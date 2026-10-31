@@ -18,6 +18,7 @@ import { sendPushToUser } from '../../shared/lib/push';
 import { assertTripInsideServiceArea } from '../../shared/lib/service-area';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { cancellationService } from '../cancellations/service';
+import { getPrimaryMethodForDriver, toDriverTransferDetails } from '../payment-methods/service';
 import { matchAndBroadcast } from './matching.service';
 
 const TERMINAL_STATUSES = [
@@ -36,6 +37,17 @@ async function recordEvent(tripId: string, fromStatus: string | null, toStatus: 
     from_status: fromStatus,
     to_status: toStatus,
   });
+}
+
+async function attachDriverTransfer<T extends { driver_id?: string | null }>(
+  trip: T | null,
+): Promise<(T & { driver_transfer: ReturnType<typeof toDriverTransferDetails> }) | null> {
+  if (!trip) return null;
+  if (!trip.driver_id) {
+    return { ...trip, driver_transfer: null };
+  }
+  const method = await getPrimaryMethodForDriver(trip.driver_id);
+  return { ...trip, driver_transfer: toDriverTransferDetails(method) };
 }
 
 export const passengerTripService = {
@@ -291,7 +303,7 @@ export const passengerTripService = {
       .orderBy(desc(trips.created_at))
       .limit(1);
 
-    return result[0] ?? null;
+    return attachDriverTransfer(result[0] ?? null);
   },
 
   async getTripById(user: AuthUser, tripId: string) {
@@ -329,7 +341,8 @@ export const passengerTripService = {
       .where(eq(tripEvents.trip_id, tripId))
       .orderBy(tripEvents.changed_at);
 
-    return { ...trip, events };
+    const withTransfer = await attachDriverTransfer(trip);
+    return { ...withTransfer!, events };
   },
 
   async cancelTrip(user: AuthUser, tripId: string) {

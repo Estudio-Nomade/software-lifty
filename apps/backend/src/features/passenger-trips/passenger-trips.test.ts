@@ -12,6 +12,7 @@ import {
   drivers,
   fuelPriceLog,
   passengerProfiles,
+  payoutMethods,
   platformConfig,
   tripMessages,
   ratings,
@@ -32,6 +33,7 @@ async function truncateTables() {
   await db.delete(tripEvents);
   await db.delete(tripMessages);
   await db.delete(trips);
+  await db.delete(payoutMethods);
   await db.delete(driverLocations);
   await db.delete(vehicles);
   await db.delete(drivers);
@@ -986,5 +988,91 @@ describe('Passenger Trips', () => {
     );
     expect(status).toBe(409);
     expect(data.error.code).toBe('CHAT_CLOSED');
+  });
+
+  test('GET /active exposes full driver transfer details for trip passenger', async () => {
+    const passengerToken = await createPassengerToken();
+    const driverId = await createDriverWithLocation(passengerToken, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(passengerToken);
+
+    const db = getDb();
+    await db.insert(payoutMethods).values({
+      driver_id: driverId,
+      method_type: 'cvu',
+      account_number: '1234567890123456789012',
+      titular_name: 'conductor.mp',
+      wallet: 'MercadoPago',
+    });
+    await db
+      .update(trips)
+      .set({ driver_id: driverId, status: 'completed', is_collected: false })
+      .where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'GET',
+      '/api/passenger/trips/active',
+      undefined,
+      passengerToken,
+    );
+
+    expect(status).toBe(200);
+    expect(data.driver_transfer).toEqual({
+      alias: 'conductor.mp',
+      cbu_cvu: '1234567890123456789012',
+      holder: 'conductor.mp',
+      bank: 'MercadoPago',
+    });
+  });
+
+  test('GET /:id returns null driver_transfer when driver has no payout method', async () => {
+    const passengerToken = await createPassengerToken();
+    const driverId = await createDriverWithLocation(passengerToken, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(passengerToken);
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({ driver_id: driverId, status: 'accepted' })
+      .where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'GET',
+      `/api/passenger/trips/${trip.id}`,
+      undefined,
+      passengerToken,
+    );
+
+    expect(status).toBe(200);
+    expect(data.driver_transfer).toBeNull();
+  });
+
+  test('GET /:id returns 404 for another passenger (no full CBU leak)', async () => {
+    const ownerToken = await createPassengerToken();
+    const otherToken = await createPassengerToken();
+    const driverId = await createDriverWithLocation(ownerToken, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(ownerToken);
+
+    const db = getDb();
+    await db.insert(payoutMethods).values({
+      driver_id: driverId,
+      method_type: 'cvu',
+      account_number: '9876543210987654321098',
+      titular_name: 'secreto.alias',
+    });
+    await db
+      .update(trips)
+      .set({ driver_id: driverId, status: 'accepted' })
+      .where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'GET',
+      `/api/passenger/trips/${trip.id}`,
+      undefined,
+      otherToken,
+    );
+
+    expect(status).toBe(404);
+    expect(data?.driver_transfer).toBeUndefined();
+    expect(JSON.stringify(data)).not.toContain('9876543210987654321098');
   });
 });
