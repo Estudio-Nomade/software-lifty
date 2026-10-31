@@ -21,6 +21,18 @@ export const DOC_SIDES: Record<DocBase, DocSide[]> = {
   rndg: ['front'],
 };
 
+/** Docs that offer Archivo PDF / + PDF in onboarding + profile reupload. BE accepts PDF for all. */
+const PDF_UPLOAD_DOC_BASES: ReadonlySet<DocBase> = new Set([
+  'vehicle_insurance',
+  'platform_rc_insurance',
+  'background_check',
+  'rndg',
+]);
+
+export function allowsPdfDoc(docType: DocBase | undefined | null): boolean {
+  return docType != null && PDF_UPLOAD_DOC_BASES.has(docType);
+}
+
 const DOC_BASE_MAP: Record<DocBase, string> = {
   drivers_license: 'license',
   vehicle_registration: 'registration',

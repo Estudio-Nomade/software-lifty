@@ -1,4 +1,4 @@
-import { DOC_SIDES, type DocBase, toBackendDocType } from '../../utils/upload';
+import { allowsPdfDoc, DOC_SIDES, type DocBase, toBackendDocType } from '../../utils/upload';
 
 // Must match apps/backend/src/shared/lib/documents.ts DOC_TYPES
 // (no background_check_back, no insurance_back — single file/policy;
@@ -50,5 +50,20 @@ describe('DOC_SIDES ↔ backend DOC_TYPES alignment', () => {
   it('does not require background_check_back or insurance_back', () => {
     expect(mobileRequiredDocTypes()).not.toContain('background_check_back');
     expect(mobileRequiredDocTypes()).not.toContain('insurance_back');
+  });
+});
+
+describe('allowsPdfDoc', () => {
+  it('enables PDF for seguros, antecedentes and RNDG', () => {
+    expect(allowsPdfDoc('vehicle_insurance')).toBe(true);
+    expect(allowsPdfDoc('platform_rc_insurance')).toBe(true);
+    expect(allowsPdfDoc('background_check')).toBe(true);
+    expect(allowsPdfDoc('rndg')).toBe(true);
+  });
+
+  it('keeps license and registration photo-only in UI', () => {
+    expect(allowsPdfDoc('drivers_license')).toBe(false);
+    expect(allowsPdfDoc('vehicle_registration')).toBe(false);
+    expect(allowsPdfDoc(undefined)).toBe(false);
   });
 });

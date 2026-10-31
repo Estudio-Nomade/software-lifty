@@ -21,6 +21,7 @@ import type { DocBase, DocSide } from '../utils/upload';
 import {
   DOC_SIDES,
   MAX_FILES_PER_DOC_SIDE,
+  allowsPdfDoc,
   reuploadDocumentToBackend,
   uploadDocumentToBackend,
 } from '../utils/upload';
@@ -37,16 +38,12 @@ type SelectedFile = {
   size?: number;
 };
 
-function allowsPdf(docType: DocType | undefined): boolean {
-  return docType === 'vehicle_insurance' || docType === 'platform_rc_insurance';
-}
-
 function sideLabelFor(
   docType: DocType | undefined,
   side: DocSide,
   requiredSides: DocSide[],
 ): string {
-  if (allowsPdf(docType) && requiredSides.length === 1) {
+  if (allowsPdfDoc(docType) && requiredSides.length === 1) {
     return 'Archivo o foto';
   }
   return SIDE_LABELS[side];
@@ -61,6 +58,9 @@ function subtitleFor(docType: DocType | undefined, isReupload: boolean): string 
   }
   if (docType === 'vehicle_insurance') {
     return 'Subí un archivo o foto del seguro (PDF o imagen). No hace falta dorso. Si no entra en una sola, sumá más fotos (máx. 5).';
+  }
+  if (docType === 'background_check' || docType === 'rndg') {
+    return 'PDF o foto del certificado. Si no entra en una sola imagen, podés sumar hasta 5 archivos.';
   }
   return 'Subí el documento requerido. Si no entra en una sola foto, podés sumar hasta 5 imágenes.';
 }
@@ -281,7 +281,7 @@ export const UploadDocumentScreen: React.FC = () => {
         {requiredSides.map((side) => {
           const files = selectedFiles[side];
           const label = sideLabelFor(docType, side, requiredSides);
-          const showSideTitle = requiredSides.length > 1 || allowsPdf(docType) || true;
+          const showSideTitle = requiredSides.length > 1 || allowsPdfDoc(docType) || true;
           const canAddMore = files.length < MAX_FILES_PER_DOC_SIDE;
           return (
             <View key={side} style={styles.sideSection}>
@@ -338,7 +338,7 @@ export const UploadDocumentScreen: React.FC = () => {
                       {files.length ? '🖼 Más de galería' : '🖼 Subir de galeria'}
                     </Text>
                   </TouchableOpacity>
-                  {allowsPdf(docType) ? (
+                  {allowsPdfDoc(docType) ? (
                     <TouchableOpacity
                       style={styles.option}
                       onPress={() => handlePdf(side)}

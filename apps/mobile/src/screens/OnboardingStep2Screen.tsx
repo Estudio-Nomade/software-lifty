@@ -33,6 +33,7 @@ import {
   type HydratedSideState,
   allDocsSatisfied,
   canAppendMoreFiles,
+  clearSideForReplaceUi,
   emptyHydratedDocs,
   hydrateDocsFromApi,
 } from '../lib/onboardingDocsHydrate';
@@ -47,6 +48,7 @@ import {
   type DocBase,
   type DocSide,
   MAX_FILES_PER_DOC_SIDE,
+  allowsPdfDoc,
   uploadDocumentToBackend,
 } from '../utils/upload';
 
@@ -83,14 +85,13 @@ const PLATFORM_RC_HINT =
 const MULTI_SHOT_HINT =
   'Si no entra en una sola foto, podés sacar o subir hasta 5 imágenes del mismo documento.';
 
+const CERT_PDF_HINT =
+  'PDF o foto del certificado. Si no entra en una sola imagen, podés sumar hasta 5 archivos.';
+
 const SIDE_LABELS: Record<DocSide, string> = { front: 'Frente', back: 'Dorso' };
 
-function allowsPdf(docType: DocType): boolean {
-  return docType === 'vehicle_insurance' || docType === 'platform_rc_insurance';
-}
-
 function sideLabelFor(docType: DocType, side: DocSide): string {
-  if (allowsPdf(docType) && DOC_SIDES[docType].length === 1) {
+  if (allowsPdfDoc(docType) && DOC_SIDES[docType].length === 1) {
     return 'Archivo o foto';
   }
   return SIDE_LABELS[side];
@@ -331,7 +332,7 @@ export const OnboardingStep2Screen: React.FC = () => {
           } else {
             mimeType = 'application/pdf';
             if (!name.toLowerCase().endsWith('.pdf')) {
-              name = `${name || `seguro_${Date.now()}`}.pdf`.replace(/\.pdf\.pdf$/i, '.pdf');
+              name = `${name || `documento_${Date.now()}`}.pdf`.replace(/\.pdf\.pdf$/i, '.pdf');
             }
           }
 
@@ -372,6 +373,7 @@ export const OnboardingStep2Screen: React.FC = () => {
                     serverStatus: 'pending_review',
                     isPdf: files.some((f) => f.isPdf),
                     error: null,
+                    reviewComment: replaceGroup ? null : prevSide.reviewComment,
                   },
                 },
               };
@@ -421,27 +423,28 @@ export const OnboardingStep2Screen: React.FC = () => {
     [docs, driverId, navigation, setSideError],
   );
 
-  const handleRetry = useCallback((docType: DocType, side: DocSide) => {
+  const handleReplaceAll = useCallback((docType: DocType, side: DocSide) => {
     setDocs((prev) => {
       const prevSide = prev[docType][side];
+      if (prevSide.uploading) return prev;
       return {
         ...prev,
         [docType]: {
           ...prev[docType],
-          [side]: {
-            ...prevSide,
-            fileUri: null,
-            fileName: prevSide.needsReplace ? 'Rehacer' : null,
-            fileUrl: prevSide.needsReplace ? prevSide.fileUrl : null,
-            files: prevSide.needsReplace ? prevSide.files : [],
-            uploaded: false,
-            replacedInSession: false,
-            error: null,
-            uploading: false,
-          },
+          [side]: clearSideForReplaceUi(prevSide),
         },
       };
     });
+  }, []);
+
+  const handleClearSideError = useCallback((docType: DocType, side: DocSide) => {
+    setDocs((prev) => ({
+      ...prev,
+      [docType]: {
+        ...prev[docType],
+        [side]: { ...prev[docType][side], error: null, uploading: false },
+      },
+    }));
   }, []);
 
   const handleSelectCoverage = useCallback(
@@ -614,14 +617,20 @@ export const OnboardingStep2Screen: React.FC = () => {
               {doc.type === 'platform_rc_insurance' ? (
                 <Text style={styles.hintText}>{PLATFORM_RC_HINT}</Text>
               ) : null}
-              {doc.type !== 'vehicle_insurance' && doc.type !== 'platform_rc_insurance' ? (
+              {doc.type === 'background_check' || doc.type === 'rndg' ? (
+                <Text style={styles.hintText}>{CERT_PDF_HINT}</Text>
+              ) : null}
+              {doc.type !== 'vehicle_insurance' &&
+              doc.type !== 'platform_rc_insurance' &&
+              doc.type !== 'background_check' &&
+              doc.type !== 'rndg' ? (
                 <Text style={styles.hintText}>{MULTI_SHOT_HINT}</Text>
               ) : null}
 
               {DOC_SIDES[doc.type].map((side) => {
                 const state = docs[doc.type][side];
                 const label = sideLabelFor(doc.type, side);
-                const showSideLabel = DOC_SIDES[doc.type].length > 1 || allowsPdf(doc.type);
+                const showSideLabel = DOC_SIDES[doc.type].length > 1 || allowsPdfDoc(doc.type);
                 const badge = badgeFor(state);
                 const showAsOk = sideSatisfiedUi(state);
                 const canAppend = showAsOk && canAppendMoreFiles(state) && !state.uploading;
@@ -677,7 +686,7 @@ export const OnboardingStep2Screen: React.FC = () => {
                             >
                               <Text style={styles.appendOptionText}>+ Galería</Text>
                             </TouchableOpacity>
-                            {allowsPdf(doc.type) ? (
+                            {allowsPdfDoc(doc.type) ? (
                               <TouchableOpacity
                                 style={styles.appendOption}
                                 onPress={() => handlePick(doc.type, side, 'pdf', 'append')}
@@ -689,7 +698,10 @@ export const OnboardingStep2Screen: React.FC = () => {
                           </View>
                         ) : null}
                         {!state.needsReplace || state.replacedInSession ? (
-                          <TouchableOpacity onPress={() => handleRetry(doc.type, side)} hitSlop={8}>
+                          <TouchableOpacity
+                            onPress={() => handleReplaceAll(doc.type, side)}
+                            hitSlop={8}
+                          >
                             <Text style={styles.retryText}>Reemplazar todo</Text>
                           </TouchableOpacity>
                         ) : null}
@@ -713,7 +725,7 @@ export const OnboardingStep2Screen: React.FC = () => {
                         >
                           <Text style={styles.optionText}>Subir de galería</Text>
                         </TouchableOpacity>
-                        {allowsPdf(doc.type) ? (
+                        {allowsPdfDoc(doc.type) ? (
                           <TouchableOpacity
                             style={styles.uploadOption}
                             onPress={() => handlePick(doc.type, side, 'pdf', 'replace')}
@@ -734,7 +746,7 @@ export const OnboardingStep2Screen: React.FC = () => {
                     {state.error ? (
                       <View style={styles.errorRow}>
                         <Text style={styles.errorText}>{state.error}</Text>
-                        <TouchableOpacity onPress={() => handleRetry(doc.type, side)}>
+                        <TouchableOpacity onPress={() => handleClearSideError(doc.type, side)}>
                           <Text style={styles.retryText}>Reintentar</Text>
                         </TouchableOpacity>
                       </View>
