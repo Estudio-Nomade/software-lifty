@@ -563,37 +563,52 @@ export const OnboardingStep1Screen: React.FC = () => {
                 ) : null
               }
             />
-            {placesLoading && addressQueryActive ? (
-              <View style={styles.placesStatusRow}>
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-                <Text style={styles.placesStatusText}>Buscando direcciones…</Text>
-              </View>
-            ) : null}
-            {showPlacesError ? <Text style={styles.placesErrorText}>{placesError}</Text> : null}
-            {showSuggestionsEmpty ? (
-              <Text style={styles.placesEmptyText}>{ADDRESS_EMPTY_MSG}</Text>
-            ) : null}
-            {showSuggestionsList ? (
-              <View style={styles.suggestions} accessibilityRole="list">
-                {suggestions.map((s) => (
-                  <Pressable
-                    key={`${s.place_id}-${s.description}`}
-                    style={styles.suggestionRow}
-                    onPress={() => handleSelectPlace(s)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Elegir ${s.description}`}
+            {/* One panel: loading / error / empty / list — all clipped inside the same box. */}
+            {addressQueryActive ? (
+              <View style={styles.suggestionsPanel}>
+                {placesLoading ? (
+                  <View style={styles.placesStatusRow}>
+                    <ActivityIndicator size="small" color={theme.colors.primary} />
+                    <Text style={styles.placesStatusText}>Buscando direcciones…</Text>
+                  </View>
+                ) : null}
+                {showPlacesError ? <Text style={styles.placesErrorText}>{placesError}</Text> : null}
+                {showSuggestionsEmpty ? (
+                  <Text style={styles.placesEmptyText}>{ADDRESS_EMPTY_MSG}</Text>
+                ) : null}
+                {showSuggestionsList ? (
+                  <ScrollView
+                    style={styles.suggestionsScroll}
+                    contentContainerStyle={styles.suggestionsScrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    nestedScrollEnabled
+                    bounces={false}
+                    showsVerticalScrollIndicator
                   >
-                    <Ionicons
-                      name="location-outline"
-                      size={16}
-                      color={theme.colors.mediumGray}
-                      style={styles.suggestionIcon}
-                    />
-                    <Text style={styles.suggestionText} numberOfLines={2}>
-                      {s.description}
-                    </Text>
-                  </Pressable>
-                ))}
+                    {suggestions.map((s, index) => {
+                      const isLast = index === suggestions.length - 1;
+                      return (
+                        <Pressable
+                          key={`${s.place_id}-${s.description}`}
+                          style={[styles.suggestionRow, isLast && styles.suggestionRowLast]}
+                          onPress={() => handleSelectPlace(s)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Elegir ${s.description}`}
+                        >
+                          <Ionicons
+                            name="location-outline"
+                            size={16}
+                            color={theme.colors.mediumGray}
+                            style={styles.suggestionIcon}
+                          />
+                          <Text style={styles.suggestionText} numberOfLines={2}>
+                            {s.description}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                ) : null}
               </View>
             ) : null}
             <TouchableOpacity
@@ -769,7 +784,6 @@ const styles = StyleSheet.create({
   },
   addressFieldGroup: {
     zIndex: 20,
-    elevation: 8,
   },
   fieldLabel: {
     fontSize: theme.fontSize.sm,
@@ -786,15 +800,15 @@ const styles = StyleSheet.create({
   addressBlock: {
     width: '100%',
     zIndex: 20,
-    elevation: 8,
     gap: theme.spacing.xs,
-    overflow: 'visible',
   },
   placesStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
-    minHeight: 36,
+    minHeight: 44,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
   },
   placesStatusText: {
     fontSize: theme.fontSize.sm,
@@ -805,11 +819,15 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.dangerRed,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
   },
   placesEmptyText: {
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
   },
   useLocationBtn: {
     flexDirection: 'row',
@@ -867,16 +885,25 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.mediumGray,
   },
-  suggestions: {
+  suggestionsPanel: {
+    width: '100%',
     marginTop: 2,
     borderRadius: theme.radius.md,
     backgroundColor: theme.colors.surface,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: theme.colors.lightGray,
-    maxHeight: 220,
+    // Clip children so rows never paint outside the panel border.
+    overflow: 'hidden',
+    maxHeight: 240,
     zIndex: 30,
     ...theme.shadows.card,
-    elevation: 12,
+  },
+  suggestionsScroll: {
+    maxHeight: 240,
+    width: '100%',
+  },
+  suggestionsScrollContent: {
+    flexGrow: 0,
   },
   suggestionRow: {
     flexDirection: 'row',
@@ -884,15 +911,20 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.md,
-    minHeight: 44,
+    minHeight: 48,
+    width: '100%',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.colors.lightGray,
+  },
+  suggestionRowLast: {
+    borderBottomWidth: 0,
   },
   suggestionIcon: {
     marginTop: 1,
   },
   suggestionText: {
     flex: 1,
+    minWidth: 0,
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.deepBlue,
