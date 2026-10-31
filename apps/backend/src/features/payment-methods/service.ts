@@ -28,7 +28,11 @@ type PrimaryPayoutMethod = {
   wallet: string | null;
 };
 
-/** Full (unmasked) primary payout method for a driver. Passenger-trip scoped use only. */
+/**
+ * Full (unmasked) payout method for passenger transfer UI.
+ * No is_default column exists — v1 uses the latest row by created_at.
+ * Passenger-trip scoped only (never expose via public driver list).
+ */
 export async function getPrimaryMethodForDriver(
   driverId: string,
 ): Promise<PrimaryPayoutMethod | null> {
@@ -48,16 +52,30 @@ export async function getPrimaryMethodForDriver(
   return method ?? null;
 }
 
+/**
+ * Driver PaymentMethodScreen stores:
+ * - method_type 'cvu'|'cbu': account_number = CBU/CVU digits, titular_name = transfer **alias**
+ * - method_type 'alias': account_number = alias string, titular_name optional real holder
+ * There is no dedicated alias column.
+ */
 export function toDriverTransferDetails(
   method: PrimaryPayoutMethod | null,
 ): DriverTransferDetails | null {
   if (!method) return null;
 
-  const isAliasOnly = method.method_type === 'alias';
+  if (method.method_type === 'alias') {
+    return {
+      alias: method.account_number,
+      cbu_cvu: null,
+      holder: method.titular_name ?? null,
+      bank: method.wallet ?? null,
+    };
+  }
+
   return {
-    alias: isAliasOnly ? method.account_number : (method.titular_name ?? null),
-    cbu_cvu: isAliasOnly ? null : method.account_number,
-    holder: method.titular_name ?? null,
+    alias: method.titular_name ?? null,
+    cbu_cvu: method.account_number,
+    holder: null,
     bank: method.wallet ?? null,
   };
 }

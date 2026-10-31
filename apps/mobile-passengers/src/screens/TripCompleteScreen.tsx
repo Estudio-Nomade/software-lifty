@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
-import { Alert, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { rateRide, setTripPaymentMethod } from '../api/passenger';
 import type { DriverTransferDetails } from '../api/types';
@@ -35,7 +36,8 @@ function paymentTitle(type: PaymentMethodType): string {
 
 async function copyText(label: string, value: string) {
   try {
-    await Share.share({ message: value, title: label });
+    await Clipboard.setStringAsync(value);
+    Alert.alert('Copiado', `${label} copiado al portapapeles.`);
   } catch {
     Alert.alert(label, value);
   }

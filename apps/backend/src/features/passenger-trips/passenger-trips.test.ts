@@ -1019,7 +1019,7 @@ describe('Passenger Trips', () => {
     expect(data.driver_transfer).toEqual({
       alias: 'conductor.mp',
       cbu_cvu: '1234567890123456789012',
-      holder: 'conductor.mp',
+      holder: null,
       bank: 'MercadoPago',
     });
   });
