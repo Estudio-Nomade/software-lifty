@@ -4,6 +4,7 @@
  */
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import {
+  applyHousenumberSynthesis,
   autocomplete,
   autocompleteCacheKey,
   formatPhotonAddress,
@@ -13,9 +14,16 @@ import {
   rankPhotonPlaceFeatures,
 } from './geo';
 import {
+  encode as olcEncode,
+  extractPlusCode,
+  recoverNearest,
+  resolvePlusCodeCenter,
+} from './open-location-code';
+import {
   expandPlaceQueries,
   mergePlaceResults,
   normalizePlaceQuery,
+  parseStreetQuery,
 } from './place-aliases';
 import { matchCatalogPlaces } from './places-catalog';
 
@@ -26,12 +34,12 @@ describe('geo autocomplete helpers', () => {
     expect(normalizeAutocompleteQuery('  San  Martin  ')).toBe('san martin');
   });
 
-  test('cache key is v3 (aliases/catalog) and buckets bias', () => {
+  test('cache key is v4 (aliases/catalog/olc) and buckets bias', () => {
     const a = autocompleteCacheKey('San  Martin', -31.945, -65.189);
     const b = autocompleteCacheKey('san martin', -31.94, -65.19);
     expect(a).toBe(b);
-    expect(a).toContain('geo:ac:v3:san martin:');
-    expect(a).not.toContain('geo:ac:v2:');
+    expect(a).toContain('geo:ac:v4:san martin:');
+    expect(a).not.toContain('geo:ac:v3:');
     expect(autocompleteCacheKey('x')).toContain(':none:none');
   });
 
@@ -77,6 +85,33 @@ describe('place aliases', () => {
     expect(merged).toHaveLength(2);
     expect(merged[0].place_id).toBe('1');
   });
+
+  test('parseStreetQuery handles C-prefix without comma + door number', () => {
+    const p = parseStreetQuery('C ignacio castellano 50 villa dolores');
+    expect(p.streetName.toLowerCase()).toContain('ignacio');
+    expect(p.housenumber).toBe('50');
+    expect(p.cityHint?.toLowerCase()).toContain('dolores');
+    expect(p.photonQueries.some((q) => /ignacio castellano 50/i.test(q))).toBe(true);
+  });
+
+  test('parseStreetQuery expands RN km route text', () => {
+    const p = parseStreetQuery('RN 148 km 964.98 Villa Dolores');
+    expect(p.photonQueries.join(' ')).toMatch(/Ruta Nacional 148|rn 148/i);
+    expect(p.housenumber).toBeNull();
+  });
+});
+
+describe('open location code', () => {
+  test('encodes Villa Dolores hub and recovers club short code', () => {
+    expect(olcEncode(-31.9449, -65.1906)).toBe('47WP3R45+2Q');
+    const full = recoverNearest('2RM8+V9', -31.9456, -65.1895);
+    expect(full).toBe('47WP2RM8+V9');
+    const resolved = resolvePlusCodeCenter('2rm8+V9 Villa Dolores', -31.9456, -65.1895);
+    expect(resolved).not.toBeNull();
+    expect(resolved!.lat).toBeCloseTo(-31.9653, 3);
+    expect(resolved!.lng).toBeCloseTo(-65.1841, 3);
+    expect(extractPlusCode('code 2RM8+V9 cerca')).toBe('2RM8+V9');
+  });
 });
 
 describe('places catalog', () => {
@@ -116,6 +151,16 @@ describe('places catalog', () => {
   test('no invented VD dique catalog row', () => {
     const hits = matchCatalogPlaces('Dique de Villa Dolores');
     expect(hits.every((h) => !h.place_id.includes('dique-vd'))).toBe(true);
+  });
+
+  test('VD club + CES / RN148 catalog aliases', () => {
+    const bias = { biasLat: -31.9456, biasLng: -65.1895 };
+    const club = matchCatalogPlaces('Club Deportivo Ignacio Castellano', undefined, bias);
+    expect(club.some((h) => h.place_id.includes('club-ignacio'))).toBe(true);
+    const plus = matchCatalogPlaces('2rm8+v9 villa dolores', undefined, bias);
+    expect(plus.some((h) => h.place_id.includes('club-ignacio'))).toBe(true);
+    const ces = matchCatalogPlaces('RN 148 km 964.98 Villa Dolores', undefined, bias);
+    expect(ces.some((h) => h.place_id.includes('centro-regional'))).toBe(true);
   });
 });
 
@@ -218,6 +263,59 @@ describe('rankPhotonPlaceFeatures', () => {
       -65.1895,
     );
     expect(ranked[0].properties.osm_id).toBe(2);
+  });
+
+  test('Ignacio Castellano street outranks Ernesto housenumber for same query', () => {
+    const ranked = rankPhotonPlaceFeatures(
+      [
+        {
+          geometry: { coordinates: [-65.19115, -31.94281] },
+          properties: {
+            osm_id: 1,
+            street: 'Ernesto Castellano',
+            housenumber: '50',
+            city: 'Villa Dolores',
+            type: 'house',
+          },
+        },
+        {
+          geometry: { coordinates: [-65.17652, -31.94772] },
+          properties: {
+            osm_id: 2,
+            name: 'Ignacio Castellano',
+            osm_key: 'highway',
+            type: 'street',
+            city: 'Villa Dolores',
+          },
+        },
+      ],
+      'C ignacio castellano 50 villa dolores',
+      -31.9456,
+      -65.1895,
+    );
+    expect(ranked[0].properties.osm_id).toBe(2);
+  });
+
+  test('applyHousenumberSynthesis attaches door number to matching street label', () => {
+    const out = applyHousenumberSynthesis(
+      [
+        {
+          description: 'Ignacio Castellano, Villa Dolores, Córdoba, Argentina',
+          place_id: '2',
+          lat: -31.9477,
+          lng: -65.1765,
+        },
+        {
+          description: 'Ernesto Castellano 50, Villa Dolores, Córdoba, Argentina',
+          place_id: '1',
+          lat: -31.9428,
+          lng: -65.1911,
+        },
+      ],
+      'C ignacio castellano 50 villa dolores',
+    );
+    expect(out[0].description).toMatch(/^Ignacio Castellano 50,/);
+    expect(out[1].description).toMatch(/^Ernesto Castellano 50,/);
   });
 });
 

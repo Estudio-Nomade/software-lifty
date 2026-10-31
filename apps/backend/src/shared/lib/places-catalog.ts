@@ -94,6 +94,44 @@ export const PLACES_CATALOG: CatalogPlace[] = [
       'balneario municipal de villa dolores',
     ],
   },
+  {
+    // Plus Code 2RM8+V9 (recovered near VD) — OSM/Photon has no POI name.
+    id: 'vd-club-ignacio-castellano',
+    name: 'Club Deportivo Ignacio Castellano',
+    lat: -31.9653125,
+    lng: -65.1840625,
+    city: 'Villa Dolores',
+    aliases: [
+      'club ignacio castellano',
+      'club deportivo ignacio castellano',
+      'ignacio castellano club',
+      'club castellano',
+      'deportivo ignacio castellano',
+      '2rm8+v9',
+      '2rm8+v9 villa dolores',
+    ],
+  },
+  {
+    // RN 148 corridor east of VD — OSM lacks the CES / km marker POI.
+    // Pin on Ruta Nacional 148 near Villa Dolores (Nominatim highway point).
+    id: 'vd-centro-regional-estudios-superiores',
+    name: 'Centro Regional de Estudios Superiores Villa Dolores',
+    lat: -31.95224,
+    lng: -65.1622267,
+    city: 'Villa Dolores',
+    aliases: [
+      'centro regional de estudios superiores',
+      'centro regional estudios superiores',
+      'centro regional villa dolores',
+      'estudios superiores villa dolores',
+      'ces villa dolores',
+      'rn 148 km 964',
+      'rn 148 km 964.98',
+      'ruta 148 km 964',
+      'ruta nacional 148 km 964',
+      'rn 148 villa dolores',
+    ],
+  },
 ];
 
 function catalogDescription(p: CatalogPlace): string {
