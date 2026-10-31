@@ -94,7 +94,7 @@ const WAITLIST_MSG =
   'Todavía no operamos en esa ubicación. No vas a poder conectar online hasta que Lifty esté en tu localidad. Podés seguir el alta ahora y te avisamos cuando abramos en tu zona.';
 
 const ADDRESS_PICK_REQUIRED_MSG =
-  'Elegí una dirección de la lista o tocá “Usar mi ubicación” para que el sistema la valide.';
+  'Confirmá el domicilio eligiendo una sugerencia o tocando “Usar mi ubicación”.';
 
 const ADDRESS_EMPTY_MSG = 'No encontramos esa dirección. Probá otra o usá tu ubicación.';
 
@@ -156,6 +156,9 @@ export const OnboardingStep1Screen: React.FC = () => {
   const [lastName, setLastName] = useState('');
   const [phoneDigits, setPhoneDigits] = useState('');
   const [addressLine, setAddressLine] = useState('');
+  const [addressSelection, setAddressSelection] = useState<
+    { start: number; end: number } | undefined
+  >(undefined);
   const [selectedPlace, setSelectedPlace] = useState<PlaceSuggestion | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -263,19 +266,33 @@ export const OnboardingStep1Screen: React.FC = () => {
     }
   };
 
-  const handleSelectPlace = (place: PlaceSuggestion) => {
+  const applyResolvedAddress = (place: PlaceSuggestion) => {
     setAddressLine(place.description);
+    // One-shot: show start of long labels, then release so the user can edit freely.
+    setAddressSelection({ start: 0, end: 0 });
     setSelectedPlace(place);
     setShowSuggestions(false);
     setConfirmedWaitlisted(false);
     setError('address', undefined);
+    setTimeout(() => setAddressSelection(undefined), 0);
+  };
+
+  const handleSelectPlace = (place: PlaceSuggestion) => {
+    applyResolvedAddress(place);
+  };
+
+  const handleClearAddress = () => {
+    setAddressLine('');
+    setAddressSelection(undefined);
+    setSelectedPlace(null);
+    setConfirmedWaitlisted(false);
+    setShowSuggestions(false);
+    setError('address', undefined);
   };
 
   const handleChangeAddress = () => {
-    setSelectedPlace(null);
-    setConfirmedWaitlisted(false);
+    handleClearAddress();
     setShowSuggestions(true);
-    setError('address', undefined);
   };
 
   /** GPS → reverse geocode → pin with lat/lng for backend municipality gate. */
@@ -312,10 +329,7 @@ export const OnboardingStep1Screen: React.FC = () => {
         lat: Number(data?.lat ?? lat),
         lng: Number(data?.lng ?? lng),
       };
-      setAddressLine(place.description);
-      setSelectedPlace(place);
-      setShowSuggestions(false);
-      setConfirmedWaitlisted(false);
+      applyResolvedAddress(place);
     } catch (err: unknown) {
       const msg =
         err && typeof err === 'object' && 'message' in err
@@ -504,15 +518,14 @@ export const OnboardingStep1Screen: React.FC = () => {
 
         <View style={[styles.fieldGroup, styles.addressFieldGroup]}>
           <Text style={styles.fieldLabel}>Domicilio</Text>
-          <Text style={styles.addressHint}>
-            Elegí de la lista o usá tu ubicación. El sistema valida que estés en la zona Lifty.
-          </Text>
           <View style={styles.addressBlock}>
             <Input
               placeholder="Calle, altura, ciudad…"
               value={addressLine}
+              {...(addressSelection ? { selection: addressSelection } : {})}
               onChangeText={(t) => {
                 setAddressLine(t);
+                setAddressSelection(undefined);
                 setSelectedPlace(null);
                 setConfirmedWaitlisted(false);
                 setShowSuggestions(true);
@@ -533,6 +546,22 @@ export const OnboardingStep1Screen: React.FC = () => {
               containerStyle={styles.input}
               maxLength={200}
               autoCorrect={false}
+              multiline
+              numberOfLines={3}
+              scrollEnabled
+              rightElement={
+                addressLine.length > 0 ? (
+                  <Pressable
+                    onPress={handleClearAddress}
+                    accessibilityRole="button"
+                    accessibilityLabel="Borrar domicilio"
+                    hitSlop={10}
+                    style={styles.clearAddressBtn}
+                  >
+                    <Ionicons name="close-circle" size={22} color={theme.colors.mediumGray} />
+                  </Pressable>
+                ) : null
+              }
             />
             {placesLoading && addressQueryActive ? (
               <View style={styles.placesStatusRow}>
@@ -747,14 +776,12 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.medium,
     color: theme.colors.deepBlue,
   },
-  addressHint: {
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
-    color: theme.colors.mediumGray,
-    marginBottom: 2,
-  },
   input: {
     width: '100%',
+  },
+  clearAddressBtn: {
+    marginTop: 2,
+    padding: 2,
   },
   addressBlock: {
     width: '100%',
