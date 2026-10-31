@@ -167,7 +167,6 @@ export const OnboardingStep1Screen: React.FC = () => {
   const [locating, setLocating] = useState(false);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitError, setSubmitError] = useState('');
-  const [confirmedWaitlisted, setConfirmedWaitlisted] = useState(false);
   const profileLoaded = useRef(false);
 
   const gpsLat = useLocationStore((s) => s.lat);
@@ -184,7 +183,8 @@ export const OnboardingStep1Screen: React.FC = () => {
   const addressZone: AddressZone = selectedPlace
     ? zoneForCoords(selectedPlace.lat, selectedPlace.lng)
     : 'unknown';
-  const showWaitlistBanner = addressZone === 'outside' || confirmedWaitlisted;
+  // Banner only from live pin — never sticky after a prior waitlisted submit.
+  const showWaitlistBanner = addressZone === 'outside';
 
   const addressQueryActive = showSuggestions && !selectedPlace && addressLine.trim().length >= 2;
   const showSuggestionsList = addressQueryActive && !placesLoading && suggestions.length > 0;
@@ -272,7 +272,6 @@ export const OnboardingStep1Screen: React.FC = () => {
     setAddressSelection({ start: 0, end: 0 });
     setSelectedPlace(place);
     setShowSuggestions(false);
-    setConfirmedWaitlisted(false);
     setError('address', undefined);
     setTimeout(() => setAddressSelection(undefined), 0);
   };
@@ -285,7 +284,6 @@ export const OnboardingStep1Screen: React.FC = () => {
     setAddressLine('');
     setAddressSelection(undefined);
     setSelectedPlace(null);
-    setConfirmedWaitlisted(false);
     setShowSuggestions(false);
     setError('address', undefined);
   };
@@ -397,16 +395,30 @@ export const OnboardingStep1Screen: React.FC = () => {
 
       const municipalityStatus = readMunicipalityStatus(data);
       if (municipalityStatus === 'waitlisted') {
-        setConfirmedWaitlisted(true);
         const shouldContinue = await new Promise<boolean>((resolve) => {
-          Alert.alert('Todavía no operamos acá', WAITLIST_MSG, [
+          let settled = false;
+          const finish = (value: boolean) => {
+            if (settled) return;
+            settled = true;
+            resolve(value);
+          };
+          Alert.alert(
+            'Todavía no operamos acá',
+            WAITLIST_MSG,
+            [
+              {
+                text: 'Cambiar domicilio',
+                style: 'cancel',
+                onPress: () => finish(false),
+              },
+              { text: 'Continuar igual', onPress: () => finish(true) },
+            ],
             {
-              text: 'Cambiar domicilio',
-              style: 'cancel',
-              onPress: () => resolve(false),
+              // Android back / outside tap must not leave submit hanging on loading.
+              cancelable: true,
+              onDismiss: () => finish(false),
             },
-            { text: 'Continuar igual', onPress: () => resolve(true) },
-          ]);
+          );
         });
         if (!shouldContinue) {
           handleChangeAddress();
@@ -527,7 +539,6 @@ export const OnboardingStep1Screen: React.FC = () => {
                 setAddressLine(t);
                 setAddressSelection(undefined);
                 setSelectedPlace(null);
-                setConfirmedWaitlisted(false);
                 setShowSuggestions(true);
                 setError('address', undefined);
               }}
