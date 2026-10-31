@@ -22,6 +22,13 @@ export type TripStatus =
   | 'expired'
   | 'rated';
 
+export interface DriverTransferDetails {
+  alias: string | null;
+  cbu_cvu: string | null;
+  holder: string | null;
+  bank: string | null;
+}
+
 export interface Trip {
   id: string;
   passenger_id: string;
@@ -49,6 +56,8 @@ export interface Trip {
   vehicle_plate?: string | null;
   driver_lat?: number | null;
   driver_lng?: number | null;
+  /** Full CBU/alias for passenger transfer — only on passenger trip endpoints. */
+  driver_transfer?: DriverTransferDetails | null;
   created_at: string;
   updated_at: string;
 }
