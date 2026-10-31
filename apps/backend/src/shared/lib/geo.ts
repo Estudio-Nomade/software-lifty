@@ -1,5 +1,6 @@
 import { logger } from './logger';
-import { expandPlaceQueries, mergePlaceResults } from './place-aliases';
+import { extractPlusCode, resolvePlusCodeCenter } from './open-location-code';
+import { expandPlaceQueries, mergePlaceResults, parseStreetQuery } from './place-aliases';
 import { VD_CENTER, matchCatalogPlaces } from './places-catalog';
 import { getRedis } from './redis';
 
@@ -196,7 +197,34 @@ export function isBiasNearVillaDolores(biasLat?: number, biasLng?: number): bool
   return haversineDistance(biasLat, biasLng, VD_CENTER.lat, VD_CENTER.lng) <= GEO_LOCAL_BIAS_KM;
 }
 
-/** Soft-rank Photon hits: query name match + proximity + local-bbox boost near VD. */
+function significantTokens(s: string): string[] {
+  return normalizePlaceMatch(s)
+    .split(/[^a-z0-9+]+/)
+    .filter((t) => t.length >= 2 && !['de', 'del', 'la', 'las', 'los', 'el', 'y'].includes(t));
+}
+
+function tokenOverlapScore(queryTokens: string[], candidate: string): number {
+  if (queryTokens.length === 0 || !candidate) return 0;
+  const candTokens = new Set(significantTokens(candidate));
+  if (candTokens.size === 0) return 0;
+  let hit = 0;
+  for (const t of queryTokens) {
+    if (candTokens.has(t)) {
+      hit += 1;
+      continue;
+    }
+    // prefix token match (ignacio vs ignacios)
+    for (const c of candTokens) {
+      if (c.startsWith(t) || t.startsWith(c)) {
+        hit += 0.6;
+        break;
+      }
+    }
+  }
+  return hit / queryTokens.length;
+}
+
+/** Soft-rank Photon hits: token overlap + proximity + local-bbox boost near VD. */
 export function rankPhotonPlaceFeatures(
   features: PhotonFeature[],
   query: string,
@@ -205,6 +233,14 @@ export function rankPhotonPlaceFeatures(
 ): PhotonFeature[] {
   const q = normalizePlaceMatch(query);
   if (!q || features.length <= 1) return features;
+
+  const parsed = parseStreetQuery(query);
+  const streetFocus = parsed.streetName ? normalizePlaceMatch(parsed.streetName) : q;
+  const focusTokens = significantTokens(streetFocus || q);
+  // Drop pure city tokens from overlap so "villa dolores" doesn't inflate every local hit.
+  const cityNoise = new Set(['villa', 'dolores', 'cordoba', 'argentina', 'sarmiento']);
+  const qTokens = focusTokens.filter((t) => !cityNoise.has(t) && !/^\d+$/.test(t));
+  const wantNumber = parsed.housenumber ? normalizePlaceMatch(parsed.housenumber) : null;
 
   const hasBias =
     typeof biasLat === 'number' &&
@@ -218,11 +254,44 @@ export function rankPhotonPlaceFeatures(
     const props = f.properties ?? {};
     const name = normalizePlaceMatch(props.name ? String(props.name) : '');
     const street = normalizePlaceMatch(props.street ? String(props.street) : '');
+    const house = normalizePlaceMatch(props.housenumber ? String(props.housenumber) : '');
     const label = normalizePlaceMatch(formatPhotonAddress(props));
+    const streetOrName = street || name;
+
     let match = 0;
-    if (name === q || street === q) match = 100;
-    else if (name.startsWith(q) || street.startsWith(q)) match = 70;
-    else if (name.includes(q) || street.includes(q) || label.includes(q)) match = 45;
+    if (name === q || street === q || streetOrName === streetFocus) match = 100;
+    else if (
+      (streetFocus && (name.startsWith(streetFocus) || street.startsWith(streetFocus))) ||
+      name.startsWith(q) ||
+      street.startsWith(q)
+    ) {
+      match = 70;
+    } else if (name.includes(q) || street.includes(q) || label.includes(q)) match = 45;
+
+    const overlap = Math.max(
+      tokenOverlapScore(qTokens, name),
+      tokenOverlapScore(qTokens, street),
+      tokenOverlapScore(qTokens, label),
+    );
+    match = Math.max(match, Math.round(overlap * 95));
+
+    // Housenumber: boost exact door match; penalize different door on similar street.
+    if (wantNumber) {
+      if (house && house === wantNumber) match += 25;
+      else if (house && house !== wantNumber) match -= 15;
+      else if (!house && streetOrName && tokenOverlapScore(qTokens, streetOrName) >= 0.7) {
+        // Street geometry only — still useful once we synthesize the number.
+        match += 10;
+      }
+    }
+
+    // Penalize near-homonym streets that miss a distinctive query token (Ignacio vs Ernesto).
+    if (qTokens.length >= 2 && streetOrName) {
+      const missingDistinctive = qTokens.filter((t) => t.length >= 4 && !streetOrName.includes(t));
+      if (missingDistinctive.length > 0 && tokenOverlapScore(qTokens, streetOrName) < 0.8) {
+        match -= 20 * missingDistinctive.length;
+      }
+    }
 
     let distKm = 1e9;
     if (hasBias && f.geometry?.coordinates?.length >= 2) {
@@ -247,6 +316,82 @@ export function rankPhotonPlaceFeatures(
 
   scored.sort((a, b) => b.score - a.score || a.index - b.index);
   return scored.map((s) => s.f);
+}
+
+/**
+ * When the user typed a door number but Photon only returned the street center,
+ * attach the number to the label so the list shows "Ignacio Castellano 50, …".
+ * Coords stay on the street geometry (OSM often lacks the house node).
+ * Strict: every street-name token must appear in the leading label segment, and we
+ * never stamp a number onto catalog/OLC pins or labels that already carry a different #.
+ */
+export function applyHousenumberSynthesis(results: PlaceResult[], query: string): PlaceResult[] {
+  const parsed = parseStreetQuery(query);
+  if (!parsed.housenumber || !parsed.streetName) return results;
+  const want = normalizePlaceMatch(parsed.housenumber);
+  const streetFocus = normalizePlaceMatch(parsed.streetName);
+  const focusTokens = significantTokens(streetFocus).filter((t) => !/^\d+$/.test(t));
+  if (focusTokens.length === 0) return results;
+
+  return results.map((r) => {
+    const id = String(r.place_id);
+    if (id.startsWith('catalog:') || id.startsWith('olc:')) return r;
+
+    const descN = normalizePlaceMatch(r.description);
+    // Already has this door number in the leading street segment.
+    const leading = descN.split(',')[0] ?? descN;
+    if (new RegExp(`\\b${want}\\b`).test(leading)) return r;
+
+    // All query street tokens must be present (Ignacio≠Ernesto; no POI stamping).
+    const allTokensPresent = focusTokens.every((t) => leading.includes(t));
+    if (!allTokensPresent) return r;
+    // Leading should not introduce an extra distinctive person/place token missing from query
+    // (e.g. "ernesto castellano" when query is "ignacio castellano").
+    const leadingNameTokens = significantTokens(leading).filter(
+      (t) => !/^\d+$/.test(t) && t.length >= 4,
+    );
+    const extraDistinctive = leadingNameTokens.filter(
+      (t) => !focusTokens.some((f) => f === t || f.startsWith(t) || t.startsWith(f)),
+    );
+    if (extraDistinctive.length > 0) return r;
+
+    // Rebuild description: inject number after street name portion.
+    const parts = r.description.split(',').map((p) => p.trim());
+    const primary = parts[0] ?? r.description;
+    // Avoid double-insert if primary already ends with a different number.
+    if (/\d/.test(primary) && !new RegExp(`\\b${want}\\b`, 'i').test(primary)) {
+      return r;
+    }
+    const withNum = /\d/.test(primary) ? primary : `${primary} ${parsed.housenumber}`;
+    const rest = parts.slice(1).join(', ');
+    const description = rest ? `${withNum}, ${rest}` : withNum;
+    return {
+      ...r,
+      description,
+      place_id: `${r.place_id}:hn:${want}`,
+    };
+  });
+}
+
+function plusCodePlaceResult(query: string, biasLat: number, biasLng: number): PlaceResult | null {
+  const code = extractPlusCode(query);
+  if (!code) return null;
+  const resolved = resolvePlusCodeCenter(code, biasLat, biasLng);
+  if (!resolved) return null;
+  const shortOrFull = code.includes('+') ? code.toUpperCase() : resolved.fullCode;
+  const city =
+    isBiasNearVillaDolores(resolved.lat, resolved.lng) || isBiasNearVillaDolores(biasLat, biasLng)
+      ? 'Villa Dolores'
+      : null;
+  const description = city
+    ? `${shortOrFull}, ${city}, Córdoba, Argentina`
+    : `${shortOrFull} (${resolved.lat.toFixed(5)}, ${resolved.lng.toFixed(5)})`;
+  return {
+    description,
+    place_id: `olc:${resolved.fullCode}`,
+    lat: resolved.lat,
+    lng: resolved.lng,
+  };
 }
 
 interface PhotonFeature {
@@ -275,6 +420,77 @@ async function fetchPhoton(
   return (await res.json()) as { features?: PhotonFeature[] };
 }
 
+type NominatimHit = {
+  place_id?: number | string;
+  lat?: string;
+  lon?: string;
+  display_name?: string;
+  class?: string;
+  type?: string;
+  address?: Record<string, string | undefined>;
+};
+
+/** Last-resort street search when Photon is down/empty (OSM Nominatim). */
+async function nominatimStreetFallback(
+  query: string,
+  biasLat: number,
+  biasLng: number,
+): Promise<PlaceResult[]> {
+  const parsed = parseStreetQuery(query);
+  const q =
+    parsed.streetName && parsed.housenumber
+      ? `${parsed.streetName} ${parsed.housenumber}${parsed.cityHint ? `, ${parsed.cityHint}` : ''}`
+      : parsed.streetName
+        ? `${parsed.streetName}${parsed.cityHint ? `, ${parsed.cityHint}` : ''}`
+        : query;
+
+  const url = new URL('https://nominatim.openstreetmap.org/search');
+  url.searchParams.set('q', q);
+  url.searchParams.set('format', 'json');
+  url.searchParams.set('addressdetails', '1');
+  url.searchParams.set('limit', '5');
+  // ~0.4° box ≈ 40 km around bias
+  const d = 0.35;
+  url.searchParams.set('viewbox', `${biasLng - d},${biasLat + d},${biasLng + d},${biasLat - d}`);
+  url.searchParams.set('bounded', '1');
+
+  const res = await fetch(url.toString(), {
+    headers: { 'User-Agent': GEO_USER_AGENT, Accept: 'application/json' },
+    signal: AbortSignal.timeout(Math.max(GEO_AUTOCOMPLETE_TIMEOUT_MS, 5000)),
+  });
+  if (!res.ok) throw new Error(`Nominatim error: ${res.status}`);
+  const hits = (await res.json()) as NominatimHit[];
+  if (!Array.isArray(hits)) return [];
+
+  const out: PlaceResult[] = [];
+  for (const h of hits) {
+    const lat = Number(h.lat);
+    const lng = Number(h.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    const addr = h.address ?? {};
+    const street =
+      addr.road || addr.pedestrian || addr.residential || addr.street || addr.path || '';
+    const house = addr.house_number || '';
+    const city = addr.city || addr.town || addr.village || addr.municipality || '';
+    const state = addr.state || '';
+    const country = addr.country || '';
+    let primary = [street, house].filter(Boolean).join(' ');
+    if (!primary) {
+      // highway without address breakdown — use first segment of display_name
+      primary = (h.display_name || '').split(',')[0]?.trim() || '';
+    }
+    if (!primary) continue;
+    const description = [primary, city, state, country].filter(Boolean).join(', ');
+    out.push({
+      description,
+      place_id: `nominatim:${h.place_id ?? `${lat},${lng}`}`,
+      lat,
+      lng,
+    });
+  }
+  return applyHousenumberSynthesis(out, query);
+}
+
 /** Exported for unit tests — do not use as public API. */
 export function normalizeAutocompleteQuery(input: string): string {
   return input.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -285,9 +501,9 @@ function biasBucket(value: number | undefined): string {
   return String(Math.round(value / GEO_BIAS_BUCKET) * GEO_BIAS_BUCKET);
 }
 
-/** Exported for unit tests — do not use as public API. Cache v3 = aliases + catalog. */
+/** Exported for unit tests — do not use as public API. Cache v4 = aliases + catalog + OLC + hn. */
 export function autocompleteCacheKey(query: string, lat?: number, lng?: number): string {
-  return `geo:ac:v3:${normalizeAutocompleteQuery(query)}:${biasBucket(lat)}:${biasBucket(lng)}`;
+  return `geo:ac:v4:${normalizeAutocompleteQuery(query)}:${biasBucket(lat)}:${biasBucket(lng)}`;
 }
 
 function featuresToPlaceResults(
@@ -371,6 +587,8 @@ export async function autocomplete(
       biasLat,
       biasLng,
     }) as PlaceResult[];
+    const olcHit = plusCodePlaceResult(trimmed, biasLat, biasLng);
+    const olcList: PlaceResult[] = olcHit ? [olcHit] : [];
     const queries = expandPlaceQueries(trimmed);
 
     const photonLists = await Promise.allSettled(
@@ -388,24 +606,80 @@ export async function autocomplete(
     );
 
     const photonResults: PlaceResult[][] = photonLists.map((r) =>
-      r.status === 'fulfilled' ? r.value : [],
+      r.status === 'fulfilled' ? applyHousenumberSynthesis(r.value, trimmed) : [],
     );
 
-    // Catalog first (bias-filtered), then Photon lists already ranked — no synthetic re-rank.
-    let merged = mergePlaceResults([catalogHits, ...photonResults]) as PlaceResult[];
+    // OLC + catalog first, then Photon lists already ranked — no synthetic re-rank.
+    let merged = mergePlaceResults([olcList, catalogHits, ...photonResults]) as PlaceResult[];
+    merged = applyHousenumberSynthesis(merged, trimmed);
 
-    // Street queries: drop weak catalog noise that does not share query tokens.
+    // Provider fallback when Photon returned nothing useful — even if catalog/OLC
+    // already matched (e.g. POI alias). Catalog alone is fine for pure POI queries;
+    // streetish free-text still needs a street geom from Photon retry / Nominatim.
+    const hasProviderHit = photonResults.some((l) => l.length > 0);
+    if (!hasProviderHit && isStreetishQuery(trimmed)) {
+      const parsed = parseStreetQuery(trimmed);
+      const fallbackQ =
+        parsed.streetName && parsed.housenumber
+          ? `${parsed.streetName} ${parsed.housenumber}${parsed.cityHint ? `, ${parsed.cityHint}` : ''}`
+          : parsed.streetName
+            ? `${parsed.streetName}${parsed.cityHint ? `, ${parsed.cityHint}` : ''}`
+            : trimmed;
+      let providerExtra: PlaceResult[] = [];
+      try {
+        const url = new URL(`${PHOTON_URL}/api/`);
+        url.searchParams.set('q', fallbackQ);
+        url.searchParams.set('limit', '10');
+        url.searchParams.set('lang', 'default');
+        url.searchParams.set('lat', String(biasLat));
+        url.searchParams.set('lon', String(biasLng));
+        const data = await fetchPhoton(url, Math.max(GEO_AUTOCOMPLETE_TIMEOUT_MS, 5000));
+        providerExtra = applyHousenumberSynthesis(
+          featuresToPlaceResults(data.features || [], trimmed, biasLat, biasLng),
+          trimmed,
+        );
+      } catch {
+        // Photon still down — Nominatim below
+      }
+      if (providerExtra.length === 0) {
+        try {
+          providerExtra = await nominatimStreetFallback(trimmed, biasLat, biasLng);
+        } catch {
+          // keep empty provider side
+        }
+      }
+      if (providerExtra.length > 0) {
+        merged = mergePlaceResults([olcList, catalogHits, providerExtra]) as PlaceResult[];
+        merged = applyHousenumberSynthesis(merged, trimmed);
+      }
+    }
+
+    // Street queries: drop weak catalog rows that do not share query tokens
+    // (generic plaza/terminal noise). Never drop OLC. Always keep catalogHits
+    // already returned by matchCatalogPlaces (alias-scored).
     if (isStreetishQuery(trimmed) && photonResults.some((l) => l.length > 0)) {
       const qn = normalizePlaceMatch(trimmed);
-      const qTokens = new Set(qn.split(/\s+/).filter((t) => t.length >= 3));
+      const qTokens = new Set(qn.split(/[^a-z0-9+]+/).filter((t) => t.length >= 3));
       merged = merged.filter((p) => {
-        if (!String(p.place_id).startsWith('catalog:')) return true;
+        const id = String(p.place_id);
+        if (!id.startsWith('catalog:')) return true;
+        if (catalogHits.some((c) => c.place_id === id)) return true;
         const dn = normalizePlaceMatch(p.description);
         for (const t of qTokens) {
           if (dn.includes(t)) return true;
         }
         return false;
       });
+    }
+
+    // Prefer local footprint when bias is VD: drop far Photon noise (e.g. bare "148").
+    if (isBiasNearVillaDolores(biasLat, biasLng)) {
+      const local = merged.filter((p) => {
+        const id = String(p.place_id);
+        if (id.startsWith('catalog:') || id.startsWith('olc:')) return true;
+        return haversineDistance(biasLat, biasLng, p.lat, p.lng) <= GEO_LOCAL_BIAS_KM * 2;
+      });
+      if (local.length > 0) merged = local;
     }
 
     const results = merged.slice(0, 10);
