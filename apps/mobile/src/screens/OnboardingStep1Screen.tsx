@@ -3,6 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
@@ -34,6 +35,7 @@ import {
 import { exitOnboardingToWelcome } from '../lib/exitOnboardingToWelcome';
 import { getCurrentPosition } from '../lib/location';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
+import { isInsidePickupArea } from '../lib/serviceArea';
 import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { theme } from '../theme';
@@ -89,10 +91,48 @@ const isFormValid = (
 };
 
 const WAITLIST_MSG =
-  'Tu domicilio quedó fuera de la zona donde opera Lifty por ahora. Podés seguir el alta; te avisamos cuando abramos en tu zona.';
+  'Todavía no operamos en esa ubicación. No vas a poder conectar online hasta que Lifty esté en tu localidad. Podés seguir el alta ahora y te avisamos cuando abramos en tu zona.';
 
 const ADDRESS_PICK_REQUIRED_MSG =
   'Elegí una dirección de la lista o tocá “Usar mi ubicación” para que el sistema la valide.';
+
+const ADDRESS_EMPTY_MSG = 'No encontramos esa dirección. Probá otra o usá tu ubicación.';
+
+type AddressZone = 'unknown' | 'inside' | 'outside';
+
+function zoneForCoords(
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): AddressZone {
+  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return 'unknown';
+  }
+  return isInsidePickupArea(lat, lng) ? 'inside' : 'outside';
+}
+
+function readMunicipalityStatus(payload: unknown): string | undefined {
+  if (payload == null || typeof payload !== 'object') return undefined;
+  const root = payload as Record<string, unknown>;
+  if (typeof root.municipality_status === 'string') return root.municipality_status;
+  const nested = root.data;
+  if (nested != null && typeof nested === 'object') {
+    const status = (nested as Record<string, unknown>).municipality_status;
+    if (typeof status === 'string') return status;
+  }
+  return undefined;
+}
+
+function readOnboardingStep(payload: unknown): string {
+  if (payload == null || typeof payload !== 'object') return 'kyc';
+  const root = payload as Record<string, unknown>;
+  if (typeof root.step === 'string' && root.step.length > 0) return root.step;
+  const nested = root.data;
+  if (nested != null && typeof nested === 'object') {
+    const step = (nested as Record<string, unknown>).step;
+    if (typeof step === 'string' && step.length > 0) return step;
+  }
+  return 'kyc';
+}
 
 export const OnboardingStep1Screen: React.FC = () => {
   const navigation = useAppNavigation();
@@ -124,6 +164,7 @@ export const OnboardingStep1Screen: React.FC = () => {
   const [locating, setLocating] = useState(false);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitError, setSubmitError] = useState('');
+  const [confirmedWaitlisted, setConfirmedWaitlisted] = useState(false);
   const profileLoaded = useRef(false);
 
   const gpsLat = useLocationStore((s) => s.lat);
@@ -131,7 +172,22 @@ export const OnboardingStep1Screen: React.FC = () => {
   const locationError = useLocationStore((s) => s.locationError);
   const placeBias = gpsLat != null && gpsLng != null ? { lat: gpsLat, lng: gpsLng } : null;
 
-  const suggestions = usePlaceAutocomplete(showSuggestions ? addressLine : '', placeBias);
+  const {
+    suggestions,
+    loading: placesLoading,
+    error: placesError,
+  } = usePlaceAutocomplete(showSuggestions ? addressLine : '', placeBias);
+
+  const addressZone: AddressZone = selectedPlace
+    ? zoneForCoords(selectedPlace.lat, selectedPlace.lng)
+    : 'unknown';
+  const showWaitlistBanner = addressZone === 'outside' || confirmedWaitlisted;
+
+  const addressQueryActive = showSuggestions && !selectedPlace && addressLine.trim().length >= 2;
+  const showSuggestionsList = addressQueryActive && !placesLoading && suggestions.length > 0;
+  const showSuggestionsEmpty =
+    addressQueryActive && !placesLoading && !placesError && suggestions.length === 0;
+  const showPlacesError = addressQueryActive && !placesLoading && !!placesError;
 
   useEffect(() => {
     if (profileLoaded.current) return;
@@ -211,6 +267,14 @@ export const OnboardingStep1Screen: React.FC = () => {
     setAddressLine(place.description);
     setSelectedPlace(place);
     setShowSuggestions(false);
+    setConfirmedWaitlisted(false);
+    setError('address', undefined);
+  };
+
+  const handleChangeAddress = () => {
+    setSelectedPlace(null);
+    setConfirmedWaitlisted(false);
+    setShowSuggestions(true);
     setError('address', undefined);
   };
 
@@ -251,6 +315,7 @@ export const OnboardingStep1Screen: React.FC = () => {
       setAddressLine(place.description);
       setSelectedPlace(place);
       setShowSuggestions(false);
+      setConfirmedWaitlisted(false);
     } catch (err: unknown) {
       const msg =
         err && typeof err === 'object' && 'message' in err
@@ -316,16 +381,26 @@ export const OnboardingStep1Screen: React.FC = () => {
 
       const { data } = await apiClient.put('/drivers/me', payload);
 
-      const municipalityStatus = data?.municipality_status as string | undefined;
+      const municipalityStatus = readMunicipalityStatus(data);
       if (municipalityStatus === 'waitlisted') {
-        await new Promise<void>((resolve) => {
-          Alert.alert('Zona en lista de espera', WAITLIST_MSG, [
-            { text: 'Entendido', onPress: () => resolve() },
+        setConfirmedWaitlisted(true);
+        const shouldContinue = await new Promise<boolean>((resolve) => {
+          Alert.alert('Todavía no operamos acá', WAITLIST_MSG, [
+            {
+              text: 'Cambiar domicilio',
+              style: 'cancel',
+              onPress: () => resolve(false),
+            },
+            { text: 'Continuar igual', onPress: () => resolve(true) },
           ]);
         });
+        if (!shouldContinue) {
+          handleChangeAddress();
+          return;
+        }
       }
 
-      const step: string = data?.step ?? data?.data?.step ?? 'kyc';
+      const step = readOnboardingStep(data);
       useAuthStore.getState().setOnboardingStep(step);
       const target = STEP_ROUTE[step];
       if (target) {
@@ -427,7 +502,7 @@ export const OnboardingStep1Screen: React.FC = () => {
           />
         </View>
 
-        <View style={styles.fieldGroup}>
+        <View style={[styles.fieldGroup, styles.addressFieldGroup]}>
           <Text style={styles.fieldLabel}>Domicilio</Text>
           <Text style={styles.addressHint}>
             Elegí de la lista o usá tu ubicación. El sistema valida que estés en la zona Lifty.
@@ -439,6 +514,7 @@ export const OnboardingStep1Screen: React.FC = () => {
               onChangeText={(t) => {
                 setAddressLine(t);
                 setSelectedPlace(null);
+                setConfirmedWaitlisted(false);
                 setShowSuggestions(true);
                 setError('address', undefined);
               }}
@@ -458,31 +534,25 @@ export const OnboardingStep1Screen: React.FC = () => {
               maxLength={200}
               autoCorrect={false}
             />
-            <TouchableOpacity
-              style={styles.useLocationBtn}
-              onPress={handleUseMyLocation}
-              disabled={locating || loading}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Usar mi ubicación actual"
-            >
-              <Ionicons name="navigate-outline" size={18} color={theme.colors.primary} />
-              <Text style={styles.useLocationText}>
-                {locating ? 'Obteniendo ubicación…' : 'Usar mi ubicación'}
-              </Text>
-            </TouchableOpacity>
-            {selectedPlace ? (
-              <Text style={styles.addressResolved} numberOfLines={2}>
-                Ubicación lista para validar
-              </Text>
+            {placesLoading && addressQueryActive ? (
+              <View style={styles.placesStatusRow}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={styles.placesStatusText}>Buscando direcciones…</Text>
+              </View>
             ) : null}
-            {showSuggestions && suggestions.length > 0 && (
-              <View style={styles.suggestions}>
+            {showPlacesError ? <Text style={styles.placesErrorText}>{placesError}</Text> : null}
+            {showSuggestionsEmpty ? (
+              <Text style={styles.placesEmptyText}>{ADDRESS_EMPTY_MSG}</Text>
+            ) : null}
+            {showSuggestionsList ? (
+              <View style={styles.suggestions} accessibilityRole="list">
                 {suggestions.map((s) => (
                   <Pressable
                     key={`${s.place_id}-${s.description}`}
                     style={styles.suggestionRow}
                     onPress={() => handleSelectPlace(s)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Elegir ${s.description}`}
                   >
                     <Ionicons
                       name="location-outline"
@@ -496,7 +566,51 @@ export const OnboardingStep1Screen: React.FC = () => {
                   </Pressable>
                 ))}
               </View>
-            )}
+            ) : null}
+            <TouchableOpacity
+              style={styles.useLocationBtn}
+              onPress={handleUseMyLocation}
+              disabled={locating || loading}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Usar mi ubicación actual"
+            >
+              <Ionicons name="navigate-outline" size={18} color={theme.colors.primary} />
+              <Text style={styles.useLocationText}>
+                {locating ? 'Obteniendo ubicación…' : 'Usar mi ubicación'}
+              </Text>
+            </TouchableOpacity>
+            {selectedPlace && addressZone === 'inside' ? (
+              <Text style={styles.addressResolved} numberOfLines={2}>
+                Ubicación lista para validar
+              </Text>
+            ) : null}
+            {showWaitlistBanner ? (
+              <View
+                style={styles.waitlistBanner}
+                accessibilityRole="summary"
+                accessibilityLabel="Zona fuera de cobertura Lifty"
+              >
+                <Ionicons name="warning-outline" size={20} color={theme.colors.warning} />
+                <View style={styles.waitlistCopy}>
+                  <Text style={styles.waitlistTitle}>Todavía no operamos acá</Text>
+                  <Text style={styles.waitlistBody}>{WAITLIST_MSG}</Text>
+                  <View style={styles.waitlistActions}>
+                    <TouchableOpacity
+                      onPress={handleChangeAddress}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cambiar domicilio"
+                      hitSlop={8}
+                    >
+                      <Text style={styles.waitlistSecondary}>Cambiar domicilio</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.waitlistPrimaryHint}>
+                      Podés tocar Continuar abajo para seguir el alta igual.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -624,6 +738,10 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: theme.spacing.xs,
   },
+  addressFieldGroup: {
+    zIndex: 20,
+    elevation: 8,
+  },
   fieldLabel: {
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.medium,
@@ -640,8 +758,31 @@ const styles = StyleSheet.create({
   },
   addressBlock: {
     width: '100%',
-    zIndex: 10,
+    zIndex: 20,
+    elevation: 8,
     gap: theme.spacing.xs,
+    overflow: 'visible',
+  },
+  placesStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    minHeight: 36,
+  },
+  placesStatusText: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+  },
+  placesErrorText: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.dangerRed,
+  },
+  placesEmptyText: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
   },
   useLocationBtn: {
     flexDirection: 'row',
@@ -660,11 +801,55 @@ const styles = StyleSheet.create({
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.turquoise,
   },
-  suggestions: {
-    marginTop: 4,
+  waitlistBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.surfaceMuted,
-    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 176, 32, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 176, 32, 0.45)',
+  },
+  waitlistCopy: {
+    flex: 1,
+    gap: theme.spacing.xs,
+  },
+  waitlistTitle: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.deepBlue,
+  },
+  waitlistBody: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.deepBlue,
+    lineHeight: 20,
+  },
+  waitlistActions: {
+    gap: theme.spacing.xs,
+    marginTop: theme.spacing.xs,
+  },
+  waitlistSecondary: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.primary,
+  },
+  waitlistPrimaryHint: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+  },
+  suggestions: {
+    marginTop: 2,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.lightGray,
+    maxHeight: 220,
+    zIndex: 30,
+    ...theme.shadows.card,
+    elevation: 12,
   },
   suggestionRow: {
     flexDirection: 'row',
