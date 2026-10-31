@@ -211,6 +211,44 @@ export function sideSatisfied(side: HydratedSideState): boolean {
   return side.uploaded;
 }
 
+/**
+ * Local UI reset for «Reemplazar todo» / error Reintentar.
+ * Does not call DELETE API — first pick with replaceGroup supersedes on upload.
+ * Clears serverStatus so sideSatisfied / UI pickers treat the side as empty.
+ * Rejected sides keep file hints until the driver uploads a replacement.
+ */
+export function clearSideForReplaceUi(side: HydratedSideState): HydratedSideState {
+  if (side.needsReplace && !side.replacedInSession) {
+    return {
+      ...side,
+      fileUri: null,
+      fileName: side.fileName ?? 'Rehacer',
+      fileUrl: side.fileUrl,
+      files: side.files,
+      uploaded: false,
+      replacedInSession: false,
+      uploading: false,
+      error: null,
+    };
+  }
+
+  return {
+    ...side,
+    fileUri: null,
+    fileName: null,
+    fileUrl: null,
+    files: [],
+    isPdf: false,
+    uploaded: false,
+    replacedInSession: false,
+    serverStatus: null,
+    needsReplace: false,
+    uploading: false,
+    error: null,
+    reviewComment: null,
+  };
+}
+
 export function allDocsSatisfied(docs: HydratedDocsState): boolean {
   return (Object.keys(DOC_SIDES) as DocBase[]).every((docType) =>
     DOC_SIDES[docType].every((side) => sideSatisfied(docs[docType][side])),
