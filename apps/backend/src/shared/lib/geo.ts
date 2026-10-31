@@ -322,6 +322,8 @@ export function rankPhotonPlaceFeatures(
  * When the user typed a door number but Photon only returned the street center,
  * attach the number to the label so the list shows "Ignacio Castellano 50, …".
  * Coords stay on the street geometry (OSM often lacks the house node).
+ * Strict: every street-name token must appear in the leading label segment, and we
+ * never stamp a number onto catalog/OLC pins or labels that already carry a different #.
  */
 export function applyHousenumberSynthesis(results: PlaceResult[], query: string): PlaceResult[] {
   const parsed = parseStreetQuery(query);
@@ -332,20 +334,32 @@ export function applyHousenumberSynthesis(results: PlaceResult[], query: string)
   if (focusTokens.length === 0) return results;
 
   return results.map((r) => {
+    const id = String(r.place_id);
+    if (id.startsWith('catalog:') || id.startsWith('olc:')) return r;
+
     const descN = normalizePlaceMatch(r.description);
     // Already has this door number in the leading street segment.
     const leading = descN.split(',')[0] ?? descN;
     if (new RegExp(`\\b${want}\\b`).test(leading)) return r;
 
-    const overlap = tokenOverlapScore(focusTokens, leading);
-    if (overlap < 0.7) return r;
+    // All query street tokens must be present (Ignacio≠Ernesto; no POI stamping).
+    const allTokensPresent = focusTokens.every((t) => leading.includes(t));
+    if (!allTokensPresent) return r;
+    // Leading should not introduce an extra distinctive person/place token missing from query
+    // (e.g. "ernesto castellano" when query is "ignacio castellano").
+    const leadingNameTokens = significantTokens(leading).filter(
+      (t) => !/^\d+$/.test(t) && t.length >= 4,
+    );
+    const extraDistinctive = leadingNameTokens.filter(
+      (t) => !focusTokens.some((f) => f === t || f.startsWith(t) || t.startsWith(f)),
+    );
+    if (extraDistinctive.length > 0) return r;
 
     // Rebuild description: inject number after street name portion.
     const parts = r.description.split(',').map((p) => p.trim());
     const primary = parts[0] ?? r.description;
     // Avoid double-insert if primary already ends with a different number.
     if (/\d/.test(primary) && !new RegExp(`\\b${want}\\b`, 'i').test(primary)) {
-      // Different number already present — leave alone.
       return r;
     }
     const withNum = /\d/.test(primary) ? primary : `${primary} ${parsed.housenumber}`;
@@ -354,7 +368,6 @@ export function applyHousenumberSynthesis(results: PlaceResult[], query: string)
     return {
       ...r,
       description,
-      // Stable synthetic id so cache/dedupe keeps the numbered variant.
       place_id: `${r.place_id}:hn:${want}`,
     };
   });
@@ -600,9 +613,11 @@ export async function autocomplete(
     let merged = mergePlaceResults([olcList, catalogHits, ...photonResults]) as PlaceResult[];
     merged = applyHousenumberSynthesis(merged, trimmed);
 
-    // If Photon timed out / empty but the user typed a clear street (+ optional #),
-    // try Photon once more then Nominatim — beats "no encontramos esa dirección".
-    if (merged.length === 0 && isStreetishQuery(trimmed)) {
+    // Provider fallback when Photon returned nothing useful — even if catalog/OLC
+    // already matched (e.g. POI alias). Catalog alone is fine for pure POI queries;
+    // streetish free-text still needs a street geom from Photon retry / Nominatim.
+    const hasProviderHit = photonResults.some((l) => l.length > 0);
+    if (!hasProviderHit && isStreetishQuery(trimmed)) {
       const parsed = parseStreetQuery(trimmed);
       const fallbackQ =
         parsed.streetName && parsed.housenumber
@@ -610,6 +625,7 @@ export async function autocomplete(
           : parsed.streetName
             ? `${parsed.streetName}${parsed.cityHint ? `, ${parsed.cityHint}` : ''}`
             : trimmed;
+      let providerExtra: PlaceResult[] = [];
       try {
         const url = new URL(`${PHOTON_URL}/api/`);
         url.searchParams.set('q', fallbackQ);
@@ -618,21 +634,23 @@ export async function autocomplete(
         url.searchParams.set('lat', String(biasLat));
         url.searchParams.set('lon', String(biasLng));
         const data = await fetchPhoton(url, Math.max(GEO_AUTOCOMPLETE_TIMEOUT_MS, 5000));
-        const fb = applyHousenumberSynthesis(
+        providerExtra = applyHousenumberSynthesis(
           featuresToPlaceResults(data.features || [], trimmed, biasLat, biasLng),
           trimmed,
         );
-        merged = mergePlaceResults([olcList, catalogHits, fb]) as PlaceResult[];
       } catch {
-        // Photon still down — continue to Nominatim
+        // Photon still down — Nominatim below
       }
-      if (merged.length === 0) {
+      if (providerExtra.length === 0) {
         try {
-          const nom = await nominatimStreetFallback(trimmed, biasLat, biasLng);
-          merged = mergePlaceResults([olcList, catalogHits, nom]) as PlaceResult[];
+          providerExtra = await nominatimStreetFallback(trimmed, biasLat, biasLng);
         } catch {
-          // keep empty
+          // keep empty provider side
         }
+      }
+      if (providerExtra.length > 0) {
+        merged = mergePlaceResults([olcList, catalogHits, providerExtra]) as PlaceResult[];
+        merged = applyHousenumberSynthesis(merged, trimmed);
       }
     }
 

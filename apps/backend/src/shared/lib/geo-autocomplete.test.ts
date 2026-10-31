@@ -15,6 +15,7 @@ import {
 } from './geo';
 import {
   encode as olcEncode,
+  decode as olcDecode,
   extractPlusCode,
   recoverNearest,
   resolvePlusCodeCenter,
@@ -296,7 +297,7 @@ describe('rankPhotonPlaceFeatures', () => {
     expect(ranked[0].properties.osm_id).toBe(2);
   });
 
-  test('applyHousenumberSynthesis attaches door number to matching street label', () => {
+  test('applyHousenumberSynthesis attaches door number only to matching street', () => {
     const out = applyHousenumberSynthesis(
       [
         {
@@ -306,16 +307,35 @@ describe('rankPhotonPlaceFeatures', () => {
           lng: -65.1765,
         },
         {
-          description: 'Ernesto Castellano 50, Villa Dolores, Córdoba, Argentina',
+          description: 'Ernesto Castellano, Villa Dolores, Córdoba, Argentina',
           place_id: '1',
           lat: -31.9428,
           lng: -65.1911,
+        },
+        {
+          description: 'Club Deportivo Ignacio Castellano, Villa Dolores',
+          place_id: 'catalog:vd-club-ignacio-castellano',
+          lat: -31.9653,
+          lng: -65.184,
         },
       ],
       'C ignacio castellano 50 villa dolores',
     );
     expect(out[0].description).toMatch(/^Ignacio Castellano 50,/);
-    expect(out[1].description).toMatch(/^Ernesto Castellano 50,/);
+    // Near-homonym without "ignacio" must not get a fabricated door number.
+    expect(out[1].description).toBe('Ernesto Castellano, Villa Dolores, Córdoba, Argentina');
+    // Catalog pins stay untouched.
+    expect(out[2].description).toBe('Club Deportivo Ignacio Castellano, Villa Dolores');
+    expect(out[2].place_id).toBe('catalog:vd-club-ignacio-castellano');
+  });
+
+  test('open location code 10-digit cell precision is 0.000125°', () => {
+    const full = recoverNearest('2RM8+V9', -31.9456, -65.1895);
+    expect(full).toBe('47WP2RM8+V9');
+    const area = olcDecode(full);
+    // 10 significant pair digits → official last pair resolution 0.000125°.
+    expect(area.latitudeHi - area.latitudeLo).toBeCloseTo(0.000125, 8);
+    expect(area.longitudeHi - area.longitudeLo).toBeCloseTo(0.000125, 8);
   });
 });
 
