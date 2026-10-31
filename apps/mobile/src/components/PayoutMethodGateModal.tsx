@@ -22,8 +22,7 @@ export const PayoutMethodGateModal: React.FC<PayoutMethodGateModalProps> = ({
           <Text style={styles.title}>Necesitamos tu medio de cobro</Text>
           <Text style={styles.body}>
             Cargá un CBU/CVU y un alias. Cuando el pasajero elija pagar por transferencia, va a ver
-            estos datos para enviarte el monto del viaje. Lifty no te deposita por acá. Sin medio de
-            cobro no podés conectarte.
+            estos datos para enviarte el monto del viaje. Sin medio de cobro no podés conectarte.
           </Text>
           <Button title="CARGAR MEDIO DE COBRO" onPress={onAddMethod} style={styles.primary} />
           <Button
