@@ -1,4 +1,12 @@
-import { allowsPdfDoc, DOC_SIDES, type DocBase, toBackendDocType } from '../../utils/upload';
+import {
+  allowsPdfDoc,
+  DOC_SIDES,
+  type DocBase,
+  MAX_PDF_UPLOAD_BYTES,
+  PDF_TOO_LARGE_MSG,
+  toBackendDocType,
+  validateDocFileSize,
+} from '../../utils/upload';
 
 // Must match apps/backend/src/shared/lib/documents.ts DOC_TYPES
 // (no background_check_back, no insurance_back — single file/policy;
@@ -65,5 +73,24 @@ describe('allowsPdfDoc', () => {
     expect(allowsPdfDoc('drivers_license')).toBe(false);
     expect(allowsPdfDoc('vehicle_registration')).toBe(false);
     expect(allowsPdfDoc(undefined)).toBe(false);
+  });
+});
+
+describe('validateDocFileSize', () => {
+  it('rejects PDF over 5 MB with actionable copy', () => {
+    expect(
+      validateDocFileSize({ fileSize: MAX_PDF_UPLOAD_BYTES + 1, isPdf: true }),
+    ).toBe(PDF_TOO_LARGE_MSG);
+    expect(validateDocFileSize({ fileSize: MAX_PDF_UPLOAD_BYTES, isPdf: true })).toBeNull();
+  });
+
+  it('keeps images at 10 MB cap', () => {
+    expect(validateDocFileSize({ fileSize: 9 * 1024 * 1024, isPdf: false })).toBeNull();
+    expect(validateDocFileSize({ fileSize: 11 * 1024 * 1024, isPdf: false })).toMatch(/10 MB/);
+  });
+
+  it('skips when size is unknown', () => {
+    expect(validateDocFileSize({ fileSize: null, isPdf: true })).toBeNull();
+    expect(validateDocFileSize({ fileSize: undefined, isPdf: false })).toBeNull();
   });
 });

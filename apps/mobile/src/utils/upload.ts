@@ -33,6 +33,29 @@ export function allowsPdfDoc(docType: DocBase | undefined | null): boolean {
   return docType != null && PDF_UPLOAD_DOC_BASES.has(docType);
 }
 
+/** Images are compressed client-side; hard cap stays generous. */
+export const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
+/** PDFs are not compressed on device — keep a tighter product limit. */
+export const MAX_PDF_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+export const PDF_TOO_LARGE_MSG =
+  'El PDF supera 5 MB. Reducilo a 5 MB o menos, o subí una foto del documento.';
+
+export const IMAGE_TOO_LARGE_MSG = 'La imagen debe pesar menos de 10 MB.';
+
+/** Returns a user-facing error, or null if size is OK / unknown. */
+export function validateDocFileSize(opts: {
+  fileSize: number | null | undefined;
+  isPdf: boolean;
+}): string | null {
+  const size = opts.fileSize;
+  if (size == null || !Number.isFinite(size) || size <= 0) return null;
+  if (opts.isPdf) {
+    return size > MAX_PDF_UPLOAD_BYTES ? PDF_TOO_LARGE_MSG : null;
+  }
+  return size > MAX_IMAGE_UPLOAD_BYTES ? IMAGE_TOO_LARGE_MSG : null;
+}
+
 const DOC_BASE_MAP: Record<DocBase, string> = {
   drivers_license: 'license',
   vehicle_registration: 'registration',

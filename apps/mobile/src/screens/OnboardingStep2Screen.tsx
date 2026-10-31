@@ -50,6 +50,7 @@ import {
   MAX_FILES_PER_DOC_SIDE,
   allowsPdfDoc,
   uploadDocumentToBackend,
+  validateDocFileSize,
 } from '../utils/upload';
 
 const meVehicleSchema = z.object({
@@ -61,8 +62,6 @@ const meVehicleSchema = z.object({
     .nullable()
     .optional(),
 });
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 type DocType = DocBase;
 type PickMethod = 'camera' | 'gallery' | 'pdf';
@@ -294,8 +293,13 @@ export const OnboardingStep2Screen: React.FC = () => {
         }
 
         for (const asset of picked) {
-          if (asset.fileSize && asset.fileSize > MAX_FILE_SIZE) {
-            setSideError(docType, side, 'El archivo debe ser menor a 10MB');
+          const isPdf =
+            method === 'pdf' ||
+            asset.mimeType === 'application/pdf' ||
+            asset.name.toLowerCase().endsWith('.pdf');
+          const sizeError = validateDocFileSize({ fileSize: asset.fileSize, isPdf });
+          if (sizeError) {
+            setSideError(docType, side, sizeError);
             return;
           }
         }

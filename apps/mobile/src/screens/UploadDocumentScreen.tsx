@@ -24,12 +24,12 @@ import {
   allowsPdfDoc,
   reuploadDocumentToBackend,
   uploadDocumentToBackend,
+  validateDocFileSize,
 } from '../utils/upload';
 
 type DocType = DocBase;
 
 const SIDE_LABELS: Record<DocSide, string> = { front: 'Frente', back: 'Dorso' };
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 type SelectedFile = {
   uri: string;
@@ -180,15 +180,16 @@ export const UploadDocumentScreen: React.FC = () => {
     if (result.canceled || !result.assets?.[0]) return;
 
     const asset = result.assets[0];
-    if (asset.size && asset.size > MAX_FILE_SIZE) {
-      Alert.alert('Archivo grande', 'El archivo debe ser menor a 10MB.');
+    const sizeError = validateDocFileSize({ fileSize: asset.size, isPdf: true });
+    if (sizeError) {
+      Alert.alert('PDF demasiado pesado', sizeError);
       return;
     }
 
     pushFiles(side, [
       {
         uri: asset.uri,
-        name: asset.name ?? `seguro_${Date.now()}.pdf`,
+        name: asset.name ?? `documento_${Date.now()}.pdf`,
         mimeType: asset.mimeType ?? 'application/pdf',
         size: asset.size,
       },
