@@ -377,7 +377,7 @@ export const OnboardingStep2Screen: React.FC = () => {
                     serverStatus: 'pending_review',
                     isPdf: files.some((f) => f.isPdf),
                     error: null,
-                    reviewComment: replaceGroup ? null : prevSide.reviewComment,
+                    reviewComment: null,
                   },
                 },
               };
@@ -751,7 +751,7 @@ export const OnboardingStep2Screen: React.FC = () => {
                       <View style={styles.errorRow}>
                         <Text style={styles.errorText}>{state.error}</Text>
                         <TouchableOpacity onPress={() => handleClearSideError(doc.type, side)}>
-                          <Text style={styles.retryText}>Reintentar</Text>
+                          <Text style={styles.retryText}>Cerrar</Text>
                         </TouchableOpacity>
                       </View>
                     ) : null}
