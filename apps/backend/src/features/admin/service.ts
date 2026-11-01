@@ -155,10 +155,13 @@ async function loadDriverDetailRow(driverId: string): Promise<DriverDetailRow | 
     return row ?? null;
   } catch (err) {
     if (!isMissingDriverDetailRelationError(err)) throw err;
-    logger.warn('[admin] getDriverDetail schema drift — retry without optional cols', {
-      driverId: driverId.slice(0, 8),
-      message: (err as Error).message,
-    });
+    logger.warn(
+      '[admin] getDriverDetail schema drift — retry without commission_fraud_block (keep license cols)',
+      {
+        driverId: driverId.slice(0, 8),
+        message: (err as Error).message,
+      },
+    );
     try {
       const [row] = await db
         .select({
@@ -174,10 +177,13 @@ async function loadDriverDetailRow(driverId: string): Promise<DriverDetailRow | 
       return { ...row, commission_fraud_block: false };
     } catch (err2) {
       if (!isMissingDriverDetailRelationError(err2)) throw err2;
-      logger.warn('[admin] getDriverDetail schema drift — retry without license cols', {
-        driverId: driverId.slice(0, 8),
-        message: (err2 as Error).message,
-      });
+      logger.warn(
+        '[admin] getDriverDetail schema drift — base select only (empty license + no commission_fraud_block)',
+        {
+          driverId: driverId.slice(0, 8),
+          message: (err2 as Error).message,
+        },
+      );
       const [row] = await db
         .select(baseSelect)
         .from(drivers)
