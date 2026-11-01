@@ -45,8 +45,8 @@ export type CommissionPhaseSnapshot = {
 
 function formatRatePct(ratePct: number): string {
   if (!Number.isFinite(ratePct)) return '0';
-  const rounded = Math.round(ratePct * 100) / 100;
-  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+  // Drop trailing zeros (10, 5.5) without a dead integer branch.
+  return String(Math.round(ratePct * 100) / 100);
 }
 
 /**

@@ -48,24 +48,29 @@ export const EarningsScreen: React.FC = () => {
 
   const retentionTotal = earnings?.trips?.reduce((sum, t) => sum + (t.platform_fee ?? 0), 0) ?? 0;
   const tripsRevenueTotal = earnings?.trips?.reduce((sum, t) => sum + (t.total_fare ?? 0), 0) ?? 0;
-  // Prefer admin global phase rate; fall back to today's realized fee % only if API omits commission.
+  // Prefer admin global phase rate. Realized % only when there were fares today —
+  // never invent 0% from an empty day when the server rate is unknown/missing.
   const serverRatePct =
     earnings?.commission != null && Number.isFinite(earnings.commission.rate_pct)
       ? Math.round(earnings.commission.rate_pct)
       : null;
   const realizedRetentionPercent =
-    retentionTotal > 0 && tripsRevenueTotal > 0
-      ? Math.round((retentionTotal / tripsRevenueTotal) * 100)
-      : 0;
+    tripsRevenueTotal > 0 ? Math.round((retentionTotal / tripsRevenueTotal) * 100) : null;
   const retentionPercent = serverRatePct ?? realizedRetentionPercent;
+  const retentionPercentLabel = retentionPercent == null ? '' : ` (${retentionPercent}%)`;
   const commissionBanner =
     earnings?.commission != null ? formatCommissionBanner(earnings.commission) : null;
   const commissionIsZero = isZeroCommissionPhase(earnings?.commission);
 
   const weekRetention = earnings?.week_platform_fee ?? 0;
   const weekFare = earnings?.week_total_fare ?? 0;
-  const weekRetentionPercent =
-    weekRetention > 0 && weekFare > 0 ? Math.round((weekRetention / weekFare) * 100) : 0;
+  const weekRetentionPercent = weekFare > 0 ? Math.round((weekRetention / weekFare) * 100) : null;
+  const weekRetentionPercentLabel =
+    weekRetentionPercent != null
+      ? ` (${weekRetentionPercent}%)`
+      : serverRatePct != null
+        ? ` (${serverRatePct}%)`
+        : '';
 
   const formatTime = (iso: string) => {
     const date = new Date(iso);
@@ -231,7 +236,7 @@ export const EarningsScreen: React.FC = () => {
                   ]}
                 >
                   -{formatCurrency(retentionTotal)}
-                  {retentionTotal > 0 || retentionPercent > 0 ? ` (${retentionPercent}%)` : ' (0%)'}
+                  {retentionPercentLabel}
                 </Text>
               </View>
               {commissionBanner ? (
@@ -271,7 +276,7 @@ export const EarningsScreen: React.FC = () => {
                   ]}
                 >
                   -{formatCurrency(weekRetention)}
-                  {weekRetention > 0 ? ` (${weekRetentionPercent}%)` : ' (0%)'}
+                  {weekRetentionPercentLabel}
                 </Text>
               </View>
             </Card>
@@ -429,7 +434,7 @@ export const EarningsScreen: React.FC = () => {
                   ]}
                 >
                   -{formatCurrency(retentionTotal)}
-                  {retentionTotal > 0 || retentionPercent > 0 ? ` (${retentionPercent}%)` : ' (0%)'}
+                  {retentionPercentLabel}
                 </Text>
               </View>
               {commissionBanner ? (
@@ -469,7 +474,7 @@ export const EarningsScreen: React.FC = () => {
                   ]}
                 >
                   -{formatCurrency(weekRetention)}
-                  {weekRetention > 0 ? ` (${weekRetentionPercent}%)` : ' (0%)'}
+                  {weekRetentionPercentLabel}
                 </Text>
               </View>
             </Card>
