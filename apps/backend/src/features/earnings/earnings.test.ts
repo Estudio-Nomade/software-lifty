@@ -163,6 +163,40 @@ describe('Earnings + Stats + TVF', () => {
     expect(data.debt_blocks_online).toBe(false);
   });
 
+  test('GET /daily exposes global commission phase from admin config', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+    const db = getDb();
+    // Force Lanzamiento window relative to "now"
+    const today = new Date();
+    const y = today.getUTCFullYear();
+    const m = String(today.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(today.getUTCDate()).padStart(2, '0');
+    await db
+      .insert(platformConfig)
+      .values({ key: 'commission_start_date', value: `${y}-${m}-${d}` })
+      .onConflictDoUpdate({
+        target: platformConfig.key,
+        set: { value: `${y}-${m}-${d}`, updated_at: new Date() },
+      });
+
+    const { status, data } = await request(
+      'GET',
+      '/api/drivers/me/earnings/daily',
+      undefined,
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.commission).toBeDefined();
+    expect(data.commission.phase).toBe('Lanzamiento');
+    expect(data.commission.rate).toBe(0);
+    expect(data.commission.rate_pct).toBe(0);
+    expect(data.commission.current_day).toBe(1);
+    expect(data.commission.phase_day_start).toBe(1);
+    expect(data.commission.phase_day_end).toBe(7);
+  });
+
   test('GET /summary returns earnings after completed trip', async () => {
     const token = await registerAndGetToken(phone, password);
     const driverId = await createDriverRow(token);

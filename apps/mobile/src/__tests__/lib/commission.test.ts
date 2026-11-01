@@ -1,8 +1,10 @@
 import {
+  formatCommissionBanner,
   formatCommissionReceiptDate,
   formatCommissionReceiptStatus,
   formatDebtCapLabel,
   isSafeHttpUrl,
+  isZeroCommissionPhase,
   normalizePlatformDebt,
   shouldShowPlatformDebt,
 } from '../../lib/commission';
@@ -42,6 +44,73 @@ describe('formatDebtCapLabel', () => {
 
   it('formats positive cap without inventing a fixed amount', () => {
     expect(formatDebtCapLabel(10000)).toMatch(/tope \$10[.\s]?000/);
+  });
+});
+
+describe('formatCommissionBanner', () => {
+  it('describes zero-rate launch window with day bounds', () => {
+    expect(
+      formatCommissionBanner({
+        rate: 0,
+        rate_pct: 0,
+        phase: 'Lanzamiento',
+        current_day: 3,
+        phase_day_start: 1,
+        phase_day_end: 7,
+      }),
+    ).toBe('Comisión 0% — Lanzamiento (día 3 de 7)');
+  });
+
+  it('describes positive global rate without inventing free month', () => {
+    expect(
+      formatCommissionBanner({
+        rate: 0.1,
+        rate_pct: 10,
+        phase: 'Estabilización',
+        current_day: 20,
+        phase_day_start: 15,
+        phase_day_end: 120,
+      }),
+    ).toBe('Comisión actual 10% — Estabilización (día 20 de 120)');
+  });
+
+  it('handles open-ended phases', () => {
+    expect(
+      formatCommissionBanner({
+        rate: 0.12,
+        rate_pct: 12,
+        phase: 'Crecimiento',
+        current_day: 200,
+        phase_day_start: 121,
+        phase_day_end: null,
+      }),
+    ).toBe('Comisión actual 12% — Crecimiento (día 200+)');
+  });
+});
+
+describe('isZeroCommissionPhase', () => {
+  it('is true only for zero rate snapshots', () => {
+    expect(
+      isZeroCommissionPhase({
+        rate: 0,
+        rate_pct: 0,
+        phase: 'Lanzamiento',
+        current_day: 1,
+        phase_day_start: 1,
+        phase_day_end: 7,
+      }),
+    ).toBe(true);
+    expect(
+      isZeroCommissionPhase({
+        rate: 0.05,
+        rate_pct: 5,
+        phase: 'Medición',
+        current_day: 8,
+        phase_day_start: 8,
+        phase_day_end: 14,
+      }),
+    ).toBe(false);
+    expect(isZeroCommissionPhase(undefined)).toBe(false);
   });
 });
 

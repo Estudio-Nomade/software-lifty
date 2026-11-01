@@ -175,6 +175,15 @@ export const earningsTripSchema = z.object({
   payment_method: z.string().nullable(),
 });
 
+export const earningsCommissionSchema = z.object({
+  rate: z.number(),
+  rate_pct: z.number(),
+  phase: z.string(),
+  current_day: z.number(),
+  phase_day_start: z.number(),
+  phase_day_end: z.number().nullable(),
+});
+
 export const earningsDailySchema = z.object({
   total: z.number(),
   cash: z.number(),
@@ -188,6 +197,8 @@ export const earningsDailySchema = z.object({
   platform_debt: z.number().optional(),
   debt_cap_ars: z.number().optional(),
   debt_blocks_online: z.boolean().optional(),
+  /** Global commission phase (admin SoT). Not per-driver. */
+  commission: earningsCommissionSchema.optional(),
 });
 
 export const paymentMethodSchema = z.object({

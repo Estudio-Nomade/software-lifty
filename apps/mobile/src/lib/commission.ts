@@ -33,6 +33,52 @@ export function formatDebtCapLabel(capArs: number | undefined): string | null {
   })}`;
 }
 
+/** Snapshot of global commission phase from GET /drivers/me/earnings/daily. */
+export type CommissionPhaseSnapshot = {
+  rate: number;
+  rate_pct: number;
+  phase: string;
+  current_day: number;
+  phase_day_start: number;
+  phase_day_end: number | null;
+};
+
+function formatRatePct(ratePct: number): string {
+  if (!Number.isFinite(ratePct)) return '0';
+  const rounded = Math.round(ratePct * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+}
+
+/**
+ * Driver-facing commission banner from admin global phases.
+ * 0% = launch window (days from app launch), not “first month per driver”.
+ */
+export function formatCommissionBanner(commission: CommissionPhaseSnapshot): string {
+  const pct = formatRatePct(commission.rate_pct);
+  const phase = (commission.phase || 'actual').trim() || 'actual';
+  const day = Number.isFinite(commission.current_day) ? commission.current_day : 1;
+  const end = commission.phase_day_end;
+
+  if (commission.rate <= 0 || commission.rate_pct <= 0) {
+    if (end != null && Number.isFinite(end)) {
+      return `Comisión 0% — ${phase} (día ${day} de ${end})`;
+    }
+    return `Comisión 0% — ${phase} (día ${day}+)`;
+  }
+
+  if (end != null && Number.isFinite(end)) {
+    return `Comisión actual ${pct}% — ${phase} (día ${day} de ${end})`;
+  }
+  return `Comisión actual ${pct}% — ${phase} (día ${day}+)`;
+}
+
+export function isZeroCommissionPhase(
+  commission: CommissionPhaseSnapshot | null | undefined,
+): boolean {
+  if (!commission) return false;
+  return commission.rate <= 0 || commission.rate_pct <= 0;
+}
+
 /** API statuses for driver → Lifty commission receipts (schema + admin pack). */
 export type CommissionReceiptStatus = 'pending_review' | 'approved' | 'rejected_fraud' | string;
 

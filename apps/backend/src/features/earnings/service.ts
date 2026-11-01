@@ -2,7 +2,7 @@ import { type SQL, and, count, desc, eq, gte, inArray, lte, sql, sum } from 'dri
 import { db, getDb } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
 import { drivers, trips } from '../../shared/db/schema';
-import { getDebtCapArs } from '../../shared/lib/commission';
+import { getCommissionConfig, getDebtCapArs } from '../../shared/lib/commission';
 import { AppError } from '../../shared/lib/errors';
 import type { AuthUser } from '../../shared/middleware/auth';
 
@@ -36,7 +36,11 @@ export const earningsService = {
       .limit(1);
 
     const debt = Number(driver?.platform_debt ?? 0);
-    const cap = await getDebtCapArs(getDb());
+    const dbConn = getDb();
+    const [cap, commissionCfg] = await Promise.all([
+      getDebtCapArs(dbConn),
+      getCommissionConfig(dbConn),
+    ]);
 
     const todayTrips = await db
       .select({
@@ -81,6 +85,8 @@ export const earningsService = {
         ),
       );
 
+    const ratePct = Math.round(commissionCfg.rate * 10000) / 100;
+
     return {
       total: cash + transfer,
       cash,
@@ -93,6 +99,15 @@ export const earningsService = {
       platform_debt: debt,
       debt_cap_ars: cap,
       debt_blocks_online: debt > cap,
+      // Global phase from admin commission_start_date + phases (not per-driver).
+      commission: {
+        rate: commissionCfg.rate,
+        rate_pct: ratePct,
+        phase: commissionCfg.phase,
+        current_day: commissionCfg.currentDay,
+        phase_day_start: commissionCfg.phaseDayStart,
+        phase_day_end: commissionCfg.phaseDayEnd,
+      },
     };
   },
 

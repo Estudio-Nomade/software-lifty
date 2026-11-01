@@ -13,7 +13,9 @@ import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
 import {
+  formatCommissionBanner,
   formatDebtCapLabel,
+  isZeroCommissionPhase,
   normalizePlatformDebt,
   shouldShowPlatformDebt,
 } from '../lib/commission';
@@ -46,9 +48,19 @@ export const EarningsScreen: React.FC = () => {
 
   const retentionTotal = earnings?.trips?.reduce((sum, t) => sum + (t.platform_fee ?? 0), 0) ?? 0;
   const tripsRevenueTotal = earnings?.trips?.reduce((sum, t) => sum + (t.total_fare ?? 0), 0) ?? 0;
-  const retentionPercent =
-    retentionTotal > 0 ? Math.round((retentionTotal / tripsRevenueTotal) * 100) : 0;
-  const isExempt = retentionPercent === 0;
+  // Prefer admin global phase rate; fall back to today's realized fee % only if API omits commission.
+  const serverRatePct =
+    earnings?.commission != null && Number.isFinite(earnings.commission.rate_pct)
+      ? Math.round(earnings.commission.rate_pct)
+      : null;
+  const realizedRetentionPercent =
+    retentionTotal > 0 && tripsRevenueTotal > 0
+      ? Math.round((retentionTotal / tripsRevenueTotal) * 100)
+      : 0;
+  const retentionPercent = serverRatePct ?? realizedRetentionPercent;
+  const commissionBanner =
+    earnings?.commission != null ? formatCommissionBanner(earnings.commission) : null;
+  const commissionIsZero = isZeroCommissionPhase(earnings?.commission);
 
   const weekRetention = earnings?.week_platform_fee ?? 0;
   const weekFare = earnings?.week_total_fare ?? 0;
@@ -219,21 +231,21 @@ export const EarningsScreen: React.FC = () => {
                   ]}
                 >
                   -{formatCurrency(retentionTotal)}
-                  {retentionTotal > 0 ? ` (${retentionPercent}%)` : ' (0%)'}
+                  {retentionTotal > 0 || retentionPercent > 0 ? ` (${retentionPercent}%)` : ' (0%)'}
                 </Text>
               </View>
-              {isExempt && (
+              {commissionBanner ? (
                 <View style={styles.exemptNotice}>
                   <Ionicons
-                    name="checkmark-circle-outline"
+                    name={
+                      commissionIsZero ? 'checkmark-circle-outline' : 'information-circle-outline'
+                    }
                     size={16}
-                    color={theme.colors.turquoise}
+                    color={commissionIsZero ? theme.colors.turquoise : theme.colors.mediumGray}
                   />
-                  <Text style={styles.exemptNoticeText}>
-                    Comision 0% — Primer mes gratis para nuevos conductores
-                  </Text>
+                  <Text style={styles.exemptNoticeText}>{commissionBanner}</Text>
                 </View>
-              )}
+              ) : null}
               <View style={styles.divider} />
               <Text style={styles.sectionLabel}>Esta semana</Text>
               <View style={styles.row}>
@@ -417,21 +429,21 @@ export const EarningsScreen: React.FC = () => {
                   ]}
                 >
                   -{formatCurrency(retentionTotal)}
-                  {retentionTotal > 0 ? ` (${retentionPercent}%)` : ' (0%)'}
+                  {retentionTotal > 0 || retentionPercent > 0 ? ` (${retentionPercent}%)` : ' (0%)'}
                 </Text>
               </View>
-              {isExempt && (
+              {commissionBanner ? (
                 <View style={styles.exemptNotice}>
                   <Ionicons
-                    name="checkmark-circle-outline"
+                    name={
+                      commissionIsZero ? 'checkmark-circle-outline' : 'information-circle-outline'
+                    }
                     size={16}
-                    color={theme.colors.turquoise}
+                    color={commissionIsZero ? theme.colors.turquoise : theme.colors.mediumGray}
                   />
-                  <Text style={styles.exemptNoticeText}>
-                    Comision 0% — Primer mes gratis para nuevos conductores
-                  </Text>
+                  <Text style={styles.exemptNoticeText}>{commissionBanner}</Text>
                 </View>
-              )}
+              ) : null}
               <View style={styles.divider} />
               <Text style={styles.sectionLabel}>Esta semana</Text>
               <View style={styles.row}>

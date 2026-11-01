@@ -111,5 +111,22 @@ describe('getCommissionRate', () => {
     expect(config.currentDay).toBe(1);
     expect(config.phase).toBe('Lanzamiento');
     expect(config.rate).toBe(0);
+    expect(config.phaseDayStart).toBe(1);
+    expect(config.phaseDayEnd).toBe(7);
+  });
+
+  test('includes active phase day bounds', async () => {
+    const db = getDb();
+    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
+    const day8 = await getCommissionConfig(db, new Date('2026-10-08T12:00:00Z'));
+    expect(day8.phase).toBe('Medición');
+    expect(day8.phaseDayStart).toBe(8);
+    expect(day8.phaseDayEnd).toBe(14);
+    expect(day8.rate).toBe(0.05);
+
+    const open = await getCommissionConfig(db, new Date('2027-01-29T12:00:00Z'));
+    expect(open.phase).toBe('Crecimiento');
+    expect(open.phaseDayStart).toBe(121);
+    expect(open.phaseDayEnd).toBeNull();
   });
 });
