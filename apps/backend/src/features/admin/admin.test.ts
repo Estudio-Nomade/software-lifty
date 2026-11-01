@@ -255,6 +255,83 @@ describe('Admin', () => {
     expect(typeof data.platform_debt).toBe('number');
     expect(data).toHaveProperty('commission_fraud_block');
     expect(typeof data.commission_fraud_block).toBe('boolean');
+    expect(data).toHaveProperty('professional_license_phase');
+    expect(data).toHaveProperty('license_professional_status');
+  });
+
+  test('GET /drivers/:id exposes professional license grace snapshot', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId, token } = await createReviewDriver();
+    const db = getDb();
+    const started = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+    const due = new Date(started.getTime() + 60 * 24 * 60 * 60 * 1000);
+
+    await db
+      .update(drivers)
+      .set({
+        license_category: 'B',
+        license_professional_status: 'pending_professional',
+        professional_license_grace_started_at: started,
+        professional_license_due_at: due,
+      })
+      .where(eq(drivers.id, driverId));
+
+    const grace = await request('GET', `/api/admin/drivers/${driverId}`, undefined, adminToken);
+    expect(grace.status).toBe(200);
+    expect(grace.data.license_category).toBe('B');
+    expect(grace.data.license_professional_status).toBe('pending_professional');
+    expect(grace.data.professional_license_phase).toBe('grace');
+    expect(grace.data.professional_license_show_banner).toBe(true);
+    expect(grace.data.professional_license_blocks_online).toBe(false);
+    expect(grace.data.professional_license_grace_days).toBe(60);
+    expect(grace.data.professional_license_grace_started_at).toBe(started.toISOString());
+    expect(grace.data.professional_license_due_at).toBe(due.toISOString());
+    expect(typeof grace.data.professional_license_days_remaining).toBe('number');
+    expect(grace.data.professional_license_days_remaining).toBeGreaterThan(0);
+
+    await db
+      .update(drivers)
+      .set({
+        professional_license_grace_started_at: null,
+        professional_license_due_at: null,
+      })
+      .where(eq(drivers.id, driverId));
+
+    const notStarted = await request(
+      'GET',
+      `/api/admin/drivers/${driverId}`,
+      undefined,
+      adminToken,
+    );
+    expect(notStarted.status).toBe(200);
+    expect(notStarted.data.professional_license_phase).toBe('not_started');
+    expect(notStarted.data.professional_license_show_banner).toBe(true);
+    expect(notStarted.data.professional_license_days_remaining).toBe(60);
+
+    await db
+      .update(drivers)
+      .set({
+        license_professional_status: 'professional',
+        professional_license_grace_started_at: started,
+        professional_license_due_at: due,
+      })
+      .where(eq(drivers.id, driverId));
+
+    const satisfied = await request(
+      'GET',
+      `/api/admin/drivers/${driverId}`,
+      undefined,
+      adminToken,
+    );
+    expect(satisfied.status).toBe(200);
+    expect(satisfied.data.professional_license_phase).toBe('satisfied');
+    expect(satisfied.data.professional_license_show_banner).toBe(false);
+
+    const profile = await request('GET', '/api/drivers/me', undefined, token);
+    expect(profile.status).toBe(200);
+    expect(profile.data.professional_license_phase).toBe('satisfied');
+    expect(profile.data.professional_license_show_banner).toBe(false);
+    expect(profile.data).toHaveProperty('professional_license_days_remaining');
   });
 
   test('isMissingDriverDetailRelationError detects undeployed commission_fraud_block', async () => {

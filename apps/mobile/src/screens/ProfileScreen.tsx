@@ -56,6 +56,18 @@ interface ProfileData {
   completion_rate: number;
   is_online: boolean;
   documents_pending_review?: boolean;
+  license_professional_status?: string | null;
+  professional_license_phase?:
+    | 'not_applicable'
+    | 'not_started'
+    | 'grace'
+    | 'overdue'
+    | 'satisfied'
+    | string
+    | null;
+  professional_license_show_banner?: boolean;
+  professional_license_days_remaining?: number | null;
+  professional_license_due_at?: string | null;
   vehicle: {
     brand: string;
     model: string;
@@ -65,6 +77,34 @@ interface ProfileData {
     vehicle_type: string;
   } | null;
   created_at: string;
+}
+
+function professionalLicenseStatusCopy(profile: ProfileData): string | null {
+  const pending =
+    profile.license_professional_status === 'pending_professional' ||
+    profile.professional_license_show_banner === true;
+  if (!pending) return null;
+
+  const phase = profile.professional_license_phase;
+  if (phase === 'satisfied' || phase === 'not_applicable') return null;
+
+  if (phase === 'not_started') {
+    return 'Pendiente — el plazo de 60 días arranca en tu primera conexión';
+  }
+  if (phase === 'overdue') {
+    return 'Plazo vencido — presentá el carnet o contactá soporte';
+  }
+  if (phase === 'grace') {
+    const days = profile.professional_license_days_remaining;
+    const due = profile.professional_license_due_at
+      ? new Date(profile.professional_license_due_at).toLocaleDateString('es-AR')
+      : null;
+    const daysPart = days != null ? `quedan ${days} días` : 'plazo en curso';
+    return due
+      ? `Pendiente de carga — ${daysPart} (vence ${due})`
+      : `Pendiente de carga — ${daysPart}`;
+  }
+  return 'Carnet profesional pendiente de carga';
 }
 
 interface CancellationMetrics {
@@ -474,6 +514,49 @@ export const ProfileScreen: React.FC = () => {
               </Text>
             </View>
           )}
+          {profile && professionalLicenseStatusCopy(profile) ? (
+            <View style={styles.docRow}>
+              <Ionicons
+                name={
+                  profile.professional_license_phase === 'overdue'
+                    ? 'alert-circle-outline'
+                    : 'time-outline'
+                }
+                size={18}
+                color={
+                  profile.professional_license_phase === 'overdue'
+                    ? theme.colors.dangerRed
+                    : theme.colors.amber
+                }
+              />
+              <View style={styles.docInfo}>
+                <Text style={styles.docName}>Carnet profesional</Text>
+                <Text
+                  style={[
+                    styles.docStatus,
+                    profile.professional_license_phase === 'overdue'
+                      ? { color: theme.colors.dangerRed }
+                      : null,
+                  ]}
+                >
+                  {professionalLicenseStatusCopy(profile)}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.navigate('UploadDocument', {
+                    docType: 'drivers_license',
+                    docLabel: 'Licencia de conducir',
+                    mode: 'reupload',
+                  })
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Subir carnet profesional"
+              >
+                <Text style={styles.docAction}>Subir</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
           {MANAGEABLE_DOCS.map((managed) => {
             const docsFor = documents.filter(
               (d) => DOC_TYPE_TO_UPLOAD[d.doc_type] === managed.docType,

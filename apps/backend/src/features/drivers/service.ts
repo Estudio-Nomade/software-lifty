@@ -2223,6 +2223,13 @@ export const driversService = {
       .from(trips)
       .where(and(eq(trips.driver_id, row.id), eq(trips.status, 'completed')));
 
+    const professionalLicense = evaluateProfessionalLicenseGrace({
+      license_category: row.license_category,
+      license_professional_status: row.license_professional_status,
+      professional_license_grace_started_at: row.professional_license_grace_started_at,
+      professional_license_due_at: row.professional_license_due_at,
+    });
+
     return {
       id: row.id,
       user_id: row.user_id,
@@ -2244,14 +2251,16 @@ export const driversService = {
       address_resolved_province: row.address_resolved_province,
       municipality_status: row.municipality_status ?? 'unset',
       intended_district_id: row.intended_district_id,
-      license_category: row.license_category ?? null,
-      license_professional_status: row.license_professional_status ?? 'unknown',
-      professional_license_grace_started_at: row.professional_license_grace_started_at
-        ? row.professional_license_grace_started_at.toISOString()
-        : null,
-      professional_license_due_at: row.professional_license_due_at
-        ? row.professional_license_due_at.toISOString()
-        : null,
+      license_category: professionalLicense.license_category,
+      license_professional_status: professionalLicense.license_professional_status,
+      professional_license_phase: professionalLicense.phase,
+      professional_license_show_banner: professionalLicense.show_banner,
+      professional_license_blocks_online: professionalLicense.blocks_online,
+      professional_license_grace_days: professionalLicense.grace_days,
+      professional_license_grace_started_at: professionalLicense.grace_started_at,
+      professional_license_due_at: professionalLicense.due_at,
+      professional_license_days_remaining: professionalLicense.days_remaining,
+      professional_license_days_elapsed: professionalLicense.days_elapsed,
       vehicle: {
         brand: row.brand,
         model: row.model,

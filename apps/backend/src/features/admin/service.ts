@@ -19,6 +19,7 @@ import { DOC_TYPES, VALID_DOC_TYPES, docTypeLabel } from '../../shared/lib/docum
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
 import { logger } from '../../shared/lib/logger';
+import { evaluateProfessionalLicenseGrace } from '../../shared/lib/professional-license-grace';
 import { sendPushToUser, sendPushToUserDetailed } from '../../shared/lib/push';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { ensureDriverEnteredReview } from '../drivers/service';
@@ -34,6 +35,13 @@ import {
 } from './notifications';
 
 const ACCOUNT_MESSAGES_LIMIT = 50;
+
+const EMPTY_PROFESSIONAL_LICENSE_DETAIL = {
+  license_category: null as string | null,
+  license_professional_status: 'unknown' as string,
+  professional_license_grace_started_at: null as Date | null,
+  professional_license_due_at: null as Date | null,
+};
 
 function escapeIlike(raw: string): string {
   return raw.replace(/[\\%_]/g, (ch) => `\\${ch}`);
@@ -75,6 +83,10 @@ type DriverDetailRow = {
   district_province: string | null;
   created_at: Date | string;
   total_trips: number | null;
+  license_category: string | null;
+  license_professional_status: string | null;
+  professional_license_grace_started_at: Date | string | null;
+  professional_license_due_at: Date | string | null;
 };
 
 /** Exported for unit coverage of schema-drift detection (prod wabdd missing 0048). */
@@ -121,11 +133,18 @@ async function loadDriverDetailRow(driverId: string): Promise<DriverDetailRow | 
     created_at: drivers.created_at,
     total_trips: drivers.total_trips,
   };
+  const licenseSelect = {
+    license_category: drivers.license_category,
+    license_professional_status: drivers.license_professional_status,
+    professional_license_grace_started_at: drivers.professional_license_grace_started_at,
+    professional_license_due_at: drivers.professional_license_due_at,
+  };
 
   try {
     const [row] = await db
       .select({
         ...baseSelect,
+        ...licenseSelect,
         commission_fraud_block: drivers.commission_fraud_block,
       })
       .from(drivers)
@@ -136,19 +155,45 @@ async function loadDriverDetailRow(driverId: string): Promise<DriverDetailRow | 
     return row ?? null;
   } catch (err) {
     if (!isMissingDriverDetailRelationError(err)) throw err;
-    logger.warn('[admin] getDriverDetail schema drift — retry without commission_fraud_block', {
-      driverId: driverId.slice(0, 8),
-      message: (err as Error).message,
-    });
-    const [row] = await db
-      .select(baseSelect)
-      .from(drivers)
-      .innerJoin(users, eq(drivers.user_id, users.id))
-      .leftJoin(districts, eq(drivers.district_id, districts.id))
-      .where(eq(drivers.id, driverId))
-      .limit(1);
-    if (!row) return null;
-    return { ...row, commission_fraud_block: false };
+    logger.warn(
+      '[admin] getDriverDetail schema drift — retry without commission_fraud_block (keep license cols)',
+      {
+        driverId: driverId.slice(0, 8),
+        message: (err as Error).message,
+      },
+    );
+    try {
+      const [row] = await db
+        .select({
+          ...baseSelect,
+          ...licenseSelect,
+        })
+        .from(drivers)
+        .innerJoin(users, eq(drivers.user_id, users.id))
+        .leftJoin(districts, eq(drivers.district_id, districts.id))
+        .where(eq(drivers.id, driverId))
+        .limit(1);
+      if (!row) return null;
+      return { ...row, commission_fraud_block: false };
+    } catch (err2) {
+      if (!isMissingDriverDetailRelationError(err2)) throw err2;
+      logger.warn(
+        '[admin] getDriverDetail schema drift — base select only (empty license + no commission_fraud_block)',
+        {
+          driverId: driverId.slice(0, 8),
+          message: (err2 as Error).message,
+        },
+      );
+      const [row] = await db
+        .select(baseSelect)
+        .from(drivers)
+        .innerJoin(users, eq(drivers.user_id, users.id))
+        .leftJoin(districts, eq(drivers.district_id, districts.id))
+        .where(eq(drivers.id, driverId))
+        .limit(1);
+      if (!row) return null;
+      return { ...row, commission_fraud_block: false, ...EMPTY_PROFESSIONAL_LICENSE_DETAIL };
+    }
   }
 }
 
@@ -369,6 +414,13 @@ export const adminService = {
       created_at: driver.created_at,
     });
 
+    const professionalLicense = evaluateProfessionalLicenseGrace({
+      license_category: driver.license_category,
+      license_professional_status: driver.license_professional_status,
+      professional_license_grace_started_at: driver.professional_license_grace_started_at,
+      professional_license_due_at: driver.professional_license_due_at,
+    });
+
     const messageRows = await db
       .select({
         id: driverAccountMessages.id,
@@ -419,6 +471,16 @@ export const adminService = {
       identification_days_until_pause: identification.days_until_pause,
       identification_pause_at: identification.pause_at,
       identification_days_since_approval: identification.days_since_approval,
+      license_category: professionalLicense.license_category,
+      license_professional_status: professionalLicense.license_professional_status,
+      professional_license_phase: professionalLicense.phase,
+      professional_license_show_banner: professionalLicense.show_banner,
+      professional_license_blocks_online: professionalLicense.blocks_online,
+      professional_license_grace_days: professionalLicense.grace_days,
+      professional_license_grace_started_at: professionalLicense.grace_started_at,
+      professional_license_due_at: professionalLicense.due_at,
+      professional_license_days_remaining: professionalLicense.days_remaining,
+      professional_license_days_elapsed: professionalLicense.days_elapsed,
       missing_doc_types,
       vehicles: vehicleRows,
       documents: documentRows,
