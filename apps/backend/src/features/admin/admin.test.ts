@@ -411,10 +411,69 @@ describe('Admin', () => {
     expect(row.document_number).toBe('30111222');
     expect(row.registry_id).toBe('30111222');
     expect(row).toHaveProperty('identification_phase');
+    expect(row).toHaveProperty('professional_license_phase');
 
     const byDni = await request('GET', '/api/admin/drivers?q=30111222', undefined, adminToken);
     expect(byDni.status).toBe(200);
     expect(byDni.data.items.some((d: { id: string }) => d.id === driverId)).toBe(true);
+  });
+
+  test('GET /drivers filters by professional_license grace/overdue/pending', async () => {
+    const adminToken = await createAdminToken();
+    const { driverId } = await createReviewDriver();
+    const db = getDb();
+    const started = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    const due = new Date(started.getTime() + 60 * 24 * 60 * 60 * 1000);
+
+    await db
+      .update(drivers)
+      .set({
+        license_category: 'B',
+        license_professional_status: 'pending_professional',
+        professional_license_grace_started_at: started,
+        professional_license_due_at: due,
+      })
+      .where(eq(drivers.id, driverId));
+
+    const grace = await request(
+      'GET',
+      '/api/admin/drivers?professional_license=grace',
+      undefined,
+      adminToken,
+    );
+    expect(grace.status).toBe(200);
+    const graceRow = grace.data.items.find((d: { id: string }) => d.id === driverId);
+    expect(graceRow).toBeDefined();
+    expect(graceRow.professional_license_phase).toBe('grace');
+    expect(typeof graceRow.professional_license_days_remaining).toBe('number');
+
+    const pending = await request(
+      'GET',
+      '/api/admin/drivers?professional_license=pending',
+      undefined,
+      adminToken,
+    );
+    expect(pending.status).toBe(200);
+    expect(pending.data.items.some((d: { id: string }) => d.id === driverId)).toBe(true);
+
+    await db
+      .update(drivers)
+      .set({
+        professional_license_grace_started_at: new Date(Date.now() - 70 * 24 * 60 * 60 * 1000),
+        professional_license_due_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+      })
+      .where(eq(drivers.id, driverId));
+
+    const overdue = await request(
+      'GET',
+      '/api/admin/drivers?professional_license=overdue',
+      undefined,
+      adminToken,
+    );
+    expect(overdue.status).toBe(200);
+    const overdueRow = overdue.data.items.find((d: { id: string }) => d.id === driverId);
+    expect(overdueRow).toBeDefined();
+    expect(overdueRow.professional_license_phase).toBe('overdue');
   });
 
   test('GET /drivers returns 200 for bare driver without vehicle or district', async () => {

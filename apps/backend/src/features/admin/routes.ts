@@ -120,6 +120,7 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
         q?: string;
         status?: string;
         identification_status?: string;
+        professional_license?: string;
         limit?: string;
         offset?: string;
       };
@@ -131,6 +132,7 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
             q: q.q,
             status: q.status,
             identification_status: q.identification_status,
+            professional_license: q.professional_license,
             limit: Number.isFinite(limitNum) ? limitNum : undefined,
             offset: Number.isFinite(offsetNum) ? offsetNum : undefined,
           }),

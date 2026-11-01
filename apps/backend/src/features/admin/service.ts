@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import {
   commissionPhases,
@@ -252,6 +252,8 @@ export const adminService = {
     q?: string;
     status?: string;
     identification_status?: string;
+    /** grace | overdue | not_started | pending (any pending_professional phase) */
+    professional_license?: string;
     limit?: number;
     offset?: number;
   }) {
@@ -260,11 +262,38 @@ export const adminService = {
     const q = opts?.q?.trim();
     const status = opts?.status?.trim() || undefined;
     const identificationStatus = opts?.identification_status?.trim() || undefined;
+    const professionalLicense = opts?.professional_license?.trim().toLowerCase() || undefined;
 
     const filters = [];
     if (status) filters.push(eq(drivers.status, status));
     if (identificationStatus) {
       filters.push(eq(drivers.identification_status, identificationStatus));
+    }
+    if (professionalLicense === 'pending') {
+      filters.push(eq(drivers.license_professional_status, 'pending_professional'));
+    } else if (professionalLicense === 'not_started') {
+      filters.push(
+        and(
+          eq(drivers.license_professional_status, 'pending_professional'),
+          isNull(drivers.professional_license_grace_started_at),
+        ),
+      );
+    } else if (professionalLicense === 'grace') {
+      filters.push(
+        and(
+          eq(drivers.license_professional_status, 'pending_professional'),
+          isNotNull(drivers.professional_license_grace_started_at),
+          sql`${drivers.professional_license_due_at} > now()`,
+        ),
+      );
+    } else if (professionalLicense === 'overdue') {
+      filters.push(
+        and(
+          eq(drivers.license_professional_status, 'pending_professional'),
+          isNotNull(drivers.professional_license_due_at),
+          sql`${drivers.professional_license_due_at} <= now()`,
+        ),
+      );
     }
     if (q) {
       const pattern = `%${escapeIlike(q)}%`;
@@ -305,6 +334,10 @@ export const adminService = {
         district_province: districts.province,
         created_at: drivers.created_at,
         total_trips: drivers.total_trips,
+        license_category: drivers.license_category,
+        license_professional_status: drivers.license_professional_status,
+        professional_license_grace_started_at: drivers.professional_license_grace_started_at,
+        professional_license_due_at: drivers.professional_license_due_at,
         plate: sql<string | null>`(
           SELECT ${vehicles.plate} FROM ${vehicles}
           WHERE ${vehicles.driver_id} = ${drivers.id}
@@ -333,6 +366,12 @@ export const adminService = {
         admin_reviewed_at: row.admin_reviewed_at,
         created_at: row.created_at,
       });
+      const professionalLicenseSnap = evaluateProfessionalLicenseGrace({
+        license_category: row.license_category,
+        license_professional_status: row.license_professional_status,
+        professional_license_grace_started_at: row.professional_license_grace_started_at,
+        professional_license_due_at: row.professional_license_due_at,
+      });
       const id = row.id ?? '';
       return {
         ...row,
@@ -345,6 +384,11 @@ export const adminService = {
         identification_days_until_pause: identification.days_until_pause,
         identification_days_since_approval: identification.days_since_approval,
         identification_pause_at: identification.pause_at,
+        professional_license_phase: professionalLicenseSnap.phase,
+        professional_license_show_banner: professionalLicenseSnap.show_banner,
+        professional_license_days_remaining: professionalLicenseSnap.days_remaining,
+        professional_license_due_at: professionalLicenseSnap.due_at,
+        professional_license_grace_started_at: professionalLicenseSnap.grace_started_at,
       };
     });
 
