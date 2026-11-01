@@ -6,6 +6,9 @@ export interface CommissionConfig {
   phase: string;
   currentDay: number;
   rate: number;
+  /** Inclusive day bounds of the active phase (same as commission_phases). */
+  phaseDayStart: number;
+  phaseDayEnd: number | null;
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -102,5 +105,7 @@ export async function getCommissionConfig(
     phase: phase.name,
     currentDay,
     rate: rateForPhase(phase, currentDay),
+    phaseDayStart: phase.day_start,
+    phaseDayEnd: phase.day_end,
   };
 }

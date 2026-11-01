@@ -13,7 +13,9 @@ import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
 import {
+  formatCommissionBanner,
   formatDebtCapLabel,
+  isZeroCommissionPhase,
   normalizePlatformDebt,
   shouldShowPlatformDebt,
 } from '../lib/commission';
@@ -46,14 +48,29 @@ export const EarningsScreen: React.FC = () => {
 
   const retentionTotal = earnings?.trips?.reduce((sum, t) => sum + (t.platform_fee ?? 0), 0) ?? 0;
   const tripsRevenueTotal = earnings?.trips?.reduce((sum, t) => sum + (t.total_fare ?? 0), 0) ?? 0;
-  const retentionPercent =
-    retentionTotal > 0 ? Math.round((retentionTotal / tripsRevenueTotal) * 100) : 0;
-  const isExempt = retentionPercent === 0;
+  // Prefer admin global phase rate. Realized % only when there were fares today —
+  // never invent 0% from an empty day when the server rate is unknown/missing.
+  const serverRatePct =
+    earnings?.commission != null && Number.isFinite(earnings.commission.rate_pct)
+      ? Math.round(earnings.commission.rate_pct)
+      : null;
+  const realizedRetentionPercent =
+    tripsRevenueTotal > 0 ? Math.round((retentionTotal / tripsRevenueTotal) * 100) : null;
+  const retentionPercent = serverRatePct ?? realizedRetentionPercent;
+  const retentionPercentLabel = retentionPercent == null ? '' : ` (${retentionPercent}%)`;
+  const commissionBanner =
+    earnings?.commission != null ? formatCommissionBanner(earnings.commission) : null;
+  const commissionIsZero = isZeroCommissionPhase(earnings?.commission);
 
   const weekRetention = earnings?.week_platform_fee ?? 0;
   const weekFare = earnings?.week_total_fare ?? 0;
-  const weekRetentionPercent =
-    weekRetention > 0 && weekFare > 0 ? Math.round((weekRetention / weekFare) * 100) : 0;
+  const weekRetentionPercent = weekFare > 0 ? Math.round((weekRetention / weekFare) * 100) : null;
+  const weekRetentionPercentLabel =
+    weekRetentionPercent != null
+      ? ` (${weekRetentionPercent}%)`
+      : serverRatePct != null
+        ? ` (${serverRatePct}%)`
+        : '';
 
   const formatTime = (iso: string) => {
     const date = new Date(iso);
@@ -219,21 +236,21 @@ export const EarningsScreen: React.FC = () => {
                   ]}
                 >
                   -{formatCurrency(retentionTotal)}
-                  {retentionTotal > 0 ? ` (${retentionPercent}%)` : ' (0%)'}
+                  {retentionPercentLabel}
                 </Text>
               </View>
-              {isExempt && (
+              {commissionBanner ? (
                 <View style={styles.exemptNotice}>
                   <Ionicons
-                    name="checkmark-circle-outline"
+                    name={
+                      commissionIsZero ? 'checkmark-circle-outline' : 'information-circle-outline'
+                    }
                     size={16}
-                    color={theme.colors.turquoise}
+                    color={commissionIsZero ? theme.colors.turquoise : theme.colors.mediumGray}
                   />
-                  <Text style={styles.exemptNoticeText}>
-                    Comision 0% — Primer mes gratis para nuevos conductores
-                  </Text>
+                  <Text style={styles.exemptNoticeText}>{commissionBanner}</Text>
                 </View>
-              )}
+              ) : null}
               <View style={styles.divider} />
               <Text style={styles.sectionLabel}>Esta semana</Text>
               <View style={styles.row}>
@@ -259,7 +276,7 @@ export const EarningsScreen: React.FC = () => {
                   ]}
                 >
                   -{formatCurrency(weekRetention)}
-                  {weekRetention > 0 ? ` (${weekRetentionPercent}%)` : ' (0%)'}
+                  {weekRetentionPercentLabel}
                 </Text>
               </View>
             </Card>
@@ -417,21 +434,21 @@ export const EarningsScreen: React.FC = () => {
                   ]}
                 >
                   -{formatCurrency(retentionTotal)}
-                  {retentionTotal > 0 ? ` (${retentionPercent}%)` : ' (0%)'}
+                  {retentionPercentLabel}
                 </Text>
               </View>
-              {isExempt && (
+              {commissionBanner ? (
                 <View style={styles.exemptNotice}>
                   <Ionicons
-                    name="checkmark-circle-outline"
+                    name={
+                      commissionIsZero ? 'checkmark-circle-outline' : 'information-circle-outline'
+                    }
                     size={16}
-                    color={theme.colors.turquoise}
+                    color={commissionIsZero ? theme.colors.turquoise : theme.colors.mediumGray}
                   />
-                  <Text style={styles.exemptNoticeText}>
-                    Comision 0% — Primer mes gratis para nuevos conductores
-                  </Text>
+                  <Text style={styles.exemptNoticeText}>{commissionBanner}</Text>
                 </View>
-              )}
+              ) : null}
               <View style={styles.divider} />
               <Text style={styles.sectionLabel}>Esta semana</Text>
               <View style={styles.row}>
@@ -457,7 +474,7 @@ export const EarningsScreen: React.FC = () => {
                   ]}
                 >
                   -{formatCurrency(weekRetention)}
-                  {weekRetention > 0 ? ` (${weekRetentionPercent}%)` : ' (0%)'}
+                  {weekRetentionPercentLabel}
                 </Text>
               </View>
             </Card>
