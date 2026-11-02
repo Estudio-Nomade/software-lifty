@@ -155,20 +155,20 @@ export function VehicleSelectScreen() {
       setFares(next);
 
       // One Alert only — never spam auto+moto.
-      const allReasons = [
-        ...(directionsResult.status === 'rejected' ? [directionsResult.reason] : []),
-        ...failReasons,
-      ];
-      if (allReasons.some(isApiUnreachable)) {
-        Alert.alert(API_DOWN_TITLE, API_DOWN_MESSAGE);
-      } else if (anyFareFailed) {
-        const zoneFirst =
-          failReasons
-            .map(parseFareEstimateError)
-            .find(
-              (info) => info.code === 'OUT_OF_PICKUP_AREA' || info.code === 'OUT_OF_DROPOFF_AREA',
-            ) ?? parseFareEstimateError(failReasons[0]);
-        Alert.alert(zoneFirst.title, zoneFirst.message);
+      // Directions-only failures use the route chip; do not claim "API down"
+      // when fares still succeeded (maps provider hiccup ≠ Lifty host dead).
+      if (anyFareFailed) {
+        if (failReasons.some(isApiUnreachable)) {
+          Alert.alert(API_DOWN_TITLE, API_DOWN_MESSAGE);
+        } else {
+          const zoneFirst =
+            failReasons
+              .map(parseFareEstimateError)
+              .find(
+                (info) => info.code === 'OUT_OF_PICKUP_AREA' || info.code === 'OUT_OF_DROPOFF_AREA',
+              ) ?? parseFareEstimateError(failReasons[0]);
+          Alert.alert(zoneFirst.title, zoneFirst.message);
+        }
       }
     })();
 

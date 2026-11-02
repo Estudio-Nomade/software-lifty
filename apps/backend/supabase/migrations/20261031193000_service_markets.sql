@@ -34,8 +34,9 @@ CREATE TABLE IF NOT EXISTS "service_market_aliases" (
   "created_at" timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS service_market_aliases_norm_uidx
-  ON "service_market_aliases" ("alias_normalized");
+-- Per-market uniqueness (same label ok on different cities; replaceAliases safe).
+CREATE UNIQUE INDEX IF NOT EXISTS service_market_aliases_market_norm_uidx
+  ON "service_market_aliases" ("market_id", "alias_normalized");
 
 CREATE INDEX IF NOT EXISTS service_market_aliases_market_idx
   ON "service_market_aliases" ("market_id");

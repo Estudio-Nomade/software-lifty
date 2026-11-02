@@ -95,7 +95,6 @@ function toGeo(row: {
 }
 
 async function replaceAliases(marketId: string, aliases: string[]) {
-  await db.delete(serviceMarketAliases).where(eq(serviceMarketAliases.market_id, marketId));
   const seen = new Set<string>();
   const rows: { market_id: string; alias: string; alias_normalized: string }[] = [];
   for (const raw of aliases) {
@@ -106,9 +105,13 @@ async function replaceAliases(marketId: string, aliases: string[]) {
     seen.add(alias_normalized);
     rows.push({ market_id: marketId, alias, alias_normalized });
   }
-  if (rows.length > 0) {
-    await db.insert(serviceMarketAliases).values(rows);
-  }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(serviceMarketAliases).where(eq(serviceMarketAliases.market_id, marketId));
+    if (rows.length > 0) {
+      await tx.insert(serviceMarketAliases).values(rows);
+    }
+  });
 }
 
 async function loadAliases(marketIds: string[]) {

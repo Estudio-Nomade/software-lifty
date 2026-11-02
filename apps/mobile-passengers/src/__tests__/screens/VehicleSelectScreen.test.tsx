@@ -275,6 +275,16 @@ describe('VehicleSelectScreen fare estimation', () => {
     expect(title).toMatch(/servidor/i);
   });
 
+  test('directions-only network fail does not claim Lifty API down when fares OK', async () => {
+    mockGetDirections.mockRejectedValue({ code: 'ERR_NETWORK', message: 'Network Error' });
+
+    const { findByText } = await render(<VehicleSelectScreen />);
+    await findByText('$4.200');
+    await act(async () => {});
+
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
   test('directions fail still shows fares when estimate OK', async () => {
     mockGetDirections.mockRejectedValue(new Error('directions down'));
 
