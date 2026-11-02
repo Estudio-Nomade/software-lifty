@@ -11,6 +11,12 @@ import { MapView } from '../components/MapView';
 import { RatingStars } from '../components/RatingStars';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import {
+  buildTripCancelledParams,
+  claimTripCancelNotice,
+  isCancelledTripStatus,
+  resolveActiveGoneAction,
+} from '../lib/cancellation';
 import { mergeTripUpdate } from '../lib/mergeTrip';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
@@ -41,10 +47,41 @@ export const IncomingRequestScreen: React.FC = () => {
   const lat = useLocationStore((s) => s.lat);
   const lng = useLocationStore((s) => s.lng);
 
+  const showPassengerCancelled = (payload: Record<string, unknown> | null | undefined) => {
+    const id = payload?.id != null ? String(payload.id) : trip?.id;
+    if (!claimTripCancelNotice(id)) return;
+    navigation.replace('TripCancelled', buildTripCancelledParams(payload));
+  };
+
+  /** active gone while we held an offer — check detail so expired ≠ passenger cancel */
+  const handleActiveGone = async (tripId: string | undefined) => {
+    if (!tripId) {
+      navigation.goBack();
+      return;
+    }
+    try {
+      const response = await apiClient.get(`/trips/${tripId}`);
+      const detail = (response.data?.data ?? response.data) as Record<string, unknown> | null;
+      const resolved = resolveActiveGoneAction(detail);
+      if (resolved.action === 'trip_cancelled') {
+        showPassengerCancelled(detail);
+        return;
+      }
+    } catch {
+      /* 404 / network → silent dismiss */
+    }
+    navigation.goBack();
+  };
+
   const handleActiveTrip = (active: Trip | null) => {
     if (!active) {
       setLoading(false);
-      navigation.goBack();
+      void handleActiveGone(trip?.id ?? useTripStore.getState().activeTripId ?? undefined);
+      return;
+    }
+    if (isCancelledTripStatus(active.status)) {
+      setLoading(false);
+      showPassengerCancelled(active as unknown as Record<string, unknown>);
       return;
     }
     setActiveTrip(active);
@@ -92,6 +129,16 @@ export const IncomingRequestScreen: React.FC = () => {
           setLoading(false);
           handleActiveTrip(active);
         } else {
+          const knownId =
+            useTripStore.getState().activeTripId ??
+            (stored && (stored.status === 'request_received' || stored.status === 'offered')
+              ? stored.id
+              : undefined);
+          if (knownId) {
+            setLoading(false);
+            void handleActiveGone(knownId);
+            return;
+          }
           retries++;
           if (retries < 12) {
             setTimeout(loadTrip, 2000);
@@ -156,7 +203,7 @@ export const IncomingRequestScreen: React.FC = () => {
           if (active) {
             handleActiveTrip(active);
           } else {
-            navigation.goBack();
+            void handleActiveGone(trip.id);
           }
         }
       } catch {}

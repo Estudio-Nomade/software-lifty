@@ -53,7 +53,7 @@ export const NavigationScreen: React.FC = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const trip = useTripStore((s) => s.trip);
   const tripStatus = useTripStore((s) => s.tripStatus);
-  const clearTrip = useTripStore((s) => s.clearTrip);
+
   const locationLat = useLocationStore((s) => s.lat);
   const locationLng = useLocationStore((s) => s.lng);
   const iconType = useVehicleStore((s) => s.iconType);
@@ -249,7 +249,7 @@ export const NavigationScreen: React.FC = () => {
               reason: 'driver_cancel',
             });
             const payload = res.data?.data ?? res.data;
-            clearTrip();
+            // replace first — clearTrip before navigate races AuthRedirect → Active
             navigation.replace('TripCancelled', buildTripCancelledParams(payload));
           } catch (err: any) {
             Alert.alert('Error', err?.error?.message ?? 'No se pudo cancelar el viaje.');

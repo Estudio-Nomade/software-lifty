@@ -253,7 +253,7 @@ export const WaitingPassengerScreen: React.FC = () => {
                   reason: 'no_show',
                 });
                 const payload = res.data?.data ?? res.data;
-                clearTrip();
+                // replace first — clearTrip before navigate races AuthRedirect → Active
                 navigation.replace('TripCancelled', buildTripCancelledParams(payload));
               } catch (err: unknown) {
                 const message =

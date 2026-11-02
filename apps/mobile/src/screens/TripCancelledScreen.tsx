@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import type React from 'react';
+import { useEffect } from 'react';
 import { StatusBar, StyleSheet, View } from 'react-native';
 import { Button } from '../components/Button';
 import { Text } from '../components/ui/Text';
@@ -39,11 +40,18 @@ export const TripCancelledScreen: React.FC = () => {
   const params = useLocalSearchParams<{
     cancel_reason?: string;
     credit_driver?: string;
+    trip_id?: string;
   }>();
 
   const reason = params.cancel_reason ?? 'user_cancel';
   const copy = COPY[reason] ?? COPY.user_cancel;
   const creditDriver = params.credit_driver === 'true';
+
+  // Clear on mount (not only VOLVER): trip-cancelled is outside TRIP_ROUTES so
+  // AuthRedirect won't bounce; poll must stop re-fetching a stale activeTripId.
+  useEffect(() => {
+    clearTrip();
+  }, [clearTrip]);
 
   const extra =
     reason === 'user_cancel' && creditDriver
