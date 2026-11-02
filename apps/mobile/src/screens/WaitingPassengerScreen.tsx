@@ -289,8 +289,8 @@ const styles = StyleSheet.create({
     color: theme.colors.mediumGray,
   },
   timerCircle: {
-    width: 64,
-    height: 64,
+    width: 72,
+    height: 72,
     borderRadius: theme.radius.full,
     borderWidth: 4,
     borderColor: theme.colors.turquoise,
@@ -301,6 +301,10 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
+    includeFontPadding: false,
+    minWidth: 52,
   },
   totalWait: {
     fontSize: theme.fontSize.sm,
