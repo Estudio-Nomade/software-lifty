@@ -31,9 +31,10 @@ export async function recalcPassengerMetrics(
   // Rate only counts passenger cancels AFTER a driver accepted (en_camino / llegado).
   // Abandoning search (pending/offered → pre_asignacion) is free and must NOT
   // inflate cancel rate / suspensions — it's "changed mind before match", not a trip cancel.
+  // Allow-list stages so a future unknown stage never silently inflates the rate.
   const [cancels] = await db
     .select({
-      rate: sql<number>`count(*) filter (where ${cancelationLog.stage} <> 'pre_asignacion')::int`,
+      rate: sql<number>`count(*) filter (where ${cancelationLog.stage} in ('en_camino', 'llegado'))::int`,
       pre: sql<number>`count(*) filter (where ${cancelationLog.stage} = 'pre_asignacion')::int`,
     })
     .from(cancelationLog)
