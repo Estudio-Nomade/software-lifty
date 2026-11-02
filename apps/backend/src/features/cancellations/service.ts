@@ -14,7 +14,7 @@ import {
 import { getCommissionRate, getDebtCapArs } from '../../shared/lib/commission';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import type { AuthUser } from '../../shared/middleware/auth';
-import { getActiveBlock } from './blocks';
+import { clearBlock, getActiveBlock } from './blocks';
 import { DEFAULT_CANCELLATION_CONFIG, parseCancellationConfig } from './config';
 import { evaluateCancel } from './evaluate';
 import { getPaymentGateway } from './gateway';
@@ -281,30 +281,51 @@ export const cancellationService = {
       );
     }
 
+    // Only pay the metrics recalc when a rate block is active (lift path).
+    // Healthy passengers skip the extra aggregates on every request.
     const suspend = await getActiveBlock('passenger', userId, 'cancel_rate_72h');
-    if (suspend) {
-      const until =
-        suspend.ends_at != null
-          ? ` Hasta el ${suspend.ends_at.toLocaleString('es-AR', {
-              dateStyle: 'short',
-              timeStyle: 'short',
-              timeZone: 'America/Argentina/Buenos_Aires',
-            })}.`
-          : ` Suele durar unas ${config.suspendHours} horas.`;
-      throw new AppError(
-        `Estás suspendido temporalmente por un alto porcentaje de cancelaciones.${until} Cuando termine la suspensión vas a poder pedir viajes de nuevo. Si creés que es un error, contactá a soporte.`,
-        403,
-        'PASSENGER_SUSPENDED',
-      );
-    }
-
     const review = await getActiveBlock('passenger', userId, 'cancel_rate_review');
-    if (review) {
-      throw new AppError(
-        'Tu cuenta está en revisión por cancelaciones. No podés solicitar viajes hasta que soporte la habilite. Contactanos por WhatsApp o email.',
-        403,
-        'PASSENGER_UNDER_REVIEW',
-      );
+
+    if (suspend || review) {
+      const snapshot = await recalcPassengerMetrics(userId, config);
+      const stillSuspend =
+        snapshot.requested >= config.passengerMinTrips &&
+        snapshot.rateBp > config.passengerSuspendBp;
+      const stillReview =
+        snapshot.requested >= config.passengerMinTrips &&
+        snapshot.rateBp > config.passengerReviewBp;
+
+      if (suspend) {
+        if (!stillSuspend) {
+          await clearBlock(suspend.id);
+        } else {
+          const until =
+            suspend.ends_at != null
+              ? ` Hasta el ${suspend.ends_at.toLocaleString('es-AR', {
+                  dateStyle: 'short',
+                  timeStyle: 'short',
+                  timeZone: 'America/Argentina/Buenos_Aires',
+                })}.`
+              : ` Suele durar unas ${config.suspendHours} horas.`;
+          throw new AppError(
+            `Estás suspendido temporalmente por un alto porcentaje de cancelaciones.${until} Cuando termine la suspensión vas a poder pedir viajes de nuevo. Si creés que es un error, contactá a soporte.`,
+            403,
+            'PASSENGER_SUSPENDED',
+          );
+        }
+      }
+
+      if (review) {
+        if (!stillReview) {
+          await clearBlock(review.id);
+        } else {
+          throw new AppError(
+            'Tu cuenta está en revisión por cancelaciones. No podés solicitar viajes hasta que soporte la habilite. Contactanos por WhatsApp o email.',
+            403,
+            'PASSENGER_UNDER_REVIEW',
+          );
+        }
+      }
     }
 
     return {
