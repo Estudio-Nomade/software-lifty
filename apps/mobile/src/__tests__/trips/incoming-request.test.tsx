@@ -11,10 +11,11 @@ jest.mock('../../api/client', () => ({
 }));
 
 const mockNavigate = jest.fn();
+const mockGoBack = jest.fn();
 jest.mock('../../hooks/useAppNavigation', () => ({
   useAppNavigation: () => ({
     navigate: mockNavigate,
-    goBack: jest.fn(),
+    goBack: (...args: unknown[]) => mockGoBack(...args),
     replace: (...args: unknown[]) => mockNavigate(...args),
   }),
 }));
@@ -68,15 +69,21 @@ const REAL_TRIP_NO_PASSENGER = {
 
 describe('IncomingRequestScreen', () => {
   beforeEach(() => {
+    jest.useRealTimers();
     mockGet.mockReset();
     mockPost.mockReset();
     mockPut.mockReset();
     mockNavigate.mockReset();
+    mockGoBack.mockReset();
     useTripStore.getState().clearTrip();
     useLocationStore.getState().clearLocation();
     mockGet.mockResolvedValue({ data: REAL_TRIP });
     mockPost.mockResolvedValue({ data: { ...REAL_TRIP, status: 'accepted' } });
     mockPut.mockResolvedValue({ data: {} });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   test('fetches the real active trip on mount (no mock id)', async () => {
@@ -162,5 +169,62 @@ describe('IncomingRequestScreen', () => {
     const { queryByText } = await render(<IncomingRequestScreen />);
     await waitFor(() => expect(queryByText('Origen Real 123')).toBeTruthy());
     expect(queryByText(/min al pickup/)).toBeNull();
+  });
+
+  test('passenger cancel while offered → TripCancelled, not silent goBack', async () => {
+    const cancelled = {
+      ...REAL_TRIP,
+      status: 'cancelled_early',
+      cancel_reason: 'user_cancel',
+      cancel_actor: 'passenger',
+    };
+    let activeCalls = 0;
+    let pollCb: (() => void) | null = null;
+    const realSetInterval = global.setInterval;
+    const intervalSpy = jest.spyOn(global, 'setInterval').mockImplementation(((
+      fn: TimerHandler,
+      ms?: number,
+      ...args: unknown[]
+    ) => {
+      if (ms === 3000 && typeof fn === 'function') {
+        pollCb = fn as () => void;
+        return 0 as unknown as ReturnType<typeof setInterval>;
+      }
+      return realSetInterval(fn as TimerHandler, ms as number, ...(args as []));
+    }) as typeof setInterval);
+
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/trips/active') {
+        activeCalls += 1;
+        if (activeCalls === 1) return Promise.resolve({ data: REAL_TRIP });
+        return Promise.resolve({ data: null });
+      }
+      if (url === '/trips/trip-real-1') return Promise.resolve({ data: cancelled });
+      return Promise.resolve({ data: {} });
+    });
+
+    try {
+      const { getByText } = await render(<IncomingRequestScreen />);
+      await waitFor(() => expect(getByText('ACEPTAR')).toBeTruthy());
+      expect(pollCb).toBeTruthy();
+
+      await act(async () => {
+        await pollCb?.();
+      });
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith(
+          'TripCancelled',
+          expect.objectContaining({
+            cancel_reason: 'user_cancel',
+            trip_id: 'trip-real-1',
+          }),
+        );
+      });
+      expect(mockGoBack).not.toHaveBeenCalled();
+      expect(mockGet).toHaveBeenCalledWith('/trips/trip-real-1');
+    } finally {
+      intervalSpy.mockRestore();
+    }
   });
 });
