@@ -235,6 +235,46 @@ describe('VehicleSelectScreen fare estimation', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
+  test('OUT_OF_PICKUP_AREA shows zone alert once with BE message (not generic tarifa)', async () => {
+    const zoneErr = {
+      response: {
+        status: 400,
+        data: {
+          error: {
+            code: 'OUT_OF_PICKUP_AREA',
+            message:
+              'No pedimos viajes desde esa zona. El origen debe estar cerca de Villa Dolores, Tandil (núcleo de pickup).',
+          },
+        },
+      },
+    };
+    mockEstimateFare.mockRejectedValue(zoneErr);
+
+    await render(<VehicleSelectScreen />);
+    await act(async () => {});
+    await act(async () => {});
+
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    const [title, message] = (Alert.alert as jest.Mock).mock.calls[0] as [string, string];
+    expect(title).toMatch(/pickup|zona/i);
+    expect(message).toMatch(/Villa Dolores/i);
+    expect(message).toMatch(/Tandil/i);
+    expect(message).not.toMatch(/^Reintentá más tarde\.?$/i);
+  });
+
+  test('network down shows server alert once, not tarifa-only copy', async () => {
+    mockEstimateFare.mockRejectedValue({ code: 'ERR_NETWORK', message: 'Network Error' });
+    mockGetDirections.mockRejectedValue({ code: 'ERR_NETWORK', message: 'Network Error' });
+
+    await render(<VehicleSelectScreen />);
+    await act(async () => {});
+    await act(async () => {});
+
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    const [title] = (Alert.alert as jest.Mock).mock.calls[0] as [string, string];
+    expect(title).toMatch(/servidor/i);
+  });
+
   test('directions fail still shows fares when estimate OK', async () => {
     mockGetDirections.mockRejectedValue(new Error('directions down'));
 
