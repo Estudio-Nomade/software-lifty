@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import type { Trip } from '../api/types';
@@ -240,102 +240,108 @@ export const IncomingRequestScreen: React.FC = () => {
         centerCoordinate={lat != null && lng != null ? [lng, lat] : [0, 0]}
         userLocation={lat != null && lng != null ? [lng, lat] : null}
       />
-      <View
-        style={[
-          styles.overlay,
-          {
-            paddingTop: insets.top + theme.spacing.md,
-            paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
-          },
-        ]}
-      >
-        <Text style={styles.newRequest}>Nueva solicitud</Text>
+      <View style={styles.overlay}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              paddingTop: insets.top + theme.spacing.md,
+              paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces
+        >
+          <Text style={styles.newRequest}>Nueva solicitud</Text>
 
-        <View style={styles.timerCircle}>
-          <Text style={styles.timerText}>
-            {accepted ? '✓' : `0:${String(seconds).padStart(2, '0')}`}
-          </Text>
-        </View>
+          <View style={styles.timerCircle}>
+            <Text style={styles.timerText}>
+              {accepted ? '✓' : `0:${String(seconds).padStart(2, '0')}`}
+            </Text>
+          </View>
 
-        <Card style={styles.routeCard}>
-          {trip?.passenger_name ? (
-            <View style={styles.passengerRow}>
-              <Avatar uri={trip.passenger_avatar_url} name={trip.passenger_name} size={48} />
-              <View style={styles.passengerInfo}>
-                <Text style={styles.passengerName}>{trip.passenger_name}</Text>
-                {trip.passenger_rating != null && <RatingStars rating={trip.passenger_rating} />}
+          <Card style={styles.routeCard}>
+            {trip?.passenger_name ? (
+              <View style={styles.passengerRow}>
+                <Avatar uri={trip.passenger_avatar_url} name={trip.passenger_name} size={48} />
+                <View style={styles.passengerInfo}>
+                  <Text style={styles.passengerName}>{trip.passenger_name}</Text>
+                  {trip.passenger_rating != null && <RatingStars rating={trip.passenger_rating} />}
+                </View>
               </View>
+            ) : null}
+            {etaMinutes != null && <Text style={styles.etaText}>~{etaMinutes} min al pickup</Text>}
+            <View style={styles.routePoint}>
+              <Text style={styles.routeIconStart}>📍</Text>
+              <Text style={styles.routeText}>{trip?.origin_address ?? 'Origen'}</Text>
             </View>
-          ) : null}
-          {etaMinutes != null && <Text style={styles.etaText}>~{etaMinutes} min al pickup</Text>}
-          <View style={styles.routePoint}>
-            <Text style={styles.routeIconStart}>📍</Text>
-            <Text style={styles.routeText}>{trip?.origin_address ?? 'Origen'}</Text>
-          </View>
-          <View style={styles.routeLine}>
-            <Text style={styles.distanceText}>{formatDistance(trip?.distance_km)}</Text>
-          </View>
-          <View style={styles.routePoint}>
-            <Text style={styles.routeIconEnd}>📍</Text>
-            <Text style={styles.routeText}>{trip?.dest_address ?? 'Destino'}</Text>
-          </View>
-        </Card>
+            <View style={styles.routeLine}>
+              <Text style={styles.distanceText}>{formatDistance(trip?.distance_km)}</Text>
+            </View>
+            <View style={styles.routePoint}>
+              <Text style={styles.routeIconEnd}>📍</Text>
+              <Text style={styles.routeText}>{trip?.dest_address ?? 'Destino'}</Text>
+            </View>
+          </Card>
 
-        <View style={styles.earningsBlock}>
-          <Text style={styles.earningsLabel}>Ganaras</Text>
-          <Text style={styles.earningsAmount}>{formatCurrency(trip?.driver_earnings)}</Text>
+          <View style={styles.earningsBlock}>
+            <Text style={styles.earningsLabel}>Ganaras</Text>
+            <Text style={styles.earningsAmount}>{formatCurrency(trip?.driver_earnings)}</Text>
 
-          <View style={styles.earningsBreakdown}>
-            {trip && (trip.platform_fee ?? 0) > 0 ? (
-              <>
-                <View style={styles.earningsBreakdownRow}>
-                  <Text style={styles.earningsBreakdownLabel}>Total del viaje</Text>
-                  <Text style={styles.earningsBreakdownValue}>
-                    {formatCurrency(trip.total_fare)}
-                  </Text>
+            <View style={styles.earningsBreakdown}>
+              {trip && (trip.platform_fee ?? 0) > 0 ? (
+                <>
+                  <View style={styles.earningsBreakdownRow}>
+                    <Text style={styles.earningsBreakdownLabel}>Total del viaje</Text>
+                    <Text style={styles.earningsBreakdownValue}>
+                      {formatCurrency(trip.total_fare)}
+                    </Text>
+                  </View>
+                  <View style={styles.earningsBreakdownRow}>
+                    <Text style={styles.earningsBreakdownLabel}>
+                      Comision Lifty (
+                      {Math.round(((trip.platform_fee ?? 0) / (trip.total_fare ?? 1)) * 100)}%)
+                    </Text>
+                    <Text style={styles.earningsBreakdownDeduction}>
+                      -{formatCurrency(trip.platform_fee)}
+                    </Text>
+                  </View>
+                </>
+              ) : trip && (trip.platform_fee ?? 0) === 0 ? (
+                <View style={styles.promoBadge}>
+                  <Text style={styles.promoBadgeText}>Sin comision!</Text>
                 </View>
-                <View style={styles.earningsBreakdownRow}>
-                  <Text style={styles.earningsBreakdownLabel}>
-                    Comision Lifty (
-                    {Math.round(((trip.platform_fee ?? 0) / (trip.total_fare ?? 1)) * 100)}%)
-                  </Text>
-                  <Text style={styles.earningsBreakdownDeduction}>
-                    -{formatCurrency(trip.platform_fee)}
-                  </Text>
-                </View>
-              </>
-            ) : trip && (trip.platform_fee ?? 0) === 0 ? (
-              <View style={styles.promoBadge}>
-                <Text style={styles.promoBadgeText}>Sin comision!</Text>
-              </View>
+              ) : null}
+            </View>
+
+            {trip?.passenger_cancel_visible && trip.passenger_cancel_count_30d != null ? (
+              <Text style={styles.cancelRate}>
+                Este pasajero tiene un {trip.passenger_cancel_rate_pct}% de cancelación en los
+                últimos 30 días ({trip.passenger_cancel_count_30d} cancelaciones).
+              </Text>
             ) : null}
           </View>
 
-          {trip?.passenger_cancel_visible && trip.passenger_cancel_count_30d != null ? (
-            <Text style={styles.cancelRate}>
-              Este pasajero tiene un {trip.passenger_cancel_rate_pct}% de cancelación en los últimos
-              30 días ({trip.passenger_cancel_count_30d} cancelaciones).
-            </Text>
-          ) : null}
-        </View>
-
-        {accepted ? (
-          <Text style={styles.acceptedText}>Viaje aceptado!</Text>
-        ) : (
-          <View style={styles.actionsBlock}>
-            <Button
-              title="ACEPTAR"
-              variant="cta"
-              onPress={handleAccept}
-              disabled={!trip}
-              loading={loading}
-              style={styles.button}
-            />
-            <TouchableOpacity onPress={handleReject} style={styles.rejectButton}>
-              <Text style={styles.rejectLink}>Rechazar</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+          {accepted ? (
+            <Text style={styles.acceptedText}>Viaje aceptado!</Text>
+          ) : (
+            <View style={styles.actionsBlock}>
+              <Button
+                title="ACEPTAR"
+                variant="cta"
+                onPress={handleAccept}
+                disabled={!trip}
+                loading={loading}
+                style={styles.button}
+              />
+              <TouchableOpacity onPress={handleReject} style={styles.rejectButton}>
+                <Text style={styles.rejectLink}>Rechazar</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
       </View>
     </View>
   );
@@ -351,10 +357,18 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  scroll: {
+    flex: 1,
+    width: '100%',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingHorizontal: theme.spacing.lg,
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
   },
   newRequest: {
     fontSize: theme.fontSize.sm,
