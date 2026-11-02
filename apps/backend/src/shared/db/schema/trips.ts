@@ -33,6 +33,8 @@ export const trips = pgTable('trips', {
   driver_earnings: doublePrecision('driver_earnings').notNull(),
   tip_amount: doublePrecision('tip_amount').default(0),
   payment_method: varchar('payment_method', { length: 30 }).default('cash'),
+  /** Passenger-requested class: `auto` | `moto` (canonical). */
+  vehicle_type: varchar('vehicle_type', { length: 20 }).notNull().default('auto'),
   is_collected: boolean('is_collected').default(false).notNull(),
   tolerance_minutes: integer('tolerance_minutes').default(5),
   waiting_since: timestamp('waiting_since'),

@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
 import {
+  cancelationLog,
   commissionPhases,
   driverLocations,
   drivers,
@@ -18,6 +19,8 @@ import {
   ratings,
   tripEvents,
   trips,
+  userBlocks,
+  userDebt,
   users,
   vehicles,
 } from '../../shared/db/schema';
@@ -32,6 +35,9 @@ async function truncateTables() {
   await db.delete(ratings);
   await db.delete(tripEvents);
   await db.delete(tripMessages);
+  await db.delete(cancelationLog);
+  await db.delete(userDebt);
+  await db.delete(userBlocks);
   await db.delete(trips);
   await db.delete(payoutMethods);
   await db.delete(driverLocations);
@@ -76,7 +82,12 @@ async function createPassengerToken(): Promise<string> {
   return createTestToken(userId);
 }
 
-async function createDriverWithLocation(passengerToken: string, lat: number, lng: number): Promise<string> {
+async function createDriverWithLocation(
+  passengerToken: string,
+  lat: number,
+  lng: number,
+  opts?: { vehicleType?: string; skipVehicle?: boolean },
+): Promise<string> {
   const db = getDb();
   testId++;
   const driverId = `00000000-0000-4001-8000-${String(testId).padStart(12, '0')}`;
@@ -85,14 +96,19 @@ async function createDriverWithLocation(passengerToken: string, lat: number, lng
   await db.insert(users).values({ id: userId, phone: `+549261${String(testId + 100).padStart(6, '0')}`, full_name: 'Test Driver', role: 'driver' });
   await db.insert(drivers).values({ id: driverId, user_id: userId, is_online: true, status: 'approved' });
   await db.insert(driverLocations).values({ driver_id: driverId, lat, lng });
-  await db.insert(vehicles).values({
-    driver_id: driverId,
-    brand: 'Toyota',
-    model: 'Corolla',
-    year: 2024,
-    color: 'Blanco',
-    plate: 'ABC123',
-  });
+  if (!opts?.skipVehicle) {
+    const vt = opts?.vehicleType ?? 'car';
+    await db.insert(vehicles).values({
+      driver_id: driverId,
+      brand: vt === 'motorcycle' || vt === 'moto' ? 'Honda' : 'Toyota',
+      model: vt === 'motorcycle' || vt === 'moto' ? 'CG150' : 'Corolla',
+      year: 2024,
+      color: 'Blanco',
+      plate: `P${String(testId).padStart(6, '0')}`,
+      vehicle_type: vt,
+      engine_cc: vt === 'motorcycle' || vt === 'moto' ? 150 : null,
+    });
+  }
 
   return driverId;
 }
@@ -100,6 +116,7 @@ async function createDriverWithLocation(passengerToken: string, lat: number, lng
 async function createDriverWithLocationAndToken(
   lat: number,
   lng: number,
+  opts?: { vehicleType?: string },
 ): Promise<{ driverId: string; token: string }> {
   const db = getDb();
   testId++;
@@ -109,13 +126,16 @@ async function createDriverWithLocationAndToken(
   await db.insert(users).values({ id: userId, phone: `+549261${String(testId + 100).padStart(6, '0')}`, full_name: 'Test Driver', role: 'driver' });
   await db.insert(drivers).values({ id: driverId, user_id: userId, is_online: true, status: 'approved' });
   await db.insert(driverLocations).values({ driver_id: driverId, lat, lng });
+  const vt = opts?.vehicleType ?? 'car';
   await db.insert(vehicles).values({
     driver_id: driverId,
-    brand: 'Toyota',
-    model: 'Corolla',
+    brand: vt === 'motorcycle' || vt === 'moto' ? 'Honda' : 'Toyota',
+    model: vt === 'motorcycle' || vt === 'moto' ? 'CG150' : 'Corolla',
     year: 2024,
     color: 'Blanco',
-    plate: 'ABC123',
+    plate: `T${String(testId).padStart(6, '0')}`,
+    vehicle_type: vt,
+    engine_cc: vt === 'motorcycle' || vt === 'moto' ? 150 : null,
   });
 
   return { driverId, token: createTestToken(userId) };
@@ -149,7 +169,7 @@ describe('Passenger Trips', () => {
   const origin = { lat: -31.9449, lng: -65.1906 };
   const dest = { lat: -31.9525, lng: -65.174 };
 
-  async function createTrip(token: string) {
+  async function createTrip(token: string, vehicleType: 'auto' | 'moto' = 'auto') {
     return request('POST', '/api/passenger/trips/request', {
       origin_lat: origin.lat,
       origin_lng: origin.lng,
@@ -157,10 +177,22 @@ describe('Passenger Trips', () => {
       dest_lng: dest.lng,
       origin_address: 'Plaza Mitre, Villa Dolores',
       dest_address: 'Plaza San Martín, Villa Dolores',
-      vehicle_type: 'auto',
+      vehicle_type: vehicleType,
       distance_km: 3.2,
       duration_minutes: 12,
     }, token);
+  }
+
+  async function pollAssigned(tripId: string, timeoutMs = 2000) {
+    const db = getDb();
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const [row] = await db.select().from(trips).where(eq(trips.id, tripId));
+      if (row?.driver_id) return row;
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    const [row] = await db.select().from(trips).where(eq(trips.id, tripId));
+    return row ?? null;
   }
 
   test('POST /request creates a trip', async () => {
@@ -260,7 +292,7 @@ describe('Passenger Trips', () => {
     expect(data.id).toBe(trip.id);
     expect(data.driver_name).toBe('Test Driver');
     expect(data.vehicle_brand).toBe('Toyota');
-    expect(data.vehicle_plate).toBe('ABC123');
+    expect(data.vehicle_plate).toBeTruthy();
     expect(data.verification_code).toBe('1234');
     expect(data.driver_lat).toBe(origin.lat);
     expect(data.driver_lng).toBe(origin.lng);
@@ -1074,5 +1106,204 @@ describe('Passenger Trips', () => {
     expect(status).toBe(404);
     expect(data?.driver_transfer).toBeUndefined();
     expect(JSON.stringify(data)).not.toContain('9876543210987654321098');
+  });
+
+  test('requestTrip persists vehicle_type on trip', async () => {
+    const token = await createPassengerToken();
+    const { status, data } = await createTrip(token, 'moto');
+    expect(status).toBe(200);
+    expect(data.vehicle_type).toBe('moto');
+
+    const db = getDb();
+    const [row] = await db.select().from(trips).where(eq(trips.id, data.id));
+    expect(row?.vehicle_type).toBe('moto');
+  });
+
+  test('matching: moto request never offers to car-only nearby driver', async () => {
+    const token = await createPassengerToken();
+    await createDriverWithLocation(token, origin.lat, origin.lng, { vehicleType: 'car' });
+    const { data: trip } = await createTrip(token, 'moto');
+
+    await new Promise((r) => setTimeout(r, 300));
+    const row = await pollAssigned(trip.id, 500);
+    expect(row?.driver_id).toBeNull();
+    expect(row?.status).toBe('pending');
+    expect(row?.vehicle_type).toBe('moto');
+  });
+
+  test('matching: auto request never offers to motorcycle-only nearby driver', async () => {
+    const token = await createPassengerToken();
+    await createDriverWithLocation(token, origin.lat, origin.lng, { vehicleType: 'motorcycle' });
+    const { data: trip } = await createTrip(token, 'auto');
+
+    await new Promise((r) => setTimeout(r, 300));
+    const row = await pollAssigned(trip.id, 500);
+    expect(row?.driver_id).toBeNull();
+    expect(row?.status).toBe('pending');
+  });
+
+  test('matching: moto request offers only to motorcycle when both nearby', async () => {
+    const token = await createPassengerToken();
+    const carId = await createDriverWithLocation(token, origin.lat, origin.lng, {
+      vehicleType: 'car',
+    });
+    const motoId = await createDriverWithLocation(token, origin.lat + 0.001, origin.lng, {
+      vehicleType: 'motorcycle',
+    });
+    const { data: trip } = await createTrip(token, 'moto');
+
+    const assigned = await pollAssigned(trip.id);
+    expect(assigned?.driver_id).toBe(motoId);
+    expect(assigned?.driver_id).not.toBe(carId);
+    expect(assigned?.status).toBe('offered');
+    expect(assigned?.vehicle_type).toBe('moto');
+  });
+
+  test('matching: auto request offers to car when nearby', async () => {
+    const token = await createPassengerToken();
+    const carId = await createDriverWithLocation(token, origin.lat, origin.lng, {
+      vehicleType: 'car',
+    });
+    await createDriverWithLocation(token, origin.lat + 0.001, origin.lng, {
+      vehicleType: 'motorcycle',
+    });
+    const { data: trip } = await createTrip(token, 'auto');
+
+    const assigned = await pollAssigned(trip.id);
+    expect(assigned?.driver_id).toBe(carId);
+    expect(assigned?.status).toBe('offered');
+  });
+
+  test('matching: aliases moto↔motorcycle and auto↔car', async () => {
+    const token = await createPassengerToken();
+    const motoId = await createDriverWithLocation(token, origin.lat, origin.lng, {
+      vehicleType: 'motorcycle',
+    });
+    const { data: trip } = await createTrip(token, 'moto');
+    const assigned = await pollAssigned(trip.id);
+    expect(assigned?.driver_id).toBe(motoId);
+  });
+
+  test('matching: driver without vehicles row never matches', async () => {
+    const token = await createPassengerToken();
+    await createDriverWithLocation(token, origin.lat, origin.lng, { skipVehicle: true });
+    const { data: trip } = await createTrip(token, 'auto');
+    await new Promise((r) => setTimeout(r, 300));
+    const row = await pollAssigned(trip.id, 500);
+    expect(row?.driver_id).toBeNull();
+    expect(row?.status).toBe('pending');
+  });
+
+  test('matching: rematch after reject keeps vehicle_type filter', async () => {
+    const passengerToken = await createPassengerToken();
+    const nearMoto = await createDriverWithLocationAndToken(origin.lat, origin.lng, {
+      vehicleType: 'motorcycle',
+    });
+    const fartherMoto = await createDriverWithLocationAndToken(origin.lat + 0.003, origin.lng, {
+      vehicleType: 'motorcycle',
+    });
+    await createDriverWithLocationAndToken(origin.lat + 0.001, origin.lng, {
+      vehicleType: 'car',
+    });
+
+    const { data: trip } = await createTrip(passengerToken, 'moto');
+    const first = await pollAssigned(trip.id);
+    expect(first?.driver_id).toBe(nearMoto.driverId);
+
+    const { status: rejectStatus } = await request(
+      'POST',
+      `/api/trips/${trip.id}/reject`,
+      undefined,
+      nearMoto.token,
+    );
+    expect(rejectStatus).toBe(200);
+
+    const db = getDb();
+    let rematched: (typeof trips.$inferSelect) | null = null;
+    for (let i = 0; i < 40; i++) {
+      const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+      if (row?.driver_id && row.driver_id !== nearMoto.driverId) {
+        rematched = row;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(rematched?.driver_id).toBe(fartherMoto.driverId);
+    expect(rematched?.vehicle_type).toBe('moto');
+  });
+
+  test('accept path: trip moto + driver car → VEHICLE_TYPE_MISMATCH', async () => {
+    const passengerToken = await createPassengerToken();
+    const car = await createDriverWithLocationAndToken(origin.lat, origin.lng, {
+      vehicleType: 'car',
+    });
+    const { data: trip } = await createTrip(passengerToken, 'moto');
+
+    // Corrupt assignment as if a race offered a car the moto trip.
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({
+        driver_id: car.driverId,
+        status: 'offered',
+        expires_at: new Date(Date.now() + 60_000),
+        vehicle_type: 'moto',
+      })
+      .where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'POST',
+      `/api/trips/${trip.id}/accept`,
+      undefined,
+      car.token,
+    );
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('VEHICLE_TYPE_MISMATCH');
+
+    const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+    expect(row?.status).not.toBe('accepted');
+  });
+
+  test('respond accept path: trip moto + driver car → VEHICLE_TYPE_MISMATCH', async () => {
+    const passengerToken = await createPassengerToken();
+    const car = await createDriverWithLocationAndToken(origin.lat, origin.lng, {
+      vehicleType: 'car',
+    });
+    const { data: trip } = await createTrip(passengerToken, 'moto');
+
+    const db = getDb();
+    await db
+      .update(trips)
+      .set({
+        driver_id: car.driverId,
+        status: 'offered',
+        expires_at: new Date(Date.now() + 60_000),
+        vehicle_type: 'moto',
+      })
+      .where(eq(trips.id, trip.id));
+
+    const { status, data } = await request(
+      'POST',
+      `/api/trips/${trip.id}/respond`,
+      { action: 'accept' },
+      car.token,
+    );
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('VEHICLE_TYPE_MISMATCH');
+  });
+
+  test('moto fare stays moto (not auto) after matching', async () => {
+    const token = await createPassengerToken();
+    await createDriverWithLocation(token, origin.lat, origin.lng, { vehicleType: 'motorcycle' });
+    const { data: trip } = await createTrip(token, 'moto');
+    const assigned = await pollAssigned(trip.id);
+    expect(assigned?.vehicle_type).toBe('moto');
+    expect(assigned?.total_fare).toBe(trip.total_fare);
+
+    // Auto fare for same route would differ; ensure we still have moto class.
+    const autoRes = await createTrip(await createPassengerToken(), 'auto');
+    expect(autoRes.data.vehicle_type).toBe('auto');
+    // Not asserting inequality (rates can coincide at edge) — only that type stuck.
+    expect(assigned?.vehicle_type).not.toBe('auto');
   });
 });

@@ -10,7 +10,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { eq } from 'drizzle-orm';
 import { createApp } from './index';
 import { getDb, resetDb } from './shared/db/client';
-import { commissionPhases, districts, drivers, platformConfig, users } from './shared/db/schema';
+import {
+  commissionPhases,
+  districts,
+  drivers,
+  platformConfig,
+  users,
+  vehicles,
+} from './shared/db/schema';
 import { getRedis } from './shared/lib/redis';
 import { createTestToken } from './shared/testing/utils';
 
@@ -106,7 +113,18 @@ async function driver(token: string): Promise<string> {
     },
     token,
   );
-  return data.id;
+  const driverId = data.id as string;
+  const db = getDb();
+  await db.insert(vehicles).values({
+    driver_id: driverId,
+    brand: 'Toyota',
+    model: 'Corolla',
+    year: 2024,
+    color: 'Blanco',
+    plate: `AE${driverId.slice(0, 6)}`,
+    vehicle_type: 'car',
+  });
+  return driverId;
 }
 
 async function approveKyc(userId: string) {

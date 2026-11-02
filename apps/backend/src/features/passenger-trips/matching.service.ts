@@ -1,10 +1,18 @@
 import { and, eq, gt, notInArray, or, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
-import { driverLocations, drivers, tripEvents, trips, users } from '../../shared/db/schema';
+import {
+  driverLocations,
+  drivers,
+  tripEvents,
+  trips,
+  users,
+  vehicles,
+} from '../../shared/db/schema';
 import { DRIVER_OFFLINE_GRACE_MS } from '../../shared/lib/cleanup';
 import { haversineDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
+import { normalizeVehicleClass, vehicleTypesCompatible } from '../../shared/lib/vehicle-class';
 import { listBlockedDriverIds } from '../cancellations/blocks';
 import { getPassengerVisibility } from '../cancellations/metrics';
 import { getCancellationConfig } from '../cancellations/service';
@@ -19,10 +27,13 @@ interface NearbyDriver {
   userId: string;
   distance: number;
   fullName: string;
+  vehicleType: string;
 }
 
 export interface MatchOptions {
   excludeDriverIds?: string[];
+  /** Canonical or alias; required for filtering. Loaded from DB if omitted on trip. */
+  requestedVehicleType?: string | null;
 }
 
 export async function findNearbyDrivers(
@@ -30,7 +41,16 @@ export async function findNearbyDrivers(
   originLng: number,
   radiusKm = DEFAULT_MATCH_RADIUS_KM,
   excludeDriverIds: string[] = [],
+  requestedVehicleType?: string | null,
 ): Promise<NearbyDriver[]> {
+  const requestedClass = normalizeVehicleClass(requestedVehicleType);
+  if (!requestedClass) {
+    logger.warn('[findNearbyDrivers] missing/invalid requested vehicle type — fail closed', {
+      requestedVehicleType,
+    });
+    return [];
+  }
+
   const conditions = [
     eq(drivers.status, 'approved'),
     sql`${driverLocations.lat} IS NOT NULL`,
@@ -48,6 +68,15 @@ export async function findNearbyDrivers(
     conditions.push(notInArray(drivers.id, excluded));
   }
 
+  // SQL pre-filter by class aliases (fail closed: innerJoin requires a vehicles row).
+  if (requestedClass === 'moto') {
+    conditions.push(sql`lower(trim(${vehicles.vehicle_type})) IN ('motorcycle', 'moto')`);
+  } else {
+    conditions.push(
+      sql`lower(trim(${vehicles.vehicle_type})) IN ('car', 'auto', 'pickup', 'van', 'camioneta')`,
+    );
+  }
+
   const rows = await db
     .select({
       driverId: drivers.id,
@@ -55,10 +84,12 @@ export async function findNearbyDrivers(
       fullName: users.full_name,
       lat: driverLocations.lat,
       lng: driverLocations.lng,
+      vehicleType: vehicles.vehicle_type,
     })
     .from(drivers)
     .innerJoin(users, eq(drivers.user_id, users.id))
     .innerJoin(driverLocations, eq(drivers.id, driverLocations.driver_id))
+    .innerJoin(vehicles, eq(drivers.id, vehicles.driver_id))
     .where(and(...conditions));
 
   return rows
@@ -66,9 +97,10 @@ export async function findNearbyDrivers(
       driverId: d.driverId,
       userId: d.userId,
       fullName: d.fullName ?? 'Conductor',
+      vehicleType: d.vehicleType,
       distance: haversineDistance(originLat, originLng, d.lat!, d.lng!),
     }))
-    .filter((d) => d.distance <= radiusKm)
+    .filter((d) => d.distance <= radiusKm && vehicleTypesCompatible(requestedClass, d.vehicleType))
     .sort((a, b) => a.distance - b.distance)
     .slice(0, 5);
 }
@@ -86,18 +118,33 @@ export async function matchAndBroadcast(
     dest_lng: number;
     distance_km?: number | null;
     duration_minutes?: number | null;
+    vehicle_type?: string | null;
   },
   options: MatchOptions = {},
 ) {
+  let requestedType = options.requestedVehicleType ?? trip.vehicle_type ?? null;
+  if (!normalizeVehicleClass(requestedType)) {
+    const [row] = await db
+      .select({ vehicle_type: trips.vehicle_type })
+      .from(trips)
+      .where(eq(trips.id, trip.id))
+      .limit(1);
+    requestedType = row?.vehicle_type ?? null;
+  }
+
   const nearby = await findNearbyDrivers(
     trip.origin_lat,
     trip.origin_lng,
     DEFAULT_MATCH_RADIUS_KM,
     options.excludeDriverIds ?? [],
+    requestedType,
   );
 
   if (nearby.length === 0) {
-    logger.info('[matchAndBroadcast] No nearby drivers found', { tripId: trip.id });
+    logger.info('[matchAndBroadcast] No nearby drivers found', {
+      tripId: trip.id,
+      requestedVehicleType: requestedType,
+    });
     return { drivers_found: 0 };
   }
 
@@ -156,6 +203,8 @@ export async function matchAndBroadcast(
     tripId: trip.id,
     driverId: driver.driverId,
     distanceKm: Math.round(driver.distance * 100) / 100,
+    vehicleType: driver.vehicleType,
+    requestedVehicleType: requestedType,
   });
 
   return { drivers_found: 1, driver_id: driver.driverId };

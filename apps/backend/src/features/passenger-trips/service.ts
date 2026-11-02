@@ -16,6 +16,7 @@ import { geocode, resolveRouteDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { sendPushToUser } from '../../shared/lib/push';
 import { assertTripInsideServiceArea } from '../../shared/lib/service-area';
+import { normalizeRequestedVehicleType } from '../../shared/lib/vehicle-class';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { cancellationService } from '../cancellations/service';
 import { getPrimaryMethodForDriver, toDriverTransferDetails } from '../payment-methods/service';
@@ -87,8 +88,10 @@ export const passengerTripService = {
       data.dest_lng,
     );
 
+    const vehicleType = normalizeRequestedVehicleType(data.vehicle_type);
+
     const fare = await calculateFare({
-      vehicle_type: data.vehicle_type,
+      vehicle_type: vehicleType,
       distance_km: resolved.distance_km,
       duration_minutes: resolved.duration_minutes,
       commission_rate: commissionRate,
@@ -136,6 +139,7 @@ export const passengerTripService = {
         platform_fee: fare.platform_fee,
         driver_earnings: fare.driver_earnings,
         payment_method: data.payment_method ?? 'cash',
+        vehicle_type: vehicleType,
         status: 'pending',
       })
       .returning();
@@ -155,6 +159,7 @@ export const passengerTripService = {
         dest_lng: trip.dest_lng,
         distance_km: trip.distance_km,
         duration_minutes: trip.duration_minutes,
+        vehicle_type: trip.vehicle_type,
       })
         .then((result) => {
           // Keep trip pending; client polls + silent retryRide. No immediate NO_NEARBY_DRIVERS broadcast.
@@ -207,6 +212,7 @@ export const passengerTripService = {
       dest_lng: trip.dest_lng,
       distance_km: trip.distance_km,
       duration_minutes: trip.duration_minutes,
+      vehicle_type: trip.vehicle_type,
     });
 
     const [updated] = await db.select().from(trips).where(eq(trips.id, tripId));
@@ -255,6 +261,7 @@ export const passengerTripService = {
         dest_lng: reopened.dest_lng,
         distance_km: reopened.distance_km,
         duration_minutes: reopened.duration_minutes,
+        vehicle_type: reopened.vehicle_type,
       },
       { excludeDriverIds: [excludedDriverId] },
     );

@@ -6,7 +6,18 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
-import { commissionPhases, drivers, fuelPriceLog, platformConfig, ratings, tripEvents, tripMessages, trips, users } from '../../shared/db/schema';
+import {
+  commissionPhases,
+  drivers,
+  fuelPriceLog,
+  platformConfig,
+  ratings,
+  tripEvents,
+  tripMessages,
+  trips,
+  users,
+  vehicles,
+} from '../../shared/db/schema';
 import { createTestAuthPlugin, createTestToken } from '../../shared/testing/utils';
 
 let app: any;
@@ -17,6 +28,7 @@ async function truncateTables() {
   await db.delete(tripEvents);
   await db.delete(tripMessages);
   await db.delete(trips);
+  await db.delete(vehicles);
   await db.delete(drivers);
   await db.delete(users);
   await db.delete(commissionPhases);
@@ -53,7 +65,17 @@ async function createDriverRow(token: string): Promise<string> {
   await request('PUT', '/api/drivers/me', { first_name: 'Test Driver', address_line: 'San Martín 100, Villa Dolores, Córdoba', photo_url: 'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png' }, token);
   const db = getDb();
   const [driver] = await db.select({ id: drivers.id }).from(drivers).limit(1);
-  return driver!.id;
+  const driverId = driver!.id;
+  await db.insert(vehicles).values({
+    driver_id: driverId,
+    brand: 'Toyota',
+    model: 'Corolla',
+    year: 2024,
+    color: 'Blanco',
+    plate: `T${String(++testId).padStart(6, '0')}`,
+    vehicle_type: 'car',
+  });
+  return driverId;
 }
 
 async function completeTrip(token: string): Promise<{ tripId: string; platformFee: number }> {
