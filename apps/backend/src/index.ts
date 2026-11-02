@@ -16,6 +16,11 @@ import { passengerTripRoutes } from './features/passenger-trips/routes';
 import { passengersRoutes } from './features/passengers/routes';
 import { paymentMethodsRoutes } from './features/payment-methods/routes';
 import { ratingsRoutes } from './features/ratings/routes';
+import {
+  serviceMarketsAdminRoutes,
+  serviceMarketsPublicRoutes,
+} from './features/service-markets/routes';
+import { reloadServiceMarketsCache } from './features/service-markets/service';
 import { sosRoutes } from './features/sos/routes';
 import { transitBridgeRoutes } from './features/transit-bridge/routes';
 import { transitRoutes } from './features/transit/routes';
@@ -101,6 +106,8 @@ export function createApp(customAuthPlugin?: typeof authPlugin) {
         .use(transitBridgeRoutes)
         .use(fuelPriceRoutes)
         .use(transitOperatorsRoutes)
+        .use(serviceMarketsAdminRoutes)
+        .use(serviceMarketsPublicRoutes)
         .use(paymentMethodsRoutes)
         .use(kycRoutes)
         .use(tripRoutes)
@@ -255,6 +262,12 @@ export function createApp(customAuthPlugin?: typeof authPlugin) {
 if (process.env.NODE_ENV !== 'test') {
   const app = createApp().listen(process.env.PORT || 3000);
   logger.info('Server running on port', String(app.server?.port));
+
+  reloadServiceMarketsCache().catch((err) => {
+    logger.warn('[boot] service markets cache load failed', {
+      message: (err as Error).message,
+    });
+  });
 
   startStaleDriverCleanup();
 

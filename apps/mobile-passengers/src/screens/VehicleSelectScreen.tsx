@@ -11,8 +11,13 @@ import type { MarkerData } from '../components/Map/mapHtml';
 import { RequestBlockedCard } from '../components/RequestBlockedCard';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { toMapCoordinate } from '../hooks/useLocation';
+import { API_DOWN_MESSAGE, API_DOWN_TITLE, isApiUnreachable } from '../lib/apiReachability';
 import { decodePolyline } from '../lib/polyline';
-import { type RideRequestErrorInfo, parseRideRequestError } from '../lib/rideRequestErrors';
+import {
+  type RideRequestErrorInfo,
+  parseFareEstimateError,
+  parseRideRequestError,
+} from '../lib/rideRequestErrors';
 import { type PaymentMethodType, usePaymentStore } from '../store/paymentStore';
 import { theme } from '../theme';
 import { formatCurrency, formatDistanceKm, formatDurationMin } from '../utils/formatters';
@@ -134,20 +139,36 @@ export function VehicleSelectScreen() {
       }
 
       const next: Partial<Record<Vehicle['id'], FareEstimate>> = {};
-      let anyFailed = false;
+      let anyFareFailed = false;
+      const failReasons: unknown[] = [];
       fareResults.forEach((result, index) => {
         const id: Vehicle['id'] = index === 0 ? 'auto' : 'moto';
         if (result.status === 'fulfilled') {
           next[id] = result.value;
         } else {
-          anyFailed = true;
+          anyFareFailed = true;
+          failReasons.push(result.reason);
           console.error('[VehicleSelect] fare estimate failed', result.reason);
         }
       });
 
       setFares(next);
-      if (anyFailed) {
-        Alert.alert('No pudimos calcular la tarifa', 'Reintentá más tarde.');
+
+      // One Alert only — never spam auto+moto.
+      // Directions-only failures use the route chip; do not claim "API down"
+      // when fares still succeeded (maps provider hiccup ≠ Lifty host dead).
+      if (anyFareFailed) {
+        if (failReasons.some(isApiUnreachable)) {
+          Alert.alert(API_DOWN_TITLE, API_DOWN_MESSAGE);
+        } else {
+          const zoneFirst =
+            failReasons
+              .map(parseFareEstimateError)
+              .find(
+                (info) => info.code === 'OUT_OF_PICKUP_AREA' || info.code === 'OUT_OF_DROPOFF_AREA',
+              ) ?? parseFareEstimateError(failReasons[0]);
+          Alert.alert(zoneFirst.title, zoneFirst.message);
+        }
       }
     })();
 
