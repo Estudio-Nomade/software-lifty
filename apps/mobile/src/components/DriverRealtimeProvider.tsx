@@ -3,7 +3,9 @@ import { apiClient } from '../api/client';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
   buildTripCancelledParams,
+  claimTripCancelNotice,
   isCancelledTripStatus,
+  resetTripCancelNoticeClaim,
   resolveActiveGoneAction,
 } from '../lib/cancellation';
 import { hasActiveTrip } from '../lib/isLiveTrip';
@@ -17,7 +19,6 @@ export const DriverRealtimeProvider: React.FC = () => {
   const driverId = useAuthStore((s) => s.driverId);
   const isOnline = useOnlineStore((s) => s.isOnline);
   const handledTripRef = useRef<string | null>(null);
-  const handledCancelRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!driverId || !isOnline) return;
@@ -26,13 +27,11 @@ export const DriverRealtimeProvider: React.FC = () => {
       payload: Record<string, unknown> | null | undefined,
       tripId?: string,
     ) => {
-      const id = tripId ?? (payload?.id != null ? String(payload.id) : null);
-      if (id && handledCancelRef.current === id) return;
-      if (id) handledCancelRef.current = id;
+      const id = tripId ?? (payload?.id != null ? String(payload.id) : undefined);
+      // Shared claim with IncomingRequest — one replace('TripCancelled') per trip.
+      // Navigate first; TripCancelledScreen clears store on mount (outside TRIP_ROUTES).
+      if (!claimTripCancelNotice(id)) return;
       handledTripRef.current = null;
-      // Navigate BEFORE clearTrip. AuthRedirectWatcher bounces TRIP_ROUTES → Active
-      // when the store is empty; clearing first races and closes without notice.
-      // TripCancelledScreen clears on VOLVER.
       replace('TripCancelled', buildTripCancelledParams(payload));
     };
 
@@ -41,7 +40,7 @@ export const DriverRealtimeProvider: React.FC = () => {
       if (payload.status !== 'request_received' && payload.status !== 'offered') return;
       if (handledTripRef.current === payload.id) return;
       handledTripRef.current = payload.id;
-      handledCancelRef.current = null;
+      resetTripCancelNoticeClaim();
       useTripStore.getState().setActiveTrip(payload);
       replace('IncomingRequest');
     };
@@ -65,7 +64,6 @@ export const DriverRealtimeProvider: React.FC = () => {
           const localId = store.activeTripId;
           const localTrip = store.trip;
           if (!localId || !hasActiveTrip(localTrip)) return;
-          if (handledCancelRef.current === localId) return;
           try {
             const detailRes = await apiClient.get(`/trips/${localId}`);
             const detail = detailRes.data?.data ?? detailRes.data;
@@ -87,7 +85,7 @@ export const DriverRealtimeProvider: React.FC = () => {
         if (trip.status !== 'request_received' && trip.status !== 'offered') return;
         if (handledTripRef.current === trip.id) return;
         handledTripRef.current = trip.id;
-        handledCancelRef.current = null;
+        resetTripCancelNoticeClaim();
         useTripStore.getState().setActiveTrip(trip);
         replace('IncomingRequest');
       } catch {}

@@ -13,6 +13,7 @@ import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
   buildTripCancelledParams,
+  claimTripCancelNotice,
   isCancelledTripStatus,
   resolveActiveGoneAction,
 } from '../lib/cancellation';
@@ -47,6 +48,8 @@ export const IncomingRequestScreen: React.FC = () => {
   const lng = useLocationStore((s) => s.lng);
 
   const showPassengerCancelled = (payload: Record<string, unknown> | null | undefined) => {
+    const id = payload?.id != null ? String(payload.id) : trip?.id;
+    if (!claimTripCancelNotice(id)) return;
     navigation.replace('TripCancelled', buildTripCancelledParams(payload));
   };
 

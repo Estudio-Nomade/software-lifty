@@ -30,3 +30,19 @@ export function resolveActiveGoneAction(
   }
   return { action: 'dismiss' };
 }
+
+/** Shared across IncomingRequest + DriverRealtimeProvider — one TripCancelled nav per trip. */
+let claimedCancelTripId: string | null = null;
+
+export function claimTripCancelNotice(tripId: string | null | undefined): boolean {
+  if (tripId == null || tripId === '') return true;
+  if (claimedCancelTripId === tripId) return false;
+  claimedCancelTripId = tripId;
+  return true;
+}
+
+export function resetTripCancelNoticeClaim(tripId?: string | null): void {
+  if (tripId == null || claimedCancelTripId === tripId) {
+    claimedCancelTripId = null;
+  }
+}

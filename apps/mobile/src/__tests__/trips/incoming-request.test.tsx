@@ -26,6 +26,7 @@ jest.mock('../../components/MapView', () => ({ MapView: () => null }));
 
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { resetTripCancelNoticeClaim } from '../../lib/cancellation';
 import { IncomingRequestScreen } from '../../screens/IncomingRequestScreen';
 import { useLocationStore } from '../../store/locationStore';
 import { useTripStore } from '../../store/tripStore';
@@ -75,6 +76,7 @@ describe('IncomingRequestScreen', () => {
     mockPut.mockReset();
     mockNavigate.mockReset();
     mockGoBack.mockReset();
+    resetTripCancelNoticeClaim();
     useTripStore.getState().clearTrip();
     useLocationStore.getState().clearLocation();
     mockGet.mockResolvedValue({ data: REAL_TRIP });

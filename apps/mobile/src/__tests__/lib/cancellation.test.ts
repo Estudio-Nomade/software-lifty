@@ -1,6 +1,8 @@
 import {
   buildTripCancelledParams,
+  claimTripCancelNotice,
   isCancelledTripStatus,
+  resetTripCancelNoticeClaim,
   resolveActiveGoneAction,
 } from '../../lib/cancellation';
 
@@ -63,5 +65,27 @@ describe('resolveActiveGoneAction', () => {
     expect(resolveActiveGoneAction({ id: 't1', status: 'offered' })).toEqual({
       action: 'dismiss',
     });
+  });
+});
+
+describe('claimTripCancelNotice', () => {
+  beforeEach(() => {
+    resetTripCancelNoticeClaim();
+  });
+
+  test('first claim wins; second for same id is ignored', () => {
+    expect(claimTripCancelNotice('trip-a')).toBe(true);
+    expect(claimTripCancelNotice('trip-a')).toBe(false);
+  });
+
+  test('reset allows a new claim for the same id', () => {
+    claimTripCancelNotice('trip-a');
+    resetTripCancelNoticeClaim('trip-a');
+    expect(claimTripCancelNotice('trip-a')).toBe(true);
+  });
+
+  test('different trip id can claim after another', () => {
+    expect(claimTripCancelNotice('trip-a')).toBe(true);
+    expect(claimTripCancelNotice('trip-b')).toBe(true);
   });
 });
