@@ -28,9 +28,12 @@ export async function recalcPassengerMetrics(
     .from(trips)
     .where(and(eq(trips.passenger_id, userId), gte(trips.created_at, from)));
 
+  // Rate only counts passenger cancels AFTER a driver accepted (en_camino / llegado).
+  // Abandoning search (pending/offered → pre_asignacion) is free and must NOT
+  // inflate cancel rate / suspensions — it's "changed mind before match", not a trip cancel.
   const [cancels] = await db
     .select({
-      total: sql<number>`count(*)::int`,
+      rate: sql<number>`count(*) filter (where ${cancelationLog.stage} <> 'pre_asignacion')::int`,
       pre: sql<number>`count(*) filter (where ${cancelationLog.stage} = 'pre_asignacion')::int`,
     })
     .from(cancelationLog)
@@ -44,7 +47,7 @@ export async function recalcPassengerMetrics(
     );
 
   const totalRequested = requested?.n ?? 0;
-  const totalCancels = cancels?.total ?? 0;
+  const totalCancels = cancels?.rate ?? 0;
   const preAssign = cancels?.pre ?? 0;
   const rateBp = totalRequested === 0 ? 0 : Math.round((totalCancels * 10000) / totalRequested);
 
