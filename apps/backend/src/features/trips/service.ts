@@ -39,26 +39,6 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   completed: ['rated'],
 };
 
-async function assertDriverVehicleMatchesTrip(
-  driverId: string,
-  tripVehicleType: string | null | undefined,
-  tx: typeof db = db,
-) {
-  const [vehicle] = await tx
-    .select({ vehicle_type: vehicles.vehicle_type })
-    .from(vehicles)
-    .where(eq(vehicles.driver_id, driverId))
-    .limit(1);
-
-  if (!vehicleTypesCompatible(tripVehicleType, vehicle?.vehicle_type)) {
-    throw new AppError(
-      'El vehículo del conductor no coincide con el tipo de viaje solicitado',
-      400,
-      'VEHICLE_TYPE_MISMATCH',
-    );
-  }
-}
-
 export function broadcastTripRequest(driverId: string, trip: any) {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
@@ -452,23 +432,22 @@ export const tripService = {
     });
 
     if (rematchAfterReject) {
-      const rematch = await passengerTripService.releaseAndRematch(tripId, driverId);
-      if (vehicleMismatch) {
-        throw new AppError(
-          'El vehículo del conductor no coincide con el tipo de viaje solicitado',
-          400,
-          'VEHICLE_TYPE_MISMATCH',
-        );
-      }
-      return rematch;
+      // releaseAndRematch accepts status rejected|offered|expired with same driver_id.
+      await passengerTripService.releaseAndRematch(tripId, driverId);
     }
 
     if (vehicleMismatch) {
+      // Driver never owns the trip; pax already re-offered (or pending) via rematch.
       throw new AppError(
         'El vehículo del conductor no coincide con el tipo de viaje solicitado',
         400,
         'VEHICLE_TYPE_MISMATCH',
       );
+    }
+
+    if (rematchAfterReject) {
+      const [trip] = await db.select().from(trips).where(eq(trips.id, tripId)).limit(1);
+      return { drivers_found: trip?.driver_id ? 1 : 0, trip };
     }
 
     return updated;
@@ -610,8 +589,9 @@ export const tripService = {
   async acceptTrip(user: AuthUser, tripId: string) {
     const driverId = await getDriverId(user);
     const verificationCode = Math.floor(1000 + Math.random() * 9000).toString();
+    let vehicleMismatch = false;
 
-    return db.transaction(async (tx) => {
+    const updated = await db.transaction(async (tx) => {
       const trip = await findTrip(driverId, tripId, tx);
 
       const allowed = VALID_TRANSITIONS[trip.status];
@@ -623,7 +603,23 @@ export const tripService = {
         );
       }
 
-      await assertDriverVehicleMatchesTrip(driverId, trip.vehicle_type, tx);
+      const [vehicle] = await tx
+        .select({ vehicle_type: vehicles.vehicle_type })
+        .from(vehicles)
+        .where(eq(vehicles.driver_id, driverId))
+        .limit(1);
+
+      if (!vehicleTypesCompatible(trip.vehicle_type, vehicle?.vehicle_type)) {
+        // Commit rejected + keep driver_id so releaseAndRematch can reopen (see rejected status).
+        await tx
+          .update(trips)
+          .set({ status: 'rejected', expires_at: null, updated_at: new Date() })
+          .where(eq(trips.id, tripId));
+        await recordEvent(tripId, trip.status, 'rejected', tx);
+        vehicleMismatch = true;
+        const [result] = await tx.select().from(trips).where(eq(trips.id, tripId));
+        return result;
+      }
 
       await tx
         .update(trips)
@@ -637,7 +633,7 @@ export const tripService = {
 
       await recordEvent(tripId, trip.status, 'accepted', tx);
 
-      const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
+      const [accepted] = await tx.select().from(trips).where(eq(trips.id, tripId));
 
       if (trip.passenger_id) {
         sendPushToUser(trip.passenger_id, {
@@ -645,11 +641,24 @@ export const tripService = {
           body: `Código de verificación: ${verificationCode}`,
           data: { type: 'trip:verification', trip_id: tripId, verification_code: verificationCode },
         });
-        broadcastToPassenger(trip.passenger_id, updated);
+        broadcastToPassenger(trip.passenger_id, accepted);
       }
 
-      return attachPassengerFields(updated, tx);
+      return attachPassengerFields(accepted, tx);
     });
+
+    if (vehicleMismatch) {
+      if (updated?.passenger_id) {
+        await passengerTripService.releaseAndRematch(tripId, driverId);
+      }
+      throw new AppError(
+        'El vehículo del conductor no coincide con el tipo de viaje solicitado',
+        400,
+        'VEHICLE_TYPE_MISMATCH',
+      );
+    }
+
+    return updated;
   },
 
   async rejectTrip(user: AuthUser, tripId: string) {

@@ -1232,10 +1232,13 @@ describe('Passenger Trips', () => {
     expect(rematched?.vehicle_type).toBe('moto');
   });
 
-  test('accept path: trip moto + driver car → VEHICLE_TYPE_MISMATCH', async () => {
+  test('accept path: trip moto + driver car → VEHICLE_TYPE_MISMATCH and rematch to moto', async () => {
     const passengerToken = await createPassengerToken();
     const car = await createDriverWithLocationAndToken(origin.lat, origin.lng, {
       vehicleType: 'car',
+    });
+    const moto = await createDriverWithLocationAndToken(origin.lat + 0.002, origin.lng, {
+      vehicleType: 'motorcycle',
     });
     const { data: trip } = await createTrip(passengerToken, 'moto');
 
@@ -1260,14 +1263,27 @@ describe('Passenger Trips', () => {
     expect(status).toBe(400);
     expect(data.error.code).toBe('VEHICLE_TYPE_MISMATCH');
 
-    const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
-    expect(row?.status).not.toBe('accepted');
+    let rematched: (typeof trips.$inferSelect) | null = null;
+    for (let i = 0; i < 40; i++) {
+      const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+      if (row?.driver_id === moto.driverId && row.status === 'offered') {
+        rematched = row;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    expect(rematched?.driver_id).toBe(moto.driverId);
+    expect(rematched?.status).toBe('offered');
+    expect(rematched?.vehicle_type).toBe('moto');
   });
 
-  test('respond accept path: trip moto + driver car → VEHICLE_TYPE_MISMATCH', async () => {
+  test('respond accept path: trip moto + driver car → VEHICLE_TYPE_MISMATCH and rematch', async () => {
     const passengerToken = await createPassengerToken();
     const car = await createDriverWithLocationAndToken(origin.lat, origin.lng, {
       vehicleType: 'car',
+    });
+    const moto = await createDriverWithLocationAndToken(origin.lat + 0.002, origin.lng, {
+      vehicleType: 'motorcycle',
     });
     const { data: trip } = await createTrip(passengerToken, 'moto');
 
@@ -1290,6 +1306,18 @@ describe('Passenger Trips', () => {
     );
     expect(status).toBe(400);
     expect(data.error.code).toBe('VEHICLE_TYPE_MISMATCH');
+
+    let rematched: (typeof trips.$inferSelect) | null = null;
+    for (let i = 0; i < 40; i++) {
+      const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+      if (row?.driver_id === moto.driverId && row.status === 'offered') {
+        rematched = row;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    expect(rematched?.driver_id).toBe(moto.driverId);
+    expect(rematched?.vehicle_type).toBe('moto');
   });
 
   test('moto fare stays moto (not auto) after matching', async () => {
