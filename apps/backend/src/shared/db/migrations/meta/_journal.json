@@ -393,6 +393,13 @@
       "when": 1788900000000,
       "tag": "0054_launch_cluster_districts_sp_vs",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1789000000000,
+      "tag": "0055_service_markets",
+      "breakpoints": true
     }
   ]
 }

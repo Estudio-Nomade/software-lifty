@@ -12,6 +12,7 @@ export { ratings } from './ratings';
 export { sosEvents } from './sos-events';
 export { pushTokens } from './push-tokens';
 export { districts } from './districts';
+export { serviceMarkets, serviceMarketAliases } from './service-markets';
 export { fuelPriceLog } from './fuel-price-log';
 export { commissionPhases } from './commission-phases';
 export { platformConfig } from './platform-config';
