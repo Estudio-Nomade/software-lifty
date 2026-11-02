@@ -94,6 +94,13 @@ describe('IncomingRequestScreen', () => {
     expect(queryByText('Terminal de Omnibus')).toBeNull();
   });
 
+  test('does not render sponsor / auspicio banner', async () => {
+    const { queryByText, getByText } = await render(<IncomingRequestScreen />);
+    await waitFor(() => expect(getByText('ACEPTAR')).toBeTruthy());
+    expect(queryByText(/Auspiciado/i)).toBeNull();
+    expect(queryByText(/sponsor/i)).toBeNull();
+  });
+
   test('accept uses the real /accept endpoint with the real trip id', async () => {
     const { getByText } = await render(<IncomingRequestScreen />);
     await waitFor(() => expect(getByText('ACEPTAR')).toBeTruthy());

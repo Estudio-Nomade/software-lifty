@@ -9,7 +9,6 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { MapView } from '../components/MapView';
 import { RatingStars } from '../components/RatingStars';
-import { SponsorBanner } from '../components/SponsorBanner';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { mergeTripUpdate } from '../lib/mergeTrip';
@@ -241,8 +240,15 @@ export const IncomingRequestScreen: React.FC = () => {
         centerCoordinate={lat != null && lng != null ? [lng, lat] : [0, 0]}
         userLocation={lat != null && lng != null ? [lng, lat] : null}
       />
-      <View style={[styles.overlay, { paddingBottom: Math.max(insets.bottom, theme.spacing.lg) }]}>
-        <View style={{ height: insets.top + theme.spacing.md }} />
+      <View
+        style={[
+          styles.overlay,
+          {
+            paddingTop: insets.top + theme.spacing.md,
+            paddingBottom: Math.max(insets.bottom, theme.spacing.lg),
+          },
+        ]}
+      >
         <Text style={styles.newRequest}>Nueva solicitud</Text>
 
         <View style={styles.timerCircle}>
@@ -275,51 +281,48 @@ export const IncomingRequestScreen: React.FC = () => {
           </View>
         </Card>
 
-        <View style={{ height: theme.spacing.md }} />
+        <View style={styles.earningsBlock}>
+          <Text style={styles.earningsLabel}>Ganaras</Text>
+          <Text style={styles.earningsAmount}>{formatCurrency(trip?.driver_earnings)}</Text>
 
-        <View style={styles.earningsBreakdown}>
-          {trip && (trip.platform_fee ?? 0) > 0 ? (
-            <>
-              <View style={styles.earningsBreakdownRow}>
-                <Text style={styles.earningsBreakdownLabel}>Total del viaje</Text>
-                <Text style={styles.earningsBreakdownValue}>{formatCurrency(trip.total_fare)}</Text>
+          <View style={styles.earningsBreakdown}>
+            {trip && (trip.platform_fee ?? 0) > 0 ? (
+              <>
+                <View style={styles.earningsBreakdownRow}>
+                  <Text style={styles.earningsBreakdownLabel}>Total del viaje</Text>
+                  <Text style={styles.earningsBreakdownValue}>
+                    {formatCurrency(trip.total_fare)}
+                  </Text>
+                </View>
+                <View style={styles.earningsBreakdownRow}>
+                  <Text style={styles.earningsBreakdownLabel}>
+                    Comision Lifty (
+                    {Math.round(((trip.platform_fee ?? 0) / (trip.total_fare ?? 1)) * 100)}%)
+                  </Text>
+                  <Text style={styles.earningsBreakdownDeduction}>
+                    -{formatCurrency(trip.platform_fee)}
+                  </Text>
+                </View>
+              </>
+            ) : trip && (trip.platform_fee ?? 0) === 0 ? (
+              <View style={styles.promoBadge}>
+                <Text style={styles.promoBadgeText}>Sin comision!</Text>
               </View>
-              <View style={styles.earningsBreakdownRow}>
-                <Text style={styles.earningsBreakdownLabel}>
-                  Comision Lifty (
-                  {Math.round(((trip.platform_fee ?? 0) / (trip.total_fare ?? 1)) * 100)}%)
-                </Text>
-                <Text style={styles.earningsBreakdownDeduction}>
-                  -{formatCurrency(trip.platform_fee)}
-                </Text>
-              </View>
-            </>
-          ) : trip && (trip.platform_fee ?? 0) === 0 ? (
-            <View style={styles.promoBadge}>
-              <Text style={styles.promoBadgeText}>Sin comision!</Text>
-            </View>
+            ) : null}
+          </View>
+
+          {trip?.passenger_cancel_visible && trip.passenger_cancel_count_30d != null ? (
+            <Text style={styles.cancelRate}>
+              Este pasajero tiene un {trip.passenger_cancel_rate_pct}% de cancelación en los últimos
+              30 días ({trip.passenger_cancel_count_30d} cancelaciones).
+            </Text>
           ) : null}
         </View>
-
-        {trip?.passenger_cancel_visible && trip.passenger_cancel_count_30d != null ? (
-          <Text style={styles.cancelRate}>
-            Este pasajero tiene un {trip.passenger_cancel_rate_pct}% de cancelación en los últimos
-            30 días ({trip.passenger_cancel_count_30d} cancelaciones).
-          </Text>
-        ) : null}
-
-        <Text style={styles.earningsLabel}>Ganaras</Text>
-        <Text style={styles.earningsAmount}>{formatCurrency(trip?.driver_earnings)}</Text>
-
-        <View style={{ height: theme.spacing.sm }} />
-        <SponsorBanner />
-
-        <View style={{ height: theme.spacing.lg }} />
 
         {accepted ? (
           <Text style={styles.acceptedText}>Viaje aceptado!</Text>
         ) : (
-          <>
+          <View style={styles.actionsBlock}>
             <Button
               title="ACEPTAR"
               variant="cta"
@@ -328,15 +331,17 @@ export const IncomingRequestScreen: React.FC = () => {
               loading={loading}
               style={styles.button}
             />
-            <TouchableOpacity onPress={handleReject}>
+            <TouchableOpacity onPress={handleReject} style={styles.rejectButton}>
               <Text style={styles.rejectLink}>Rechazar</Text>
             </TouchableOpacity>
-          </>
+          </View>
         )}
       </View>
     </View>
   );
 };
+
+const CONTENT_MAX_WIDTH = 340;
 
 const styles = StyleSheet.create({
   container: {
@@ -344,14 +349,19 @@ const styles = StyleSheet.create({
   },
   overlay: {
     flex: 1,
+    width: '100%',
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    justifyContent: 'flex-start',
+    paddingHorizontal: theme.spacing.lg,
+    gap: theme.spacing.md,
   },
   newRequest: {
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.white,
+    textAlign: 'center',
+    alignSelf: 'center',
   },
   timerCircle: {
     width: 100,
@@ -361,6 +371,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.turquoise,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
   },
   timerText: {
     fontSize: theme.fontSize.xl,
@@ -368,7 +379,11 @@ const styles = StyleSheet.create({
     color: theme.colors.white,
   },
   routeCard: {
-    width: 310,
+    // Override Card's default width:'100%' + alignSelf:'stretch', which on Android
+    // pins the fixed-width card to the left instead of centering it.
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
     gap: theme.spacing.sm,
   },
   routePoint: {
@@ -398,26 +413,37 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
   },
+  earningsBlock: {
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
   cancelRate: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
     textAlign: 'center',
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: theme.spacing.sm,
   },
   earningsLabel: {
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.white,
+    textAlign: 'center',
   },
   earningsAmount: {
     fontSize: theme.fontSize['4xl'],
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.white,
+    textAlign: 'center',
   },
   earningsBreakdown: {
-    width: 260,
+    width: '100%',
+    maxWidth: 280,
     gap: theme.spacing.xs,
     alignItems: 'center',
+    alignSelf: 'center',
   },
   earningsBreakdownRow: {
     flexDirection: 'row',
@@ -448,27 +474,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.xs,
     borderRadius: theme.radius.full,
+    alignSelf: 'center',
   },
   promoBadgeText: {
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.white,
   },
+  actionsBlock: {
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+  },
   button: {
     width: '100%',
-    maxWidth: 480,
+    maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
+  },
+  rejectButton: {
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
   },
   rejectLink: {
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.mediumGray,
-    marginTop: theme.spacing.sm,
+    textAlign: 'center',
   },
   acceptedText: {
     fontSize: theme.fontSize.lg,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.turquoise,
+    textAlign: 'center',
   },
   passengerRow: {
     flexDirection: 'row',
