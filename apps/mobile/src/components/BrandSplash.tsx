@@ -16,7 +16,19 @@ export function BrandSplash() {
           accessibilityLabel="Lifty"
         />
         <Text style={styles.wordmark}>Lifty</Text>
-        <Text style={styles.tagline}>Movilidad que te eleva</Text>
+        <View
+          style={styles.taglineBlock}
+          accessible
+          accessibilityRole="text"
+          accessibilityLabel="Movilidad que te eleva"
+        >
+          <Text style={styles.tagline} accessible={false}>
+            Movilidad que
+          </Text>
+          <Text style={styles.tagline} accessible={false}>
+            te eleva
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -42,17 +54,19 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     fontSize: theme.fontSize['3xl'],
-    fontFamily: theme.fontFamily.bold,
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.deepBlue,
     letterSpacing: -0.8,
   },
+  taglineBlock: {
+    alignItems: 'center',
+    maxWidth: 280,
+  },
   tagline: {
     fontSize: theme.fontSize.md,
-    fontFamily: theme.fontFamily.medium,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.mediumGray,
     textAlign: 'center',
-    maxWidth: 280,
+    lineHeight: 22,
   },
 });
