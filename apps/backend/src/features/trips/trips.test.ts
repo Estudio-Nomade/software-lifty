@@ -1194,8 +1194,11 @@ describe('Trip State Machine', () => {
       );
       expect(sent.status).toBe(200);
 
-      // Fire-and-forget push — wait briefly for the detailed send.
-      await Bun.sleep(150);
+      // Fire-and-forget push — poll until Expo fetch runs (CI load tolerant).
+      const deadline = Date.now() + 2000;
+      while (expoCalls.length === 0 && Date.now() < deadline) {
+        await Bun.sleep(40);
+      }
 
       expect(expoCalls.length).toBeGreaterThanOrEqual(1);
       const payload = expoCalls[0] as {

@@ -30,7 +30,9 @@ export function ChatScreen() {
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const paramId = typeof tripIdParam === 'string' ? tripIdParam : tripIdParam?.[0];
-  const tripId = trip?.id ?? paramId;
+  // Deep-link param wins over a stale activeTrip (e.g. completed ride still in store).
+  const tripId = paramId || trip?.id;
+  const chatTrip = trip?.id === tripId ? trip : null;
   const { messages, sendMessage } = useTripChat(tripId, 'passenger');
 
   // Push tap may land here before ActiveTripRecovery fills the store.
@@ -139,7 +141,7 @@ export function ChatScreen() {
           <Ionicons name="arrow-back" size={24} color={theme.colors.deepBlue} />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle}>Chat con {trip?.driver_name ?? 'tu conductor'}</Text>
+          <Text style={styles.headerTitle}>Chat con {chatTrip?.driver_name ?? 'tu conductor'}</Text>
         </View>
         <View style={{ width: 24 }} />
       </View>
