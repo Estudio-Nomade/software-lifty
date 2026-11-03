@@ -1,7 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
+import { stopTracking } from '../lib/location';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
+import { useOnlineStore } from '../store/onlineStore';
 
 export function useSignUp() {
   return useMutation({
@@ -121,6 +123,12 @@ export function useSignOut() {
 
   return useMutation({
     mutationFn: async () => {
+      const hb = useOnlineStore.getState().heartbeatIntervalRef;
+      if (hb) clearInterval(hb);
+      useOnlineStore.getState().setHeartbeatRef(null);
+      useOnlineStore.getState().setOnline(false);
+      await stopTracking().catch(() => {});
+
       if (token) {
         try {
           await apiClient.post('/auth/logout');

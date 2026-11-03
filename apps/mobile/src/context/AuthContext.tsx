@@ -9,10 +9,12 @@ import {
   useState,
 } from 'react';
 import { apiClient } from '../api/client';
+import { stopTracking } from '../lib/location';
 import { queryClient } from '../lib/queryClient';
 import { type SocialProvider, signInWithProvider } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
+import { useOnlineStore } from '../store/onlineStore';
 
 interface AuthContextValue {
   /** Current Supabase session, or null when signed out. */
@@ -132,6 +134,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Stop bg location/FGS before clearing session so queued OS updates don't keep heartbeating.
+    const hb = useOnlineStore.getState().heartbeatIntervalRef;
+    if (hb) clearInterval(hb);
+    useOnlineStore.getState().setHeartbeatRef(null);
+    useOnlineStore.getState().setOnline(false);
+    await stopTracking().catch(() => {});
+
     if (useAuthStore.getState().token) {
       try {
         await apiClient.post('/auth/logout');

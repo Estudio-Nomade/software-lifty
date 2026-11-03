@@ -126,4 +126,27 @@ describe('driver background location tracking', () => {
 
     expect(mockStopUpdates).toHaveBeenCalledWith('lifty-location');
   });
+
+  it('serializes rapid start then stop without leaving updates running', async () => {
+    let releaseStart: (() => void) | undefined;
+    mockStartUpdates.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseStart = resolve;
+        }),
+    );
+    mockHasStarted.mockResolvedValue(true);
+
+    const startP = startTracking({ enableBackground: true });
+    const stopP = stopTracking();
+
+    // Let the exclusive queue reach startLocationUpdatesAsync, then finish it.
+    await Promise.resolve();
+    await Promise.resolve();
+    releaseStart?.();
+
+    await Promise.all([startP, stopP]);
+
+    expect(mockStopUpdates).toHaveBeenCalledWith('lifty-location');
+  });
 });

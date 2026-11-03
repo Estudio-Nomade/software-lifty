@@ -69,7 +69,21 @@ const SECURE_CONTEXT_MSG =
 
 let nativeSubscription: Location.LocationSubscription | null = null;
 let webWatchId: number | null = null;
-let backgroundUpdatesDesired = false;
+
+/** Serializes start/stop so rapid online toggles cannot orphan FGS / watch. */
+let trackingOpId = 0;
+let trackingQueue: Promise<void> = Promise.resolve();
+
+function runExclusive(op: (isCurrent: () => boolean) => Promise<void>): Promise<void> {
+  const myId = ++trackingOpId;
+  const isCurrent = () => myId === trackingOpId;
+  const run = trackingQueue.then(async () => {
+    if (!isCurrent()) return;
+    await op(isCurrent);
+  });
+  trackingQueue = run.catch(() => {});
+  return run;
+}
 
 function readBrowserGeo(): BrowserGeolocation | null {
   const g = globalThis as { navigator?: { geolocation?: BrowserGeolocation } };
@@ -289,69 +303,95 @@ async function startForegroundWatch(): Promise<void> {
   );
 }
 
-async function startBackgroundLocationUpdates(): Promise<boolean> {
+/** Tear down any native location source (bg task + fg watch). */
+async function tearDownNativeTracking(): Promise<void> {
+  await stopBackgroundUpdates();
+  stopNativeWatch();
+}
+
+async function startBackgroundLocationUpdates(isCurrent: () => boolean): Promise<void> {
   const bg = await ensureBackgroundLocationPermission();
+  if (!isCurrent()) return;
+
   if (!bg.granted) {
     // Fall back to foreground watch so map/online still work while app is open.
     await startForegroundWatch();
-    return false;
+    if (!isCurrent()) {
+      stopNativeWatch();
+    }
+    return;
   }
 
   stopNativeWatch();
 
   const already = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+  if (!isCurrent()) return;
+
   if (!already) {
     await Location.startLocationUpdatesAsync(
       LOCATION_TASK_NAME,
       buildBackgroundLocationOptions(Location.Accuracy.Balanced),
     );
   }
-  return true;
+
+  if (!isCurrent()) {
+    // Superseded after start — do not leave an orphan FGS task.
+    await tearDownNativeTracking();
+  }
 }
 
 export async function startTracking(options: StartTrackingOptions = {}): Promise<void> {
-  if (isWebRuntime()) {
-    await getWebPositionOnce();
-    startWebWatch();
-    return;
-  }
-
-  try {
-    const { granted } = await Location.requestForegroundPermissionsAsync();
-    if (!granted) {
-      useLocationStore
-        .getState()
-        .setLocationError('Permiso de ubicación denegado. Activálo en Ajustes e intentá de nuevo.');
+  return runExclusive(async (isCurrent) => {
+    if (isWebRuntime()) {
+      await getWebPositionOnce();
+      if (!isCurrent()) return;
+      startWebWatch();
       return;
     }
 
-    useLocationStore.getState().setLocationError(null);
-    backgroundUpdatesDesired = shouldStartBackgroundUpdates(options, false);
+    try {
+      const { granted } = await Location.requestForegroundPermissionsAsync();
+      if (!isCurrent()) return;
+      if (!granted) {
+        useLocationStore
+          .getState()
+          .setLocationError(
+            'Permiso de ubicación denegado. Activálo en Ajustes e intentá de nuevo.',
+          );
+        return;
+      }
 
-    if (backgroundUpdatesDesired) {
-      await startBackgroundLocationUpdates();
-      return;
+      useLocationStore.getState().setLocationError(null);
+
+      if (shouldStartBackgroundUpdates(options, false)) {
+        await startBackgroundLocationUpdates(isCurrent);
+        return;
+      }
+
+      // Offline map follow: fg watch only (no FGS / no always permission).
+      await tearDownNativeTracking();
+      if (!isCurrent()) return;
+      await startForegroundWatch();
+      if (!isCurrent()) {
+        stopNativeWatch();
+      }
+    } catch (error) {
+      console.error('startTracking failed:', error);
+      if (isCurrent()) {
+        useLocationStore.getState().setLocationError(LOCATION_DENIED_MSG);
+      }
     }
-
-    // Offline map follow: fg watch only (no FGS / no always permission).
-    await stopBackgroundUpdates();
-    await startForegroundWatch();
-  } catch (error) {
-    console.error('startTracking failed:', error);
-    useLocationStore.getState().setLocationError(LOCATION_DENIED_MSG);
-  }
+  });
 }
 
 export async function stopTracking(): Promise<void> {
-  backgroundUpdatesDesired = false;
-
-  if (isWebRuntime()) {
-    stopWebWatch();
-    return;
-  }
-
-  await stopBackgroundUpdates();
-  stopNativeWatch();
+  return runExclusive(async () => {
+    if (isWebRuntime()) {
+      stopWebWatch();
+      return;
+    }
+    await tearDownNativeTracking();
+  });
 }
 
 export async function getCurrentPosition(): Promise<void> {
