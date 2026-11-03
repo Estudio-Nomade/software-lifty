@@ -18,11 +18,16 @@ export function BrandSplash() {
         <Text style={styles.wordmark}>Lifty</Text>
         <View
           style={styles.taglineBlock}
+          accessible
           accessibilityRole="text"
           accessibilityLabel="Movilidad que te eleva"
         >
-          <Text style={styles.tagline}>Movilidad que</Text>
-          <Text style={styles.tagline}>te eleva</Text>
+          <Text style={styles.tagline} accessible={false}>
+            Movilidad que
+          </Text>
+          <Text style={styles.tagline} accessible={false}>
+            te eleva
+          </Text>
         </View>
       </View>
     </View>
