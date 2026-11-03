@@ -46,7 +46,8 @@
       [
         "expo-notifications",
         {
-          "mode": "development"
+          "mode": "development",
+          "sounds": ["./assets/sounds/trip-request.wav"]
         }
       ],
       "expo-router",
@@ -74,6 +75,14 @@
           "image": "./assets/splash-brand.png",
           "imageWidth": 300,
           "resizeMode": "contain"
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false,
+          "recordAudioAndroid": false
         }
       ]
     ],

@@ -18,6 +18,7 @@ import {
   resolveActiveGoneAction,
 } from '../lib/cancellation';
 import { mergeTripUpdate } from '../lib/mergeTrip';
+import { startOfferRingtone, stopOfferRingtone } from '../lib/offerRingtone';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { theme } from '../theme';
@@ -50,12 +51,14 @@ export const IncomingRequestScreen: React.FC = () => {
   const showPassengerCancelled = (payload: Record<string, unknown> | null | undefined) => {
     const id = payload?.id != null ? String(payload.id) : trip?.id;
     if (!claimTripCancelNotice(id)) return;
+    stopOfferRingtone();
     navigation.replace('TripCancelled', buildTripCancelledParams(payload));
   };
 
   /** active gone while we held an offer — check detail so expired ≠ passenger cancel */
   const handleActiveGone = async (tripId: string | undefined) => {
     if (!tripId) {
+      stopOfferRingtone();
       navigation.goBack();
       return;
     }
@@ -70,6 +73,7 @@ export const IncomingRequestScreen: React.FC = () => {
     } catch {
       /* 404 / network → silent dismiss */
     }
+    stopOfferRingtone();
     navigation.goBack();
   };
 
@@ -84,6 +88,7 @@ export const IncomingRequestScreen: React.FC = () => {
       showPassengerCancelled(active as unknown as Record<string, unknown>);
       return;
     }
+    stopOfferRingtone();
     setActiveTrip(active);
     switch (active.status) {
       case 'accepted':
@@ -166,10 +171,27 @@ export const IncomingRequestScreen: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (
+      !trip ||
+      accepted ||
+      timedOut.current ||
+      acceptingRef.current ||
+      (trip.status !== 'request_received' && trip.status !== 'offered')
+    ) {
+      return;
+    }
+    void startOfferRingtone();
+    return () => {
+      stopOfferRingtone();
+    };
+  }, [trip?.id, trip?.status, accepted]);
+
+  useEffect(() => {
     if (!trip || accepted || timedOut.current || acceptingRef.current) return;
     if (seconds <= 0) {
       if (acceptingRef.current || accepted) return;
       timedOut.current = true;
+      stopOfferRingtone();
       apiClient
         .post(`/trips/${trip.id}/reject`)
         .catch(() => {})
@@ -234,6 +256,7 @@ export const IncomingRequestScreen: React.FC = () => {
   const handleAccept = async () => {
     if (!trip || loading || acceptingRef.current) return;
     acceptingRef.current = true;
+    stopOfferRingtone();
     setLoading(true);
     try {
       const response = await apiClient.post(`/trips/${trip.id}/accept`);
@@ -248,6 +271,11 @@ export const IncomingRequestScreen: React.FC = () => {
       if (__DEV__) console.error('[handleAccept] error:', err?.message ?? err);
       const isTokenExpired =
         err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED';
+      if (isTokenExpired) {
+        stopOfferRingtone();
+      } else if (trip.status === 'request_received' || trip.status === 'offered') {
+        void startOfferRingtone();
+      }
       Alert.alert(
         'Error',
         isTokenExpired
@@ -272,6 +300,7 @@ export const IncomingRequestScreen: React.FC = () => {
 
   const handleReject = async () => {
     if (!trip) return;
+    stopOfferRingtone();
     try {
       await apiClient.post(`/trips/${trip.id}/reject`);
     } catch {}
