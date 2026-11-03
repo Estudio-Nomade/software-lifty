@@ -52,14 +52,12 @@ export function isRemotePushAvailable(): boolean {
 }
 
 async function loadNotifications(): Promise<typeof import('expo-notifications') | null> {
+  // Guard first: static top-level import breaks Expo Go Android (SDK 53+).
+  // Lazy require (not top-level) keeps load deferred; Jest can mock the module.
   if (!isRemotePushAvailable()) return null;
   try {
-    // Prefer require so Jest mocks resolve; fall back to dynamic import in Metro.
-    if (typeof require === 'function') {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      return require('expo-notifications') as typeof import('expo-notifications');
-    }
-    return await import('expo-notifications');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('expo-notifications') as typeof import('expo-notifications');
   } catch (err) {
     console.warn('[push] expo-notifications load failed', err);
     return null;
