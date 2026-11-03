@@ -8,6 +8,11 @@ export interface PushMessage {
   data?: Record<string, string>;
   /** Android Expo channel; defaults to trip-requests for trip alerts. */
   channelId?: string;
+  /**
+   * Expo push sound. Use `'default'` or a filename registered in the app
+   * (e.g. `trip-request.wav` via expo-notifications sounds plugin).
+   */
+  sound?: string;
   /** iOS app-icon badge (and Android when supported via Expo). */
   badge?: number;
 }
@@ -156,7 +161,7 @@ export async function sendExpoPushNotification(
     title: message.title,
     body: message.body,
     data: message.data ?? {},
-    sound: 'default',
+    sound: message.sound?.trim() ? message.sound.trim() : 'default',
     priority: 'high',
     // Matches Android channels in the driver app (notifications.ts).
     channelId: message.channelId ?? 'trip-requests',
