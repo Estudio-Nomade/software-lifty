@@ -1,6 +1,6 @@
 import { isRunningInExpoGo } from 'expo';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import { apiClient } from '../api/client';
 import type { DriverStatus } from '../api/types';
 import { driverStatusSchema } from '../api/types';
@@ -12,7 +12,23 @@ import { resolvePostAuthRoute, routeForDriverStatus } from './postAuthRouting';
 interface PermStatus {
   status: string;
   granted: boolean;
+  canAskAgain?: boolean;
 }
+
+/** Result of asking OS permission + Expo token + optional backend register. */
+export type PushRegistrationReason =
+  | 'unavailable'
+  | 'project_id_missing'
+  | 'permission_denied'
+  | 'token_null'
+  | 'register_error'
+  | 'post_failed';
+
+export type PushRegistrationResult =
+  | { ok: true; token: string }
+  | { ok: false; reason: PushRegistrationReason; message: string; canOpenSettings?: boolean };
+
+export const PUSH_PERMISSION_DENIED_MSG = 'Activá notificaciones en Ajustes para recibir viajes';
 
 /** Minimal shape for notification tap payloads — avoids static expo-notifications import. */
 export type NotificationResponseLike = {
@@ -36,10 +52,14 @@ export function isRemotePushAvailable(): boolean {
 }
 
 async function loadNotifications(): Promise<typeof import('expo-notifications') | null> {
+  // Guard first: static top-level import breaks Expo Go Android (SDK 53+).
+  // Lazy require (not top-level) keeps load deferred; Jest can mock the module.
   if (!isRemotePushAvailable()) return null;
   try {
-    return await import('expo-notifications');
-  } catch {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('expo-notifications') as typeof import('expo-notifications');
+  } catch (err) {
+    console.warn('[push] expo-notifications load failed', err);
     return null;
   }
 }
@@ -107,20 +127,56 @@ export async function getLastNotificationResponse(): Promise<NotificationRespons
   }
 }
 
+/**
+ * Request notification permission, create Android channels, obtain Expo push token.
+ * Does not POST to backend — use ensurePushRegistration for full path.
+ */
 export async function registerForPush(): Promise<string | null> {
+  const result = await obtainPushToken();
+  return result.ok ? result.token : null;
+}
+
+async function obtainPushToken(): Promise<PushRegistrationResult> {
+  if (!isRemotePushAvailable()) {
+    return {
+      ok: false,
+      reason: 'unavailable',
+      message:
+        'Push remoto no disponible en este runtime (web o Expo Go Android). Usá un build preview/dev.',
+    };
+  }
+
   const Notifications = await loadNotifications();
-  if (!Notifications) return null;
+  if (!Notifications) {
+    return {
+      ok: false,
+      reason: 'unavailable',
+      message: 'Módulo de notificaciones no disponible.',
+    };
+  }
 
   const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.expoConfig?.slug;
-
   if (!projectId) {
-    return null;
+    console.warn('[push] projectId missing (eas.projectId / slug)');
+    return {
+      ok: false,
+      reason: 'project_id_missing',
+      message: 'Falta projectId de Expo para obtener el token push.',
+    };
   }
 
   try {
     const perm = (await Notifications.requestPermissionsAsync()) as unknown as PermStatus;
     if (perm.status !== 'granted') {
-      return null;
+      console.warn('[push] permission not granted', perm.status, {
+        canAskAgain: perm.canAskAgain,
+      });
+      return {
+        ok: false,
+        reason: 'permission_denied',
+        message: PUSH_PERMISSION_DENIED_MSG,
+        canOpenSettings: perm.canAskAgain === false || perm.status === 'denied',
+      };
     }
 
     if (Platform.OS === 'android') {
@@ -152,9 +208,64 @@ export async function registerForPush(): Promise<string | null> {
     }
 
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
-    return token.data;
-  } catch {
-    return null;
+    if (!token?.data) {
+      console.warn('[push] getExpoPushTokenAsync returned empty token');
+      return {
+        ok: false,
+        reason: 'token_null',
+        message: 'No se pudo obtener el token de notificaciones.',
+      };
+    }
+    return { ok: true, token: token.data };
+  } catch (err) {
+    console.warn('[push] registerForPush failed', err);
+    return {
+      ok: false,
+      reason: 'register_error',
+      message: 'Error al registrar notificaciones. Reintentá en unos segundos.',
+    };
+  }
+}
+
+/**
+ * Full path: permission → Expo token → POST /notifications/token.
+ * Call on session restore and again on GO so deny/error is never silent.
+ */
+export async function ensurePushRegistration(): Promise<PushRegistrationResult> {
+  const obtained = await obtainPushToken();
+  if (!obtained.ok) return obtained;
+
+  const platform = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : null;
+  if (!platform) {
+    return {
+      ok: false,
+      reason: 'unavailable',
+      message: 'Plataforma no soportada para push nativo.',
+    };
+  }
+
+  try {
+    await apiClient.post('/notifications/token', {
+      token: obtained.token,
+      platform,
+    });
+    return obtained;
+  } catch (err) {
+    console.warn('[push] POST /notifications/token failed', err);
+    return {
+      ok: false,
+      reason: 'post_failed',
+      message: 'No se pudo registrar el token de notificaciones. Revisá la conexión.',
+    };
+  }
+}
+
+/** Open OS app settings so the driver can re-enable notifications after deny. */
+export async function openNotificationSettings(): Promise<void> {
+  try {
+    await Linking.openSettings();
+  } catch (err) {
+    console.warn('[push] openSettings failed', err);
   }
 }
 

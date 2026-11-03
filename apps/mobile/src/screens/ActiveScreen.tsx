@@ -6,6 +6,7 @@ import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   ScrollView,
   StatusBar,
@@ -47,6 +48,12 @@ import {
   feedbackFromConnectError,
 } from '../lib/connectBlockedFeedback';
 import { getCurrentPosition, startTracking, stopTracking } from '../lib/location';
+import {
+  PUSH_PERMISSION_DENIED_MSG,
+  ensurePushRegistration,
+  isRemotePushAvailable,
+  openNotificationSettings,
+} from '../lib/notifications';
 import {
   hasDistrictFromCache,
   isDistrictRequiredError,
@@ -311,6 +318,34 @@ export const ActiveScreen: React.FC = () => {
     if (!hasLocation) {
       showConnectFeedback(feedbackForConnectBlock('no_location'));
       return;
+    }
+
+    // Hard-gate online when remote push is available (preview/dev/prod APK).
+    // Skip on web / Expo Go Android where remote push is intentionally unavailable.
+    if (isRemotePushAvailable()) {
+      const push = await ensurePushRegistration();
+      if (!push.ok) {
+        if (push.reason === 'permission_denied') {
+          showConnectFeedback(feedbackForConnectBlock('notifications_denied'));
+          Alert.alert('Notificaciones', PUSH_PERMISSION_DENIED_MSG, [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+              text: 'Abrir Ajustes',
+              onPress: () => {
+                void openNotificationSettings();
+              },
+            },
+          ]);
+        } else {
+          const base = feedbackForConnectBlock('notifications_register_failed');
+          showConnectFeedback({
+            ...base,
+            message: push.message || base.message,
+          });
+          console.warn('[push] GO blocked', push.reason, push.message);
+        }
+        return;
+      }
     }
 
     const latest = queryClient.getQueryData<DriverStatus>(['driverStatus']);
