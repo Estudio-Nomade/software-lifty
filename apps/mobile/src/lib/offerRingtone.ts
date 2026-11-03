@@ -49,10 +49,16 @@ export async function startOfferRingtone(): Promise<void> {
 
     if (token !== generation) return;
 
-    const next = createAudioPlayer(TRIP_REQUEST_SOUND);
-    next.loop = true;
-    next.volume = 1;
-    next.play();
+    let next: AudioPlayer | null = null;
+    try {
+      next = createAudioPlayer(TRIP_REQUEST_SOUND);
+      next.loop = true;
+      next.volume = 1;
+      next.play();
+    } catch (playErr) {
+      releasePlayer(next);
+      throw playErr;
+    }
 
     if (token !== generation) {
       releasePlayer(next);

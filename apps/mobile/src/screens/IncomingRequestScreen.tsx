@@ -42,6 +42,8 @@ export const IncomingRequestScreen: React.FC = () => {
   const [accepted, setAccepted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
+  /** Bump to re-arm the ringtone effect after a failed accept (same trip/status). */
+  const [ringtoneEpoch, setRingtoneEpoch] = useState(0);
   const timedOut = useRef(false);
   const acceptingRef = useRef(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -184,7 +186,7 @@ export const IncomingRequestScreen: React.FC = () => {
     return () => {
       stopOfferRingtone();
     };
-  }, [trip?.id, trip?.status, accepted]);
+  }, [trip?.id, trip?.status, accepted, ringtoneEpoch]);
 
   useEffect(() => {
     if (!trip || accepted || timedOut.current || acceptingRef.current) return;
@@ -274,7 +276,9 @@ export const IncomingRequestScreen: React.FC = () => {
       if (isTokenExpired) {
         stopOfferRingtone();
       } else if (trip.status === 'request_received' || trip.status === 'offered') {
-        void startOfferRingtone();
+        // Re-arm the ringtone effect so cleanup stays owned by the effect (not a
+        // detached manual start that can outlive status-driven navigation).
+        setRingtoneEpoch((n) => n + 1);
       }
       Alert.alert(
         'Error',

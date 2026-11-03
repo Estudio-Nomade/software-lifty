@@ -91,4 +91,20 @@ describe('offerRingtone', () => {
     expect(mockCreateAudioPlayer).not.toHaveBeenCalled();
     expect(mockSetAudioModeAsync).not.toHaveBeenCalled();
   });
+
+  test('releases player if play throws after create', async () => {
+    mockCreateAudioPlayer.mockImplementation(() => {
+      const p = makePlayer();
+      p.play.mockImplementation(() => {
+        throw new Error('play failed');
+      });
+      return p;
+    });
+
+    await startOfferRingtone();
+
+    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(1);
+    expect(mockPause).toHaveBeenCalledTimes(1);
+    expect(mockRemove).toHaveBeenCalledTimes(1);
+  });
 });

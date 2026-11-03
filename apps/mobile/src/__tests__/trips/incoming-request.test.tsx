@@ -145,6 +145,25 @@ describe('IncomingRequestScreen', () => {
     expect(useTripStore.getState().trip?.id).toBe('trip-real-1');
   });
 
+  test('failed accept re-arms ringtone via effect (not a detached manual start)', async () => {
+    mockPost.mockRejectedValueOnce({ message: 'accept failed' });
+    const { getByText } = await render(<IncomingRequestScreen />);
+    await waitFor(() => expect(getByText('ACEPTAR')).toBeTruthy());
+    const startsBefore = mockStartOfferRingtone.mock.calls.length;
+
+    await act(async () => {
+      fireEvent.press(getByText('ACEPTAR'));
+    });
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith('/trips/trip-real-1/accept');
+    });
+    await waitFor(() => {
+      expect(mockStartOfferRingtone.mock.calls.length).toBeGreaterThan(startsBefore);
+    });
+    expect(mockStopOfferRingtone).toHaveBeenCalled();
+  });
+
   test('reject uses the real /reject endpoint with the real trip id', async () => {
     const { getByText } = await render(<IncomingRequestScreen />);
     await waitFor(() => expect(getByText('Rechazar')).toBeTruthy());
