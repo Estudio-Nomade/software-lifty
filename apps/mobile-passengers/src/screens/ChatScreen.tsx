@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 import { type ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -11,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getRideDetails } from '../api/passenger';
 import { ChatBubble } from '../components/ChatBubble';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTripChat } from '../hooks/useTripChat';
@@ -20,13 +22,30 @@ import { theme } from '../theme';
 export function ChatScreen() {
   const { goBack } = useAppNavigation();
   const insets = useSafeAreaInsets();
+  const { tripId: tripIdParam } = useLocalSearchParams<{ tripId?: string }>();
   const trip = useRideStore((s) => s.activeTrip);
+  const setActiveTrip = useRideStore((s) => s.setActiveTrip);
   const [message, setMessage] = useState('');
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const tripId = trip?.id;
+  const paramId = typeof tripIdParam === 'string' ? tripIdParam : tripIdParam?.[0];
+  const tripId = trip?.id ?? paramId;
   const { messages, sendMessage } = useTripChat(tripId, 'passenger');
+
+  // Push tap may land here before ActiveTripRecovery fills the store.
+  useEffect(() => {
+    if (!paramId || trip?.id === paramId) return;
+    let cancelled = false;
+    void getRideDetails(paramId)
+      .then((full) => {
+        if (!cancelled && full) setActiveTrip(full);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [paramId, trip?.id, setActiveTrip]);
 
   const scrollToEnd = useCallback(() => {
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);

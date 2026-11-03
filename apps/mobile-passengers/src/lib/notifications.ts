@@ -81,6 +81,9 @@ export async function registerForPush(): Promise<string | null> {
   try {
     const perm = (await Notifications.requestPermissionsAsync()) as unknown as PermStatus;
     if (perm.status !== 'granted') {
+      if (__DEV__) {
+        console.warn('[push] permission not granted', perm.status);
+      }
       return null;
     }
 
@@ -99,7 +102,10 @@ export async function registerForPush(): Promise<string | null> {
 
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
     return token.data;
-  } catch {
+  } catch (err) {
+    if (__DEV__) {
+      console.warn('[push] registerForPush failed', err);
+    }
     return null;
   }
 }
@@ -114,9 +120,11 @@ export function handleNotificationResponse(
   const type = data?.type;
 
   switch (type) {
-    case 'trip:message':
-      navigate('Chat');
+    case 'trip:message': {
+      const params = data?.trip_id ? { tripId: data.trip_id } : undefined;
+      navigate('Chat', params);
       break;
+    }
     case 'trip:status':
     case 'trip:accepted':
     case 'trip:arrived':
