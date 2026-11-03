@@ -10,6 +10,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+// Side-effect: register TaskManager location task before any startLocationUpdatesAsync.
+import '../src/lib/backgroundLocationTask';
 import { AppInitializer } from '../src/components/AppInitializer';
 import { BrandSplash } from '../src/components/BrandSplash';
 import { LocationSync } from '../src/components/LocationSync';

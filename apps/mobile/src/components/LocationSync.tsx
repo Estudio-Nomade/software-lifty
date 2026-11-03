@@ -25,12 +25,14 @@ export function LocationSync() {
     }, 30_000);
     useOnlineStore.getState().setHeartbeatRef(heartbeatInterval);
 
-    startTracking();
+    // Background TaskManager updates + heartbeat PUT keep matching freshness (5 min)
+    // and offline grace (10 min) while the app is backgrounded.
+    void startTracking({ enableBackground: true });
 
     return () => {
       clearInterval(heartbeatInterval);
       useOnlineStore.getState().setHeartbeatRef(null);
-      stopTracking();
+      void stopTracking();
     };
   }, [shouldTrack]);
 

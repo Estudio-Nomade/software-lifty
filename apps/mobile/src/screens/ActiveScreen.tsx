@@ -47,7 +47,15 @@ import {
   feedbackForConnectBlock,
   feedbackFromConnectError,
 } from '../lib/connectBlockedFeedback';
-import { getCurrentPosition, startTracking, stopTracking } from '../lib/location';
+import {
+  BG_LOCATION_PERMISSION_MSG,
+  ensureBackgroundLocationPermission,
+  getCurrentPosition,
+  isWebRuntime,
+  openLocationSettings,
+  startTracking,
+  stopTracking,
+} from '../lib/location';
 import {
   PUSH_PERMISSION_DENIED_MSG,
   ensurePushRegistration,
@@ -348,6 +356,28 @@ export const ActiveScreen: React.FC = () => {
       }
     }
 
+    // Soft-gate: warn if background location is denied. Matching drops after ~5 min
+    // without pin refresh; still allow GO so drivers can work in foreground.
+    if (!isWebRuntime()) {
+      const bg = await ensureBackgroundLocationPermission();
+      if (!bg.granted) {
+        showConnectFeedback({
+          title: 'Ubicación en segundo plano',
+          message: BG_LOCATION_PERMISSION_MSG,
+          tone: 'warning',
+        });
+        Alert.alert('Ubicación en segundo plano', BG_LOCATION_PERMISSION_MSG, [
+          { text: 'Continuar', style: 'cancel' },
+          {
+            text: 'Abrir Ajustes',
+            onPress: () => {
+              void openLocationSettings();
+            },
+          },
+        ]);
+      }
+    }
+
     const latest = queryClient.getQueryData<DriverStatus>(['driverStatus']);
     if (shouldOpenDistrictPicker({ hasDistrict: hasDistrictFromCache(latest) })) {
       setDistrictSheetVisible(true);
@@ -413,7 +443,7 @@ export const ActiveScreen: React.FC = () => {
       if (ref) clearInterval(ref);
       useOnlineStore.getState().setHeartbeatRef(null);
 
-      stopTracking();
+      void stopTracking();
       setOnline(false);
       useOnlineStore.setState({ isOnline: false });
       AsyncStorage.removeItem(ONLINE_SINCE_KEY).catch(() => {});
