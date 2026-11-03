@@ -19,18 +19,25 @@ export function LocationSync() {
   useEffect(() => {
     if (!shouldTrack) return;
 
+    let cancelled = false;
     const heartbeatInterval = setInterval(() => {
       const { lat, lng, heading } = useLocationStore.getState();
       apiClient.put('/drivers/me/heartbeat', { lat, lng, heading }).catch(() => {});
     }, 30_000);
     useOnlineStore.getState().setHeartbeatRef(heartbeatInterval);
 
-    startTracking();
+    // Background TaskManager updates + heartbeat PUT keep matching freshness (5 min)
+    // and offline grace (10 min) while the app is backgrounded.
+    // start/stop are serialized inside location.ts (no orphan FGS on rapid toggle).
+    void startTracking({ enableBackground: true }).then(() => {
+      if (cancelled) void stopTracking();
+    });
 
     return () => {
+      cancelled = true;
       clearInterval(heartbeatInterval);
       useOnlineStore.getState().setHeartbeatRef(null);
-      stopTracking();
+      void stopTracking();
     };
   }, [shouldTrack]);
 

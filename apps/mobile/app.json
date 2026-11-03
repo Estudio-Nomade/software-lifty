@@ -64,8 +64,11 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Lifty necesita tu ubicacion para mostrarte en el mapa, navegar viajes y conectarte con pasajeros cercanos.",
-          "isAndroidBackgroundLocationEnabled": false,
-          "isIosBackgroundLocationEnabled": false
+          "locationAlwaysAndWhenInUsePermission": "Lifty usa tu ubicacion en segundo plano para seguir recibiendo viajes mientras la app esta minimizada.",
+          "locationAlwaysPermission": "Lifty usa tu ubicacion en segundo plano para seguir recibiendo viajes mientras la app esta minimizada.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       [

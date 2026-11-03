@@ -5,12 +5,20 @@ import { Platform } from 'react-native';
 
 jest.mock('expo-location', () => ({
   requestForegroundPermissionsAsync: jest.fn(),
+  requestBackgroundPermissionsAsync: jest.fn(),
   getForegroundPermissionsAsync: jest.fn(),
+  getBackgroundPermissionsAsync: jest.fn(),
   watchPositionAsync: jest.fn(),
   getCurrentPositionAsync: jest.fn(),
   hasStartedLocationUpdatesAsync: jest.fn(),
+  startLocationUpdatesAsync: jest.fn(),
   stopLocationUpdatesAsync: jest.fn(),
   Accuracy: { High: 4, Balanced: 3 },
+}));
+
+jest.mock('expo-task-manager', () => ({
+  isTaskDefined: jest.fn(() => true),
+  defineTask: jest.fn(),
 }));
 
 import {
