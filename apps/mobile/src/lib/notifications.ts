@@ -2,9 +2,10 @@ import { isRunningInExpoGo } from 'expo';
 import Constants from 'expo-constants';
 import { Linking, Platform } from 'react-native';
 import { apiClient } from '../api/client';
-import type { DriverStatus } from '../api/types';
+import type { DriverStatus, Trip } from '../api/types';
 import { driverStatusSchema } from '../api/types';
 import { useAuthStore } from '../store/authStore';
+import { useTripStore } from '../store/tripStore';
 import { buildTripCancelledParams } from './cancellation';
 import { refreshMessagesUnread } from './messagesUnread';
 import { resolvePostAuthRoute, routeForDriverStatus } from './postAuthRouting';
@@ -332,6 +333,54 @@ export async function reactToDriverReviewPush(
   }
 }
 
+function isOfferTrip(trip: Trip | null | undefined): trip is Trip {
+  return !!trip && (trip.status === 'request_received' || trip.status === 'offered');
+}
+
+/**
+ * Push tap for trip:request often lands with empty trip store (Realtime never ran in bg).
+ * Hydrate via /trips/active or /trips/:id before IncomingRequest so AuthRedirect + screen
+ * poll do not dismiss as "no active trip".
+ */
+export async function hydrateTripOfferFromPush(
+  tripId: string | undefined,
+  navigate: (screen: string, params?: Record<string, string>) => void,
+): Promise<void> {
+  const store = useTripStore.getState();
+  if (isOfferTrip(store.trip) && (!tripId || store.trip.id === tripId)) {
+    navigate('IncomingRequest');
+    return;
+  }
+
+  let hydrated: Trip | null = null;
+  try {
+    const { data } = await apiClient.get('/trips/active');
+    const active = (data?.data ?? data) as Trip | null;
+    if (isOfferTrip(active) && (!tripId || active.id === tripId)) {
+      hydrated = active;
+    }
+  } catch {
+    /* try detail */
+  }
+
+  if (!hydrated && tripId) {
+    try {
+      const { data } = await apiClient.get(`/trips/${tripId}`);
+      const detail = (data?.data ?? data) as Trip | null;
+      if (isOfferTrip(detail)) {
+        hydrated = detail;
+      }
+    } catch {
+      /* navigate anyway — IncomingRequest retries active */
+    }
+  }
+
+  if (hydrated) {
+    useTripStore.getState().setActiveTrip(hydrated);
+  }
+  navigate('IncomingRequest');
+}
+
 export function handleNotificationResponse(
   response: NotificationResponseLike,
   navigate: (screen: string, params?: Record<string, string>) => void,
@@ -343,7 +392,7 @@ export function handleNotificationResponse(
 
   switch (type) {
     case 'trip:request':
-      navigate('IncomingRequest');
+      void hydrateTripOfferFromPush(data?.trip_id, navigate);
       break;
     case 'trip:cancelled':
       navigate(

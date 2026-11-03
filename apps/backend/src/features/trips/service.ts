@@ -324,13 +324,27 @@ export const tripService = {
         .limit(1);
 
       if (driverUser?.user_id) {
-        sendPushToUser(driverUser.user_id, {
+        void sendPushToUserDetailed(driverUser.user_id, {
           title: 'Nuevo viaje',
           body: `Viaje solicitado de ${updated.origin_address ?? 'origen'} a ${updated.dest_address ?? 'destino'} — $${updated.total_fare}`,
           channelId: 'trip-offers',
           sound: 'trip-request.wav',
           data: { trip_id: tripId, type: 'trip:request' },
-        });
+        })
+          .then((result) => {
+            logger.info('[OFFER-PUSH] offerTrip→driver', {
+              tripId: tripId.slice(0, 8),
+              userId: driverUser.user_id.slice(0, 8),
+              tokenCount: result.tokenCount,
+              push_status: result.status,
+            });
+          })
+          .catch((err) => {
+            logger.error('[OFFER-PUSH] offerTrip→driver failed', {
+              tripId: tripId.slice(0, 8),
+              error: (err as Error).message,
+            });
+          });
       }
 
       return updated;
@@ -579,13 +593,27 @@ export const tripService = {
 
     broadcastTripRequest(driverId, trip);
 
-    sendPushToUser(user.id, {
+    void sendPushToUserDetailed(user.id, {
       title: 'Nuevo viaje',
       body: `Viaje solicitado de ${trip.origin_address ?? 'origen'} a ${trip.dest_address ?? 'destino'} — $${fare.total}`,
       channelId: 'trip-offers',
       sound: 'trip-request.wav',
       data: { trip_id: trip.id, type: 'trip:request' },
-    });
+    })
+      .then((result) => {
+        logger.info('[OFFER-PUSH] createTrip→driver', {
+          tripId: trip.id.slice(0, 8),
+          userId: user.id.slice(0, 8),
+          tokenCount: result.tokenCount,
+          push_status: result.status,
+        });
+      })
+      .catch((err) => {
+        logger.error('[OFFER-PUSH] createTrip→driver failed', {
+          tripId: trip.id.slice(0, 8),
+          error: (err as Error).message,
+        });
+      });
 
     return trip;
   },

@@ -11,7 +11,7 @@ import {
 import { DRIVER_OFFLINE_GRACE_MS } from '../../shared/lib/cleanup';
 import { haversineDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
-import { sendPushToUser } from '../../shared/lib/push';
+import { sendPushToUserDetailed } from '../../shared/lib/push';
 import { normalizeVehicleClass, vehicleTypesCompatible } from '../../shared/lib/vehicle-class';
 import { listBlockedDriverIds } from '../cancellations/blocks';
 import { getPassengerVisibility } from '../cancellations/metrics';
@@ -193,13 +193,27 @@ export async function matchAndBroadcast(
 
   broadcastTripRequest(driver.driverId, offerPayload);
 
-  sendPushToUser(driver.userId, {
+  void sendPushToUserDetailed(driver.userId, {
     title: 'Nuevo viaje',
     body: `Viaje solicitado de ${assigned.origin_address ?? 'origen'} a ${assigned.dest_address ?? 'destino'} — $${assigned.total_fare ?? 'N/A'}`,
     channelId: 'trip-offers',
     sound: 'trip-request.wav',
     data: { trip_id: trip.id, type: 'trip:request' },
-  });
+  })
+    .then((result) => {
+      logger.info('[OFFER-PUSH] match→driver', {
+        tripId: trip.id.slice(0, 8),
+        userId: driver.userId.slice(0, 8),
+        tokenCount: result.tokenCount,
+        push_status: result.status,
+      });
+    })
+    .catch((err) => {
+      logger.error('[OFFER-PUSH] match→driver failed', {
+        tripId: trip.id.slice(0, 8),
+        error: (err as Error).message,
+      });
+    });
 
   logger.info(`[MATCH] Assigned trip ${trip.id} to driver ${driver.driverId}`, {
     tripId: trip.id,

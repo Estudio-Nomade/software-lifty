@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { apiClient } from '../api/client';
+import type { Trip } from '../api/types';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
   buildTripCancelledParams,
@@ -35,26 +37,16 @@ export const DriverRealtimeProvider: React.FC = () => {
       replace('TripCancelled', buildTripCancelledParams(payload));
     };
 
-    const onTripRequest = (payload: any) => {
-      if (!payload?.id) return;
-      if (payload.status !== 'request_received' && payload.status !== 'offered') return;
-      if (handledTripRef.current === payload.id) return;
-      handledTripRef.current = payload.id;
+    const applyOffer = (trip: Trip) => {
+      if (trip.status !== 'request_received' && trip.status !== 'offered') return;
+      if (handledTripRef.current === trip.id) return;
+      handledTripRef.current = trip.id;
       resetTripCancelNoticeClaim();
-      useTripStore.getState().setActiveTrip(payload);
+      useTripStore.getState().setActiveTrip(trip);
       replace('IncomingRequest');
     };
 
-    const onTripCancelled = (payload: any) => {
-      goTripCancelled(payload, payload?.id != null ? String(payload.id) : undefined);
-    };
-
-    const unsubscribe = subscribeToDriverChannel(driverId, onTripRequest, onTripCancelled);
-
-    // Fallback poll: recovers offers missed by realtime, and detects passenger
-    // cancel post-accept when the trip:cancelled broadcast is lost (/trips/active
-    // only returns non-terminal trips → null when cancelled).
-    const pollInterval = setInterval(async () => {
+    const pollActiveOffer = async () => {
       try {
         const { data } = await apiClient.get('/trips/active');
         const trip = data?.data ?? data;
@@ -82,18 +74,38 @@ export const DriverRealtimeProvider: React.FC = () => {
           return;
         }
 
-        if (trip.status !== 'request_received' && trip.status !== 'offered') return;
-        if (handledTripRef.current === trip.id) return;
-        handledTripRef.current = trip.id;
-        resetTripCancelNoticeClaim();
-        useTripStore.getState().setActiveTrip(trip);
-        replace('IncomingRequest');
+        applyOffer(trip);
       } catch {}
+    };
+
+    const onTripRequest = (payload: any) => {
+      if (!payload?.id) return;
+      applyOffer(payload);
+    };
+
+    const onTripCancelled = (payload: any) => {
+      goTripCancelled(payload, payload?.id != null ? String(payload.id) : undefined);
+    };
+
+    const unsubscribe = subscribeToDriverChannel(driverId, onTripRequest, onTripCancelled);
+
+    // Fallback poll: recovers offers missed by realtime, and detects passenger
+    // cancel post-accept when the trip:cancelled broadcast is lost (/trips/active
+    // only returns non-terminal trips → null when cancelled).
+    const pollInterval = setInterval(() => {
+      void pollActiveOffer();
     }, 5_000);
+
+    // Resume from background: one-shot poll if push was missed while JS suspended.
+    const onAppState = (next: AppStateStatus) => {
+      if (next === 'active') void pollActiveOffer();
+    };
+    const appSub = AppState.addEventListener('change', onAppState);
 
     return () => {
       unsubscribe();
       clearInterval(pollInterval);
+      appSub.remove();
     };
   }, [driverId, isOnline, replace]);
 
