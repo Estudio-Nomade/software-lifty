@@ -33,12 +33,16 @@ export const DriverRealtimeProvider: React.FC = () => {
       // Shared claim with IncomingRequest — one replace('TripCancelled') per trip.
       // Navigate first; TripCancelledScreen clears store on mount (outside TRIP_ROUTES).
       if (!claimTripCancelNotice(id)) return;
-      handledTripRef.current = null;
+      // Keep cancelled id in handledTripRef so AppState/5s poll cannot re-apply the
+      // same offer while store still holds it before TripCancelledScreen clears.
+      // A later offer uses a different trip id → applyOffer still runs.
+      if (id) handledTripRef.current = id;
       replace('TripCancelled', buildTripCancelledParams(payload));
     };
 
     const applyOffer = (trip: Trip) => {
       if (trip.status !== 'request_received' && trip.status !== 'offered') return;
+      if (trip.expires_at && new Date(trip.expires_at).getTime() < Date.now()) return;
       if (handledTripRef.current === trip.id) return;
       handledTripRef.current = trip.id;
       resetTripCancelNoticeClaim();

@@ -6,7 +6,7 @@ import type { DriverStatus, Trip } from '../api/types';
 import { driverStatusSchema } from '../api/types';
 import { useAuthStore } from '../store/authStore';
 import { useTripStore } from '../store/tripStore';
-import { buildTripCancelledParams } from './cancellation';
+import { buildTripCancelledParams, isCancelledTripStatus } from './cancellation';
 import { refreshMessagesUnread } from './messagesUnread';
 import { resolvePostAuthRoute, routeForDriverStatus } from './postAuthRouting';
 
@@ -333,14 +333,22 @@ export async function reactToDriverReviewPush(
   }
 }
 
-function isOfferTrip(trip: Trip | null | undefined): trip is Trip {
-  return !!trip && (trip.status === 'request_received' || trip.status === 'offered');
+/** Live offer for this driver — status + optional expires_at (server offer window). */
+export function isOfferTrip(trip: Trip | null | undefined): trip is Trip {
+  if (!trip) return false;
+  if (trip.status !== 'request_received' && trip.status !== 'offered') return false;
+  if (trip.expires_at) {
+    const exp = new Date(trip.expires_at).getTime();
+    if (!Number.isNaN(exp) && exp < Date.now()) return false;
+  }
+  return true;
 }
 
 /**
  * Push tap for trip:request often lands with empty trip store (Realtime never ran in bg).
  * Hydrate via /trips/active or /trips/:id before IncomingRequest so AuthRedirect + screen
  * poll do not dismiss as "no active trip".
+ * getTripById is driver-scoped (404 if reassigned). Prefer /active (filters stale offered).
  */
 export async function hydrateTripOfferFromPush(
   tripId: string | undefined,
@@ -353,6 +361,7 @@ export async function hydrateTripOfferFromPush(
   }
 
   let hydrated: Trip | null = null;
+  let detailSeen: Trip | null = null;
   try {
     const { data } = await apiClient.get('/trips/active');
     const active = (data?.data ?? data) as Trip | null;
@@ -367,17 +376,35 @@ export async function hydrateTripOfferFromPush(
     try {
       const { data } = await apiClient.get(`/trips/${tripId}`);
       const detail = (data?.data ?? data) as Trip | null;
+      detailSeen = detail;
       if (isOfferTrip(detail)) {
         hydrated = detail;
       }
     } catch {
-      /* navigate anyway — IncomingRequest retries active */
+      /* network / 404 — IncomingRequest can still retry active */
     }
   }
 
   if (hydrated) {
     useTripStore.getState().setActiveTrip(hydrated);
+    navigate('IncomingRequest');
+    return;
   }
+
+  if (detailSeen && isCancelledTripStatus(detailSeen.status)) {
+    navigate(
+      'TripCancelled',
+      buildTripCancelledParams(detailSeen as unknown as Record<string, unknown>),
+    );
+    return;
+  }
+
+  // Expired / terminal / wrong status confirmed — do not open empty IncomingRequest.
+  if (detailSeen && !isOfferTrip(detailSeen)) {
+    return;
+  }
+
+  // No detail yet (network) — screen retries /trips/active.
   navigate('IncomingRequest');
 }
 

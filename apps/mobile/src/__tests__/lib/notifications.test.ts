@@ -193,6 +193,34 @@ describe('trip:request push hydrate', () => {
     expect(mockSetActiveTrip).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith('IncomingRequest');
   });
+
+  it('does not setActiveTrip or open IncomingRequest for expired offered detail', async () => {
+    const expired = {
+      ...offer,
+      expires_at: new Date(Date.now() - 5_000).toISOString(),
+    };
+    mockApiGet
+      .mockResolvedValueOnce({ data: { data: null } })
+      .mockResolvedValueOnce({ data: { data: expired } });
+    const navigate = jest.fn();
+    await hydrateTripOfferFromPush('trip-offer-1', navigate);
+    expect(mockSetActiveTrip).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('routes cancelled detail to TripCancelled instead of IncomingRequest', async () => {
+    const cancelled = { id: 'trip-offer-1', status: 'cancelled', cancel_reason: 'user_cancel' };
+    mockApiGet
+      .mockResolvedValueOnce({ data: { data: null } })
+      .mockResolvedValueOnce({ data: { data: cancelled } });
+    const navigate = jest.fn();
+    await hydrateTripOfferFromPush('trip-offer-1', navigate);
+    expect(mockSetActiveTrip).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith(
+      'TripCancelled',
+      expect.objectContaining({ cancel_reason: 'user_cancel', trip_id: 'trip-offer-1' }),
+    );
+  });
 });
 
 describe('ensurePushRegistration / registerForPush', () => {
