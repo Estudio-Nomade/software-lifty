@@ -151,6 +151,8 @@ export const tripSchema = z.object({
   is_collected: z.boolean(),
   created_at: z.string(),
   updated_at: z.string(),
+  /** Offer window — server sets on match; null for non-offer states. */
+  expires_at: z.string().nullable().optional(),
   passenger_name: z.string().nullable(),
   passenger_avatar_url: z.string().nullable(),
   passenger_phone: z.string().nullable(),

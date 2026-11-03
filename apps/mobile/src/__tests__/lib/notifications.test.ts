@@ -3,6 +3,8 @@ const mockGetExpoPushTokenAsync = jest.fn();
 const mockSetNotificationChannelAsync = jest.fn();
 const mockIsRunningInExpoGo = jest.fn(() => false);
 const mockApiPost = jest.fn(() => Promise.resolve({ data: {} }));
+const mockApiGet = jest.fn();
+const mockSetActiveTrip = jest.fn();
 
 jest.mock('expo', () => ({
   isRunningInExpoGo: () => mockIsRunningInExpoGo(),
@@ -36,7 +38,7 @@ jest.mock('../../lib/postAuthRouting', () => ({
 
 jest.mock('../../api/client', () => ({
   apiClient: {
-    get: jest.fn(),
+    get: (...args: unknown[]) => mockApiGet(...args),
     post: (...args: unknown[]) => mockApiPost(...args),
   },
 }));
@@ -50,10 +52,21 @@ jest.mock('../../store/authStore', () => ({
   },
 }));
 
+jest.mock('../../store/tripStore', () => ({
+  useTripStore: {
+    getState: () => ({
+      trip: null,
+      activeTripId: null,
+      setActiveTrip: mockSetActiveTrip,
+    }),
+  },
+}));
+
 import { Platform } from 'react-native';
 import {
   ensurePushRegistration,
   handleNotificationResponse,
+  hydrateTripOfferFromPush,
   type NotificationResponseLike,
   PUSH_PERMISSION_DENIED_MSG,
   registerForPush,
@@ -124,6 +137,89 @@ describe('handleNotificationResponse driver review', () => {
     const navigate = jest.fn();
     handleNotificationResponse(makeResponse('driver:commission_debt_block'), navigate);
     expect(navigate).toHaveBeenCalledWith('PayCommissionDebt');
+  });
+});
+
+describe('trip:request push hydrate', () => {
+  const offer = {
+    id: 'trip-offer-1',
+    status: 'offered',
+    origin_address: 'A',
+    dest_address: 'B',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockApiGet.mockReset();
+  });
+
+  it('hydrates from /trips/active then setActiveTrip + IncomingRequest', async () => {
+    mockApiGet.mockResolvedValueOnce({ data: { data: offer } });
+    const navigate = jest.fn();
+    await hydrateTripOfferFromPush('trip-offer-1', navigate);
+    expect(mockApiGet).toHaveBeenCalledWith('/trips/active');
+    expect(mockSetActiveTrip).toHaveBeenCalledWith(offer);
+    expect(navigate).toHaveBeenCalledWith('IncomingRequest');
+  });
+
+  it('falls back to GET /trips/:id when active is empty', async () => {
+    mockApiGet
+      .mockResolvedValueOnce({ data: { data: null } })
+      .mockResolvedValueOnce({ data: { data: offer } });
+    const navigate = jest.fn();
+    await hydrateTripOfferFromPush('trip-offer-1', navigate);
+    expect(mockApiGet).toHaveBeenCalledWith('/trips/trip-offer-1');
+    expect(mockSetActiveTrip).toHaveBeenCalledWith(offer);
+    expect(navigate).toHaveBeenCalledWith('IncomingRequest');
+  });
+
+  it('handleNotificationResponse trip:request triggers hydrate path', async () => {
+    mockApiGet.mockResolvedValueOnce({ data: { data: offer } });
+    const navigate = jest.fn();
+    handleNotificationResponse(
+      makeResponse('trip:request', { trip_id: 'trip-offer-1' }),
+      navigate,
+    );
+    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockApiGet).toHaveBeenCalledWith('/trips/active');
+    expect(navigate).toHaveBeenCalledWith('IncomingRequest');
+  });
+
+  it('navigates IncomingRequest even if fetch fails (screen retries)', async () => {
+    mockApiGet.mockRejectedValue(new Error('network'));
+    const navigate = jest.fn();
+    await hydrateTripOfferFromPush('trip-offer-1', navigate);
+    expect(mockSetActiveTrip).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith('IncomingRequest');
+  });
+
+  it('does not setActiveTrip or open IncomingRequest for expired offered detail', async () => {
+    const expired = {
+      ...offer,
+      expires_at: new Date(Date.now() - 5_000).toISOString(),
+    };
+    mockApiGet
+      .mockResolvedValueOnce({ data: { data: null } })
+      .mockResolvedValueOnce({ data: { data: expired } });
+    const navigate = jest.fn();
+    await hydrateTripOfferFromPush('trip-offer-1', navigate);
+    expect(mockSetActiveTrip).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('routes cancelled detail to TripCancelled instead of IncomingRequest', async () => {
+    const cancelled = { id: 'trip-offer-1', status: 'cancelled', cancel_reason: 'user_cancel' };
+    mockApiGet
+      .mockResolvedValueOnce({ data: { data: null } })
+      .mockResolvedValueOnce({ data: { data: cancelled } });
+    const navigate = jest.fn();
+    await hydrateTripOfferFromPush('trip-offer-1', navigate);
+    expect(mockSetActiveTrip).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith(
+      'TripCancelled',
+      expect.objectContaining({ cancel_reason: 'user_cancel', trip_id: 'trip-offer-1' }),
+    );
   });
 });
 

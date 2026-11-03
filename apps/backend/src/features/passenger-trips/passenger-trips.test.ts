@@ -2,7 +2,7 @@ process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://lifty:lifty@localhost:5433/lifty_test';
 delete process.env.REDIS_URL;
 
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
@@ -15,6 +15,7 @@ import {
   passengerProfiles,
   payoutMethods,
   platformConfig,
+  pushTokens,
   tripMessages,
   ratings,
   tripEvents,
@@ -39,6 +40,7 @@ async function truncateTables() {
   await db.delete(userDebt);
   await db.delete(userBlocks);
   await db.delete(trips);
+  await db.delete(pushTokens);
   await db.delete(payoutMethods);
   await db.delete(driverLocations);
   await db.delete(vehicles);
@@ -553,6 +555,78 @@ describe('Passenger Trips', () => {
     expect(assigned?.driver_id).toBe(driverId);
     expect(assigned?.status).toBe('offered');
     expect(assigned?.expires_at).toBeTruthy();
+  });
+
+  test('matchAndBroadcast pushes Nuevo viaje on trip-offers channel to driver', async () => {
+    const prevSendPush = process.env.SEND_PUSH_IN_DEV;
+    process.env.SEND_PUSH_IN_DEV = 'true';
+
+    const expoCalls: unknown[] = [];
+    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(((
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('exp.host')) {
+        expoCalls.push(init?.body ? JSON.parse(String(init.body)) : null);
+        return Promise.resolve(
+          new Response(JSON.stringify({ data: [{ status: 'ok' }] }), { status: 200 }),
+        );
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }) as typeof fetch);
+
+    try {
+      const token = await createPassengerToken();
+      const driverId = await createDriverWithLocation(token, origin.lat, origin.lng);
+      const db = getDb();
+      const [driverRow] = await db
+        .select({ user_id: drivers.user_id })
+        .from(drivers)
+        .where(eq(drivers.id, driverId))
+        .limit(1);
+      await db.insert(pushTokens).values({
+        user_id: driverRow!.user_id,
+        token: 'ExponentPushToken[offer-driver-test]',
+        platform: 'android',
+      });
+
+      const { data: trip } = await createTrip(token);
+
+      let assigned: (typeof trips.$inferSelect) | null = null;
+      for (let i = 0; i < 40; i++) {
+        const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+        if (row?.driver_id) {
+          assigned = row;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      expect(assigned?.driver_id).toBe(driverId);
+
+      const deadline = Date.now() + 2000;
+      while (expoCalls.length === 0 && Date.now() < deadline) {
+        await Bun.sleep(40);
+      }
+
+      expect(expoCalls.length).toBeGreaterThanOrEqual(1);
+      const payload = expoCalls[0] as {
+        to: string;
+        title: string;
+        channelId: string;
+        sound: string;
+        data: { type: string; trip_id: string };
+      };
+      expect(payload.to).toBe('ExponentPushToken[offer-driver-test]');
+      expect(payload.title).toBe('Nuevo viaje');
+      expect(payload.channelId).toBe('trip-offers');
+      expect(payload.sound).toBe('trip-request.wav');
+      expect(payload.data).toEqual({ type: 'trip:request', trip_id: trip.id });
+    } finally {
+      fetchSpy.mockRestore();
+      if (prevSendPush === undefined) delete process.env.SEND_PUSH_IN_DEV;
+      else process.env.SEND_PUSH_IN_DEV = prevSendPush;
+    }
   });
 
   test('POST /:id/retry re-runs matching and assigns a driver', async () => {
