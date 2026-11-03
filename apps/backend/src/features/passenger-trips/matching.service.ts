@@ -196,6 +196,8 @@ export async function matchAndBroadcast(
   sendPushToUser(driver.userId, {
     title: 'Nuevo viaje',
     body: `Viaje solicitado de ${assigned.origin_address ?? 'origen'} a ${assigned.dest_address ?? 'destino'} — $${assigned.total_fare ?? 'N/A'}`,
+    channelId: 'trip-offers',
+    sound: 'trip-request.wav',
     data: { trip_id: trip.id, type: 'trip:request' },
   });
 

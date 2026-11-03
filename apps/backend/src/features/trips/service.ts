@@ -327,6 +327,8 @@ export const tripService = {
         sendPushToUser(driverUser.user_id, {
           title: 'Nuevo viaje',
           body: `Viaje solicitado de ${updated.origin_address ?? 'origen'} a ${updated.dest_address ?? 'destino'} — $${updated.total_fare}`,
+          channelId: 'trip-offers',
+          sound: 'trip-request.wav',
           data: { trip_id: tripId, type: 'trip:request' },
         });
       }
@@ -580,6 +582,8 @@ export const tripService = {
     sendPushToUser(user.id, {
       title: 'Nuevo viaje',
       body: `Viaje solicitado de ${trip.origin_address ?? 'origen'} a ${trip.dest_address ?? 'destino'} — $${fare.total}`,
+      channelId: 'trip-offers',
+      sound: 'trip-request.wav',
       data: { trip_id: trip.id, type: 'trip:request' },
     });
 

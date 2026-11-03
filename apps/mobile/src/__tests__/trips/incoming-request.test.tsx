@@ -24,12 +24,23 @@ jest.mock('../../lib/location', () => ({ stopTracking: jest.fn() }));
 
 jest.mock('../../components/MapView', () => ({ MapView: () => null }));
 
+jest.mock('../../lib/offerRingtone', () => ({
+  startOfferRingtone: jest.fn(() => Promise.resolve()),
+  stopOfferRingtone: jest.fn(),
+}));
+
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { resetTripCancelNoticeClaim } from '../../lib/cancellation';
+import { startOfferRingtone, stopOfferRingtone } from '../../lib/offerRingtone';
 import { IncomingRequestScreen } from '../../screens/IncomingRequestScreen';
 import { useLocationStore } from '../../store/locationStore';
 import { useTripStore } from '../../store/tripStore';
+
+const mockStartOfferRingtone = startOfferRingtone as jest.MockedFunction<
+  typeof startOfferRingtone
+>;
+const mockStopOfferRingtone = stopOfferRingtone as jest.MockedFunction<typeof stopOfferRingtone>;
 
 const REAL_TRIP = {
   id: 'trip-real-1',
@@ -76,6 +87,8 @@ describe('IncomingRequestScreen', () => {
     mockPut.mockReset();
     mockNavigate.mockReset();
     mockGoBack.mockReset();
+    mockStartOfferRingtone.mockClear();
+    mockStopOfferRingtone.mockClear();
     resetTripCancelNoticeClaim();
     useTripStore.getState().clearTrip();
     useLocationStore.getState().clearLocation();
@@ -110,6 +123,12 @@ describe('IncomingRequestScreen', () => {
     expect(queryByText(/sponsor/i)).toBeNull();
   });
 
+  test('starts offer ringtone when an offer trip is loaded', async () => {
+    const { getByText } = await render(<IncomingRequestScreen />);
+    await waitFor(() => expect(getByText('ACEPTAR')).toBeTruthy());
+    await waitFor(() => expect(mockStartOfferRingtone).toHaveBeenCalled());
+  });
+
   test('accept uses the real /accept endpoint with the real trip id', async () => {
     const { getByText } = await render(<IncomingRequestScreen />);
     await waitFor(() => expect(getByText('ACEPTAR')).toBeTruthy());
@@ -119,10 +138,30 @@ describe('IncomingRequestScreen', () => {
     await waitFor(() => {
       expect(mockPost).toHaveBeenCalledWith('/trips/trip-real-1/accept');
     });
+    expect(mockStopOfferRingtone).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('Navigation');
     expect(useTripStore.getState().tripStatus).toBe('accepted');
     expect(useTripStore.getState().trip).not.toBeNull();
     expect(useTripStore.getState().trip?.id).toBe('trip-real-1');
+  });
+
+  test('failed accept re-arms ringtone via effect (not a detached manual start)', async () => {
+    mockPost.mockRejectedValueOnce({ message: 'accept failed' });
+    const { getByText } = await render(<IncomingRequestScreen />);
+    await waitFor(() => expect(getByText('ACEPTAR')).toBeTruthy());
+    const startsBefore = mockStartOfferRingtone.mock.calls.length;
+
+    await act(async () => {
+      fireEvent.press(getByText('ACEPTAR'));
+    });
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith('/trips/trip-real-1/accept');
+    });
+    await waitFor(() => {
+      expect(mockStartOfferRingtone.mock.calls.length).toBeGreaterThan(startsBefore);
+    });
+    expect(mockStopOfferRingtone).toHaveBeenCalled();
   });
 
   test('reject uses the real /reject endpoint with the real trip id', async () => {
@@ -134,6 +173,7 @@ describe('IncomingRequestScreen', () => {
     await waitFor(() => {
       expect(mockPost).toHaveBeenCalledWith('/trips/trip-real-1/reject');
     });
+    expect(mockStopOfferRingtone).toHaveBeenCalled();
   });
 
   test('shows passenger name when passenger data is present', async () => {

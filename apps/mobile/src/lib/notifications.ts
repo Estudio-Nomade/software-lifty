@@ -124,11 +124,20 @@ export async function registerForPush(): Promise<string | null> {
     }
 
     if (Platform.OS === 'android') {
-      // Backend Expo pushes use channelId "trip-requests" by default.
+      // Legacy default channel (other trip alerts). Sound settings freeze after first
+      // create on device — keep for backward-compat payloads without channelId.
       await Notifications.setNotificationChannelAsync('trip-requests', {
         name: 'Trip Requests',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
+      });
+      // Dedicated offer channel so custom sound is not stuck on old channel settings.
+      await Notifications.setNotificationChannelAsync('trip-offers', {
+        name: 'Ofertas de viaje',
+        importance: Notifications.AndroidImportance.MAX,
+        sound: 'trip-request.wav',
+        vibrationPattern: [0, 400, 200, 400, 200, 400],
+        enableVibrate: true,
       });
       await Notifications.setNotificationChannelAsync('trip-chat', {
         name: 'Chat del viaje',
