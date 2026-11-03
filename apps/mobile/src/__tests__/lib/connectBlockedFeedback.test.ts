@@ -14,6 +14,11 @@ describe('connectBlockedFeedback', () => {
     expect(feedbackForConnectBlock('stickers').title).toBe('Falta la identificación');
     expect(feedbackForConnectBlock('stickers_overdue').title).toBe('Cuenta suspendida');
     expect(feedbackForConnectBlock('no_location').title).toBe('Falta tu ubicación');
+    expect(feedbackForConnectBlock('notifications_denied')).toMatchObject({
+      title: 'Activá las notificaciones',
+      tone: 'warning',
+    });
+    expect(feedbackForConnectBlock('notifications_register_failed').tone).toBe('error');
   });
 
   it('maps STICKERS_PICKUP_OVERDUE API errors', () => {

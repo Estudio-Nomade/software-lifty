@@ -1,7 +1,33 @@
-import {
-  handleNotificationResponse,
-  type NotificationResponseLike,
-} from '../../lib/notifications';
+const mockRequestPermissionsAsync = jest.fn();
+const mockGetExpoPushTokenAsync = jest.fn();
+const mockSetNotificationChannelAsync = jest.fn();
+const mockIsRunningInExpoGo = jest.fn(() => false);
+const mockApiPost = jest.fn(() => Promise.resolve({ data: {} }));
+
+jest.mock('expo', () => ({
+  isRunningInExpoGo: () => mockIsRunningInExpoGo(),
+}));
+
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: {
+    expoConfig: {
+      extra: { eas: { projectId: 'test-eas-project-id' } },
+      slug: 'lifty-driver',
+    },
+  },
+}));
+
+jest.mock('expo-notifications', () => ({
+  requestPermissionsAsync: (...args: unknown[]) => mockRequestPermissionsAsync(...args),
+  getExpoPushTokenAsync: (...args: unknown[]) => mockGetExpoPushTokenAsync(...args),
+  setNotificationChannelAsync: (...args: unknown[]) => mockSetNotificationChannelAsync(...args),
+  AndroidImportance: { HIGH: 4, MAX: 5 },
+  setNotificationHandler: jest.fn(),
+  addNotificationReceivedListener: jest.fn(),
+  addNotificationResponseReceivedListener: jest.fn(),
+  getLastNotificationResponseAsync: jest.fn(),
+}));
 
 jest.mock('../../lib/postAuthRouting', () => ({
   resolvePostAuthRoute: jest.fn(async () => ({ screen: 'Active', status: 'approved' })),
@@ -9,7 +35,10 @@ jest.mock('../../lib/postAuthRouting', () => ({
 }));
 
 jest.mock('../../api/client', () => ({
-  apiClient: { get: jest.fn(), post: jest.fn(() => Promise.resolve({ data: {} })) },
+  apiClient: {
+    get: jest.fn(),
+    post: (...args: unknown[]) => mockApiPost(...args),
+  },
 }));
 
 jest.mock('../../store/authStore', () => ({
@@ -20,6 +49,15 @@ jest.mock('../../store/authStore', () => ({
     }),
   },
 }));
+
+import { Platform } from 'react-native';
+import {
+  ensurePushRegistration,
+  handleNotificationResponse,
+  type NotificationResponseLike,
+  PUSH_PERMISSION_DENIED_MSG,
+  registerForPush,
+} from '../../lib/notifications';
 
 function makeResponse(type: string, extra?: Record<string, string>): NotificationResponseLike {
   return {
@@ -86,6 +124,88 @@ describe('handleNotificationResponse driver review', () => {
     const navigate = jest.fn();
     handleNotificationResponse(makeResponse('driver:commission_debt_block'), navigate);
     expect(navigate).toHaveBeenCalledWith('PayCommissionDebt');
+  });
+});
+
+describe('ensurePushRegistration / registerForPush', () => {
+  const originalOS = Platform.OS;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsRunningInExpoGo.mockReturnValue(false);
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
+    mockRequestPermissionsAsync.mockResolvedValue({ status: 'granted', granted: true });
+    mockGetExpoPushTokenAsync.mockResolvedValue({ data: 'ExponentPushToken[test]' });
+    mockSetNotificationChannelAsync.mockResolvedValue(undefined);
+    mockApiPost.mockResolvedValue({ data: {} });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => originalOS });
+  });
+
+  it('granted → token + POST /notifications/token', async () => {
+    const result = await ensurePushRegistration();
+    expect(result).toEqual({ ok: true, token: 'ExponentPushToken[test]' });
+    expect(mockApiPost).toHaveBeenCalledWith('/notifications/token', {
+      token: 'ExponentPushToken[test]',
+      platform: 'android',
+    });
+    expect(mockSetNotificationChannelAsync).toHaveBeenCalledWith(
+      'trip-offers',
+      expect.objectContaining({ name: 'Ofertas de viaje' }),
+    );
+  });
+
+  it('registerForPush returns token string on success without requiring POST', async () => {
+    const token = await registerForPush();
+    expect(token).toBe('ExponentPushToken[test]');
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it('denied → reason permission_denied with ES copy', async () => {
+    mockRequestPermissionsAsync.mockResolvedValue({
+      status: 'denied',
+      granted: false,
+      canAskAgain: false,
+    });
+    const result = await ensurePushRegistration();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('permission_denied');
+      expect(result.message).toBe(PUSH_PERMISSION_DENIED_MSG);
+      expect(result.canOpenSettings).toBe(true);
+    }
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it('catch/register error → reason register_error', async () => {
+    mockGetExpoPushTokenAsync.mockRejectedValue(new Error('native boom'));
+    const result = await ensurePushRegistration();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('register_error');
+    }
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it('POST fail → reason post_failed', async () => {
+    mockApiPost.mockRejectedValue(new Error('401'));
+    const result = await ensurePushRegistration();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('post_failed');
+    }
+  });
+
+  it('Expo Go Android → unavailable (no hard fail path for GO gate)', async () => {
+    mockIsRunningInExpoGo.mockReturnValue(true);
+    const result = await ensurePushRegistration();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('unavailable');
+    }
+    expect(mockRequestPermissionsAsync).not.toHaveBeenCalled();
   });
 });
 

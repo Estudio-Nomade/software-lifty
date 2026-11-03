@@ -46,6 +46,16 @@ const BY_CODE: Record<string, ConnectBlockedFeedback> = {
     message: 'Activá el GPS o concedé permiso de ubicación para conectarte.',
     tone: 'warning',
   },
+  NOTIFICATIONS_REQUIRED: {
+    title: 'Activá las notificaciones',
+    message: 'Activá notificaciones en Ajustes para recibir viajes. Sin eso no podés estar online.',
+    tone: 'warning',
+  },
+  NOTIFICATIONS_REGISTER_FAILED: {
+    title: 'No se registraron notificaciones',
+    message: 'No se pudo registrar el token push. Revisá la conexión e intentá de nuevo.',
+    tone: 'error',
+  },
   DISTRICT_REQUIRED: {
     title: 'Elegí tu municipio',
     message: 'Seleccioná en qué municipio vas a trabajar para conectarte.',
@@ -73,7 +83,9 @@ export function feedbackForConnectBlock(
     | 'stickers_overdue'
     | 'stickers_revoked'
     | 'no_location'
-    | 'municipality_waitlisted',
+    | 'municipality_waitlisted'
+    | 'notifications_denied'
+    | 'notifications_register_failed',
 ): ConnectBlockedFeedback {
   if (reason === 'not_approved') return BY_CODE.DRIVER_NOT_APPROVED;
   if (reason === 'docs_pending') return BY_CODE.DOCS_PENDING_REVIEW;
@@ -81,6 +93,8 @@ export function feedbackForConnectBlock(
   if (reason === 'stickers_revoked') return BY_CODE.STICKERS_REVOKED;
   if (reason === 'stickers') return BY_CODE.STICKERS_REQUIRED;
   if (reason === 'municipality_waitlisted') return BY_CODE.MUNICIPALITY_NOT_ENABLED;
+  if (reason === 'notifications_denied') return BY_CODE.NOTIFICATIONS_REQUIRED;
+  if (reason === 'notifications_register_failed') return BY_CODE.NOTIFICATIONS_REGISTER_FAILED;
   return BY_CODE.LOCATION_REQUIRED;
 }
 

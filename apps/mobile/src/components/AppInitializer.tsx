@@ -1,6 +1,5 @@
 import { useRootNavigationState, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
 import { apiClient } from '../api/client';
 import { driverStatusSchema } from '../api/types';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -10,9 +9,9 @@ import { refreshMessagesUnread } from '../lib/messagesUnread';
 import {
   addNotificationReceivedListener,
   addNotificationResponseListener,
+  ensurePushRegistration,
   getLastNotificationResponse,
   handleNotificationResponse,
-  registerForPush,
   setupNotificationHandler,
 } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
@@ -243,17 +242,16 @@ function NotificationSetup() {
   useEffect(() => {
     if (!sessionRestored || !authToken) return;
 
-    // Android + iOS share the same Expo push token path (platform field differs).
-    registerForPush().then((token) => {
-      if (!token) return;
-      apiClient
-        .post('/notifications/token', {
-          token,
-          platform: Platform.OS,
-        })
-        .catch(() => {
-          // best-effort
-        });
+    // Android + iOS: permission prompt + token POST (no silent fail).
+    void ensurePushRegistration().then((result) => {
+      if (result.ok) return;
+      if (result.reason === 'unavailable') {
+        if (__DEV__) {
+          console.warn('[push] session setup skipped:', result.message);
+        }
+        return;
+      }
+      console.warn('[push] session setup failed', result.reason, result.message);
     });
 
     // Seed tab/avatar badges after session restore (works even without push).
