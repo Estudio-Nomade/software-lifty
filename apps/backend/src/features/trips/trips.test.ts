@@ -2,7 +2,7 @@ process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://lifty:lifty@localhost:5433/lifty_test';
 delete process.env.REDIS_URL;
 
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
@@ -11,6 +11,7 @@ import {
   drivers,
   fuelPriceLog,
   platformConfig,
+  pushTokens,
   ratings,
   tripEvents,
   tripMessages,
@@ -30,6 +31,7 @@ async function truncateTables() {
   await db.delete(trips);
   await db.delete(vehicles);
   await db.delete(drivers);
+  await db.delete(pushTokens);
   await db.delete(users);
   await db.delete(commissionPhases);
   await db.delete(platformConfig);
@@ -1131,6 +1133,95 @@ describe('Trip State Machine', () => {
     expect(listed.status).toBe(200);
     expect(listed.data.length).toBe(1);
     expect(listed.data[0].text).toBe('Voy en camino');
+  });
+
+  test('23b. driver chat message pushes trip:message to passenger with trip-chat channel', async () => {
+    const prevSendPush = process.env.SEND_PUSH_IN_DEV;
+    process.env.SEND_PUSH_IN_DEV = 'true';
+
+    const expoCalls: unknown[] = [];
+    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(((
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('exp.host')) {
+        expoCalls.push(init?.body ? JSON.parse(String(init.body)) : null);
+        return Promise.resolve(
+          new Response(JSON.stringify({ data: [{ status: 'ok' }] }), { status: 200 }),
+        );
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }) as typeof fetch);
+
+    try {
+      const token = await registerAndGetToken(phone, password);
+      await createDriverRow(token);
+
+      const db = getDb();
+      const [passenger] = await db
+        .insert(users)
+        .values({ phone: '+5492614444455', full_name: 'Push Pax', role: 'passenger' })
+        .returning({ id: users.id });
+
+      await db.insert(pushTokens).values({
+        user_id: passenger.id,
+        token: 'ExponentPushToken[chat-pax-test]',
+        platform: 'ios',
+      });
+
+      const { data: trip } = await request(
+        'POST',
+        '/api/trips',
+        {
+          origin_lat: -31.9,
+          origin_lng: -65.0,
+          dest_lat: -31.88,
+          dest_lng: -65.02,
+          vehicle_type: 'car',
+          distance_km: 5,
+          duration_minutes: 15,
+          passenger_id: passenger.id,
+        },
+        token,
+      );
+
+      const sent = await request(
+        'POST',
+        `/api/trips/${trip.id}/messages`,
+        { text: 'Estoy afuera' },
+        token,
+      );
+      expect(sent.status).toBe(200);
+
+      // Fire-and-forget push — poll until Expo fetch runs (CI load tolerant).
+      const deadline = Date.now() + 2000;
+      while (expoCalls.length === 0 && Date.now() < deadline) {
+        await Bun.sleep(40);
+      }
+
+      expect(expoCalls.length).toBeGreaterThanOrEqual(1);
+      const payload = expoCalls[0] as {
+        to: string;
+        title: string;
+        body: string;
+        channelId: string;
+        data: { type: string; trip_id: string; sender_role: string };
+      };
+      expect(payload.to).toBe('ExponentPushToken[chat-pax-test]');
+      expect(payload.title).toBe('Nuevo mensaje del conductor');
+      expect(payload.body).toBe('Estoy afuera');
+      expect(payload.channelId).toBe('trip-chat');
+      expect(payload.data).toEqual({
+        type: 'trip:message',
+        trip_id: trip.id,
+        sender_role: 'driver',
+      });
+    } finally {
+      fetchSpy.mockRestore();
+      if (prevSendPush === undefined) delete process.env.SEND_PUSH_IN_DEV;
+      else process.env.SEND_PUSH_IN_DEV = prevSendPush;
+    }
   });
 
   test('24. stranger cannot read trip messages', async () => {

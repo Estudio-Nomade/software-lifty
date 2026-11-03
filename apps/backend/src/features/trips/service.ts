@@ -18,7 +18,7 @@ import { AppError, BadRequestError, NotFoundError } from '../../shared/lib/error
 import { calculateFare } from '../../shared/lib/fuel-pricing';
 import { geocode, haversineDistance, resolveRouteDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
-import { sendPushToUser } from '../../shared/lib/push';
+import { sendPushToUser, sendPushToUserDetailed } from '../../shared/lib/push';
 import {
   normalizeRequestedVehicleType,
   vehicleTypesCompatible,
@@ -1127,14 +1127,29 @@ export const tripService = {
 
     broadcastTripMessage(tripId, row);
 
-    // Push notification to the other participant (best-effort, fire-and-forget).
+    // Push to the other participant (best-effort). channelId trip-chat matches
+    // Android channels created in both mobile apps at registerForPush.
     if (role === 'driver') {
       if (trip.passenger_id) {
-        sendPushToUser(trip.passenger_id, {
+        void sendPushToUserDetailed(trip.passenger_id, {
           title: 'Nuevo mensaje del conductor',
           body: trimmed,
+          channelId: 'trip-chat',
           data: { type: 'trip:message', trip_id: tripId, sender_role: 'driver' },
-        });
+        })
+          .then((result) => {
+            logger.info('[CHAT-PUSH] driver→passenger', {
+              tripId: tripId.slice(0, 8),
+              userId: trip.passenger_id!.slice(0, 8),
+              tokenCount: result.tokenCount,
+              push_status: result.status,
+            });
+          })
+          .catch((err) => {
+            logger.error('[CHAT-PUSH] driver→passenger failed', {
+              error: (err as Error).message,
+            });
+          });
       }
     } else if (trip.driver_id) {
       const [tripDriver] = await db
@@ -1143,11 +1158,25 @@ export const tripService = {
         .where(eq(drivers.id, trip.driver_id))
         .limit(1);
       if (tripDriver) {
-        sendPushToUser(tripDriver.user_id, {
+        void sendPushToUserDetailed(tripDriver.user_id, {
           title: 'Nuevo mensaje del pasajero',
           body: trimmed,
+          channelId: 'trip-chat',
           data: { type: 'trip:message', trip_id: tripId, sender_role: 'passenger' },
-        });
+        })
+          .then((result) => {
+            logger.info('[CHAT-PUSH] passenger→driver', {
+              tripId: tripId.slice(0, 8),
+              userId: tripDriver.user_id.slice(0, 8),
+              tokenCount: result.tokenCount,
+              push_status: result.status,
+            });
+          })
+          .catch((err) => {
+            logger.error('[CHAT-PUSH] passenger→driver failed', {
+              error: (err as Error).message,
+            });
+          });
       }
     }
 

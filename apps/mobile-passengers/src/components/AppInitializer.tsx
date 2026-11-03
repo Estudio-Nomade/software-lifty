@@ -318,14 +318,23 @@ function NotificationSetup() {
     if (!sessionRestored || !isAuthenticated) return;
 
     registerForPush().then((token) => {
-      if (!token) return;
+      if (!token) {
+        if (__DEV__) {
+          console.warn(
+            '[push] no token (Expo Go Android has no remote push; check permission / projectId)',
+          );
+        }
+        return;
+      }
       api
         .post('/notifications/token', {
           token,
           platform: Platform.OS,
         })
-        .catch(() => {
-          // best-effort
+        .catch((err) => {
+          if (__DEV__) {
+            console.warn('[push] POST /notifications/token failed', err);
+          }
         });
     });
   }, [sessionRestored, isAuthenticated]);
