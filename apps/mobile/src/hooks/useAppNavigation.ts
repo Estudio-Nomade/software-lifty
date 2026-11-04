@@ -1,50 +1,9 @@
 import { useRouter, useSegments } from 'expo-router';
 import { useCallback, useMemo, useRef } from 'react';
+import { SCREEN_TO_ROUTE, type ScreenName, routePathForScreen } from '../lib/screenRoutes';
 
-const SCREEN_TO_ROUTE = {
-  Welcome: '/',
-  Auth: '/auth',
-  Register: '/register',
-  LoginPhone: '/login-phone',
-  LoginOTP: '/login-otp',
-  LoginCredentials: '/login-credentials',
-  AuthCallback: '/auth-callback',
-  ForgotPassword: '/forgot-password',
-  Terms: '/terms',
-  Support: '/support',
-  Messages: '/messages',
-  TripHistory: '/trip-history',
-  OnboardingStep1: '/onboarding-step1',
-  OnboardingStep2: '/onboarding-step2',
-  OnboardingVehicle: '/onboarding-vehicle',
-  UploadDocument: '/upload-document',
-  KYCVerify: '/kyc-verify',
-  KYCWebView: '/kyc-webview',
-  DNIScan: '/dni-scan',
-  Selfie: '/selfie',
-  UnderReview: '/under-review',
-  WaitingApproval: '/waiting-approval',
-  Online: '/online',
-  Active: '/active',
-  IncomingRequest: '/incoming-request',
-  Navigation: '/navigation',
-  WaitingPassenger: '/waiting-passenger',
-  TripInProgress: '/trip-in-progress',
-  TripCancelled: '/trip-cancelled',
-  TripComplete: '/trip-complete',
-  Earnings: '/earnings',
-  PayCommissionDebt: '/pay-commission-debt',
-  Profile: '/profile',
-  CancellationPolicy: '/cancellation-policy',
-  PaymentMethod: '/payment-method',
-  SelectProvince: '/select-province',
-  SelectDistrict: '/select-district',
-  DistrictTerms: '/district-terms',
-  PassengerCode: '/passenger-code',
-  Chat: '/chat',
-} as const;
-
-export type ScreenName = keyof typeof SCREEN_TO_ROUTE;
+export type { ScreenName };
+export { routePathForScreen };
 
 export interface ScreenParams {
   KYCWebView: { url: string };

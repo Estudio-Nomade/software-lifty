@@ -6,8 +6,10 @@ import { BrandSplash } from '../components/BrandSplash';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams';
 import { shouldTreatAuthCallbackAsSuccess } from '../lib/oauthSessionRecovery';
+import { resolvePassengerPostAuthPath } from '../lib/postAuthRouting';
 import { createSessionFromUrl } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
 const AUTH_SCHEME = 'lifty-passenger';
@@ -96,16 +98,29 @@ export function AuthCallbackScreen() {
 
     let cancelled = false;
 
-    const finishOk = () => {
+    /**
+     * Single post-OAuth handoff: resolve complete-profile vs home while BrandSplash
+     * stays up, then one replace. Never hop via Welcome (double brand + anim).
+     */
+    const finishOk = async () => {
+      if (cancelled || finishedOkRef.current) return;
+      let target: '/complete-profile' | '/home' | '/' = '/home';
+      try {
+        const { data } = await supabase.auth.getSession();
+        const userId = data.session?.user?.id ?? useAuthStore.getState().userId;
+        target = await resolvePassengerPostAuthPath(userId);
+      } catch {
+        target = '/';
+      }
       if (cancelled) return;
       finishedOkRef.current = true;
-      router.replace('/');
+      router.replace(target);
     };
 
     const finishErr = async (err: unknown) => {
       if (cancelled || finishedOkRef.current) return;
       if (await shouldTreatAuthCallbackAsSuccess(() => supabase.auth.getSession())) {
-        finishOk();
+        await finishOk();
         return;
       }
       if (__DEV__) {
@@ -132,7 +147,7 @@ export function AuthCallbackScreen() {
       if (startedKeysRef.current.has(key) && finishedOkRef.current) return;
       startedKeysRef.current.add(key);
       await createSessionFromUrl(url);
-      finishOk();
+      await finishOk();
     };
 
     const isCallbackPayload = (url: string) =>
@@ -160,7 +175,7 @@ export function AuthCallbackScreen() {
 
         const { data } = await supabase.auth.getSession();
         if (data.session) {
-          finishOk();
+          await finishOk();
           return;
         }
 
@@ -178,7 +193,7 @@ export function AuthCallbackScreen() {
 
         const session2 = await supabase.auth.getSession();
         if (session2.data.session) {
-          finishOk();
+          await finishOk();
           return;
         }
 
