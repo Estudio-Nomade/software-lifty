@@ -1,4 +1,4 @@
-import { and, eq, gt, notInArray, or, sql } from 'drizzle-orm';
+import { and, eq, gt, ne, notInArray, or, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import {
   driverLocations,
@@ -42,6 +42,8 @@ export async function findNearbyDrivers(
   radiusKm = DEFAULT_MATCH_RADIUS_KM,
   excludeDriverIds: string[] = [],
   requestedVehicleType?: string | null,
+  /** users.id of the requester: a dual-role (both) person must never match their own driver profile. */
+  passengerUserId?: string | null,
 ): Promise<NearbyDriver[]> {
   const requestedClass = normalizeVehicleClass(requestedVehicleType);
   if (!requestedClass) {
@@ -62,6 +64,10 @@ export async function findNearbyDrivers(
       gt(drivers.last_heartbeat, new Date(Date.now() - DRIVER_OFFLINE_GRACE_MS)),
     ),
   ];
+  if (passengerUserId) {
+    // trips.passenger_id is a users.id, drivers.id is a different id space → compare drivers.user_id.
+    conditions.push(ne(drivers.user_id, passengerUserId));
+  }
   const blocked = await listBlockedDriverIds();
   const excluded = [...new Set([...excludeDriverIds, ...blocked])];
   if (excluded.length > 0) {
@@ -138,6 +144,7 @@ export async function matchAndBroadcast(
     DEFAULT_MATCH_RADIUS_KM,
     options.excludeDriverIds ?? [],
     requestedType,
+    trip.passenger_id ?? null,
   );
 
   if (nearby.length === 0) {

@@ -2,6 +2,7 @@ import { Elysia } from 'elysia';
 import { safeCall } from '../../shared/lib/route-utils';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { authGuard } from '../../shared/middleware/require-auth';
+import { assertNotStaff } from '../../shared/middleware/roles';
 import { cancellationService } from '../cancellations/service';
 import { passengersService } from '../passengers/service';
 import { tripService } from '../trips/service';
@@ -15,6 +16,7 @@ import {
 import { passengerTripService } from './service';
 
 async function asPassenger(user: AuthUser) {
+  assertNotStaff(user);
   await passengersService.register(user.id);
 }
 

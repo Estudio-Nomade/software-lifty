@@ -7,6 +7,14 @@ import { logger } from '../lib/logger';
 import { getSupabaseClient } from '../lib/supabase';
 
 export async function deriveRole(userId: string): Promise<string | null> {
+  // Staff roles are authoritative: a stray drivers/passenger_profiles row must not demote them.
+  const [staff] = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (staff?.role === 'admin' || staff?.role === 'transit') return staff.role;
+
   const [driver] = await db
     .select({ id: drivers.user_id })
     .from(drivers)
