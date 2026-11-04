@@ -992,6 +992,7 @@ export const adminService = {
             });
           }
           void sendPushToUser(driverUser.user_id, {
+            app: 'driver',
             title: DRIVER_APPROVED_PUSH.title,
             body: DRIVER_APPROVED_PUSH.body,
             data: { ...DRIVER_APPROVED_PUSH.data },

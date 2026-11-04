@@ -9,6 +9,7 @@ export const CANCEL_COPY = {
 
 export function notifyFeeApplied(passengerId: string, tripId: string) {
   sendPushToUser(passengerId, {
+    app: 'passenger',
     title: 'Viaje cancelado',
     body: 'Tu viaje fue cancelado. Se aplicó un cargo de $600 por cancelación tardía.',
     data: { trip_id: tripId, type: 'trip:cancelled' },
@@ -17,6 +18,7 @@ export function notifyFeeApplied(passengerId: string, tripId: string) {
 
 export function notifyArrived(passengerId: string, tripId: string) {
   sendPushToUser(passengerId, {
+    app: 'passenger',
     title: 'Tu conductor llegó',
     body: 'Tu conductor ha llegado al punto de encuentro. Tienes 5 minutos para subir.',
     data: { trip_id: tripId, type: 'trip:arrived' },
@@ -25,6 +27,7 @@ export function notifyArrived(passengerId: string, tripId: string) {
 
 export function notifyNoShow(passengerId: string, tripId: string) {
   sendPushToUser(passengerId, {
+    app: 'passenger',
     title: 'Viaje cancelado',
     body: 'El conductor canceló el viaje por no-show. Se te cobrarán $600.',
     data: { trip_id: tripId, type: 'trip:cancelled' },
@@ -33,6 +36,7 @@ export function notifyNoShow(passengerId: string, tripId: string) {
 
 export function notifyDebt(passengerId: string, amountArs: number, blocked: boolean) {
   sendPushToUser(passengerId, {
+    app: 'passenger',
     title: blocked ? 'Cuenta bloqueada' : 'Aviso de deuda',
     body: blocked
       ? `Tienes $${amountArs} en deuda. No puedes solicitar viajes hasta regularizar tu saldo.`
@@ -43,6 +47,7 @@ export function notifyDebt(passengerId: string, amountArs: number, blocked: bool
 
 export function notifyCancelRateWarning(passengerId: string) {
   sendPushToUser(passengerId, {
+    app: 'passenger',
     title: 'Advertencia de cancelaciones',
     body: 'Has cancelado más del 30% de tus viajes en los últimos 30 días. Si continúas, podrías ser suspendido.',
     data: { type: 'cancel_rate:warning' },
@@ -51,6 +56,7 @@ export function notifyCancelRateWarning(passengerId: string) {
 
 export function notifyTvfWarning(driverUserId: string) {
   sendPushToUser(driverUserId, {
+    app: 'driver',
     title: 'Tasa de cancelación alta',
     body: 'Tu tasa de cancelación superó el 70%. Si llega al 95% o más, dejás de recibir ofertas hasta revisión de soporte.',
     data: { type: 'tvf:warning' },
@@ -69,6 +75,7 @@ export function notifyPassengerCancelled(
   },
 ) {
   sendPushToUser(driverUserId, {
+    app: 'driver',
     title: 'Viaje cancelado',
     body: 'El pasajero ha cancelado el viaje.',
     data: {
@@ -89,6 +96,7 @@ export function notifyPassengerCancelled(
 
 export function notifyDriverCancelled(passengerId: string, tripId: string) {
   sendPushToUser(passengerId, {
+    app: 'passenger',
     title: 'Viaje cancelado',
     body: 'El conductor canceló el viaje.',
     data: { trip_id: tripId, type: 'trip:cancelled' },

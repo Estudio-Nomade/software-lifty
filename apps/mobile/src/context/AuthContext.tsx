@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { apiClient } from '../api/client';
 import { stopTracking } from '../lib/location';
+import { unregisterPush } from '../lib/notifications';
 import { queryClient } from '../lib/queryClient';
 import { type SocialProvider, signInWithProvider } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
@@ -142,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await stopTracking().catch(() => {});
 
     if (useAuthStore.getState().token) {
+      await unregisterPush();
       try {
         await apiClient.post('/auth/logout');
       } catch {

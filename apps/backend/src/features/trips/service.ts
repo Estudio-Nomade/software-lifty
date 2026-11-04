@@ -18,7 +18,11 @@ import { AppError, BadRequestError, NotFoundError } from '../../shared/lib/error
 import { calculateFare } from '../../shared/lib/fuel-pricing';
 import { geocode, haversineDistance, resolveRouteDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
-import { sendPushToUser, sendPushToUserDetailed } from '../../shared/lib/push';
+import {
+  OFFER_PUSH_TTL_SECONDS,
+  sendPushToUser,
+  sendPushToUserDetailed,
+} from '../../shared/lib/push';
 import {
   normalizeRequestedVehicleType,
   vehicleTypesCompatible,
@@ -289,7 +293,7 @@ export const tripService = {
   },
 
   async offerTrip(tripId: string) {
-    return db.transaction(async (tx) => {
+    const { updated, driverUserId } = await db.transaction(async (tx) => {
       const [trip] = await tx.select().from(trips).where(eq(trips.id, tripId)).limit(1);
       if (!trip) throw new NotFoundError('Trip not found');
       if (trip.status !== 'pending') {
@@ -323,32 +327,38 @@ export const tripService = {
         .where(eq(drivers.id, driverId))
         .limit(1);
 
-      if (driverUser?.user_id) {
-        void sendPushToUserDetailed(driverUser.user_id, {
-          title: 'Nuevo viaje',
-          body: `Viaje solicitado de ${updated.origin_address ?? 'origen'} a ${updated.dest_address ?? 'destino'} — $${updated.total_fare}`,
-          channelId: 'trip-offers',
-          sound: 'trip-request.wav',
-          data: { trip_id: tripId, type: 'trip:request' },
-        })
-          .then((result) => {
-            logger.info('[OFFER-PUSH] offerTrip→driver', {
-              tripId: tripId.slice(0, 8),
-              userId: driverUser.user_id.slice(0, 8),
-              tokenCount: result.tokenCount,
-              push_status: result.status,
-            });
-          })
-          .catch((err) => {
-            logger.error('[OFFER-PUSH] offerTrip→driver failed', {
-              tripId: tripId.slice(0, 8),
-              error: (err as Error).message,
-            });
-          });
-      }
-
-      return updated;
+      return { updated, driverUserId: driverUser?.user_id ?? null };
     });
+
+    // Push only after the transaction committed: a rollback must not leave a phantom
+    // offer, and the driver's tap must be able to read the 'offered' trip.
+    if (driverUserId) {
+      void sendPushToUserDetailed(driverUserId, {
+        app: 'driver',
+        title: 'Nuevo viaje',
+        body: `Viaje solicitado de ${updated.origin_address ?? 'origen'} a ${updated.dest_address ?? 'destino'} — $${updated.total_fare}`,
+        channelId: 'trip-offers',
+        sound: 'trip-request.wav',
+        ttl: OFFER_PUSH_TTL_SECONDS,
+        data: { trip_id: tripId, type: 'trip:request' },
+      })
+        .then((result) => {
+          logger.info('[OFFER-PUSH] offerTrip→driver', {
+            tripId: tripId.slice(0, 8),
+            userId: driverUserId.slice(0, 8),
+            tokenCount: result.tokenCount,
+            push_status: result.status,
+          });
+        })
+        .catch((err) => {
+          logger.error('[OFFER-PUSH] offerTrip→driver failed', {
+            tripId: tripId.slice(0, 8),
+            error: (err as Error).message,
+          });
+        });
+    }
+
+    return updated;
   },
 
   async respondToTrip(user: AuthUser, tripId: string, action: 'accept' | 'reject') {
@@ -417,6 +427,7 @@ export const tripService = {
 
         if (trip.passenger_id) {
           sendPushToUser(trip.passenger_id, {
+            app: 'passenger',
             title: 'Tu conductor aceptó el viaje',
             body: `Código de verificación: ${verificationCode}`,
             data: {
@@ -594,10 +605,12 @@ export const tripService = {
     broadcastTripRequest(driverId, trip);
 
     void sendPushToUserDetailed(user.id, {
+      app: 'driver',
       title: 'Nuevo viaje',
       body: `Viaje solicitado de ${trip.origin_address ?? 'origen'} a ${trip.dest_address ?? 'destino'} — $${fare.total}`,
       channelId: 'trip-offers',
       sound: 'trip-request.wav',
+      ttl: OFFER_PUSH_TTL_SECONDS,
       data: { trip_id: trip.id, type: 'trip:request' },
     })
       .then((result) => {
@@ -669,6 +682,7 @@ export const tripService = {
 
       if (trip.passenger_id) {
         sendPushToUser(trip.passenger_id, {
+          app: 'passenger',
           title: 'Tu conductor aceptó el viaje',
           body: `Código de verificación: ${verificationCode}`,
           data: { type: 'trip:verification', trip_id: tripId, verification_code: verificationCode },
@@ -1085,6 +1099,7 @@ export const tripService = {
 
       if (trip.passenger_id) {
         sendPushToUser(trip.passenger_id, {
+          app: 'passenger',
           title: 'Tu conductor aceptó el viaje',
           body: `Código de verificación: ${verificationCode}`,
           data: {
@@ -1164,6 +1179,7 @@ export const tripService = {
     if (role === 'driver') {
       if (trip.passenger_id) {
         void sendPushToUserDetailed(trip.passenger_id, {
+          app: 'passenger',
           title: 'Nuevo mensaje del conductor',
           body: trimmed,
           channelId: 'trip-chat',
@@ -1191,6 +1207,7 @@ export const tripService = {
         .limit(1);
       if (tripDriver) {
         void sendPushToUserDetailed(tripDriver.user_id, {
+          app: 'driver',
           title: 'Nuevo mensaje del pasajero',
           body: trimmed,
           channelId: 'trip-chat',

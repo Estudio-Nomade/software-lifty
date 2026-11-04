@@ -524,6 +524,7 @@ export const passengerTripService = {
     if (!result.already_exists && result.driver_user_id) {
       const stars = result.score;
       sendPushToUser(result.driver_user_id, {
+        app: 'driver',
         title: 'Nueva calificación',
         body: stars === 1 ? 'Recibiste 1 estrella' : `Recibiste ${stars} estrellas`,
         data: {

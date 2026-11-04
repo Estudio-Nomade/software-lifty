@@ -11,7 +11,7 @@ import {
 import { DRIVER_OFFLINE_GRACE_MS } from '../../shared/lib/cleanup';
 import { haversineDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
-import { sendPushToUserDetailed } from '../../shared/lib/push';
+import { OFFER_PUSH_TTL_SECONDS, sendPushToUserDetailed } from '../../shared/lib/push';
 import { normalizeVehicleClass, vehicleTypesCompatible } from '../../shared/lib/vehicle-class';
 import { listBlockedDriverIds } from '../cancellations/blocks';
 import { getPassengerVisibility } from '../cancellations/metrics';
@@ -194,10 +194,12 @@ export async function matchAndBroadcast(
   broadcastTripRequest(driver.driverId, offerPayload);
 
   void sendPushToUserDetailed(driver.userId, {
+    app: 'driver',
     title: 'Nuevo viaje',
     body: `Viaje solicitado de ${assigned.origin_address ?? 'origen'} a ${assigned.dest_address ?? 'destino'} — $${assigned.total_fare ?? 'N/A'}`,
     channelId: 'trip-offers',
     sound: 'trip-request.wav',
+    ttl: OFFER_PUSH_TTL_SECONDS,
     data: { trip_id: trip.id, type: 'trip:request' },
   })
     .then((result) => {

@@ -268,6 +268,7 @@ async function enforceCommissionDebtCap(params: {
 
     if (params.notifyOnBlock || forcedOffline) {
       void sendPushToUser(params.userId, {
+        app: 'driver',
         title: 'Cuenta bloqueada por comisión',
         body: 'Tu cuenta está bloqueada por revisión de comisión. Contactá a soporte Lifty.',
         data: {
@@ -306,6 +307,7 @@ async function enforceCommissionDebtCap(params: {
 
   if (params.notifyOnBlock || forcedOffline) {
     void sendPushToUser(params.userId, {
+      app: 'driver',
       title: 'Deuda de comisión con Lifty',
       body: `Alcanzaste el límite de $${cap}. Debés $${Math.round(debt)}. Transferí el total y subí el comprobante para volver a conectarte.`,
       data: {

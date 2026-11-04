@@ -73,6 +73,7 @@ export async function approveDriver(token: string): Promise<{ message: string }>
   });
 
   sendPushToUser(driver.user_id, {
+    app: 'driver',
     title: DRIVER_APPROVED_PUSH.title,
     body: DRIVER_APPROVED_PUSH.body,
     data: { ...DRIVER_APPROVED_PUSH.data },

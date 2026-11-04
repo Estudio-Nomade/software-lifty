@@ -228,6 +228,25 @@ async function obtainPushToken(): Promise<PushRegistrationResult> {
   }
 }
 
+/** Token this install last registered; needed to unregister on logout. */
+let registeredPushToken: string | null = null;
+
+/**
+ * Best-effort: remove this device's token from the backend. Must run while the session
+ * is still valid (before supabase.auth.signOut) so a shared phone does not keep
+ * delivering this account's pushes to the next user.
+ */
+export async function unregisterPush(): Promise<void> {
+  const token = registeredPushToken;
+  if (!token) return;
+  try {
+    await apiClient.delete('/notifications/token', { params: { token } });
+    registeredPushToken = null;
+  } catch (err) {
+    console.warn('[push] DELETE /notifications/token failed', err);
+  }
+}
+
 /**
  * Full path: permission → Expo token → POST /notifications/token.
  * Call on session restore and again on GO so deny/error is never silent.
@@ -249,7 +268,11 @@ export async function ensurePushRegistration(): Promise<PushRegistrationResult> 
     await apiClient.post('/notifications/token', {
       token: obtained.token,
       platform,
+      // The backend scopes push tokens per app so driver offers never land in the
+      // passenger app of the same account (and vice versa).
+      app: 'driver',
     });
+    registeredPushToken = obtained.token;
     return obtained;
   } catch (err) {
     console.warn('[push] POST /notifications/token failed', err);

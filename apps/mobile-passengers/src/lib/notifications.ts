@@ -1,6 +1,7 @@
 import { isRunningInExpoGo } from 'expo';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import { api } from '../api/client';
 
 interface PermStatus {
   status: string;
@@ -31,7 +32,9 @@ export function isRemotePushAvailable(): boolean {
 async function loadNotifications(): Promise<typeof import('expo-notifications') | null> {
   if (!isRemotePushAvailable()) return null;
   try {
-    return await import('expo-notifications');
+    // Lazy require (same as the driver app): keeps load deferred and lets Jest mock it.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('expo-notifications') as typeof import('expo-notifications');
   } catch {
     return null;
   }
@@ -107,6 +110,43 @@ export async function registerForPush(): Promise<string | null> {
       console.warn('[push] registerForPush failed', err);
     }
     return null;
+  }
+}
+
+/** Token this install last registered; needed to unregister on logout. */
+let registeredPushToken: string | null = null;
+
+/** Permission → Expo token → POST /notifications/token tagged as the passenger app. */
+export async function ensurePushRegistration(): Promise<string | null> {
+  const token = await registerForPush();
+  if (!token) return null;
+  try {
+    await api.post('/notifications/token', {
+      token,
+      platform: Platform.OS,
+      // Backend scopes tokens per app so passenger pushes never reach the driver app.
+      app: 'passenger',
+    });
+    registeredPushToken = token;
+  } catch (err) {
+    if (__DEV__) {
+      console.warn('[push] POST /notifications/token failed', err);
+    }
+  }
+  return token;
+}
+
+/** Best-effort: drop this device's token while the session is still valid (before sign-out). */
+export async function unregisterPush(): Promise<void> {
+  const token = registeredPushToken;
+  if (!token) return;
+  try {
+    await api.delete('/notifications/token', { params: { token } });
+    registeredPushToken = null;
+  } catch (err) {
+    if (__DEV__) {
+      console.warn('[push] DELETE /notifications/token failed', err);
+    }
   }
 }
 

@@ -460,6 +460,7 @@ export const adminCommissionDebtService = {
     }
 
     void sendPushToUser(result.userId, {
+      app: 'driver',
       title: 'Comprobante de comisión rechazado',
       body: 'Detectamos un problema con tu comprobante. La deuda se restableció y no podés conectarte hasta resolverlo con soporte Lifty.',
       data: {
