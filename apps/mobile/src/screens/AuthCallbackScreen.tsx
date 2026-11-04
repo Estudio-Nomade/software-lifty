@@ -6,6 +6,8 @@ import { BrandSplash } from '../components/BrandSplash';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams';
 import { shouldTreatAuthCallbackAsSuccess } from '../lib/oauthSessionRecovery';
+import { resolvePostAuthRoute } from '../lib/postAuthRouting';
+import { routePathForScreen } from '../lib/screenRoutes';
 import { createSessionFromUrl } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
 import { theme } from '../theme';
@@ -96,16 +98,34 @@ export function AuthCallbackScreen() {
 
     let cancelled = false;
 
-    const finishOk = () => {
-      if (cancelled) return;
+    /**
+     * Single post-OAuth handoff: resolve destination while BrandSplash stays up,
+     * then one replace. Never hop via Welcome (that re-mounts BrandSplash + anim).
+     * Transient status failure → `/` for Welcome recovery (auth + unresolved).
+     */
+    const finishOk = async () => {
+      if (cancelled || finishedOkRef.current) return;
+      // Claim before await so twin-path exchange cannot re-enter while status loads.
       finishedOkRef.current = true;
-      router.replace('/');
+      let target = '/';
+      try {
+        // resolvePostAuthRoute only throws on transient network; other errors → onboarding.
+        const route = await resolvePostAuthRoute();
+        if (route.screen) {
+          target = routePathForScreen(route.screen);
+        }
+      } catch {
+        // Transient status fail → Welcome recovery (auth + unresolved status).
+        target = '/';
+      }
+      if (cancelled) return;
+      router.replace(target);
     };
 
     const finishErr = async (err: unknown) => {
       if (cancelled || finishedOkRef.current) return;
       if (await shouldTreatAuthCallbackAsSuccess(() => supabase.auth.getSession())) {
-        finishOk();
+        await finishOk();
         return;
       }
       if (__DEV__) {
@@ -132,7 +152,7 @@ export function AuthCallbackScreen() {
       if (startedKeysRef.current.has(key) && finishedOkRef.current) return;
       startedKeysRef.current.add(key);
       await createSessionFromUrl(url);
-      finishOk();
+      await finishOk();
     };
 
     const isCallbackPayload = (url: string) =>
@@ -160,7 +180,7 @@ export function AuthCallbackScreen() {
 
         const { data } = await supabase.auth.getSession();
         if (data.session) {
-          finishOk();
+          await finishOk();
           return;
         }
 
@@ -178,7 +198,7 @@ export function AuthCallbackScreen() {
 
         const session2 = await supabase.auth.getSession();
         if (session2.data.session) {
-          finishOk();
+          await finishOk();
           return;
         }
 

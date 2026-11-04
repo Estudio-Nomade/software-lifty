@@ -4,6 +4,7 @@ import {
   isTransientStatusFailure,
   routeForDriverStatus,
 } from '../../lib/postAuthRouting';
+import { routePathForScreen } from '../../lib/screenRoutes';
 
 describe('STEP_ROUTE order', () => {
   it('keeps KYC before vehicle before documents', () => {
@@ -93,6 +94,26 @@ describe('routeForDriverStatus', () => {
     const r = routeForDriverStatus({ status: 'rejected', step: 'documents' });
     expect(r.screen).toBe('OnboardingStep2');
     expect(r.blockedMessage).toContain('Solo volvé a subir lo indicado');
+  });
+});
+
+describe('routePathForScreen (post-OAuth replace target)', () => {
+  it('maps post-auth screens to pathnames (no Welcome hop)', () => {
+    expect(routePathForScreen('Active')).toBe('/active');
+    expect(routePathForScreen('OnboardingStep1')).toBe('/onboarding-step1');
+    expect(routePathForScreen('KYCVerify')).toBe('/kyc-verify');
+    expect(routePathForScreen('OnboardingVehicle')).toBe('/onboarding-vehicle');
+    expect(routePathForScreen('OnboardingStep2')).toBe('/onboarding-step2');
+  });
+
+  it('falls back to Welcome path only when screen is empty', () => {
+    expect(routePathForScreen('')).toBe('/');
+  });
+
+  it('never maps approved/review status routes through Welcome guest', () => {
+    const approved = routeForDriverStatus({ status: 'approved', step: 'approved' });
+    expect(routePathForScreen(approved.screen)).toBe('/active');
+    expect(routePathForScreen(approved.screen)).not.toBe('/');
   });
 });
 

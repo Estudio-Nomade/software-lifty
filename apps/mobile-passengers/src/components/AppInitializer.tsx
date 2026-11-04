@@ -1,8 +1,7 @@
 import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
-import { api } from '../api/client';
-import { getActiveRide, getProfile, registerPassenger } from '../api/passenger';
+import { getActiveRide, registerPassenger } from '../api/passenger';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { shouldKickAuthedUserToHome } from '../lib/authRouteGate';
 import {
@@ -11,12 +10,8 @@ import {
   handleNotificationResponse,
   setupNotificationHandler,
 } from '../lib/notifications';
-import {
-  invalidatePassengerProfileCompleteCache,
-  isPassengerProfileComplete,
-  readPassengerProfileCompleteCache,
-  writePassengerProfileCompleteCache,
-} from '../lib/passengerProfileGate';
+import { invalidatePassengerProfileCompleteCache } from '../lib/passengerProfileGate';
+import { resolvePassengerProfileComplete } from '../lib/postAuthRouting';
 import {
   outcomeFromAccessToken,
   shouldApplySessionAfterSettle,
@@ -43,26 +38,6 @@ function runAfterInteractions(task: () => void): void {
 }
 
 const SESSION_RESTORE_TIMEOUT_MS = 8_000;
-
-async function resolvePassengerProfileComplete(userId: string | null): Promise<boolean> {
-  if (!userId) return false;
-  const cached = readPassengerProfileCompleteCache(userId);
-  if (cached !== null) return cached;
-
-  try {
-    let profile = await getProfile().catch(() => null);
-    if (!profile) {
-      await registerPassenger().catch(() => null);
-      profile = await getProfile().catch(() => null);
-    }
-    const complete = profile ? isPassengerProfileComplete(profile) : false;
-    writePassengerProfileCompleteCache(userId, complete);
-    return complete;
-  } catch {
-    writePassengerProfileCompleteCache(userId, false);
-    return false;
-  }
-}
 
 function SessionRestore() {
   const setSession = useAuthStore((s) => s.setSession);
@@ -202,6 +177,8 @@ function AuthRedirectWatcher() {
     void (async () => {
       const complete = await resolvePassengerProfileComplete(userId);
       if (cancelled) return;
+      // null = unknown (network) — stay put; retry on next effect tick / cold path.
+      if (complete === null) return;
 
       if (!complete) {
         if (current !== 'complete-profile') {
@@ -255,7 +232,7 @@ function ActiveTripRecovery() {
     runAfterInteractions(() => {
       void (async () => {
         const complete = await resolvePassengerProfileComplete(userId);
-        if (cancelled || !complete) return;
+        if (cancelled || complete !== true) return;
 
         const trip = await getActiveRide().catch(() => null);
         if (cancelled || !trip) return;

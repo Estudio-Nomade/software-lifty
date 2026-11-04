@@ -11,6 +11,7 @@ const mockResetRedirect = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ replace: mockRouterReplace, push: jest.fn(), back: jest.fn() }),
   useSegments: () => mockSegments,
+  useRootNavigationState: () => ({ key: 'test-root' }),
 }));
 
 jest.mock('../../store/authStore', () => ({
@@ -32,7 +33,6 @@ jest.mock('../../store/tripStore', () => ({
 
 import { act, render } from '@testing-library/react-native';
 import React from 'react';
-import { InteractionManager } from 'react-native';
 import { AuthRedirectWatcher } from '../../components/AuthRedirectWatcher';
 
 describe('AuthRedirectWatcher', () => {
@@ -46,16 +46,6 @@ describe('AuthRedirectWatcher', () => {
     mockOnboardingStep = null;
     mockDriverStatus = null;
     mockTrip = null;
-    jest
-      .spyOn(InteractionManager, 'runAfterInteractions')
-      .mockImplementation((task?: (() => void) | { gen?: () => void }) => {
-        if (typeof task === 'function') task();
-        return { then: jest.fn(), done: jest.fn(), cancel: jest.fn() } as never;
-      });
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
   });
 
   test('does not redirect when the user is not authenticated', async () => {

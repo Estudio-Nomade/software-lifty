@@ -1,8 +1,8 @@
 import { apiClient } from '../api/client';
 import type { DriverStatus } from '../api/types';
 import { ApiError, driverStatusSchema } from '../api/types';
-import type { ScreenName } from '../hooks/useAppNavigation';
 import { useAuthStore } from '../store/authStore';
+import type { ScreenName } from './screenRoutes';
 
 /** Network / CORS / timeout — do not invent pending onboarding. */
 export function isTransientStatusFailure(err: unknown): boolean {
