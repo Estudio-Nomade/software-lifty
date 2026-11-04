@@ -20,7 +20,13 @@ export async function registerPassenger(
   const { data } = await api.post<PassengerProfile>('/passenger/register', body);
   // Profile row may lack phone — force watchers to re-fetch completeness.
   invalidatePassengerProfileCompleteCache();
-  return data;
+  // Older backends returned the raw passenger_profiles row (no full_name).
+  // Complete-profile gates on full_name + phone — always re-read GET /profile.
+  try {
+    return await getProfile();
+  } catch {
+    return assertProfilePayload(data, 'registrar el pasajero');
+  }
 }
 
 function assertProfilePayload(data: unknown, action: string): PassengerProfile {

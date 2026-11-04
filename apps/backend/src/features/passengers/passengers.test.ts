@@ -312,13 +312,17 @@ describe('Passenger Profile', () => {
       .returning({ id: users.id });
     const token = await createTestToken(user.id);
 
-    const { status } = await request(
+    const { status, data } = await request(
       'POST',
       '/api/passenger/register',
       { phone: '+549****5555', full_name: 'Sebastian Vallejo' },
       token,
     );
     expect(status).toBe(200);
+    // Response must match GET /profile shape — complete-profile gates on full_name + phone.
+    expect(data.full_name).toBe('Sebastian Vallejo');
+    expect(data.phone).toBe('+549****5555');
+    expect(data.id).toBeString();
 
     const [row] = await db
       .select({ full_name: users.full_name })
@@ -330,6 +334,28 @@ describe('Passenger Profile', () => {
     const profile = await request('GET', '/api/passenger/profile', undefined, token);
     expect(profile.status).toBe(200);
     expect(profile.data.full_name).toBe('Sebastian Vallejo');
+  });
+
+  test('POST /register returns 409 when phone belongs to another user', async () => {
+    await createPassengerUser('+549****7777', 'Dueño del Tel');
+    const { token } = await createPassengerUser('+549****8888', 'Otro');
+
+    // Clear phone so register tries to claim the taken one (Google-first user)
+    const db = getDb();
+    await db
+      .update(users)
+      .set({ phone: null })
+      .where(eq(users.phone, '+549****8888'));
+
+    const { status, data } = await request(
+      'POST',
+      '/api/passenger/register',
+      { phone: '+549****7777', full_name: 'Quiero Ese Tel' },
+      token,
+    );
+
+    expect(status).toBe(409);
+    expect(data.error?.code).toBe('PHONE_TAKEN');
   });
 });
 

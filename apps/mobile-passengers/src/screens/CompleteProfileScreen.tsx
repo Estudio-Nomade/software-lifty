@@ -90,13 +90,33 @@ export function CompleteProfileScreen() {
     setError(null);
     setLoading(true);
     try {
-      let updated = await updateProfile({
-        full_name: fullName,
-        phone: phone.trim(),
-      }).catch(() => null);
+      const phoneTrimmed = phone.trim();
+      let updated;
+      try {
+        updated = await updateProfile({
+          full_name: fullName,
+          phone: phoneTrimmed,
+        });
+      } catch (updateErr) {
+        // Only retry via register when the profile row is genuinely missing.
+        // 5xx / network / PHONE_TAKEN / validation must surface — a second write
+        // path can leave half-updated state and hide the real error.
+        const status = (updateErr as { response?: { status?: number } })?.response?.status;
+        if (status !== 404) throw updateErr;
 
-      if (!updated) {
-        updated = await registerPassenger(phone.trim(), fullName);
+        await registerPassenger(phoneTrimmed, fullName);
+        updated = await getProfile();
+        if (!isPassengerProfileComplete(updated)) {
+          updated = await updateProfile({
+            full_name: fullName,
+            phone: phoneTrimmed,
+          });
+        }
+      }
+
+      if (!isPassengerProfileComplete(updated)) {
+        // Server may have written fields under a partial response shape.
+        updated = await getProfile();
       }
 
       if (!isPassengerProfileComplete(updated)) {

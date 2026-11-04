@@ -46,6 +46,8 @@ async function ensurePassengerProfile(userId: string, phone?: string | null) {
 
 export const passengersService = {
   async register(userId: string, phone?: string, fullName?: string) {
+    // Same completeness contract as GET/PUT /profile: clients gate on full_name + phone.
+    // Returning the raw passenger_profiles row omits full_name and breaks complete-profile.
     const trimmedName = fullName?.trim() || null;
     if (trimmedName) {
       await db
@@ -54,43 +56,67 @@ export const passengersService = {
         .where(eq(users.id, userId));
     }
 
-    if (phone?.trim()) {
+    let nextPhone: string | null = null;
+    if (phone !== undefined && phone !== null) {
       const phoneTrimmed = phone.trim();
-      const [owner] = await db
-        .select({ id: users.id, phone: users.phone })
-        .from(users)
-        .where(eq(users.id, userId))
-        .limit(1);
-      if (owner && !owner.phone) {
+      if (phoneTrimmed) {
+        if (phoneTrimmed.length > PHONE_MAX_LEN) {
+          throw new AppError(
+            'El teléfono es demasiado largo. Usá hasta 20 caracteres.',
+            400,
+            'PHONE_TOO_LONG',
+          );
+        }
+
         const [taken] = await db
           .select({ id: users.id })
           .from(users)
           .where(and(eq(users.phone, phoneTrimmed), ne(users.id, userId)))
           .limit(1);
-        if (!taken) {
+        if (taken) {
+          throw new AppError(
+            'Ese teléfono ya está registrado en otra cuenta. Probá con otro número.',
+            409,
+            'PHONE_TAKEN',
+          );
+        }
+
+        const [owner] = await db
+          .select({ id: users.id, phone: users.phone })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+        if (owner && owner.phone !== phoneTrimmed) {
           await db
             .update(users)
             .set({ phone: phoneTrimmed, updated_at: new Date() })
             .where(eq(users.id, userId));
         }
+        nextPhone = phoneTrimmed;
       }
     }
 
-    const existing = await ensurePassengerProfile(userId, phone ?? null);
+    const existing = await ensurePassengerProfile(userId, nextPhone);
 
-    if (phone && !existing.phone) {
-      const [updated] = await db
+    if (nextPhone && existing.phone !== nextPhone) {
+      await db
         .update(passengerProfiles)
-        .set({ phone })
-        .where(eq(passengerProfiles.user_id, userId))
-        .returning();
-      return updated;
+        .set({ phone: nextPhone, updated_at: new Date() })
+        .where(eq(passengerProfiles.user_id, userId));
     }
-    return existing;
+
+    // Always re-read from DB (same contract as GET /profile). Do not pass a
+    // synthetic phone — getProfileByUserId ignores AuthUser fields other than id.
+    return this.getProfileByUserId(userId);
   },
 
   async getProfile(user: AuthUser) {
-    await ensurePassengerProfile(user.id);
+    return this.getProfileByUserId(user.id);
+  },
+
+  /** Reads full_name/phone/email from DB only — never from a request-scoped AuthUser snapshot. */
+  async getProfileByUserId(userId: string) {
+    await ensurePassengerProfile(userId);
 
     const rows = await db
       .select({
@@ -103,7 +129,7 @@ export const passengersService = {
       })
       .from(passengerProfiles)
       .innerJoin(users, eq(passengerProfiles.user_id, users.id))
-      .where(eq(passengerProfiles.user_id, user.id))
+      .where(eq(passengerProfiles.user_id, userId))
       .limit(1);
 
     const row = rows[0];
