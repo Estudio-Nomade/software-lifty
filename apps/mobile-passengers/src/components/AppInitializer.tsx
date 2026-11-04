@@ -177,6 +177,8 @@ function AuthRedirectWatcher() {
     void (async () => {
       const complete = await resolvePassengerProfileComplete(userId);
       if (cancelled) return;
+      // null = unknown (network) — stay put; retry on next effect tick / cold path.
+      if (complete === null) return;
 
       if (!complete) {
         if (current !== 'complete-profile') {
@@ -230,7 +232,7 @@ function ActiveTripRecovery() {
     runAfterInteractions(() => {
       void (async () => {
         const complete = await resolvePassengerProfileComplete(userId);
-        if (cancelled || !complete) return;
+        if (cancelled || complete !== true) return;
 
         const trip = await getActiveRide().catch(() => null);
         if (cancelled || !trip) return;

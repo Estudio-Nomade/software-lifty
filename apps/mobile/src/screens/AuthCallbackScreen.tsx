@@ -105,17 +105,20 @@ export function AuthCallbackScreen() {
      */
     const finishOk = async () => {
       if (cancelled || finishedOkRef.current) return;
+      // Claim before await so twin-path exchange cannot re-enter while status loads.
+      finishedOkRef.current = true;
       let target = '/';
       try {
+        // resolvePostAuthRoute only throws on transient network; other errors → onboarding.
         const route = await resolvePostAuthRoute();
         if (route.screen) {
           target = routePathForScreen(route.screen);
         }
       } catch {
+        // Transient status fail → Welcome recovery (auth + unresolved status).
         target = '/';
       }
       if (cancelled) return;
-      finishedOkRef.current = true;
       router.replace(target);
     };
 

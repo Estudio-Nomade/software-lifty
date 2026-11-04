@@ -104,7 +104,9 @@ export function AuthCallbackScreen() {
      */
     const finishOk = async () => {
       if (cancelled || finishedOkRef.current) return;
-      let target: '/complete-profile' | '/home' | '/' = '/home';
+      // Claim before await so twin-path exchange cannot re-enter.
+      finishedOkRef.current = true;
+      let target: '/complete-profile' | '/home' | '/' = '/';
       try {
         const { data } = await supabase.auth.getSession();
         const userId = data.session?.user?.id ?? useAuthStore.getState().userId;
@@ -113,7 +115,6 @@ export function AuthCallbackScreen() {
         target = '/';
       }
       if (cancelled) return;
-      finishedOkRef.current = true;
       router.replace(target);
     };
 
