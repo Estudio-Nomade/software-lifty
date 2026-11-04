@@ -4,6 +4,7 @@ const mockSetNotificationChannelAsync = jest.fn();
 const mockIsRunningInExpoGo = jest.fn(() => false);
 const mockApiPost = jest.fn(() => Promise.resolve({ data: {} }));
 const mockApiGet = jest.fn();
+const mockApiDelete = jest.fn(() => Promise.resolve({ data: {} }));
 const mockSetActiveTrip = jest.fn();
 
 jest.mock('expo', () => ({
@@ -40,6 +41,7 @@ jest.mock('../../api/client', () => ({
   apiClient: {
     get: (...args: unknown[]) => mockApiGet(...args),
     post: (...args: unknown[]) => mockApiPost(...args),
+    delete: (...args: unknown[]) => mockApiDelete(...args),
   },
 }));
 
@@ -65,6 +67,7 @@ jest.mock('../../store/tripStore', () => ({
 import { Platform } from 'react-native';
 import {
   ensurePushRegistration,
+  unregisterPush,
   handleNotificationResponse,
   hydrateTripOfferFromPush,
   type NotificationResponseLike,
@@ -246,6 +249,7 @@ describe('ensurePushRegistration / registerForPush', () => {
     expect(mockApiPost).toHaveBeenCalledWith('/notifications/token', {
       token: 'ExponentPushToken[test]',
       platform: 'android',
+      app: 'driver',
     });
     expect(mockSetNotificationChannelAsync).toHaveBeenCalledWith(
       'trip-offers',
@@ -305,3 +309,28 @@ describe('ensurePushRegistration / registerForPush', () => {
   });
 });
 
+describe('unregisterPush', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsRunningInExpoGo.mockReturnValue(false);
+    mockRequestPermissionsAsync.mockResolvedValue({ status: 'granted', granted: true });
+    mockGetExpoPushTokenAsync.mockResolvedValue({ data: 'ExponentPushToken[test]' });
+    mockSetNotificationChannelAsync.mockResolvedValue(undefined);
+    mockApiPost.mockResolvedValue({ data: {} });
+    mockApiDelete.mockResolvedValue({ data: {} });
+  });
+
+  it('DELETEs the token registered by this device', async () => {
+    await ensurePushRegistration();
+    await unregisterPush();
+    expect(mockApiDelete).toHaveBeenCalledWith('/notifications/token', {
+      params: { token: 'ExponentPushToken[test]' },
+    });
+  });
+
+  it('never throws when the request fails', async () => {
+    await ensurePushRegistration();
+    mockApiDelete.mockRejectedValue(new Error('offline'));
+    await expect(unregisterPush()).resolves.toBeUndefined();
+  });
+});

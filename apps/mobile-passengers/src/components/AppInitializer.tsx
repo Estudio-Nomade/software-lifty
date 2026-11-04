@@ -7,8 +7,8 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { shouldKickAuthedUserToHome } from '../lib/authRouteGate';
 import {
   addNotificationResponseListener,
+  ensurePushRegistration,
   handleNotificationResponse,
-  registerForPush,
   setupNotificationHandler,
 } from '../lib/notifications';
 import {
@@ -317,25 +317,12 @@ function NotificationSetup() {
   useEffect(() => {
     if (!sessionRestored || !isAuthenticated) return;
 
-    registerForPush().then((token) => {
-      if (!token) {
-        if (__DEV__) {
-          console.warn(
-            '[push] no token (Expo Go Android has no remote push; check permission / projectId)',
-          );
-        }
-        return;
+    ensurePushRegistration().then((token) => {
+      if (!token && __DEV__) {
+        console.warn(
+          '[push] no token (Expo Go Android has no remote push; check permission / projectId)',
+        );
       }
-      api
-        .post('/notifications/token', {
-          token,
-          platform: Platform.OS,
-        })
-        .catch((err) => {
-          if (__DEV__) {
-            console.warn('[push] POST /notifications/token failed', err);
-          }
-        });
     });
   }, [sessionRestored, isAuthenticated]);
 

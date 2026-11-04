@@ -76,6 +76,7 @@ export const transitBridgeService = {
     });
 
     sendPushToUser(driver.user_id, {
+      app: 'driver',
       title: 'Identificación lista',
       body: 'Ya podés conectarte en Lifty y aceptar viajes.',
       data: { type: 'identification:issued' },

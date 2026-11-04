@@ -5,6 +5,7 @@ export const DRIVER_APPROVED_PUSH = {
   body: 'Ya podés usar Lifty. Retirá los stickers en tránsito (tenés 30 días).',
   data: { type: 'driver:approved' } as Record<string, string>,
   channelId: 'account',
+  app: 'driver',
 } as const;
 
 const REJECT_PUSH_FALLBACK = 'Entrá a la app, revisá el motivo y volvé a subir lo que falte.';
@@ -29,6 +30,7 @@ export function driverRejectedPush(notes?: string | null) {
     body: reason,
     data: { type: 'driver:rejected', reason } as Record<string, string>,
     channelId: 'account' as const,
+    app: 'driver' as const,
   };
 }
 
@@ -49,6 +51,7 @@ export function driverReviewNotesPush(
     body: reason,
     data,
     channelId: 'account' as const,
+    app: 'driver' as const,
     ...(typeof badge === 'number' && Number.isFinite(badge)
       ? { badge: Math.max(0, Math.floor(badge)) }
       : {}),
