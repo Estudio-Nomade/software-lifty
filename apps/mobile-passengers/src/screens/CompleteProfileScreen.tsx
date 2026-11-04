@@ -98,23 +98,11 @@ export function CompleteProfileScreen() {
           phone: phoneTrimmed,
         });
       } catch (updateErr) {
-        // Validation / auth errors must surface as-is (PHONE_TAKEN, etc.).
-        // Only fall back to register+refetch for "no profile yet" style failures.
+        // Only retry via register when the profile row is genuinely missing.
+        // 5xx / network / PHONE_TAKEN / validation must surface — a second write
+        // path can leave half-updated state and hide the real error.
         const status = (updateErr as { response?: { status?: number } })?.response?.status;
-        const code = String(
-          (updateErr as { response?: { data?: { error?: { code?: string } } } })?.response?.data
-            ?.error?.code ?? '',
-        ).toUpperCase();
-        const nonRetryable =
-          status === 401 ||
-          status === 403 ||
-          status === 409 ||
-          code === 'PHONE_TAKEN' ||
-          code === 'PHONE_REQUIRED' ||
-          code === 'PHONE_TOO_LONG' ||
-          code === 'VALIDATION_ERROR' ||
-          code === 'BAD_REQUEST';
-        if (nonRetryable) throw updateErr;
+        if (status !== 404) throw updateErr;
 
         await registerPassenger(phoneTrimmed, fullName);
         updated = await getProfile();

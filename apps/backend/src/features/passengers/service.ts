@@ -105,11 +105,18 @@ export const passengersService = {
         .where(eq(passengerProfiles.user_id, userId));
     }
 
-    return this.getProfile({ id: userId, role: 'passenger', email: null, phone: nextPhone });
+    // Always re-read from DB (same contract as GET /profile). Do not pass a
+    // synthetic phone — getProfileByUserId ignores AuthUser fields other than id.
+    return this.getProfileByUserId(userId);
   },
 
   async getProfile(user: AuthUser) {
-    await ensurePassengerProfile(user.id);
+    return this.getProfileByUserId(user.id);
+  },
+
+  /** Reads full_name/phone/email from DB only — never from a request-scoped AuthUser snapshot. */
+  async getProfileByUserId(userId: string) {
+    await ensurePassengerProfile(userId);
 
     const rows = await db
       .select({
@@ -122,7 +129,7 @@ export const passengersService = {
       })
       .from(passengerProfiles)
       .innerJoin(users, eq(passengerProfiles.user_id, users.id))
-      .where(eq(passengerProfiles.user_id, user.id))
+      .where(eq(passengerProfiles.user_id, userId))
       .limit(1);
 
     const row = rows[0];
