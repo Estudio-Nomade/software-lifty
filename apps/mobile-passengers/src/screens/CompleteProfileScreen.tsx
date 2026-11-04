@@ -90,13 +90,45 @@ export function CompleteProfileScreen() {
     setError(null);
     setLoading(true);
     try {
-      let updated = await updateProfile({
-        full_name: fullName,
-        phone: phone.trim(),
-      }).catch(() => null);
+      const phoneTrimmed = phone.trim();
+      let updated;
+      try {
+        updated = await updateProfile({
+          full_name: fullName,
+          phone: phoneTrimmed,
+        });
+      } catch (updateErr) {
+        // Validation / auth errors must surface as-is (PHONE_TAKEN, etc.).
+        // Only fall back to register+refetch for "no profile yet" style failures.
+        const status = (updateErr as { response?: { status?: number } })?.response?.status;
+        const code = String(
+          (updateErr as { response?: { data?: { error?: { code?: string } } } })?.response?.data
+            ?.error?.code ?? '',
+        ).toUpperCase();
+        const nonRetryable =
+          status === 401 ||
+          status === 403 ||
+          status === 409 ||
+          code === 'PHONE_TAKEN' ||
+          code === 'PHONE_REQUIRED' ||
+          code === 'PHONE_TOO_LONG' ||
+          code === 'VALIDATION_ERROR' ||
+          code === 'BAD_REQUEST';
+        if (nonRetryable) throw updateErr;
 
-      if (!updated) {
-        updated = await registerPassenger(phone.trim(), fullName);
+        await registerPassenger(phoneTrimmed, fullName);
+        updated = await getProfile();
+        if (!isPassengerProfileComplete(updated)) {
+          updated = await updateProfile({
+            full_name: fullName,
+            phone: phoneTrimmed,
+          });
+        }
+      }
+
+      if (!isPassengerProfileComplete(updated)) {
+        // Server may have written fields under a partial response shape.
+        updated = await getProfile();
       }
 
       if (!isPassengerProfileComplete(updated)) {
