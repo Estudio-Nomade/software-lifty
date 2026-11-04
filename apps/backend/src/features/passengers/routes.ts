@@ -1,6 +1,7 @@
 import { Elysia, t } from 'elysia';
 import { safeCall } from '../../shared/lib/route-utils';
 import { authGuard } from '../../shared/middleware/require-auth';
+import { assertNotStaff } from '../../shared/middleware/roles';
 import { passengersService } from './service';
 
 export const passengersRoutes = new Elysia({ prefix: '/passenger' })
@@ -8,7 +9,10 @@ export const passengersRoutes = new Elysia({ prefix: '/passenger' })
   .post(
     '/register',
     ({ user, body, set }) =>
-      safeCall(() => passengersService.register(user.id, body?.phone, body?.full_name), set),
+      safeCall(async () => {
+        assertNotStaff(user);
+        return passengersService.register(user.id, body?.phone, body?.full_name);
+      }, set),
     {
       requireAuth: true,
       body: t.Optional(
@@ -19,12 +23,24 @@ export const passengersRoutes = new Elysia({ prefix: '/passenger' })
       ),
     },
   )
-  .get('/profile', ({ user, set }) => safeCall(() => passengersService.getProfile(user), set), {
-    requireAuth: true,
-  })
+  .get(
+    '/profile',
+    ({ user, set }) =>
+      safeCall(async () => {
+        assertNotStaff(user);
+        return passengersService.getProfile(user);
+      }, set),
+    {
+      requireAuth: true,
+    },
+  )
   .put(
     '/profile',
-    ({ user, body, set }) => safeCall(() => passengersService.updateProfile(user, body), set),
+    ({ user, body, set }) =>
+      safeCall(async () => {
+        assertNotStaff(user);
+        return passengersService.updateProfile(user, body);
+      }, set),
     {
       requireAuth: true,
       body: t.Optional(
@@ -37,7 +53,11 @@ export const passengersRoutes = new Elysia({ prefix: '/passenger' })
   )
   .post(
     '/profile/photo',
-    ({ user, body, set }) => safeCall(() => passengersService.uploadAvatar(user, body.file), set),
+    ({ user, body, set }) =>
+      safeCall(async () => {
+        assertNotStaff(user);
+        return passengersService.uploadAvatar(user, body.file);
+      }, set),
     {
       requireAuth: true,
       body: t.Object({

@@ -48,6 +48,7 @@ import {
   hasValidMotoInsuranceCoverage,
 } from '../../shared/lib/vehicle-insurance-coverage';
 import { assertVehicleYear } from '../../shared/lib/vehicle-year';
+import { assertNotStaff } from '../../shared/middleware/roles';
 
 let _storage: StorageProvider = supabaseStorage;
 
@@ -1115,6 +1116,7 @@ export const driversService = {
       address_place_id?: string;
     },
   ) {
+    assertNotStaff(user);
     let existing:
       | {
           id: string;

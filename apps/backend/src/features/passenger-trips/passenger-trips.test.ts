@@ -1248,6 +1248,30 @@ describe('Passenger Trips', () => {
     expect(assigned?.status).toBe('offered');
   });
 
+  test('matching: never offers a trip to the requester\'s own driver profile (dual role)', async () => {
+    const { driverId: selfDriverId, token } = await createDriverWithLocationAndToken(
+      origin.lat,
+      origin.lng,
+    );
+    const otherId = await createDriverWithLocation(token, origin.lat + 0.002, origin.lng);
+
+    const { data: trip } = await createTrip(token, 'auto');
+    const assigned = await pollAssigned(trip.id);
+
+    expect(assigned?.driver_id).toBe(otherId);
+    expect(assigned?.driver_id).not.toBe(selfDriverId);
+  });
+
+  test('matching: dual-role requester alone online gets no self-offer', async () => {
+    const { token } = await createDriverWithLocationAndToken(origin.lat, origin.lng);
+
+    const { data: trip } = await createTrip(token, 'auto');
+    const assigned = await pollAssigned(trip.id, 600);
+
+    expect(assigned?.driver_id).toBeNull();
+    expect(assigned?.status).toBe('pending');
+  });
+
   test('matching: aliases moto↔motorcycle and auto↔car', async () => {
     const token = await createPassengerToken();
     const motoId = await createDriverWithLocation(token, origin.lat, origin.lng, {
