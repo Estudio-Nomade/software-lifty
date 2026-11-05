@@ -1,3 +1,23 @@
+/** Copy when account is Google-only (no password provider). */
+export const GOOGLE_ONLY_LOGIN_MESSAGE =
+  'Esta cuenta se creó con Google. Tocá Continuar con Google para entrar.';
+
+export const INVALID_CREDENTIALS_MESSAGE = 'Email o contraseña incorrectos.';
+
+export function isInvalidLoginCredentialsError(error: unknown): boolean {
+  const raw =
+    (typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : String(error ?? '')) || '';
+  const message = raw.toLowerCase();
+  return (
+    message.includes('invalid login credentials') ||
+    message.includes('invalid credentials') ||
+    (message.includes('wrong') && message.includes('password')) ||
+    message.includes('email or password')
+  );
+}
+
 export function getFriendlyAuthError(error: unknown): string {
   const raw =
     (typeof error === 'object' && error !== null && 'message' in error
@@ -11,13 +31,8 @@ export function getFriendlyAuthError(error: unknown): string {
     return 'Inicio de sesion cancelado.';
   }
 
-  if (
-    message.includes('invalid login credentials') ||
-    message.includes('invalid credentials') ||
-    (message.includes('wrong') && message.includes('password')) ||
-    message.includes('email or password')
-  ) {
-    return 'Email o contraseña incorrectos.';
+  if (isInvalidLoginCredentialsError(error)) {
+    return INVALID_CREDENTIALS_MESSAGE;
   }
 
   if (

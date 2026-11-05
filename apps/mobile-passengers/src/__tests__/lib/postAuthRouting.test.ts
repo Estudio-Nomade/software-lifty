@@ -52,12 +52,18 @@ describe('resolvePassengerPostAuthPath', () => {
     await expect(resolvePassengerPostAuthPath(null)).resolves.toBe('/complete-profile');
   });
 
-  it('does not cache incomplete on network failure; path falls back to /', async () => {
+  it('does not cache incomplete on network failure; path falls back to complete-profile (not guest)', async () => {
     mockGetProfile.mockRejectedValue(new Error('network'));
     mockRegisterPassenger.mockRejectedValue(new Error('network'));
     await expect(resolvePassengerProfileComplete('user-net')).resolves.toBeNull();
     expect(readPassengerProfileCompleteCache('user-net')).toBeNull();
-    await expect(resolvePassengerPostAuthPath('user-net')).resolves.toBe('/');
+    // Authed + unknown profile must never bounce to Welcome guest CTAs.
+    await expect(resolvePassengerPostAuthPath('user-net')).resolves.toBe('/complete-profile');
+  });
+
+  it('returns / only when userId is null and profile unknown', async () => {
+    // null userId → complete false → complete-profile (existing gate)
+    await expect(resolvePassengerPostAuthPath(null)).resolves.toBe('/complete-profile');
   });
 
   it('treats name+phone without home as incomplete', async () => {

@@ -68,6 +68,31 @@ export async function getProfile(): Promise<PassengerProfile> {
   return assertProfilePayload(data, 'obtener el perfil');
 }
 
+export type LoginHintResponse =
+  | { exists: false }
+  | { exists: true; methods: Array<'email' | 'google'> };
+
+/** Public soft hint after failed password login. Never throws product-critical. */
+export async function fetchLoginHint(email: string): Promise<LoginHintResponse | null> {
+  try {
+    const { data } = await api.post<LoginHintResponse>('/auth/login-hint', {
+      email: email.trim().toLowerCase(),
+    });
+    if (!data || typeof data !== 'object' || typeof data.exists !== 'boolean') {
+      return null;
+    }
+    if (!data.exists) return { exists: false };
+    const methods = Array.isArray((data as { methods?: unknown }).methods)
+      ? ((data as { methods: unknown[] }).methods.filter(
+          (m): m is 'email' | 'google' => m === 'email' || m === 'google',
+        ) as Array<'email' | 'google'>)
+      : [];
+    return { exists: true, methods };
+  } catch {
+    return null;
+  }
+}
+
 export async function updateProfile(profile: Partial<PassengerProfile>): Promise<PassengerProfile> {
   const { data } = await api.put<PassengerProfile>('/passenger/profile', profile);
   const updated = assertProfilePayload(data, 'guardar el perfil');

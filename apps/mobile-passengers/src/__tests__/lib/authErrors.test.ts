@@ -1,10 +1,20 @@
-import { getFriendlyAuthError } from '../../lib/authErrors';
+import {
+  GOOGLE_ONLY_LOGIN_MESSAGE,
+  getFriendlyAuthError,
+  isInvalidLoginCredentialsError,
+} from '../../lib/authErrors';
 
 describe('getFriendlyAuthError', () => {
   it('maps Invalid login credentials to wrong email/password, not OTP', () => {
     expect(getFriendlyAuthError(new Error('Invalid login credentials'))).toBe(
       'Email o contraseña incorrectos.',
     );
+    expect(isInvalidLoginCredentialsError(new Error('Invalid login credentials'))).toBe(true);
+  });
+
+  it('exposes Google-only copy constant for hint path', () => {
+    expect(GOOGLE_ONLY_LOGIN_MESSAGE).toContain('Google');
+    expect(GOOGLE_ONLY_LOGIN_MESSAGE).not.toMatch(/otp|codigo/i);
   });
 
   it('maps OTP token invalid/expired to OTP copy', () => {
