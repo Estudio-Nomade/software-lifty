@@ -3,20 +3,29 @@ export type NameParts = { firstName: string; lastName: string };
 const MIN_NAME_LEN = 2;
 const MIN_PHONE_DIGITS = 8;
 
+/** Bump when completeness shape changes so stale "complete" caches re-resolve. */
+const GATE_CACHE_VERSION = 2;
+
 /** Module cache so watchers don't hammer getProfile. Cleared on logout / submit. */
-let profileCompleteCache: { userId: string; complete: boolean } | null = null;
+let profileCompleteCache: { version: number; userId: string; complete: boolean } | null = null;
 
 export function invalidatePassengerProfileCompleteCache(): void {
   profileCompleteCache = null;
 }
 
 export function readPassengerProfileCompleteCache(userId: string): boolean | null {
-  if (profileCompleteCache?.userId !== userId) return null;
+  if (
+    !profileCompleteCache ||
+    profileCompleteCache.version !== GATE_CACHE_VERSION ||
+    profileCompleteCache.userId !== userId
+  ) {
+    return null;
+  }
   return profileCompleteCache.complete;
 }
 
 export function writePassengerProfileCompleteCache(userId: string, complete: boolean): void {
-  profileCompleteCache = { userId, complete };
+  profileCompleteCache = { version: GATE_CACHE_VERSION, userId, complete };
 }
 
 export function splitGoogleName(
@@ -65,11 +74,34 @@ export function isPassengerPhoneComplete(phone: string | null | undefined): bool
   return phoneDigitCount(phone) >= MIN_PHONE_DIGITS;
 }
 
-/** complete = usable full_name AND phone with enough digits */
+/** Resolved home = non-empty address line + finite lat/lng. */
+export function isPassengerHomeResolved(profile: {
+  home_address_line?: string | null;
+  home_lat?: number | null;
+  home_lng?: number | null;
+}): boolean {
+  const line = profile.home_address_line?.trim() ?? '';
+  return (
+    line.length > 0 &&
+    typeof profile.home_lat === 'number' &&
+    typeof profile.home_lng === 'number' &&
+    Number.isFinite(profile.home_lat) &&
+    Number.isFinite(profile.home_lng)
+  );
+}
+
+/** complete = usable full_name AND phone with enough digits AND resolved home. */
 export function isPassengerProfileComplete(profile: {
   full_name?: string | null;
   phone?: string | null;
+  home_address_line?: string | null;
+  home_lat?: number | null;
+  home_lng?: number | null;
 }): boolean {
   const name = profile.full_name?.trim() ?? '';
-  return name.length >= MIN_NAME_LEN && isPassengerPhoneComplete(profile.phone);
+  return (
+    name.length >= MIN_NAME_LEN &&
+    isPassengerPhoneComplete(profile.phone) &&
+    isPassengerHomeResolved(profile)
+  );
 }

@@ -4,6 +4,14 @@ import { authGuard } from '../../shared/middleware/require-auth';
 import { assertNotStaff } from '../../shared/middleware/roles';
 import { passengersService } from './service';
 
+const homeFields = {
+  home_address_line: t.Optional(t.String()),
+  home_lat: t.Optional(t.Number()),
+  home_lng: t.Optional(t.Number()),
+  home_resolved_city: t.Optional(t.Union([t.String(), t.Null()])),
+  home_resolved_province: t.Optional(t.Union([t.String(), t.Null()])),
+};
+
 export const passengersRoutes = new Elysia({ prefix: '/passenger' })
   .use(authGuard)
   .post(
@@ -11,7 +19,7 @@ export const passengersRoutes = new Elysia({ prefix: '/passenger' })
     ({ user, body, set }) =>
       safeCall(async () => {
         assertNotStaff(user);
-        return passengersService.register(user.id, body?.phone, body?.full_name);
+        return passengersService.register(user.id, body?.phone, body?.full_name, body);
       }, set),
     {
       requireAuth: true,
@@ -19,6 +27,7 @@ export const passengersRoutes = new Elysia({ prefix: '/passenger' })
         t.Object({
           phone: t.Optional(t.String()),
           full_name: t.Optional(t.String()),
+          ...homeFields,
         }),
       ),
     },
@@ -39,7 +48,7 @@ export const passengersRoutes = new Elysia({ prefix: '/passenger' })
     ({ user, body, set }) =>
       safeCall(async () => {
         assertNotStaff(user);
-        return passengersService.updateProfile(user, body);
+        return passengersService.updateProfile(user, body ?? {});
       }, set),
     {
       requireAuth: true,
@@ -47,8 +56,26 @@ export const passengersRoutes = new Elysia({ prefix: '/passenger' })
         t.Object({
           full_name: t.Optional(t.String()),
           phone: t.Optional(t.String()),
+          ...homeFields,
         }),
       ),
+    },
+  )
+  .get(
+    '/service-area/status',
+    ({ user, query, set }) =>
+      safeCall(async () => {
+        assertNotStaff(user);
+        const lat = Number(query.lat);
+        const lng = Number(query.lng);
+        return passengersService.getServiceAreaStatus(lat, lng);
+      }, set),
+    {
+      requireAuth: true,
+      query: t.Object({
+        lat: t.String(),
+        lng: t.String(),
+      }),
     },
   )
   .post(

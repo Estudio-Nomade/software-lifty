@@ -12,13 +12,14 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { geocodeAddress, getActiveRide } from '../api/passenger';
+import { geocodeAddress, getActiveRide, getProfile } from '../api/passenger';
 import type { PlaceSuggestion } from '../api/types';
 import { BottomTabBar } from '../components/BottomTabBar';
 import { HomeHeader } from '../components/HomeHeader';
 import { PassengerMap } from '../components/Map/PassengerMap';
 import { DestinationSearchPill } from '../components/home/DestinationSearchPill';
 import { ExpandedTripSearch } from '../components/home/ExpandedTripSearch';
+import { OutOfServiceAreaBanner } from '../components/home/OutOfServiceAreaBanner';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
   TARGET_ACCURACY_M,
@@ -27,7 +28,14 @@ import {
   useLocation,
 } from '../hooks/useLocation';
 import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
+import { isPassengerHomeResolved } from '../lib/passengerProfileGate';
+import {
+  type ServiceAreaStatus,
+  fetchServiceAreaStatus,
+  shouldShowOutOfServiceBanner,
+} from '../lib/serviceAreaStatus';
 import { getTabBarReserve } from '../lib/tabBarLayout';
+import { syncCasaFavoriteFromProfile } from '../store/favoritesStore';
 import { useLocationStore } from '../store/locationStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
@@ -96,6 +104,8 @@ export function HomeScreen() {
    */
   const [pickupGpsAutofill, setPickupGpsAutofill] = useState(true);
   const lastGpsLabel = useRef<{ lat: number; lng: number; acc: number } | null>(null);
+  const [serviceArea, setServiceArea] = useState<ServiceAreaStatus | null>(null);
+  const [oofDismissed, setOofDismissed] = useState(false);
 
   const pickupAc = usePlaceAutocomplete(
     focusedField === 'pickup' && !pickupPicked ? pickupAddress : '',
@@ -104,6 +114,30 @@ export function HomeScreen() {
   const visibleSuggestions = focusedField === 'pickup' ? pickupAc.suggestions : destAc.suggestions;
   const placesLoading = focusedField === 'pickup' ? pickupAc.loading : destAc.loading;
   const placesError = focusedField === 'pickup' ? pickupAc.error : destAc.error;
+
+  // Soft OOF banner: GPS preferred, else home pin from profile.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (current && Number.isFinite(current.lat) && Number.isFinite(current.lng)) {
+        const status = await fetchServiceAreaStatus(current.lat, current.lng);
+        if (!cancelled) setServiceArea(status);
+        return;
+      }
+      const profile = await getProfile().catch(() => null);
+      if (cancelled || !profile) return;
+      syncCasaFavoriteFromProfile(profile);
+      if (!isPassengerHomeResolved(profile)) return;
+      const status = await fetchServiceAreaStatus(
+        profile.home_lat as number,
+        profile.home_lng as number,
+      );
+      if (!cancelled) setServiceArea(status);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [current?.lat, current?.lng]);
 
   // "Desde" autofill: paint coords ASAP, reverse label in parallel (street via Photon).
   useEffect(() => {
@@ -472,6 +506,11 @@ export function HomeScreen() {
                   <Text style={styles.geoBannerRetry}>Reintentar</Text>
                 </TouchableOpacity>
               ) : null}
+              {!oofDismissed && shouldShowOutOfServiceBanner(serviceArea) ? (
+                <View style={styles.oofBannerWrap} pointerEvents="box-none">
+                  <OutOfServiceAreaBanner onDismiss={() => setOofDismissed(true)} />
+                </View>
+              ) : null}
               <TouchableOpacity
                 style={styles.locateBtn}
                 onPress={handleLocate}
@@ -534,6 +573,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...theme.shadows.card,
+  },
+  oofBannerWrap: {
+    position: 'absolute',
+    top: theme.spacing.md,
+    left: theme.spacing.sm,
+    right: 56,
+    zIndex: 12,
   },
   geoBanner: {
     position: 'absolute',

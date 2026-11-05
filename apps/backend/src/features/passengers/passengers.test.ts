@@ -357,6 +357,96 @@ describe('Passenger Profile', () => {
     expect(status).toBe(409);
     expect(data.error?.code).toBe('PHONE_TAKEN');
   });
+
+  test('PUT /profile saves home address and returns it on GET', async () => {
+    const { token } = await registerPassenger(phone);
+    const home = {
+      home_address_line: 'San Martín 100, Villa Dolores',
+      home_lat: -31.9449,
+      home_lng: -65.1905,
+      home_resolved_city: 'Villa Dolores',
+      home_resolved_province: 'Córdoba',
+    };
+
+    const { status, data } = await request('PUT', '/api/passenger/profile', home, token);
+    expect(status).toBe(200);
+    expect(data.home_address_line).toBe(home.home_address_line);
+    expect(data.home_lat).toBeCloseTo(home.home_lat, 4);
+    expect(data.home_lng).toBeCloseTo(home.home_lng, 4);
+    expect(data.home_resolved_city).toBe('Villa Dolores');
+
+    const profile = await request('GET', '/api/passenger/profile', undefined, token);
+    expect(profile.status).toBe(200);
+    expect(profile.data.home_address_line).toBe(home.home_address_line);
+    expect(profile.data.home_lat).toBeCloseTo(home.home_lat, 4);
+    expect(profile.data.home_lng).toBeCloseTo(home.home_lng, 4);
+  });
+
+  test('PUT /profile rejects home without coords', async () => {
+    const { token } = await registerPassenger(phone);
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/passenger/profile',
+      { home_address_line: 'Calle sin pin' },
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error?.code).toBe('HOME_COORDS_REQUIRED');
+  });
+
+  test('POST /register accepts home fields in same response shape', async () => {
+    const { token } = await createPassengerUser('+5492617777777', 'Con Casa');
+
+    const { status, data } = await request(
+      'POST',
+      '/api/passenger/register',
+      {
+        phone: '+5492617777777',
+        full_name: 'Con Casa',
+        home_address_line: 'Belgrano 50',
+        home_lat: -31.95,
+        home_lng: -65.19,
+      },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.home_address_line).toBe('Belgrano 50');
+    expect(data.home_lat).toBeCloseTo(-31.95, 4);
+    expect(data.home_lng).toBeCloseTo(-65.19, 4);
+  });
+
+  test('GET /service-area/status reports inside for Villa Dolores hub', async () => {
+    const { token } = await registerPassenger(phone);
+
+    const { status, data } = await request(
+      'GET',
+      '/api/passenger/service-area/status?lat=-31.9449&lng=-65.1905',
+      undefined,
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.inside).toBe(true);
+    expect(Array.isArray(data.markets)).toBe(true);
+    expect(data.markets.length).toBeGreaterThan(0);
+  });
+
+  test('GET /service-area/status reports outside far from hubs', async () => {
+    const { token } = await registerPassenger(phone);
+
+    const { status, data } = await request(
+      'GET',
+      '/api/passenger/service-area/status?lat=-34.6&lng=-58.4',
+      undefined,
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.inside).toBe(false);
+  });
 });
 
 describe('Passenger avatar photo upload', () => {

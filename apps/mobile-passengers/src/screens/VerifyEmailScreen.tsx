@@ -16,6 +16,7 @@ import { Button } from '../components/Button';
 import { OTPInput } from '../components/OTPInput';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
+import { resolvePassengerPostAuthPath } from '../lib/postAuthRouting';
 import { resendSignupEmailOtp, verifySignupEmailOtp } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
 import { useRegistrationDraftStore } from '../store/registrationDraftStore';
@@ -57,7 +58,13 @@ export function VerifyEmailScreen() {
         )?.full_name;
       await registerPassenger(undefined, metaName ?? undefined).catch(() => {});
       clearDraft();
-      replace('LocationPermissions');
+      const { data: sessionData } = await supabase.auth.getSession();
+      const uid = sessionData.session?.user?.id ?? null;
+      const path = await resolvePassengerPostAuthPath(uid);
+      if (path === '/complete-profile') replace('CompleteProfile');
+      else if (path === '/location-permissions') replace('LocationPermissions');
+      else if (path === '/home') replace('Home');
+      else replace('Welcome');
     } catch (e) {
       setError(getFriendlyAuthError(e));
       setLoading(false);

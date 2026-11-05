@@ -4,6 +4,16 @@ export interface PassengerProfile {
   phone: string;
   email?: string;
   avatar_url?: string;
+  home_address_line?: string | null;
+  home_lat?: number | null;
+  home_lng?: number | null;
+  home_resolved_city?: string | null;
+  home_resolved_province?: string | null;
+}
+
+export interface ServiceAreaStatusResponse {
+  inside: boolean;
+  markets: Array<{ name: string; slug: string }>;
 }
 
 export type TripStatus =
