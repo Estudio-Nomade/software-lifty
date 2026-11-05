@@ -82,14 +82,8 @@ export async function registerForPush(): Promise<string | null> {
   }
 
   try {
-    const perm = (await Notifications.requestPermissionsAsync()) as unknown as PermStatus;
-    if (perm.status !== 'granted') {
-      if (__DEV__) {
-        console.warn('[push] permission not granted', perm.status);
-      }
-      return null;
-    }
-
+    // Channels first: they do not need the runtime permission, and the user can grant
+    // it later from system Settings without the channel (and its importance) missing.
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('trip-chat', {
         name: 'Chat del viaje',
@@ -101,6 +95,14 @@ export async function registerForPush(): Promise<string | null> {
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
       });
+    }
+
+    const perm = (await Notifications.requestPermissionsAsync()) as unknown as PermStatus;
+    if (perm.status !== 'granted') {
+      if (__DEV__) {
+        console.warn('[push] permission not granted', perm.status);
+      }
+      return null;
     }
 
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
@@ -116,24 +118,72 @@ export async function registerForPush(): Promise<string | null> {
 /** Token this install last registered; needed to unregister on logout. */
 let registeredPushToken: string | null = null;
 
-/** Permission → Expo token → POST /notifications/token tagged as the passenger app. */
-export async function ensurePushRegistration(): Promise<string | null> {
+const DEFAULT_RETRY_DELAYS_MS = [2000, 8000];
+/** Last time the backend confirmed our token (0 = never / last attempt failed). */
+let lastRegisteredAt = 0;
+
+export function resetPushRegistrationStateForTests(): void {
+  registeredPushToken = null;
+  lastRegisteredAt = 0;
+}
+
+type RegistrationOptions = { retryDelaysMs?: number[] };
+
+/**
+ * Permission → Expo token → POST /notifications/token tagged as the passenger app.
+ * A failed POST is retried (default 2s, 8s) instead of being lost until the next launch.
+ */
+export async function ensurePushRegistration(
+  options: RegistrationOptions = {},
+): Promise<string | null> {
   const token = await registerForPush();
   if (!token) return null;
-  try {
-    await api.post('/notifications/token', {
-      token,
-      platform: Platform.OS,
-      // Backend scopes tokens per app so passenger pushes never reach the driver app.
-      app: 'passenger',
-    });
-    registeredPushToken = token;
-  } catch (err) {
-    if (__DEV__) {
-      console.warn('[push] POST /notifications/token failed', err);
+  const delays = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
+
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      await api.post('/notifications/token', {
+        token,
+        platform: Platform.OS,
+        // Backend scopes tokens per app so passenger pushes never reach the driver app.
+        app: 'passenger',
+      });
+      registeredPushToken = token;
+      lastRegisteredAt = Date.now();
+      return token;
+    } catch (err) {
+      if (__DEV__) {
+        console.warn('[push] POST /notifications/token failed', err);
+      }
+      if (attempt < delays.length) {
+        await new Promise<void>((resolve) => setTimeout(resolve, delays[attempt]));
+      }
     }
   }
+  lastRegisteredAt = 0;
   return token;
+}
+
+/** Foreground hook: re-register only if the last successful registration is old/failed. */
+export async function ensurePushRegistrationIfStale(
+  maxAgeMs = 30 * 60_000,
+  options: RegistrationOptions = {},
+): Promise<void> {
+  if (lastRegisteredAt && Date.now() - lastRegisteredAt < maxAgeMs) return;
+  await ensurePushRegistration(options);
+}
+
+/** Device push token rotated (reinstall/restore/OS) → caller should re-register. */
+export async function addPushTokenListener(
+  listener: (token: unknown) => void,
+): Promise<{ remove: () => void } | null> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return null;
+  try {
+    return Notifications.addPushTokenListener(listener as never);
+  } catch {
+    return null;
+  }
 }
 
 /** Best-effort: drop this device's token while the session is still valid (before sign-out). */
@@ -168,8 +218,13 @@ export function handleNotificationResponse(
     case 'trip:status':
     case 'trip:accepted':
     case 'trip:arrived':
+    case 'trip:verification':
     case 'trip:completed':
       navigate('TripInProgress');
+      break;
+    case 'debt:warning':
+    case 'cancel_rate:warning':
+      navigate('Profile');
       break;
     case 'trip:cancelled':
       navigate('Home');

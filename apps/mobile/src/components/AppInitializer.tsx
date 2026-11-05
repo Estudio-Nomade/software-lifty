@@ -1,5 +1,6 @@
 import { useRootNavigationState, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { apiClient } from '../api/client';
 import { driverStatusSchema } from '../api/types';
 import { useAppNavigation } from '../hooks/useAppNavigation';
@@ -9,7 +10,9 @@ import { refreshMessagesUnread } from '../lib/messagesUnread';
 import {
   addNotificationReceivedListener,
   addNotificationResponseListener,
+  addPushTokenListener,
   ensurePushRegistration,
+  ensurePushRegistrationIfStale,
   getLastNotificationResponse,
   handleNotificationResponse,
   setupNotificationHandler,
@@ -254,12 +257,32 @@ function NotificationSetup() {
       console.warn('[push] session setup failed', result.reason, result.message);
     });
 
+    // Back to foreground: picks up a permission granted in Settings and heals a failed
+    // registration (throttled inside ensurePushRegistrationIfStale).
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void ensurePushRegistrationIfStale();
+    });
+    let pushCleanedUp = false;
+    let tokenSub: { remove: () => void } | null = null;
+    // Device token rotated by the OS → register the new Expo token.
+    void addPushTokenListener(() => {
+      void ensurePushRegistration();
+    }).then((sub) => {
+      if (pushCleanedUp) sub?.remove();
+      else tokenSub = sub;
+    });
+    const cleanupPush = () => {
+      pushCleanedUp = true;
+      appStateSub.remove();
+      tokenSub?.remove();
+    };
+
     // Seed tab/avatar badges after session restore (works even without push).
     void refreshMessagesUnread();
 
     // Cold start: user opened the app by tapping a notification.
     // Wait for interactions so ActiveTripRecovery can restore the trip first.
-    if (coldStartHandled.current) return;
+    if (coldStartHandled.current) return cleanupPush;
     coldStartHandled.current = true;
     void getLastNotificationResponse()
       .then((response) => {
@@ -271,6 +294,8 @@ function NotificationSetup() {
       .catch(() => {
         // best-effort: Expo Go / missing native module
       });
+
+    return cleanupPush;
   }, [sessionRestored, authToken, navigate]);
 
   return null;
