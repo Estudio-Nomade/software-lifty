@@ -1,12 +1,14 @@
 import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { AppState } from 'react-native';
 import { getActiveRide, registerPassenger } from '../api/passenger';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { shouldKickAuthedUserToHome } from '../lib/authRouteGate';
 import {
   addNotificationResponseListener,
+  addPushTokenListener,
   ensurePushRegistration,
+  ensurePushRegistrationIfStale,
   handleNotificationResponse,
   setupNotificationHandler,
 } from '../lib/notifications';
@@ -294,6 +296,9 @@ function NotificationSetup() {
   useEffect(() => {
     if (!sessionRestored || !isAuthenticated) return;
 
+    let cancelled = false;
+    let tokenSub: { remove: () => void } | null = null;
+
     ensurePushRegistration().then((token) => {
       if (!token && __DEV__) {
         console.warn(
@@ -301,6 +306,26 @@ function NotificationSetup() {
         );
       }
     });
+
+    // Back to foreground: picks up a permission granted in Settings and heals a
+    // registration that failed earlier (throttled inside ensurePushRegistrationIfStale).
+    const appStateSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void ensurePushRegistrationIfStale();
+    });
+
+    // Device token rotated by the OS → register the new Expo token.
+    void addPushTokenListener(() => {
+      void ensurePushRegistration();
+    }).then((sub) => {
+      if (cancelled) sub?.remove();
+      else tokenSub = sub;
+    });
+
+    return () => {
+      cancelled = true;
+      appStateSub.remove();
+      tokenSub?.remove();
+    };
   }, [sessionRestored, isAuthenticated]);
 
   return null;

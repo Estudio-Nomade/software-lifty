@@ -6,6 +6,7 @@ import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
 import { pushTokens, users } from '../../shared/db/schema';
 import { createTestToken } from '../../shared/testing/utils';
+import { MAX_NATIVE_TOKENS_PER_USER } from './service';
 let app: any;
 
 async function truncateTables() {
@@ -57,7 +58,7 @@ describe('Notifications', () => {
     const { status, data } = await request(
       'POST',
       '/api/notifications/token',
-      { token: 'expo-push-token-abc123', platform: 'ios' },
+      { token: 'ExponentPushToken[abc123]', platform: 'ios' },
       accessToken,
     );
 
@@ -67,13 +68,13 @@ describe('Notifications', () => {
     const db = getDb();
     const [entry] = await db.select().from(pushTokens).limit(1);
     expect(entry).toBeDefined();
-    expect(entry.token).toBe('expo-push-token-abc123');
+    expect(entry.token).toBe('ExponentPushToken[abc123]');
     expect(entry.platform).toBe('ios');
   });
 
   test('POST /token without auth returns 401', async () => {
     const { status, data } = await request('POST', '/api/notifications/token', {
-      token: 'expo-push-token-abc123',
+      token: 'ExponentPushToken[abc123]',
     });
 
     expect(status).toBe(401);
@@ -86,14 +87,14 @@ describe('Notifications', () => {
     await request(
       'POST',
       '/api/notifications/token',
-      { token: 'expo-old-token', platform: 'android' },
+      { token: 'ExponentPushToken[old]', platform: 'android' },
       accessToken,
     );
 
     const { status, data } = await request(
       'POST',
       '/api/notifications/token',
-      { token: 'expo-new-token', platform: 'ios' },
+      { token: 'ExponentPushToken[new]', platform: 'ios' },
       accessToken,
     );
 
@@ -103,7 +104,7 @@ describe('Notifications', () => {
     // Multi-device: a different token for the same (user, app) is a second device.
     const db = getDb();
     const entries = await db.select().from(pushTokens);
-    expect(entries.map((e) => e.token).sort()).toEqual(['expo-new-token', 'expo-old-token']);
+    expect(entries.map((e) => e.token).sort()).toEqual(['ExponentPushToken[new]', 'ExponentPushToken[old]']);
   });
 
   test('DELETE /token removes token', async () => {
@@ -112,7 +113,7 @@ describe('Notifications', () => {
     await request(
       'POST',
       '/api/notifications/token',
-      { token: 'expo-push-token-abc123' },
+      { token: 'ExponentPushToken[abc123]' },
       accessToken,
     );
 
@@ -183,15 +184,15 @@ describe('Notifications', () => {
 
   test('missing app is stored as legacy', async () => {
     const accessToken = await registerUser();
-    await request('POST', '/api/notifications/token', { token: 'tok-legacy' }, accessToken);
+    await request('POST', '/api/notifications/token', { token: 'ExponentPushToken[legacy]' }, accessToken);
     const [row] = await getDb().select().from(pushTokens);
     expect(row.app).toBe('legacy');
   });
 
   test('explicit app registration replaces the legacy row for the same token', async () => {
     const accessToken = await registerUser();
-    await request('POST', '/api/notifications/token', { token: 'tok-x' }, accessToken);
-    await request('POST', '/api/notifications/token', { token: 'tok-x', app: 'driver' }, accessToken);
+    await request('POST', '/api/notifications/token', { token: 'ExponentPushToken[x]' }, accessToken);
+    await request('POST', '/api/notifications/token', { token: 'ExponentPushToken[x]', app: 'driver' }, accessToken);
     const rows = await getDb().select().from(pushTokens);
     expect(rows).toHaveLength(1);
     expect(rows[0].app).toBe('driver');
@@ -262,5 +263,70 @@ describe('Notifications', () => {
     await request('DELETE', '/api/notifications/token', undefined, accessToken);
     const rows = await db.select().from(pushTokens);
     expect(rows.map((r) => r.platform)).toEqual(['web']);
+  });
+
+  test('rejects tokens that are not Expo push tokens', async () => {
+    const accessToken = await registerUser();
+    for (const token of ['fcm-native-token', 'https://evil.example/x', 'ExponentPushToken[]', '']) {
+      const { status } = await request('POST', '/api/notifications/token', { token }, accessToken);
+      expect(status).toBeGreaterThanOrEqual(400);
+      expect(status).toBeLessThan(500);
+    }
+    expect(await getDb().select().from(pushTokens)).toHaveLength(0);
+  });
+
+  test('accepts legacy ExpoPushToken[...] format', async () => {
+    const accessToken = await registerUser();
+    const { status } = await request(
+      'POST',
+      '/api/notifications/token',
+      { token: 'ExpoPushToken[legacy-format]' },
+      accessToken,
+    );
+    expect(status).toBe(200);
+  });
+
+  test('rejects an unknown platform', async () => {
+    const accessToken = await registerUser();
+    for (const platform of ['web', 'windows', 'x'.repeat(30)]) {
+      const { status } = await request(
+        'POST',
+        '/api/notifications/token',
+        { token: 'ExponentPushToken[p]', platform },
+        accessToken,
+      );
+      expect(status).toBeGreaterThanOrEqual(400);
+      expect(status).toBeLessThan(500);
+    }
+  });
+
+  test('caps native tokens per user keeping the newest', async () => {
+    const accessToken = await registerUser();
+    for (let i = 0; i < MAX_NATIVE_TOKENS_PER_USER + 3; i++) {
+      await request(
+        'POST',
+        '/api/notifications/token',
+        { token: `ExponentPushToken[dev${i}]`, app: 'driver' },
+        accessToken,
+      );
+    }
+    const rows = await getDb().select().from(pushTokens);
+    expect(rows).toHaveLength(MAX_NATIVE_TOKENS_PER_USER);
+    const tokens = rows.map((r) => r.token);
+    expect(tokens).toContain(`ExponentPushToken[dev${MAX_NATIVE_TOKENS_PER_USER + 2}]`);
+    expect(tokens).not.toContain('ExponentPushToken[dev0]');
+  });
+
+  test('token cap does not count or delete web subscriptions', async () => {
+    const accessToken = await registerUser();
+    const db = getDb();
+    const [u] = await db.select({ id: users.id }).from(users).limit(1);
+    await db.insert(pushTokens).values({ user_id: u.id, token: 'https://push.example/w', platform: 'web' });
+    for (let i = 0; i < MAX_NATIVE_TOKENS_PER_USER + 2; i++) {
+      await request('POST', '/api/notifications/token', { token: `ExponentPushToken[w${i}]` }, accessToken);
+    }
+    const rows = await db.select().from(pushTokens);
+    expect(rows.filter((r) => r.platform === 'web')).toHaveLength(1);
+    expect(rows.filter((r) => r.platform !== 'web')).toHaveLength(MAX_NATIVE_TOKENS_PER_USER);
   });
 });

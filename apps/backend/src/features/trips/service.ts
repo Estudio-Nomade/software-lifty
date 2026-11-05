@@ -365,6 +365,8 @@ export const tripService = {
     const driverId = await getDriverId(user);
     let rematchAfterReject = false;
     let vehicleMismatch = false;
+    // Side effects (push/realtime) run only after the transaction committed.
+    const afterCommit: Array<() => void> = [];
 
     const updated = await db.transaction(async (tx) => {
       const trip = await findTrip(driverId, tripId, tx);
@@ -425,18 +427,21 @@ export const tripService = {
 
         const [result] = await tx.select().from(trips).where(eq(trips.id, tripId));
 
-        if (trip.passenger_id) {
-          sendPushToUser(trip.passenger_id, {
-            app: 'passenger',
-            title: 'Tu conductor aceptó el viaje',
-            body: `Código de verificación: ${verificationCode}`,
-            data: {
-              type: 'trip:verification',
-              trip_id: tripId,
-              verification_code: verificationCode,
-            },
+        const passengerId = trip.passenger_id;
+        if (passengerId) {
+          afterCommit.push(() => {
+            sendPushToUser(passengerId, {
+              app: 'passenger',
+              title: 'Tu conductor aceptó el viaje',
+              body: `Código de verificación: ${verificationCode}`,
+              data: {
+                type: 'trip:verification',
+                trip_id: tripId,
+                verification_code: verificationCode,
+              },
+            });
+            broadcastToPassenger(passengerId, result);
           });
-          broadcastToPassenger(trip.passenger_id, result);
         }
 
         return result;
@@ -457,6 +462,8 @@ export const tripService = {
 
       return result;
     });
+
+    for (const run of afterCommit) run();
 
     if (rematchAfterReject) {
       // releaseAndRematch accepts status rejected|offered|expired with same driver_id.
@@ -635,6 +642,8 @@ export const tripService = {
     const driverId = await getDriverId(user);
     const verificationCode = Math.floor(1000 + Math.random() * 9000).toString();
     let vehicleMismatch = false;
+    // Side effects (push/realtime) run only after the transaction committed.
+    const afterCommit: Array<() => void> = [];
 
     const updated = await db.transaction(async (tx) => {
       const trip = await findTrip(driverId, tripId, tx);
@@ -680,18 +689,27 @@ export const tripService = {
 
       const [accepted] = await tx.select().from(trips).where(eq(trips.id, tripId));
 
-      if (trip.passenger_id) {
-        sendPushToUser(trip.passenger_id, {
-          app: 'passenger',
-          title: 'Tu conductor aceptó el viaje',
-          body: `Código de verificación: ${verificationCode}`,
-          data: { type: 'trip:verification', trip_id: tripId, verification_code: verificationCode },
+      const passengerId = trip.passenger_id;
+      if (passengerId) {
+        afterCommit.push(() => {
+          sendPushToUser(passengerId, {
+            app: 'passenger',
+            title: 'Tu conductor aceptó el viaje',
+            body: `Código de verificación: ${verificationCode}`,
+            data: {
+              type: 'trip:verification',
+              trip_id: tripId,
+              verification_code: verificationCode,
+            },
+          });
+          broadcastToPassenger(passengerId, accepted);
         });
-        broadcastToPassenger(trip.passenger_id, accepted);
       }
 
       return attachPassengerFields(accepted, tx);
     });
+
+    for (const run of afterCommit) run();
 
     if (vehicleMismatch) {
       if (updated?.passenger_id) {
@@ -1059,8 +1077,10 @@ export const tripService = {
 
   async claimTrip(user: AuthUser, tripId: string) {
     const driverId = await getDriverId(user);
+    // Side effects (push/realtime) run only after the transaction committed.
+    const afterCommit: Array<() => void> = [];
 
-    return db.transaction(async (tx) => {
+    const claimed = await db.transaction(async (tx) => {
       const [trip] = await tx
         .select()
         .from(trips)
@@ -1097,25 +1117,28 @@ export const tripService = {
 
       const [updated] = await tx.select().from(trips).where(eq(trips.id, tripId));
 
-      if (trip.passenger_id) {
-        sendPushToUser(trip.passenger_id, {
-          app: 'passenger',
-          title: 'Tu conductor aceptó el viaje',
-          body: `Código de verificación: ${verificationCode}`,
-          data: {
-            type: 'trip:verification',
-            trip_id: tripId,
-            verification_code: verificationCode,
-          },
+      const passengerId = trip.passenger_id;
+      if (passengerId) {
+        afterCommit.push(() => {
+          sendPushToUser(passengerId, {
+            app: 'passenger',
+            title: 'Tu conductor aceptó el viaje',
+            body: `Código de verificación: ${verificationCode}`,
+            data: {
+              type: 'trip:verification',
+              trip_id: tripId,
+              verification_code: verificationCode,
+            },
+          });
+          broadcastToPassenger(passengerId, updated);
         });
-      }
-
-      if (trip.passenger_id) {
-        broadcastToPassenger(trip.passenger_id, updated);
       }
 
       return updated;
     });
+
+    for (const run of afterCommit) run();
+    return claimed;
   },
 
   async assertTripParticipant(user: AuthUser, tripId: string) {

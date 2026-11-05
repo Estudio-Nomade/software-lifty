@@ -3,9 +3,10 @@ process.env.SEND_PUSH_IN_DEV = 'true';
 process.env.DATABASE_URL =
   process.env.TEST_DATABASE_URL ?? 'postgresql://lifty:lifty@localhost:5433/lifty_test';
 
-import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { getDb, resetDb } from '../db/client';
 import { pushTokens, users } from '../db/schema';
+import { logger } from './logger';
 import { sendPushToUserDetailed } from './push';
 
 type Sent = { to: string; body: Record<string, unknown> };
@@ -161,5 +162,34 @@ describe('sendPushToUserDetailed', () => {
     const res = await sendPushToUserDetailed(userId, { ...msg, app: 'driver' });
     expect(res.ok).toBe(true);
     expect(sent.some((s) => s.to.includes('good'))).toBe(true);
+  });
+
+  test('drops unsupported non-Expo tokens without calling any provider', async () => {
+    await seed([
+      { token: 'fcm-native-legacy-token', app: 'legacy' },
+      { token: 'ExponentPushToken[ok]', app: 'driver' },
+    ]);
+    const res = await sendPushToUserDetailed(userId, { ...msg, app: 'driver' });
+    expect(res.ok).toBe(true);
+    expect(sent.map((s) => s.to)).toEqual(['ExponentPushToken[ok]']);
+    const left = await getDb().select().from(pushTokens);
+    expect(left.map((r) => r.token)).toEqual(['ExponentPushToken[ok]']);
+  });
+
+  test('never logs the full push token', async () => {
+    const full = 'ExponentPushToken[SECRET-DEVICE-TOKEN-1234567890]';
+    await seed([{ token: full, app: 'driver' }]);
+    responder = () => ({
+      status: 200,
+      json: { data: { status: 'error', details: { error: 'DeviceNotRegistered' } } },
+    });
+    const spies = (['info', 'warn', 'error', 'debug'] as const).map((l) =>
+      spyOn(logger, l as 'info'),
+    );
+    await sendPushToUserDetailed(userId, { ...msg, app: 'driver' });
+    const logged = JSON.stringify(spies.flatMap((sp) => sp.mock.calls));
+    for (const sp of spies) sp.mockRestore();
+    expect(logged).not.toContain('SECRET-DEVICE-TOKEN-1234567890');
+    expect(logged).toContain('ExponentPushToken[');
   });
 });

@@ -167,19 +167,8 @@ async function obtainPushToken(): Promise<PushRegistrationResult> {
   }
 
   try {
-    const perm = (await Notifications.requestPermissionsAsync()) as unknown as PermStatus;
-    if (perm.status !== 'granted') {
-      console.warn('[push] permission not granted', perm.status, {
-        canAskAgain: perm.canAskAgain,
-      });
-      return {
-        ok: false,
-        reason: 'permission_denied',
-        message: PUSH_PERMISSION_DENIED_MSG,
-        canOpenSettings: perm.canAskAgain === false || perm.status === 'denied',
-      };
-    }
-
+    // Channels first: they need no runtime permission, and a later grant from system
+    // Settings must not leave the offer channel (sound/importance) missing.
     if (Platform.OS === 'android') {
       // Legacy default channel (other trip alerts). Sound settings freeze after first
       // create on device — keep for backward-compat payloads without channelId.
@@ -208,6 +197,19 @@ async function obtainPushToken(): Promise<PushRegistrationResult> {
       });
     }
 
+    const perm = (await Notifications.requestPermissionsAsync()) as unknown as PermStatus;
+    if (perm.status !== 'granted') {
+      console.warn('[push] permission not granted', perm.status, {
+        canAskAgain: perm.canAskAgain,
+      });
+      return {
+        ok: false,
+        reason: 'permission_denied',
+        message: PUSH_PERMISSION_DENIED_MSG,
+        canOpenSettings: perm.canAskAgain === false || perm.status === 'denied',
+      };
+    }
+
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
     if (!token?.data) {
       console.warn('[push] getExpoPushTokenAsync returned empty token');
@@ -230,6 +232,13 @@ async function obtainPushToken(): Promise<PushRegistrationResult> {
 
 /** Token this install last registered; needed to unregister on logout. */
 let registeredPushToken: string | null = null;
+/** Last time the backend confirmed our token (0 = never / last attempt failed). */
+let lastRegisteredAt = 0;
+
+export function resetPushRegistrationStateForTests(): void {
+  registeredPushToken = null;
+  lastRegisteredAt = 0;
+}
 
 /**
  * Best-effort: remove this device's token from the backend. Must run while the session
@@ -273,14 +282,37 @@ export async function ensurePushRegistration(): Promise<PushRegistrationResult> 
       app: 'driver',
     });
     registeredPushToken = obtained.token;
+    lastRegisteredAt = Date.now();
     return obtained;
   } catch (err) {
+    lastRegisteredAt = 0;
     console.warn('[push] POST /notifications/token failed', err);
     return {
       ok: false,
       reason: 'post_failed',
       message: 'No se pudo registrar el token de notificaciones. Revisá la conexión.',
     };
+  }
+}
+
+/** Foreground hook: re-register only if the last successful registration is old/failed. */
+export async function ensurePushRegistrationIfStale(
+  maxAgeMs = 30 * 60_000,
+): Promise<PushRegistrationResult | null> {
+  if (lastRegisteredAt && Date.now() - lastRegisteredAt < maxAgeMs) return null;
+  return ensurePushRegistration();
+}
+
+/** Device push token rotated (reinstall/restore/OS) → caller should re-register. */
+export async function addPushTokenListener(
+  listener: (token: unknown) => void,
+): Promise<{ remove: () => void } | null> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return null;
+  try {
+    return Notifications.addPushTokenListener(listener as never);
+  } catch {
+    return null;
   }
 }
 

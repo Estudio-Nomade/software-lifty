@@ -1,7 +1,10 @@
-import { and, eq, ne } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { pushTokens } from '../../shared/db/schema';
 import type { AuthUser } from '../../shared/middleware/auth';
+
+/** Hard cap of native device tokens per user (oldest are dropped). */
+export const MAX_NATIVE_TOKENS_PER_USER = 10;
 
 export type PushApp = 'driver' | 'passenger';
 
@@ -43,6 +46,22 @@ export const notificationsService = {
           target: [pushTokens.user_id, pushTokens.app, pushTokens.token],
           set: { platform: platformValue },
         });
+
+      // Bound table growth: keep only the newest N native tokens (web rows excluded).
+      const native = await tx
+        .select({ id: pushTokens.id })
+        .from(pushTokens)
+        .where(and(eq(pushTokens.user_id, user.id), ne(pushTokens.platform, 'web')))
+        .orderBy(asc(pushTokens.created_at), asc(pushTokens.id));
+      const excess = native.length - MAX_NATIVE_TOKENS_PER_USER;
+      if (excess > 0) {
+        await tx.delete(pushTokens).where(
+          inArray(
+            pushTokens.id,
+            native.slice(0, excess).map((r) => r.id),
+          ),
+        );
+      }
     });
     return { message: 'Token registered' };
   },

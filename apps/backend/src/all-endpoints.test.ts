@@ -743,7 +743,7 @@ describe('SOS', () => {
 // ── Notifications ──
 describe('Notifications', () => {
   test('token no auth → 401', async () => {
-    const { status } = await req('POST', '/api/notifications/token', { token: 'fcm' });
+    const { status } = await req('POST', '/api/notifications/token', { token: 'ExponentPushToken[fcm]' });
     expect(status).toBe(401);
   });
   test('token → 200', async () => {
@@ -751,7 +751,7 @@ describe('Notifications', () => {
     const { status, data } = await req(
       'POST',
       '/api/notifications/token',
-      { token: 'fcm', platform: 'android' },
+      { token: 'ExponentPushToken[fcm]', platform: 'android' },
       token,
     );
     expect(status).toBe(200);
@@ -763,7 +763,7 @@ describe('Notifications', () => {
   });
   test('delete token → 200', async () => {
     const token = await register('+54926101002');
-    await req('POST', '/api/notifications/token', { token: 'fcm' }, token);
+    await req('POST', '/api/notifications/token', { token: 'ExponentPushToken[fcm]' }, token);
     const { status } = await req('DELETE', '/api/notifications/token', undefined, token);
     expect(status).toBe(200);
   });

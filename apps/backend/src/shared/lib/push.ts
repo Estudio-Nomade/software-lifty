@@ -1,5 +1,4 @@
 import { and, eq } from 'drizzle-orm';
-import * as jose from 'jose';
 import { logger } from './logger';
 
 export interface PushMessage {
@@ -34,10 +33,16 @@ const SEND_TIMEOUT_MS = 5000;
 const RETRY_DELAY_MS = 300;
 
 // Expo push tokens look like `ExponentPushToken[...]` (or the legacy
-// `ExpoPushToken[...]`). Native FCM tokens are opaque strings that don't match
-// this pattern.
+// `ExpoPushToken[...]`). Both apps only ever obtain Expo tokens
+// (getExpoPushTokenAsync; no client ever called getDevicePushTokenAsync), so native
+// FCM delivery was dead code and was removed. Anything else is undeliverable.
 function isExpoToken(token: string): boolean {
   return token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken[');
+}
+
+/** Push tokens are send credentials: log only a short prefix. */
+function maskToken(token: string): string {
+  return `${token.slice(0, 22)}…`;
 }
 
 // Push is always enabled in production. In development it is off by default so
@@ -46,124 +51,6 @@ function isExpoToken(token: string): boolean {
 function isPushEnabled(): boolean {
   if (process.env.NODE_ENV === 'production') return true;
   return process.env.SEND_PUSH_IN_DEV === 'true';
-}
-
-// ─── FCM (native token) ────────────────────────────────────────────────
-
-function parseServiceAccount(): {
-  projectId: string;
-  clientEmail: string;
-  privateKey: string;
-} | null {
-  try {
-    const raw = process.env.FCM_SERVICE_ACCOUNT_JSON;
-    if (!raw) return null;
-    const sa = JSON.parse(raw);
-    return {
-      projectId: sa.project_id,
-      clientEmail: sa.client_email,
-      privateKey: sa.private_key,
-    };
-  } catch {
-    return null;
-  }
-}
-
-let cachedToken: { token: string; expiresAt: number } | null = null;
-
-async function getAccessToken(): Promise<string | null> {
-  const sa = parseServiceAccount();
-  if (!sa) return null;
-
-  if (cachedToken && Date.now() < cachedToken.expiresAt) {
-    return cachedToken.token;
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  const jwt = await new jose.SignJWT({
-    scope: 'https://www.googleapis.com/auth/firebase.messaging',
-  })
-    .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
-    .setIssuer(sa.clientEmail)
-    .setSubject(sa.clientEmail)
-    .setAudience('https://oauth2.googleapis.com/token')
-    .setIssuedAt(now)
-    .setExpirationTime(now + 3600)
-    .sign(await jose.importPKCS8(sa.privateKey, 'RS256'));
-
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: jwt,
-    }),
-  });
-
-  if (!res.ok) {
-    logger.error('[FCM] Failed to get access token:', res.status, await res.text());
-    return null;
-  }
-
-  const data = (await res.json()) as { access_token: string; expires_in: number };
-  cachedToken = { token: data.access_token, expiresAt: Date.now() + (data.expires_in - 60) * 1000 };
-  return cachedToken.token;
-}
-
-async function sendFcmPush(token: string, message: PushMessage): Promise<DeliveryResult> {
-  const sa = parseServiceAccount();
-  if (!sa) {
-    logger.warn('[FCM] Not configured (missing FCM_SERVICE_ACCOUNT_JSON) — cannot send');
-    return { ok: false, invalid: false };
-  }
-
-  try {
-    const accessToken = await getAccessToken();
-    if (!accessToken) return { ok: false, invalid: false };
-
-    const payload: Record<string, unknown> = {
-      message: {
-        token,
-        notification: { title: message.title, body: message.body },
-      },
-    };
-    if (message.data) {
-      (payload.message as any).data = message.data;
-    }
-
-    const res = await fetch(
-      `https://fcm.googleapis.com/v1/projects/${sa.projectId}/messages:send`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      },
-    );
-
-    const body = (await res.json()) as any;
-
-    if (!res.ok) {
-      if (body?.error?.details?.[0]?.errorCode === 'UNREGISTERED') {
-        logger.warn('[FCM] Token unregistered — removing from DB', { token });
-        return { ok: false, invalid: true };
-      }
-      logger.error('[FCM] Send failed', {
-        status: res.status,
-        token,
-        response: body,
-      });
-      return { ok: false, invalid: false };
-    }
-
-    logger.info('[FCM] Push sent', { token, title: message.title, response: body });
-    return { ok: true, invalid: false };
-  } catch (err) {
-    logger.error('[FCM] Error', { error: (err as Error).message });
-    return { ok: false, invalid: false };
-  }
 }
 
 // ─── Expo (ExponentPushToken) ──────────────────────────────────────────
@@ -202,7 +89,7 @@ async function sendExpoPushOnce(
     if (!res.ok) {
       logger.error('[EXPO-PUSH] Send failed', {
         status: res.status,
-        token,
+        token: maskToken(token),
         response: body,
       });
       return { ok: false, invalid: false, retry: res.status === 429 || res.status >= 500 };
@@ -214,11 +101,18 @@ async function sendExpoPushOnce(
     const ticket = Array.isArray(body?.data) ? body.data[0] : body?.data;
     if (ticket?.status === 'error') {
       const invalid = ticket?.details?.error === 'DeviceNotRegistered';
-      logger.error('[EXPO-PUSH] Token rejected by Expo', { token, details: ticket });
+      logger.error('[EXPO-PUSH] Token rejected by Expo', {
+        token: maskToken(token),
+        details: ticket,
+      });
       return { ok: false, invalid, retry: false };
     }
 
-    logger.info('[EXPO-PUSH] Push sent', { status: res.status, token, response: body });
+    logger.info('[EXPO-PUSH] Push sent', {
+      status: res.status,
+      token: maskToken(token),
+      response: body,
+    });
     return { ok: true, invalid: false, retry: false };
   } catch (err) {
     logger.error('[EXPO-PUSH] Error', { error: (err as Error).message });
@@ -248,14 +142,16 @@ async function deliver(token: string, message: PushMessage): Promise<DeliveryRes
     logger.info('[PUSH] Push disabled — not sending', {
       nodeEnv: process.env.NODE_ENV ?? 'unset',
       sendPushInDev: process.env.SEND_PUSH_IN_DEV ?? 'unset',
-      tokenKind: isExpoToken(token) ? 'expo' : 'fcm',
       title: message.title,
     });
     return { ok: false, invalid: false };
   }
 
   if (isExpoToken(token)) return sendExpoPush(token, message);
-  return sendFcmPush(token, message);
+
+  // Not an Expo token: no provider can deliver it, so let the fan-out drop the row.
+  logger.warn('[PUSH] Unsupported (non-Expo) token — removing', { token: maskToken(token) });
+  return { ok: false, invalid: true };
 }
 
 export async function sendPush(token: string, message: PushMessage): Promise<boolean> {
@@ -304,7 +200,7 @@ export async function sendPushToUserDetailed(
           userId: userId.slice(0, 8),
           platform: t.platform,
           app: t.app,
-          tokenKind: isExpoToken(t.token) ? 'expo' : 'fcm',
+          token: maskToken(t.token),
         });
         const result = await deliver(t.token, message);
         if (result.invalid) {
