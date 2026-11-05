@@ -1,5 +1,6 @@
 import {
   invalidatePassengerProfileCompleteCache,
+  isPassengerHomeResolved,
   isPassengerPhoneComplete,
   isPassengerProfileComplete,
   joinFullName,
@@ -67,13 +68,58 @@ describe('phoneDigitCount / isPassengerPhoneComplete', () => {
   });
 });
 
+describe('isPassengerHomeResolved', () => {
+  it('requires address line and finite coords', () => {
+    expect(
+      isPassengerHomeResolved({
+        home_address_line: 'San Martín 1',
+        home_lat: -31.9,
+        home_lng: -65.1,
+      }),
+    ).toBe(true);
+    expect(
+      isPassengerHomeResolved({
+        home_address_line: 'San Martín 1',
+        home_lat: null,
+        home_lng: -65.1,
+      }),
+    ).toBe(false);
+    expect(
+      isPassengerHomeResolved({
+        home_address_line: '  ',
+        home_lat: -31.9,
+        home_lng: -65.1,
+      }),
+    ).toBe(false);
+  });
+});
+
 describe('isPassengerProfileComplete', () => {
-  it('requires usable full_name and phone', () => {
-    expect(isPassengerProfileComplete({ full_name: 'Ana Pérez', phone: '1123456789' })).toBe(true);
-    expect(isPassengerProfileComplete({ full_name: 'A', phone: '1123456789' })).toBe(false);
-    expect(isPassengerProfileComplete({ full_name: 'Ana Pérez', phone: '123' })).toBe(false);
-    expect(isPassengerProfileComplete({ full_name: null, phone: '1123456789' })).toBe(false);
-    expect(isPassengerProfileComplete({ full_name: '  ', phone: '1123456789' })).toBe(false);
+  const home = {
+    home_address_line: 'San Martín 1',
+    home_lat: -31.9,
+    home_lng: -65.1,
+  };
+
+  it('requires usable full_name, phone and resolved home', () => {
+    expect(
+      isPassengerProfileComplete({ full_name: 'Ana Pérez', phone: '1123456789', ...home }),
+    ).toBe(true);
+    expect(isPassengerProfileComplete({ full_name: 'Ana Pérez', phone: '1123456789' })).toBe(
+      false,
+    );
+    expect(isPassengerProfileComplete({ full_name: 'A', phone: '1123456789', ...home })).toBe(
+      false,
+    );
+    expect(isPassengerProfileComplete({ full_name: 'Ana Pérez', phone: '123', ...home })).toBe(
+      false,
+    );
+    expect(isPassengerProfileComplete({ full_name: null, phone: '1123456789', ...home })).toBe(
+      false,
+    );
+    expect(isPassengerProfileComplete({ full_name: '  ', phone: '1123456789', ...home })).toBe(
+      false,
+    );
   });
 });
 

@@ -3,6 +3,7 @@ import { db } from '../../shared/db/client';
 import { passengerProfiles, users } from '../../shared/db/schema';
 import { AppError } from '../../shared/lib/errors';
 import { setUserFullName } from '../../shared/lib/identity';
+import { getActiveServiceMarkets, isInsidePickupArea } from '../../shared/lib/service-area';
 import { type StorageProvider, supabaseStorage } from '../../shared/lib/storage';
 import type { AuthUser } from '../../shared/middleware/auth';
 
@@ -12,6 +13,65 @@ let _storage: StorageProvider = supabaseStorage;
 
 export function setStorageForTesting(sp: StorageProvider) {
   _storage = sp;
+}
+
+export type PassengerHomeInput = {
+  home_address_line?: string | null;
+  home_lat?: number | null;
+  home_lng?: number | null;
+  home_resolved_city?: string | null;
+  home_resolved_province?: string | null;
+};
+
+export type PassengerProfileUpdate = {
+  full_name?: string;
+  phone?: string;
+} & PassengerHomeInput;
+
+function normalizeHomeInput(data: PassengerHomeInput): {
+  home_address_line: string;
+  home_lat: number;
+  home_lng: number;
+  home_resolved_city: string | null;
+  home_resolved_province: string | null;
+} | null {
+  // Only treat as a home write when the client sends the resolved triple core
+  // (line and/or coords). City/province alone is not a partial home update —
+  // ignore so name/phone PUTs with stray optional fields don't 400.
+  const hasHomeCore =
+    data.home_address_line !== undefined ||
+    data.home_lat !== undefined ||
+    data.home_lng !== undefined;
+
+  if (!hasHomeCore) return null;
+
+  const line = (data.home_address_line ?? '').trim();
+  const lat = data.home_lat;
+  const lng = data.home_lng;
+
+  if (!line) {
+    throw new AppError('Ingresá un domicilio válido.', 400, 'HOME_ADDRESS_REQUIRED');
+  }
+  if (
+    typeof lat !== 'number' ||
+    typeof lng !== 'number' ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng)
+  ) {
+    throw new AppError(
+      'Seleccioná una dirección de la lista o usá tu ubicación.',
+      400,
+      'HOME_COORDS_REQUIRED',
+    );
+  }
+
+  return {
+    home_address_line: line,
+    home_lat: lat,
+    home_lng: lng,
+    home_resolved_city: data.home_resolved_city?.trim() || null,
+    home_resolved_province: data.home_resolved_province?.trim() || null,
+  };
 }
 
 async function ensurePassengerProfile(userId: string, phone?: string | null) {
@@ -46,9 +106,9 @@ async function ensurePassengerProfile(userId: string, phone?: string | null) {
 }
 
 export const passengersService = {
-  async register(userId: string, phone?: string, fullName?: string) {
-    // Same completeness contract as GET/PUT /profile: clients gate on full_name + phone.
-    // Returning the raw passenger_profiles row omits full_name and breaks complete-profile.
+  async register(userId: string, phone?: string, fullName?: string, home?: PassengerHomeInput) {
+    // Same completeness contract as GET/PUT /profile: clients gate on
+    // full_name + phone + resolved home address.
     const trimmedName = fullName?.trim() || null;
     if (trimmedName) {
       await setUserFullName(userId, trimmedName);
@@ -95,16 +155,24 @@ export const passengersService = {
     }
 
     const existing = await ensurePassengerProfile(userId, nextPhone);
+    const homeNorm = home ? normalizeHomeInput(home) : null;
 
+    const profilePatch: Record<string, unknown> = { updated_at: new Date() };
     if (nextPhone && existing.phone !== nextPhone) {
+      profilePatch.phone = nextPhone;
+    }
+    if (homeNorm) {
+      Object.assign(profilePatch, homeNorm);
+    }
+
+    if (Object.keys(profilePatch).length > 1) {
       await db
         .update(passengerProfiles)
-        .set({ phone: nextPhone, updated_at: new Date() })
+        .set(profilePatch)
         .where(eq(passengerProfiles.user_id, userId));
     }
 
-    // Always re-read from DB (same contract as GET /profile). Do not pass a
-    // synthetic phone — getProfileByUserId ignores AuthUser fields other than id.
+    // Always re-read from DB (same contract as GET /profile).
     return this.getProfileByUserId(userId);
   },
 
@@ -112,7 +180,7 @@ export const passengersService = {
     return this.getProfileByUserId(user.id);
   },
 
-  /** Reads full_name/phone/email from DB only — never from a request-scoped AuthUser snapshot. */
+  /** Reads full_name/phone/email/home from DB only — never from a request-scoped AuthUser snapshot. */
   async getProfileByUserId(userId: string) {
     await ensurePassengerProfile(userId);
 
@@ -124,6 +192,11 @@ export const passengersService = {
         email: users.email,
         avatar_url: users.avatar_url,
         profile_phone: passengerProfiles.phone,
+        home_address_line: passengerProfiles.home_address_line,
+        home_lat: passengerProfiles.home_lat,
+        home_lng: passengerProfiles.home_lng,
+        home_resolved_city: passengerProfiles.home_resolved_city,
+        home_resolved_province: passengerProfiles.home_resolved_province,
       })
       .from(passengerProfiles)
       .innerJoin(users, eq(passengerProfiles.user_id, users.id))
@@ -139,10 +212,15 @@ export const passengersService = {
       phone: row.phone ?? row.profile_phone,
       email: row.email,
       avatar_url: row.avatar_url,
+      home_address_line: row.home_address_line,
+      home_lat: row.home_lat,
+      home_lng: row.home_lng,
+      home_resolved_city: row.home_resolved_city,
+      home_resolved_province: row.home_resolved_province,
     };
   },
 
-  async updateProfile(user: AuthUser, data: { full_name?: string; phone?: string }) {
+  async updateProfile(user: AuthUser, data: PassengerProfileUpdate) {
     await ensurePassengerProfile(user.id);
 
     let nextPhone: string | null = null;
@@ -180,6 +258,10 @@ export const passengersService = {
       await setUserFullName(user.id, data.full_name.trim());
     }
 
+    const homeNorm = normalizeHomeInput(data);
+    const profilePatch: Record<string, unknown> = { updated_at: new Date() };
+    let hasProfilePatch = false;
+
     if (nextPhone) {
       const [currentUser] = await db
         .select({ phone: users.phone })
@@ -194,13 +276,35 @@ export const passengersService = {
           .where(eq(users.id, user.id));
       }
 
+      profilePatch.phone = nextPhone;
+      hasProfilePatch = true;
+    }
+
+    if (homeNorm) {
+      Object.assign(profilePatch, homeNorm);
+      hasProfilePatch = true;
+    }
+
+    if (hasProfilePatch) {
       await db
         .update(passengerProfiles)
-        .set({ phone: nextPhone, updated_at: new Date() })
+        .set(profilePatch)
         .where(eq(passengerProfiles.user_id, user.id));
     }
 
     return this.getProfile(user);
+  },
+
+  getServiceAreaStatus(lat: number, lng: number) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new AppError('Coordenadas inválidas.', 400, 'INVALID_COORDS');
+    }
+    const inside = isInsidePickupArea(lat, lng);
+    const markets = getActiveServiceMarkets().map((m) => ({
+      name: m.name,
+      slug: m.slug,
+    }));
+    return { inside, markets };
   },
 
   async uploadAvatar(user: AuthUser, file: File) {

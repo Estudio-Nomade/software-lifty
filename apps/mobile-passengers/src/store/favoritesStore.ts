@@ -65,3 +65,34 @@ export const useFavoritesStore = create<FavoritesState>()(
     },
   ),
 );
+
+/** Sync chip Casa from server profile home — does not touch Trabajo/custom. */
+export function syncCasaFavoriteFromProfile(home: {
+  home_address_line?: string | null;
+  home_lat?: number | null;
+  home_lng?: number | null;
+}): void {
+  const line = home.home_address_line?.trim() ?? '';
+  if (
+    !line ||
+    typeof home.home_lat !== 'number' ||
+    typeof home.home_lng !== 'number' ||
+    !Number.isFinite(home.home_lat) ||
+    !Number.isFinite(home.home_lng)
+  ) {
+    return;
+  }
+
+  const store = useFavoritesStore.getState();
+  const casa = store.favorites.find((f) => f.id === 'casa');
+  if (casa) {
+    store.updateFavorite('casa', 'Casa', line, home.home_lat, home.home_lng);
+  } else {
+    useFavoritesStore.setState((state) => ({
+      favorites: [
+        { id: 'casa', label: 'Casa', address: line, lat: home.home_lat!, lng: home.home_lng! },
+        ...state.favorites,
+      ],
+    }));
+  }
+}

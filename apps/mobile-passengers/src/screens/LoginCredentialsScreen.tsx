@@ -17,14 +17,31 @@ import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
-import {
-  isPassengerProfileComplete,
-  writePassengerProfileCompleteCache,
-} from '../lib/passengerProfileGate';
+import { resolvePassengerPostAuthPath } from '../lib/postAuthRouting';
 import { classifySignUpResult } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
 import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 import { theme } from '../theme';
+
+async function replaceAfterAuth(
+  replace: ReturnType<typeof useAppNavigation>['replace'],
+  userId: string | null | undefined,
+) {
+  const path = await resolvePassengerPostAuthPath(userId ?? null);
+  if (path === '/complete-profile') {
+    replace('CompleteProfile');
+    return;
+  }
+  if (path === '/location-permissions') {
+    replace('LocationPermissions');
+    return;
+  }
+  if (path === '/home') {
+    replace('Home');
+    return;
+  }
+  replace('Welcome');
+}
 
 export function LoginCredentialsScreen() {
   const { goBack, navigate, replace } = useAppNavigation();
@@ -81,14 +98,8 @@ export function LoginCredentialsScreen() {
         const outcome = classifySignUpResult(data, trimmedEmail);
         if (outcome.kind === 'session') {
           clearDraft();
-          const profile = await registerPassenger(phoneTrimmed, fullName ?? undefined).catch(
-            () => null,
-          );
-          const uid = data.session?.user?.id;
-          if (uid && profile && isPassengerProfileComplete(profile)) {
-            writePassengerProfileCompleteCache(uid, true);
-          }
-          replace('LocationPermissions');
+          await registerPassenger(phoneTrimmed, fullName ?? undefined).catch(() => null);
+          await replaceAfterAuth(replace, data.session?.user?.id);
         } else if (outcome.kind === 'needs_verify') {
           replace('VerifyEmail', { email: trimmedEmail });
         } else {
@@ -109,8 +120,8 @@ export function LoginCredentialsScreen() {
             (data.user?.user_metadata as { full_name?: string } | undefined)?.full_name ??
             fullName ??
             undefined;
-          registerPassenger(undefined, metaName).catch(() => {});
-          replace('LocationPermissions');
+          await registerPassenger(undefined, metaName).catch(() => {});
+          await replaceAfterAuth(replace, data.session.user?.id);
         }
       }
     } catch (err) {

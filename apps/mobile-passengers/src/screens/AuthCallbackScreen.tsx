@@ -106,7 +106,7 @@ export function AuthCallbackScreen() {
       if (cancelled || finishedOkRef.current) return;
       // Claim before await so twin-path exchange cannot re-enter.
       finishedOkRef.current = true;
-      let target: '/complete-profile' | '/home' | '/' = '/';
+      let target: '/complete-profile' | '/location-permissions' | '/home' | '/' = '/';
       try {
         const { data } = await supabase.auth.getSession();
         const userId = data.session?.user?.id ?? useAuthStore.getState().userId;

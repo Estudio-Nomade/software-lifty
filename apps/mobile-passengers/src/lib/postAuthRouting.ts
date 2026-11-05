@@ -1,9 +1,12 @@
 import { getProfile, registerPassenger } from '../api/passenger';
+import { needsLocationPermissionPrompt } from './locationPrompt';
 import {
   isPassengerProfileComplete,
   readPassengerProfileCompleteCache,
   writePassengerProfileCompleteCache,
 } from './passengerProfileGate';
+
+export type PassengerPostAuthPath = '/complete-profile' | '/location-permissions' | '/home' | '/';
 
 /**
  * Same gate AuthRedirectWatcher uses: incomplete ficha → CompleteProfile (#480).
@@ -54,13 +57,13 @@ export async function resolvePassengerProfileComplete(
   }
 }
 
-/** Single post-OAuth destination — skip Welcome BrandSplash hop. */
+/** Single post-auth destination — skip Welcome BrandSplash hop. */
 export async function resolvePassengerPostAuthPath(
   userId: string | null,
-): Promise<'/complete-profile' | '/home' | '/'> {
+): Promise<PassengerPostAuthPath> {
   const complete = await resolvePassengerProfileComplete(userId);
-  if (complete === true) return '/home';
   if (complete === false) return '/complete-profile';
-  // Unknown (transient): Welcome recovery; watcher retries when profile is reachable.
-  return '/';
+  if (complete === null) return '/';
+  if (await needsLocationPermissionPrompt()) return '/location-permissions';
+  return '/home';
 }

@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { requestFreshPosition } from '../hooks/useLocation';
+import { markLocationPromptSeen } from '../lib/locationPrompt';
 import { useLocationStore } from '../store/locationStore';
 import { theme } from '../theme';
 
@@ -15,6 +16,11 @@ export function LocationPermissionsScreen() {
   const setPermissionGranted = useLocationStore((s) => s.setPermissionGranted);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const goHome = async () => {
+    await markLocationPromptSeen();
+    replace('Home');
+  };
 
   const handleEnable = async () => {
     setLoading(true);
@@ -29,10 +35,10 @@ export function LocationPermissionsScreen() {
               'No se pudo obtener la ubicación. Podés reintentar desde el mapa.',
           );
           setLoading(false);
-          replace('Home');
+          await goHome();
           return;
         }
-        replace('Home');
+        await goHome();
         return;
       }
 
@@ -42,7 +48,7 @@ export function LocationPermissionsScreen() {
       if (granted) {
         await requestFreshPosition();
       }
-      replace('Home');
+      await goHome();
     } catch {
       setError('No se pudo solicitar el permiso. Podés activarlo después desde Configuración.');
       setLoading(false);
@@ -51,7 +57,7 @@ export function LocationPermissionsScreen() {
 
   const handleSkip = () => {
     setPermissionGranted(false);
-    replace('Home');
+    void goHome();
   };
 
   return (

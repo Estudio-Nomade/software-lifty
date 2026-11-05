@@ -6,22 +6,42 @@ import type {
   FareEstimate,
   PassengerProfile,
   PlaceSuggestion,
+  ServiceAreaStatusResponse,
   Trip,
   TripMessage,
 } from './types';
 
+export type PassengerHomePayload = {
+  home_address_line?: string;
+  home_lat?: number;
+  home_lng?: number;
+  home_resolved_city?: string | null;
+  home_resolved_province?: string | null;
+};
+
 export async function registerPassenger(
   phone?: string,
   fullName?: string,
+  home?: PassengerHomePayload,
 ): Promise<PassengerProfile> {
-  const body: { phone?: string; full_name?: string } = {};
+  const body: {
+    phone?: string;
+    full_name?: string;
+  } & PassengerHomePayload = {};
   if (phone) body.phone = phone;
   if (fullName?.trim()) body.full_name = fullName.trim();
+  if (home?.home_address_line) body.home_address_line = home.home_address_line;
+  if (home?.home_lat != null) body.home_lat = home.home_lat;
+  if (home?.home_lng != null) body.home_lng = home.home_lng;
+  if (home?.home_resolved_city !== undefined) body.home_resolved_city = home.home_resolved_city;
+  if (home?.home_resolved_province !== undefined) {
+    body.home_resolved_province = home.home_resolved_province;
+  }
   const { data } = await api.post<PassengerProfile>('/passenger/register', body);
   // Profile row may lack phone — force watchers to re-fetch completeness.
   invalidatePassengerProfileCompleteCache();
   // Older backends returned the raw passenger_profiles row (no full_name).
-  // Complete-profile gates on full_name + phone — always re-read GET /profile.
+  // Complete-profile gates on full_name + phone + home — always re-read GET /profile.
   try {
     return await getProfile();
   } catch {
@@ -54,6 +74,22 @@ export async function updateProfile(profile: Partial<PassengerProfile>): Promise
   // Edits (incl. clearing phone) must not leave a stale "complete" cache.
   invalidatePassengerProfileCompleteCache();
   return updated;
+}
+
+export async function getServiceAreaStatus(
+  lat: number,
+  lng: number,
+): Promise<ServiceAreaStatusResponse> {
+  const { data } = await api.get<ServiceAreaStatusResponse>('/passenger/service-area/status', {
+    params: { lat: String(lat), lng: String(lng) },
+  });
+  if (!data || typeof data !== 'object' || typeof data.inside !== 'boolean') {
+    throw new Error('Respuesta inválida de zona de servicio');
+  }
+  return {
+    inside: data.inside,
+    markets: Array.isArray(data.markets) ? data.markets : [],
+  };
 }
 
 export async function uploadProfilePhoto(
