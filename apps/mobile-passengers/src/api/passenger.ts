@@ -68,26 +68,26 @@ export async function getProfile(): Promise<PassengerProfile> {
   return assertProfilePayload(data, 'obtener el perfil');
 }
 
-export type LoginHintResponse =
-  | { exists: false }
-  | { exists: true; methods: Array<'email' | 'google'> };
+export type LoginHintResponse = { googleOnly: boolean };
 
-/** Public soft hint after failed password login. Never throws product-critical. */
+/** Session-scoped cache: one network hit per email (avoids rate-limit burn on typos). */
+const loginHintCache = new Map<string, LoginHintResponse>();
+
+/** Public soft google-only hint after failed password login. Never throws product-critical. */
 export async function fetchLoginHint(email: string): Promise<LoginHintResponse | null> {
+  const key = email.trim().toLowerCase();
+  if (!key) return null;
+  const cached = loginHintCache.get(key);
+  if (cached) return cached;
+
   try {
-    const { data } = await api.post<LoginHintResponse>('/auth/login-hint', {
-      email: email.trim().toLowerCase(),
-    });
-    if (!data || typeof data !== 'object' || typeof data.exists !== 'boolean') {
+    const { data } = await api.post<LoginHintResponse>('/auth/login-hint', { email: key });
+    if (!data || typeof data !== 'object' || typeof data.googleOnly !== 'boolean') {
       return null;
     }
-    if (!data.exists) return { exists: false };
-    const methods = Array.isArray((data as { methods?: unknown }).methods)
-      ? ((data as { methods: unknown[] }).methods.filter(
-          (m): m is 'email' | 'google' => m === 'email' || m === 'google',
-        ) as Array<'email' | 'google'>)
-      : [];
-    return { exists: true, methods };
+    const result: LoginHintResponse = { googleOnly: data.googleOnly };
+    loginHintCache.set(key, result);
+    return result;
   } catch {
     return null;
   }

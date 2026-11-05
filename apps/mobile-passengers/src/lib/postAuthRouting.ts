@@ -73,29 +73,29 @@ export async function resolvePassengerPostAuthPath(
   return '/home';
 }
 
-/** Retry profile resolve a few times before accepting the safe fallback. */
+/**
+ * Retry profile completeness a few times before accepting the safe fallback.
+ * One completeness fetch per attempt (no double getProfile).
+ */
 export async function resolvePassengerPostAuthPathWithRetry(
   userId: string | null,
   opts?: { attempts?: number; delayMs?: number },
 ): Promise<PassengerPostAuthPath> {
   const attempts = opts?.attempts ?? 3;
   const delayMs = opts?.delayMs ?? 400;
-  let last: PassengerPostAuthPath = userId ? '/complete-profile' : '/';
+  if (!userId) return '/';
+
   for (let i = 0; i < attempts; i++) {
-    last = await resolvePassengerPostAuthPath(userId);
-    // Re-check only when path came from unknown complete (we cannot distinguish
-    // complete-profile-from-false vs null after resolve). Re-resolve profile:
-    if (last !== '/complete-profile' || !userId) return last;
     const complete = await resolvePassengerProfileComplete(userId);
+    if (complete === false) return '/complete-profile';
     if (complete === true) {
       if (await needsLocationPermissionPrompt()) return '/location-permissions';
       return '/home';
     }
-    if (complete === false) return '/complete-profile';
-    // still null — brief wait and retry
+    // null = unknown — wait and retry; final fallback complete-profile (not guest)
     if (i < attempts - 1) {
       await new Promise<void>((r) => setTimeout(r, delayMs));
     }
   }
-  return last;
+  return '/complete-profile';
 }

@@ -10,7 +10,7 @@ describe('login-hint mappers', () => {
     expect(normalizeLoginHintEmail('  Foo@Bar.COM ')).toBe('foo@bar.com');
   });
 
-  test('google-only identities → methods google', () => {
+  test('google-only → googleOnly true', () => {
     expect(
       methodsFromAuthUser({
         identities: [{ provider: 'google' }],
@@ -21,35 +21,35 @@ describe('login-hint mappers', () => {
       loginHintFromAuthUser({
         identities: [{ provider: 'google' }],
       }),
-    ).toEqual({ exists: true, methods: ['google'] });
+    ).toEqual({ googleOnly: true });
   });
 
-  test('email-only → methods email', () => {
+  test('email-only → googleOnly false (same as missing)', () => {
     expect(
       loginHintFromAuthUser({
         identities: [{ provider: 'email' }],
       }),
-    ).toEqual({ exists: true, methods: ['email'] });
+    ).toEqual({ googleOnly: false });
   });
 
-  test('both email + google', () => {
+  test('both email + google → googleOnly false', () => {
     expect(
       loginHintFromAuthUser({
         identities: [{ provider: 'email' }, { provider: 'google' }],
       }),
-    ).toEqual({ exists: true, methods: ['email', 'google'] });
+    ).toEqual({ googleOnly: false });
   });
 
-  test('null user → exists false', () => {
-    expect(loginHintFromAuthUser(null)).toEqual({ exists: false });
-    expect(loginHintFromAuthUser(undefined)).toEqual({ exists: false });
+  test('null / missing user → googleOnly false (no existence leak)', () => {
+    expect(loginHintFromAuthUser(null)).toEqual({ googleOnly: false });
+    expect(loginHintFromAuthUser(undefined)).toEqual({ googleOnly: false });
   });
 
-  test('unknown providers alone → soft email (generic credentials UX)', () => {
+  test('unknown providers alone → googleOnly false', () => {
     expect(
       loginHintFromAuthUser({
         identities: [{ provider: 'apple' }],
       }),
-    ).toEqual({ exists: true, methods: ['email'] });
+    ).toEqual({ googleOnly: false });
   });
 });

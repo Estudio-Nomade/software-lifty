@@ -80,8 +80,9 @@ async function assertLoginHintEmailRateLimit(email: string): Promise<void> {
 
 export const authService = {
   /**
-   * Soft account-provider hint after failed password login.
-   * Never returns tokens/ids; missing user → { exists: false } (same UX as bad password).
+   * Soft google-only hint after failed password login.
+   * Always `{ googleOnly: boolean }` — missing/email/dual → false (no existence leak).
+   * Never returns tokens/ids.
    */
   async getLoginHint(rawEmail: string): Promise<LoginHintResult> {
     const email = normalizeLoginHintEmail(rawEmail ?? '');
@@ -101,7 +102,7 @@ export const authService = {
       logger.warn('[AUTH] login-hint unexpected', {
         message: err instanceof Error ? err.message : String(err),
       });
-      return { exists: false };
+      return { googleOnly: false };
     }
   },
 

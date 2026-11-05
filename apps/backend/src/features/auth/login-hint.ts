@@ -1,7 +1,9 @@
-/** Login methods exposed by POST /auth/login-hint (anti-enumeration soft). */
-export type LoginHintMethod = 'email' | 'google';
-
-export type LoginHintResult = { exists: false } | { exists: true; methods: LoginHintMethod[] };
+/**
+ * Public login-hint payload.
+ * Only discloses the one bit needed for UX: google-only (no password provider).
+ * No `exists` field — missing user, email-password, and dual-method all look the same.
+ */
+export type LoginHintResult = { googleOnly: boolean };
 
 type AuthIdentity = { provider?: string | null };
 type AuthUserLike = {
@@ -10,9 +12,9 @@ type AuthUserLike = {
   app_metadata?: { providers?: string[] | null } | null;
 };
 
-const KNOWN: ReadonlySet<string> = new Set(['email', 'google']);
+export type LoginHintMethod = 'email' | 'google';
 
-/** Map Supabase Auth user identities → public methods list (email | google only). */
+/** Map Supabase Auth user identities → email | google only. */
 export function methodsFromAuthUser(user: AuthUserLike): LoginHintMethod[] {
   const methods = new Set<LoginHintMethod>();
 
@@ -31,15 +33,15 @@ export function methodsFromAuthUser(user: AuthUserLike): LoginHintMethod[] {
   return [...methods].sort() as LoginHintMethod[];
 }
 
+/**
+ * true only when account has google and no email/password provider.
+ * null/unknown/missing/email/dual → false (same public shape).
+ */
 export function loginHintFromAuthUser(user: AuthUserLike | null | undefined): LoginHintResult {
-  if (!user) return { exists: false };
-  const methods = methodsFromAuthUser(user).filter((m) => KNOWN.has(m));
-  if (methods.length === 0) {
-    // User row without readable providers — treat as exists with unknown methods
-    // so client keeps generic credentials copy (no Google-only false positive).
-    return { exists: true, methods: ['email'] };
-  }
-  return { exists: true, methods };
+  if (!user) return { googleOnly: false };
+  const methods = methodsFromAuthUser(user);
+  const googleOnly = methods.includes('google') && !methods.includes('email');
+  return { googleOnly };
 }
 
 export function normalizeLoginHintEmail(email: string): string {

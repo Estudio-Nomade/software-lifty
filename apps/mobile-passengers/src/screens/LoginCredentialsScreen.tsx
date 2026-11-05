@@ -136,9 +136,10 @@ export function LoginCredentialsScreen() {
         }
       }
     } catch (err) {
-      if (!isSignUp && isInvalidLoginCredentialsError(err)) {
+      if (!isSignUp && isInvalidLoginCredentialsError(err) && !highlightGoogle) {
+        // Cached per email in fetchLoginHint — only one network call per address.
         const hint = await fetchLoginHint(email.trim()).catch(() => null);
-        if (hint?.exists && hint.methods.includes('google') && !hint.methods.includes('email')) {
+        if (hint?.googleOnly) {
           setError(GOOGLE_ONLY_LOGIN_MESSAGE);
           setHighlightGoogle(true);
           return;
@@ -190,7 +191,13 @@ export function LoginCredentialsScreen() {
       <Input
         placeholder="Email"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(v) => {
+          setEmail(v);
+          if (highlightGoogle) {
+            setHighlightGoogle(false);
+            setError(null);
+          }
+        }}
         keyboardType="email-address"
         style={styles.inputField}
       />

@@ -6,10 +6,11 @@ import { authGuard } from '../../shared/middleware/require-auth';
 import { loginHintBody } from './schema';
 import { authService } from './service';
 
+/** Stricter than global: public probe surface (enumeration slowed by IP, not per-email). */
 const loginHintRateLimit = rateLimit({
   name: 'rate-limit-login-hint',
   keyPrefix: 'ratelimit:login-hint:ip',
-  max: Number(process.env.LOGIN_HINT_IP_RATE_LIMIT_MAX) || 10,
+  max: Number(process.env.LOGIN_HINT_IP_RATE_LIMIT_MAX) || 8,
   windowMs: Number(process.env.LOGIN_HINT_IP_RATE_LIMIT_WINDOW_MS) || 60_000,
 }).as('scoped');
 
@@ -25,7 +26,7 @@ const loginHintRoutes = new Elysia().use(loginHintRateLimit).post(
       tags: ['auth'],
       summary: 'Login provider hint (public, rate-limited)',
       description:
-        'Tras fallo de password: { exists, methods? }. Rate limit IP + email. Sin ids/tokens.',
+        'Tras fallo de password: { googleOnly }. Rate limit IP + email. Sin exists/ids/tokens.',
     },
   },
 );
