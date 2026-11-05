@@ -24,4 +24,10 @@ describe('getFriendlyAuthError', () => {
       'Confirmá tu email antes de iniciar sesión.',
     );
   });
+
+  it('does not map bare phone not confirmed to email copy', () => {
+    expect(getFriendlyAuthError(new Error('Phone not confirmed'))).not.toBe(
+      'Confirmá tu email antes de iniciar sesión.',
+    );
+  });
 });

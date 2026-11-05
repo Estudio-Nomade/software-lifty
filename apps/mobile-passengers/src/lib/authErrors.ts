@@ -22,7 +22,6 @@ export function getFriendlyAuthError(error: unknown): string {
 
   if (
     message.includes('email not confirmed') ||
-    message.includes('not confirmed') ||
     (message.includes('confirm') && message.includes('email'))
   ) {
     return 'Confirmá tu email antes de iniciar sesión.';
