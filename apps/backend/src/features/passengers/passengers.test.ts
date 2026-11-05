@@ -396,6 +396,21 @@ describe('Passenger Profile', () => {
     expect(data.error?.code).toBe('HOME_COORDS_REQUIRED');
   });
 
+  test('PUT /profile ignores city-only home fields without 400', async () => {
+    const { token } = await registerPassenger(phone);
+
+    const { status, data } = await request(
+      'PUT',
+      '/api/passenger/profile',
+      { full_name: 'Maria Lopez', home_resolved_city: 'Córdoba' },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.full_name).toBe('Maria Lopez');
+    expect(data.home_address_line == null || data.home_address_line === null).toBe(true);
+  });
+
   test('POST /register accepts home fields in same response shape', async () => {
     const { token } = await createPassengerUser('+5492617777777', 'Con Casa');
 

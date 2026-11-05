@@ -35,14 +35,15 @@ function normalizeHomeInput(data: PassengerHomeInput): {
   home_resolved_city: string | null;
   home_resolved_province: string | null;
 } | null {
-  const hasAny =
+  // Only treat as a home write when the client sends the resolved triple core
+  // (line and/or coords). City/province alone is not a partial home update —
+  // ignore so name/phone PUTs with stray optional fields don't 400.
+  const hasHomeCore =
     data.home_address_line !== undefined ||
     data.home_lat !== undefined ||
-    data.home_lng !== undefined ||
-    data.home_resolved_city !== undefined ||
-    data.home_resolved_province !== undefined;
+    data.home_lng !== undefined;
 
-  if (!hasAny) return null;
+  if (!hasHomeCore) return null;
 
   const line = (data.home_address_line ?? '').trim();
   const lat = data.home_lat;

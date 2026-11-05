@@ -106,6 +106,7 @@ export function HomeScreen() {
   const lastGpsLabel = useRef<{ lat: number; lng: number; acc: number } | null>(null);
   const [serviceArea, setServiceArea] = useState<ServiceAreaStatus | null>(null);
   const [oofDismissed, setOofDismissed] = useState(false);
+  const prevServiceInsideRef = useRef<boolean | null>(null);
 
   const pickupAc = usePlaceAutocomplete(
     focusedField === 'pickup' && !pickupPicked ? pickupAddress : '',
@@ -119,20 +120,26 @@ export function HomeScreen() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      let status: ServiceAreaStatus | null = null;
       if (current && Number.isFinite(current.lat) && Number.isFinite(current.lng)) {
-        const status = await fetchServiceAreaStatus(current.lat, current.lng);
-        if (!cancelled) setServiceArea(status);
-        return;
+        status = await fetchServiceAreaStatus(current.lat, current.lng);
+      } else {
+        const profile = await getProfile().catch(() => null);
+        if (cancelled || !profile) return;
+        syncCasaFavoriteFromProfile(profile);
+        if (!isPassengerHomeResolved(profile)) return;
+        status = await fetchServiceAreaStatus(
+          profile.home_lat as number,
+          profile.home_lng as number,
+        );
       }
-      const profile = await getProfile().catch(() => null);
-      if (cancelled || !profile) return;
-      syncCasaFavoriteFromProfile(profile);
-      if (!isPassengerHomeResolved(profile)) return;
-      const status = await fetchServiceAreaStatus(
-        profile.home_lat as number,
-        profile.home_lng as number,
-      );
-      if (!cancelled) setServiceArea(status);
+      if (cancelled || !status) return;
+      const prevInside = prevServiceInsideRef.current;
+      if (prevInside !== null && prevInside !== status.inside) {
+        setOofDismissed(false);
+      }
+      prevServiceInsideRef.current = status.inside;
+      setServiceArea(status);
     })();
     return () => {
       cancelled = true;
