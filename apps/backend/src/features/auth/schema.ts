@@ -13,3 +13,12 @@ export const meResponse = t.Object({
   avatar_url: t.Union([t.String(), t.Null()]),
   created_at: t.Union([t.String(), t.Null()]),
 });
+
+export const loginHintBody = t.Object({
+  email: t.String({ minLength: 3, maxLength: 320 }),
+});
+
+/** Single bit: google-only. No exists/methods list (anti-enumeration). */
+export const loginHintResponse = t.Object({
+  googleOnly: t.Boolean(),
+});

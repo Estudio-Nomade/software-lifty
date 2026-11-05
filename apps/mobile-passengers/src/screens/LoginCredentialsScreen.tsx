@@ -11,12 +11,16 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { registerPassenger } from '../api/passenger';
+import { fetchLoginHint, registerPassenger } from '../api/passenger';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { getFriendlyAuthError } from '../lib/authErrors';
+import {
+  GOOGLE_ONLY_LOGIN_MESSAGE,
+  getFriendlyAuthError,
+  isInvalidLoginCredentialsError,
+} from '../lib/authErrors';
 import { resolvePassengerPostAuthPath } from '../lib/postAuthRouting';
 import { classifySignUpResult } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
@@ -40,6 +44,11 @@ async function replaceAfterAuth(
     replace('Home');
     return;
   }
+  // Never bounce authed users to guest Welcome (OAuth / password success).
+  if (userId) {
+    replace('CompleteProfile');
+    return;
+  }
   replace('Welcome');
 }
 
@@ -59,6 +68,7 @@ export function LoginCredentialsScreen() {
   const [info, setInfo] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [highlightGoogle, setHighlightGoogle] = useState(false);
 
   const isDisabled =
     !email ||
@@ -69,6 +79,7 @@ export function LoginCredentialsScreen() {
   const handleSubmit = async () => {
     setError(null);
     setInfo(null);
+    setHighlightGoogle(false);
     setLoading(true);
     try {
       if (isSignUp) {
@@ -125,6 +136,15 @@ export function LoginCredentialsScreen() {
         }
       }
     } catch (err) {
+      if (!isSignUp && isInvalidLoginCredentialsError(err) && !highlightGoogle) {
+        // Cached per email in fetchLoginHint — only one network call per address.
+        const hint = await fetchLoginHint(email.trim()).catch(() => null);
+        if (hint?.googleOnly) {
+          setError(GOOGLE_ONLY_LOGIN_MESSAGE);
+          setHighlightGoogle(true);
+          return;
+        }
+      }
       setError(getFriendlyAuthError(err));
     } finally {
       setLoading(false);
@@ -135,9 +155,24 @@ export function LoginCredentialsScreen() {
     if (googleLoading) return;
     setError(null);
     setInfo(null);
+    setHighlightGoogle(false);
     setGoogleLoading(true);
     try {
-      await signInWithGoogle();
+      const session = await signInWithGoogle();
+      if (__DEV__) {
+        console.log('[oauth] handleGoogle session?', Boolean(session?.user));
+      }
+      if (session?.user) {
+        const metaName =
+          (session.user.user_metadata as { full_name?: string } | undefined)?.full_name ??
+          fullName ??
+          undefined;
+        await registerPassenger(undefined, metaName).catch(() => {});
+        await replaceAfterAuth(replace, session.user.id);
+        return;
+      }
+      // Cancel / dismiss without session — stay on login, no fake success.
+      setInfo('Inicio de sesión cancelado.');
     } catch (err) {
       setError(getFriendlyAuthError(err));
     } finally {
@@ -156,7 +191,13 @@ export function LoginCredentialsScreen() {
       <Input
         placeholder="Email"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(v) => {
+          setEmail(v);
+          if (highlightGoogle) {
+            setHighlightGoogle(false);
+            setError(null);
+          }
+        }}
         keyboardType="email-address"
         style={styles.inputField}
       />
@@ -226,7 +267,7 @@ export function LoginCredentialsScreen() {
         variant="secondary"
         onPress={handleGoogle}
         loading={googleLoading}
-        style={styles.button}
+        style={highlightGoogle ? { ...styles.button, ...styles.googleHighlight } : styles.button}
       >
         Continuar con Google
       </Button>
@@ -387,6 +428,10 @@ const styles = StyleSheet.create({
   },
   button: {
     width: '100%',
+  },
+  googleHighlight: {
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
   },
   orDivider: {
     fontSize: theme.fontSize.sm,

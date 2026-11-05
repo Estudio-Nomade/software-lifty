@@ -177,10 +177,27 @@ function AuthRedirectWatcher() {
     let cancelled = false;
 
     void (async () => {
-      const complete = await resolvePassengerProfileComplete(userId);
+      let complete = await resolvePassengerProfileComplete(userId);
+      // null = unknown (network) — short retries instead of silent forever on auth screens.
+      if (complete === null) {
+        for (let i = 0; i < 2 && !cancelled; i++) {
+          await new Promise<void>((r) => setTimeout(r, 500));
+          if (cancelled) return;
+          complete = await resolvePassengerProfileComplete(userId);
+          if (complete !== null) break;
+        }
+      }
       if (cancelled) return;
-      // null = unknown (network) — stay put; retry on next effect tick / cold path.
-      if (complete === null) return;
+      if (complete === null) {
+        if (__DEV__) {
+          console.log('[watcher] complete=null after retry; kick auth screens → complete-profile');
+        }
+        // Authed on guest/auth routes: leave login/Welcome even if profile API is down.
+        if (shouldKickAuthedUserToHome(current) && current !== 'complete-profile') {
+          router.replace('/complete-profile');
+        }
+        return;
+      }
 
       if (!complete) {
         if (current !== 'complete-profile') {

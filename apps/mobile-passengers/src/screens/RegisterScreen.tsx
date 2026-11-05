@@ -11,16 +11,42 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { registerPassenger } from '../api/passenger';
 import { AuthFormCard, AuthFormChrome } from '../components/AuthFormChrome';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
+import { resolvePassengerPostAuthPath } from '../lib/postAuthRouting';
 import { theme } from '../theme';
 
+async function replaceAfterAuth(
+  replace: ReturnType<typeof useAppNavigation>['replace'],
+  userId: string | null | undefined,
+) {
+  const path = await resolvePassengerPostAuthPath(userId ?? null);
+  if (path === '/complete-profile') {
+    replace('CompleteProfile');
+    return;
+  }
+  if (path === '/location-permissions') {
+    replace('LocationPermissions');
+    return;
+  }
+  if (path === '/home') {
+    replace('Home');
+    return;
+  }
+  if (userId) {
+    replace('CompleteProfile');
+    return;
+  }
+  replace('Welcome');
+}
+
 export function RegisterScreen() {
-  const { goBack, navigate } = useAppNavigation();
+  const { goBack, navigate, replace } = useAppNavigation();
   const insets = useSafeAreaInsets();
   const { signInWithGoogle } = useAuth();
   const setFullName = useRegistrationDraftStore((s) => s.setFullName);
@@ -56,7 +82,16 @@ export function RegisterScreen() {
     setGoogleLoading(true);
     try {
       clearDraft();
-      await signInWithGoogle();
+      const session = await signInWithGoogle();
+      if (session?.user) {
+        const metaName =
+          (session.user.user_metadata as { full_name?: string } | undefined)?.full_name ??
+          undefined;
+        await registerPassenger(undefined, metaName).catch(() => {});
+        await replaceAfterAuth(replace, session.user.id);
+        return;
+      }
+      setError('Inicio de sesión cancelado.');
     } catch (err) {
       setError(getFriendlyAuthError(err));
     } finally {

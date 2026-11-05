@@ -57,13 +57,45 @@ export async function resolvePassengerProfileComplete(
   }
 }
 
-/** Single post-auth destination — skip Welcome BrandSplash hop. */
+/**
+ * Single post-auth destination — skip Welcome BrandSplash hop.
+ * Never return `/` (guest Welcome) when we have a userId: profile API
+ * unknown → complete-profile (safe; user can finish ficha or leave if already ok).
+ */
 export async function resolvePassengerPostAuthPath(
   userId: string | null,
 ): Promise<PassengerPostAuthPath> {
   const complete = await resolvePassengerProfileComplete(userId);
   if (complete === false) return '/complete-profile';
-  if (complete === null) return '/';
+  // Network/unknown: prefer complete-profile over guest CTAs (OAuth bounce fix).
+  if (complete === null) return userId ? '/complete-profile' : '/';
   if (await needsLocationPermissionPrompt()) return '/location-permissions';
   return '/home';
+}
+
+/**
+ * Retry profile completeness a few times before accepting the safe fallback.
+ * One completeness fetch per attempt (no double getProfile).
+ */
+export async function resolvePassengerPostAuthPathWithRetry(
+  userId: string | null,
+  opts?: { attempts?: number; delayMs?: number },
+): Promise<PassengerPostAuthPath> {
+  const attempts = opts?.attempts ?? 3;
+  const delayMs = opts?.delayMs ?? 400;
+  if (!userId) return '/';
+
+  for (let i = 0; i < attempts; i++) {
+    const complete = await resolvePassengerProfileComplete(userId);
+    if (complete === false) return '/complete-profile';
+    if (complete === true) {
+      if (await needsLocationPermissionPrompt()) return '/location-permissions';
+      return '/home';
+    }
+    // null = unknown — wait and retry; final fallback complete-profile (not guest)
+    if (i < attempts - 1) {
+      await new Promise<void>((r) => setTimeout(r, delayMs));
+    }
+  }
+  return '/complete-profile';
 }
