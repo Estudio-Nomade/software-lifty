@@ -14,16 +14,36 @@ export function getFriendlyAuthError(error: unknown): string {
   if (message.includes('cancel') || message.includes('dismiss')) {
     return 'Inicio de sesion cancelado.';
   }
+
+  if (
+    message.includes('invalid login credentials') ||
+    message.includes('invalid credentials') ||
+    (message.includes('wrong') && message.includes('password')) ||
+    message.includes('email or password')
+  ) {
+    return 'Email o contraseña incorrectos.';
+  }
+
+  if (
+    message.includes('email not confirmed') ||
+    message.includes('not confirmed') ||
+    (message.includes('confirm') && message.includes('email'))
+  ) {
+    return 'Confirmá tu email antes de iniciar sesión.';
+  }
+
+  if (message.includes('token has expired or is invalid')) {
+    return 'El codigo es invalido o expiro. Pedi uno nuevo.';
+  }
+
   if (message.includes('expired') || message.includes('expir')) {
     return 'El codigo expiro. Pedi uno nuevo.';
   }
-  if (
-    message.includes('invalid') ||
-    message.includes('incorrect') ||
-    message.includes('token has expired or is invalid')
-  ) {
+
+  if (message.includes('otp') || message.includes('invalid') || message.includes('incorrect')) {
     return 'El codigo es invalido o expiro. Pedi uno nuevo.';
   }
+
   if (message.includes('rate') || message.includes('too many') || message.includes('security')) {
     return 'Demasiados intentos. Espera un momento antes de reintentar.';
   }
@@ -38,10 +58,7 @@ export function getFriendlyAuthError(error: unknown): string {
   ) {
     return 'Este email ya esta registrado en Lifty. Inicia sesion en lugar de crear una cuenta nueva.';
   }
-  if (
-    message.includes('email') &&
-    (message.includes('valid') || message.includes('format') || message.includes('invalid'))
-  ) {
+  if (message.includes('email') && (message.includes('valid') || message.includes('format'))) {
     return 'Ingresa un email valido.';
   }
   if (
