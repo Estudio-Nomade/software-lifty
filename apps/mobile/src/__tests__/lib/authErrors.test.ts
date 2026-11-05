@@ -12,4 +12,22 @@ describe('getFriendlyAuthError', () => {
       getFriendlyAuthError(new Error('Token has expired or is invalid')),
     ).toBe('El codigo es invalido o expiro. Pedi uno nuevo.');
   });
+
+  it('maps generic otp invalid without confusing password login', () => {
+    expect(getFriendlyAuthError(new Error('Invalid OTP'))).toBe(
+      'El codigo es invalido o expiro. Pedi uno nuevo.',
+    );
+  });
+
+  it('maps email not confirmed', () => {
+    expect(getFriendlyAuthError(new Error('Email not confirmed'))).toBe(
+      'Confirmá tu email antes de iniciar sesión.',
+    );
+  });
+
+  it('does not map bare phone not confirmed to email copy', () => {
+    expect(getFriendlyAuthError(new Error('Phone not confirmed'))).not.toBe(
+      'Confirmá tu email antes de iniciar sesión.',
+    );
+  });
 });
