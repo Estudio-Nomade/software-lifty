@@ -60,6 +60,12 @@ export function routeForDriverStatus(driverData: DriverStatus): {
     return { screen: '', status, blockedMessage: 'Tu cuenta ha sido suspendida.' };
   }
 
+  // Someone who is already a passenger and has no driver profile yet: ask before
+  // starting driver onboarding (dual-role account).
+  if (step === 'profile' && driverData.has_passenger_profile === true) {
+    return { screen: 'PassengerAccountNotice', status: 'pending' };
+  }
+
   const byStep = step ? STEP_ROUTE[step] : undefined;
   if (byStep) {
     return { screen: byStep.screen, status: byStep.storeStatus };

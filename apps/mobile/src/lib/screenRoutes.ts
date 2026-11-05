@@ -15,6 +15,7 @@ export const SCREEN_TO_ROUTE = {
   Support: '/support',
   Messages: '/messages',
   TripHistory: '/trip-history',
+  PassengerAccountNotice: '/passenger-account-notice',
   OnboardingStep1: '/onboarding-step1',
   OnboardingStep2: '/onboarding-step2',
   OnboardingVehicle: '/onboarding-vehicle',

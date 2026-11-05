@@ -2,6 +2,7 @@ import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { passengerProfiles, users } from '../../shared/db/schema';
 import { AppError } from '../../shared/lib/errors';
+import { setUserFullName } from '../../shared/lib/identity';
 import { type StorageProvider, supabaseStorage } from '../../shared/lib/storage';
 import type { AuthUser } from '../../shared/middleware/auth';
 
@@ -50,10 +51,7 @@ export const passengersService = {
     // Returning the raw passenger_profiles row omits full_name and breaks complete-profile.
     const trimmedName = fullName?.trim() || null;
     if (trimmedName) {
-      await db
-        .update(users)
-        .set({ full_name: trimmedName, updated_at: new Date() })
-        .where(eq(users.id, userId));
+      await setUserFullName(userId, trimmedName);
     }
 
     let nextPhone: string | null = null;
@@ -179,10 +177,7 @@ export const passengersService = {
     }
 
     if (data.full_name) {
-      await db
-        .update(users)
-        .set({ full_name: data.full_name.trim(), updated_at: new Date() })
-        .where(eq(users.id, user.id));
+      await setUserFullName(user.id, data.full_name.trim());
     }
 
     if (nextPhone) {

@@ -7,6 +7,7 @@ import {
   driverDocuments,
   driverLocations,
   drivers,
+  passengerProfiles,
   trips,
   users,
   vehicles,
@@ -19,6 +20,7 @@ import {
 } from '../../shared/lib/documents';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
+import { getUserKycStatus, setUserFullName } from '../../shared/lib/identity';
 import { logger } from '../../shared/lib/logger';
 import {
   assertMotoLicenseMatchesEngineCc,
@@ -589,9 +591,17 @@ export const driversService = {
 
     // No driver row yet → user must complete their profile (step1).
     if (!driver) {
+      // Dual-role signal: this person may already be a passenger. The driver app
+      // uses it to ask before starting driver onboarding.
+      const [passengerProfile] = await db
+        .select({ id: passengerProfiles.user_id })
+        .from(passengerProfiles)
+        .where(eq(passengerProfiles.user_id, user.id))
+        .limit(1);
       return {
         status: 'pending',
         step: 'profile',
+        has_passenger_profile: !!passengerProfile,
         kyc_status: 'pending',
         municipality_status: 'unset' as const,
         address_line: null,
@@ -1170,7 +1180,9 @@ export const driversService = {
     }
 
     let driverId: string;
-    const kycStatus = existing?.kyc_status ?? 'pending';
+    // A person already verified (users.kyc_status is the source of truth) must not
+    // restart KYC just because a new driver profile row is created.
+    const kycStatus = existing?.kyc_status ?? (await getUserKycStatus(user.id));
 
     if (existing) {
       driverId = existing.id;
@@ -1180,6 +1192,7 @@ export const driversService = {
         .values({
           user_id: user.id,
           status: 'step1',
+          kyc_status: kycStatus,
         })
         .returning({ id: drivers.id });
 
@@ -1189,10 +1202,7 @@ export const driversService = {
 
     if (data.first_name || data.last_name) {
       const fullName = [data.first_name, data.last_name].filter(Boolean).join(' ');
-      await db
-        .update(users)
-        .set({ full_name: fullName, updated_at: new Date() })
-        .where(eq(users.id, user.id));
+      await setUserFullName(user.id, fullName);
     }
 
     if (data.phone !== undefined) {

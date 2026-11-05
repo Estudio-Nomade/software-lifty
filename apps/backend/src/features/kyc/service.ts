@@ -62,9 +62,26 @@ export const kycService = {
   },
 
   // KYC is user-level (vendor_data = user.id), so the app can start a session
-  // without knowing the driver row id. Resets kyc_status to 'pending' on both
-  // users and drivers so the DIDIT webhook can transition out of any prior state.
+  // without knowing the driver row id. users.kyc_status is the single source of
+  // truth; drivers.kyc_status is a mirror. An already-approved identity is never
+  // reset (approved is terminal and the person is verified for every profile):
+  // we only heal the mirror and report it. Any other state is reset to 'pending'
+  // so the DIDIT webhook can transition out of it.
   async createUserSession(user: AuthUser) {
+    const [current] = await db
+      .select({ kyc_status: users.kyc_status })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+
+    if (current?.kyc_status === 'approved') {
+      await db
+        .update(drivers)
+        .set({ kyc_status: 'approved', updated_at: new Date() })
+        .where(and(eq(drivers.user_id, user.id), ne(drivers.kyc_status, 'approved')));
+      return { already_verified: true, kyc_status: 'approved' };
+    }
+
     await db
       .update(users)
       .set({ kyc_status: 'pending', updated_at: new Date() })

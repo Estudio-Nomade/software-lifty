@@ -414,6 +414,13 @@
       "when": 1789200000000,
       "tag": "0057_push_tokens_per_app",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1789300000000,
+      "tag": "0058_trips_passenger_fk",
+      "breakpoints": true
     }
   ]
 }

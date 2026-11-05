@@ -452,3 +452,108 @@ describe('KYC', () => {
     expect(data.message).toBe('Webhook processed');
   });
 });
+
+describe('KYC single source of truth + verified name lock', () => {
+  async function approvedUser(phone: string) {
+    const { token, userId } = await registerAndGetTokenAndUser(phone, 'x');
+    const db = getDb();
+    await db
+      .update(users)
+      .set({ kyc_status: 'approved', verified_name: 'Juan Pérez Verificado', full_name: 'Juan Pérez' })
+      .where(eq(users.id, userId));
+    return { token, userId };
+  }
+
+  test('GET /me/session does not reset an already approved KYC (users + drivers)', async () => {
+    const { token, userId } = await approvedUser('+5492613000001');
+    const db = getDb();
+    await db.insert(drivers).values({ user_id: userId, status: 'kyc_approved', kyc_status: 'approved' });
+
+    const { status, data } = await request('GET', '/api/kyc/me/session', undefined, token);
+
+    expect(status).toBe(200);
+    expect(data.already_verified).toBe(true);
+    expect(data.kyc_status).toBe('approved');
+    const [u] = await db.select().from(users).where(eq(users.id, userId));
+    const [d] = await db.select().from(drivers).where(eq(drivers.user_id, userId));
+    expect(u.kyc_status).toBe('approved');
+    expect(d.kyc_status).toBe('approved');
+  });
+
+  test('GET /me/session heals a drifted drivers.kyc_status when users is approved', async () => {
+    const { token, userId } = await approvedUser('+5492613000002');
+    const db = getDb();
+    await db.insert(drivers).values({ user_id: userId, status: 'step1', kyc_status: 'pending' });
+
+    await request('GET', '/api/kyc/me/session', undefined, token);
+
+    const [d] = await db.select().from(drivers).where(eq(drivers.user_id, userId));
+    expect(d.kyc_status).toBe('approved');
+  });
+
+  test('GET /me/session still resets a non-approved status to pending and returns a session', async () => {
+    const { token, userId } = await registerAndGetTokenAndUser('+5492613000003', 'x');
+    const db = getDb();
+    await db.update(users).set({ kyc_status: 'rejected' }).where(eq(users.id, userId));
+
+    const { status, data } = await request('GET', '/api/kyc/me/session', undefined, token);
+
+    expect(status).toBe(200);
+    expect(data.session_url).toBeTruthy();
+    const [u] = await db.select().from(users).where(eq(users.id, userId));
+    expect(u.kyc_status).toBe('pending');
+  });
+
+  test('new driver row inherits users.kyc_status when person is already verified', async () => {
+    const { token, userId } = await approvedUser('+5492613000004');
+
+    const { status } = await request(
+      'PUT',
+      '/api/drivers/me',
+      {
+        first_name: 'Juan',
+        address_line: 'San Martín 100, Villa Dolores, Córdoba',
+        photo_url:
+          'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
+      },
+      token,
+    );
+
+    expect(status).toBe(200);
+    const [d] = await getDb().select().from(drivers).where(eq(drivers.user_id, userId));
+    expect(d.kyc_status).toBe('approved');
+  });
+
+  test('driver onboarding does not overwrite a KYC-verified full_name', async () => {
+    const { token, userId } = await approvedUser('+5492613000005');
+
+    await request(
+      'PUT',
+      '/api/drivers/me',
+      { first_name: 'Otro', last_name: 'Nombre', address_line: 'San Martín 100, Villa Dolores, Córdoba' },
+      token,
+    );
+
+    const [u] = await getDb().select().from(users).where(eq(users.id, userId));
+    expect(u.full_name).toBe('Juan Pérez');
+  });
+
+  test('passenger register/updateProfile do not overwrite a KYC-verified full_name', async () => {
+    const { token, userId } = await approvedUser('+5492613000006');
+
+    await request('POST', '/api/passenger/register', { full_name: 'Alias Uno' }, token);
+    await request('PUT', '/api/passenger/profile', { full_name: 'Alias Dos' }, token);
+
+    const [u] = await getDb().select().from(users).where(eq(users.id, userId));
+    expect(u.full_name).toBe('Juan Pérez');
+  });
+
+  test('full_name is still editable when KYC is not approved', async () => {
+    const { token, userId } = await registerAndGetTokenAndUser('+5492613000007', 'x');
+
+    await request('PUT', '/api/passenger/profile', { full_name: 'Nuevo Nombre' }, token);
+
+    const [u] = await getDb().select().from(users).where(eq(users.id, userId));
+    expect(u.full_name).toBe('Nuevo Nombre');
+  });
+});

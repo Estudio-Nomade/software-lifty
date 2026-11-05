@@ -149,3 +149,37 @@ describe('isTransientStatusFailure', () => {
     expect(isTransientStatusFailure(new Error('boom'))).toBe(false);
   });
 });
+
+describe('dual-role notice (existing passenger opening the driver app)', () => {
+  it('asks before onboarding when the person already has a passenger profile', () => {
+    const r = routeForDriverStatus({
+      status: 'pending',
+      step: 'profile',
+      has_passenger_profile: true,
+    });
+    expect(r.screen).toBe('PassengerAccountNotice');
+    expect(r.status).toBe('pending');
+  });
+
+  it('goes straight to onboarding for a brand-new user', () => {
+    const r = routeForDriverStatus({
+      status: 'pending',
+      step: 'profile',
+      has_passenger_profile: false,
+    });
+    expect(r.screen).toBe('OnboardingStep1');
+  });
+
+  it('does not show the notice once onboarding is past the profile step', () => {
+    const r = routeForDriverStatus({
+      status: 'pending',
+      step: 'kyc',
+      has_passenger_profile: true,
+    });
+    expect(r.screen).toBe('KYCVerify');
+  });
+
+  it('registers the notice route path', () => {
+    expect(routePathForScreen('PassengerAccountNotice')).toBe('/passenger-account-notice');
+  });
+});

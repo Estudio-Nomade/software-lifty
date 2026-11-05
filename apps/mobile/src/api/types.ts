@@ -55,6 +55,8 @@ export const driverStatusSchema = z.object({
   status: z.enum(['pending', 'approved', 'under_review', 'rejected', 'suspended']),
   step: z.enum(['profile', 'kyc', 'vehicle', 'documents', 'review', 'approved']).optional(),
   kyc_status: z.string().optional(),
+  /** True when the person already has a passenger profile (dual-role signal; only sent before a driver row exists). */
+  has_passenger_profile: z.boolean().optional(),
   documents_pending_review: z.boolean().optional(),
   identification_status: z.enum(['pending_pickup', 'issued', 'revoked']).optional(),
   identification_phase: z
