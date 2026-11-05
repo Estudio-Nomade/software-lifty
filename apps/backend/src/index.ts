@@ -75,7 +75,7 @@ export function createApp(customAuthPlugin?: typeof authPlugin) {
             { name: 'earnings', description: 'Ganancias y estadísticas' },
             { name: 'ratings', description: 'Calificaciones' },
             { name: 'sos', description: 'Emergencias' },
-            { name: 'notifications', description: 'Push tokens FCM' },
+            { name: 'notifications', description: 'Push tokens (Expo)' },
             { name: 'drivers', description: 'Perfil público y privado' },
             { name: 'districts', description: 'Zonas operativas' },
           ],

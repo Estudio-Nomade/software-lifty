@@ -56,7 +56,6 @@ Copiar `.env.example` a `.env` y completar las credenciales según el entorno.
 | `TWILIO_*` | Twilio | Envío de SMS (OTP). En dev se muestra por consola. |
 | `DIDIT_API_KEY`, `DIDIT_WEBHOOK_SECRET` | DIDIT | Verificación de identidad (KYC). |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Supabase Storage | Almacenamiento de documentos del conductor. |
-| `FCM_SERVICE_ACCOUNT_JSON` | Firebase | Notificaciones push. |
 | `PHOTON_URL`, `OSRM_URL` | Komoot / OSRM | Geocodificación y cálculo de rutas. Tienen defaults públicos. |
 
 ## Endpoints
@@ -74,7 +73,7 @@ La API documenta **49 endpoints** en 15 módulos. Swagger UI disponible en `http
 | Earnings | `/earnings`, `/earnings/stats` | Ganancias y estadísticas del conductor |
 | Ratings | `/ratings` | Calificaciones de viajes |
 | SOS | `/sos` | Eventos de emergencia |
-| Notifications | `/notifications/token` | Registro de token FCM para push |
+| Notifications | `/notifications/token` | Registro de token Expo push (por app: driver/passenger) |
 | Drivers | `/drivers/me`, `/drivers/public/:id` | Perfil público/privado del conductor |
 | Districts | `/districts` | Zonas operativas |
 | Payment Methods | `/payment-methods` | Métodos de cobro del conductor |

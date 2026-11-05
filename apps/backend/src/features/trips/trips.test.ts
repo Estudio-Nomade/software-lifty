@@ -1224,6 +1224,89 @@ describe('Trip State Machine', () => {
     }
   });
 
+  test('23c. verification push is sent only after the accept transaction committed', async () => {
+    const prevSendPush = process.env.SEND_PUSH_IN_DEV;
+    process.env.SEND_PUSH_IN_DEV = 'true';
+    const db = getDb();
+
+    // Slow the commit down so a push fired inside the tx would observe uncommitted data.
+    await db.execute(`
+      CREATE OR REPLACE FUNCTION test_slow_commit() RETURNS trigger AS $$
+      BEGIN PERFORM pg_sleep(0.4); RETURN NULL; END; $$ LANGUAGE plpgsql;
+    `);
+    await db.execute(`
+      CREATE CONSTRAINT TRIGGER test_slow_commit_trg AFTER UPDATE ON trips
+      DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+      WHEN (NEW.status = 'accepted') EXECUTE FUNCTION test_slow_commit();
+    `);
+
+    let tripIdForCheck = '';
+    const statusAtPush: string[] = [];
+    const realFetch = globalThis.fetch;
+    const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes('exp.host')) {
+        const body = JSON.parse(String(init?.body));
+        if (body.data?.type === 'trip:verification') {
+          const [row] = await db
+            .select({ status: trips.status })
+            .from(trips)
+            .where(eq(trips.id, tripIdForCheck));
+          statusAtPush.push(row?.status ?? 'missing');
+        }
+        return new Response(JSON.stringify({ data: { status: 'ok' } }), { status: 200 });
+      }
+      return realFetch(input as any, init);
+    }) as typeof fetch);
+
+    try {
+      const token = await registerAndGetToken(phone, password);
+      await createDriverRow(token);
+      const [passenger] = await db
+        .insert(users)
+        .values({ phone: '+5492614444466', full_name: 'Verif Pax', role: 'passenger' })
+        .returning({ id: users.id });
+      await db.insert(pushTokens).values({
+        user_id: passenger.id,
+        token: 'ExponentPushToken[verif-pax]',
+        platform: 'ios',
+        app: 'passenger',
+      });
+      const { data: trip } = await request(
+        'POST',
+        '/api/trips',
+        {
+          origin_lat: -31.9,
+          origin_lng: -65.0,
+          dest_lat: -31.88,
+          dest_lng: -65.02,
+          vehicle_type: 'car',
+          distance_km: 5,
+          duration_minutes: 15,
+          passenger_id: passenger.id,
+        },
+        token,
+      );
+      tripIdForCheck = trip.id;
+
+      const accepted = await request('POST', `/api/trips/${trip.id}/accept`, undefined, token);
+      expect(accepted.status).toBe(200);
+
+      const deadline = Date.now() + 3000;
+      while (statusAtPush.length === 0 && Date.now() < deadline) await Bun.sleep(40);
+      expect(statusAtPush).toEqual(['accepted']);
+    } finally {
+      fetchSpy.mockRestore();
+      await db.execute('DROP TRIGGER IF EXISTS test_slow_commit_trg ON trips');
+      await db.execute('DROP FUNCTION IF EXISTS test_slow_commit()');
+      if (prevSendPush === undefined) delete process.env.SEND_PUSH_IN_DEV;
+      else process.env.SEND_PUSH_IN_DEV = prevSendPush;
+    }
+  });
+
   test('24. stranger cannot read trip messages', async () => {
     const token = await registerAndGetToken(phone, password);
     await createDriverRow(token);
