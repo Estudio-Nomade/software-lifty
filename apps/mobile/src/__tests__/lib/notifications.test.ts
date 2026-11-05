@@ -4,6 +4,7 @@ const mockSetNotificationChannelAsync = jest.fn();
 const mockIsRunningInExpoGo = jest.fn(() => false);
 const mockApiPost = jest.fn(() => Promise.resolve({ data: {} }));
 const mockApiGet = jest.fn();
+const mockAddPushTokenListener = jest.fn();
 const mockApiDelete = jest.fn(() => Promise.resolve({ data: {} }));
 const mockSetActiveTrip = jest.fn();
 
@@ -28,6 +29,7 @@ jest.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 4, MAX: 5 },
   setNotificationHandler: jest.fn(),
   addNotificationReceivedListener: jest.fn(),
+  addPushTokenListener: (...args: unknown[]) => mockAddPushTokenListener(...args),
   addNotificationResponseReceivedListener: jest.fn(),
   getLastNotificationResponseAsync: jest.fn(),
 }));
@@ -66,7 +68,10 @@ jest.mock('../../store/tripStore', () => ({
 
 import { Platform } from 'react-native';
 import {
+  addPushTokenListener,
   ensurePushRegistration,
+  ensurePushRegistrationIfStale,
+  resetPushRegistrationStateForTests,
   unregisterPush,
   handleNotificationResponse,
   hydrateTripOfferFromPush,
@@ -237,6 +242,7 @@ describe('ensurePushRegistration / registerForPush', () => {
     mockGetExpoPushTokenAsync.mockResolvedValue({ data: 'ExponentPushToken[test]' });
     mockSetNotificationChannelAsync.mockResolvedValue(undefined);
     mockApiPost.mockResolvedValue({ data: {} });
+    resetPushRegistrationStateForTests();
   });
 
   afterEach(() => {
@@ -255,6 +261,14 @@ describe('ensurePushRegistration / registerForPush', () => {
       'trip-offers',
       expect.objectContaining({ name: 'Ofertas de viaje' }),
     );
+  });
+
+  it('denied → Android channels are still created (permission can be granted later)', async () => {
+    mockRequestPermissionsAsync.mockResolvedValue({ status: 'denied', granted: false });
+    await ensurePushRegistration();
+    const names = mockSetNotificationChannelAsync.mock.calls.map((c) => c[0]);
+    expect(names).toEqual(expect.arrayContaining(['trip-requests', 'trip-offers', 'trip-chat', 'account']));
+    expect(mockApiPost).not.toHaveBeenCalled();
   });
 
   it('registerForPush returns token string on success without requiring POST', async () => {
@@ -332,5 +346,41 @@ describe('unregisterPush', () => {
     await ensurePushRegistration();
     mockApiDelete.mockRejectedValue(new Error('offline'));
     await expect(unregisterPush()).resolves.toBeUndefined();
+  });
+});
+
+describe('foreground re-registration', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIsRunningInExpoGo.mockReturnValue(false);
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'android' });
+    mockRequestPermissionsAsync.mockResolvedValue({ status: 'granted', granted: true });
+    mockGetExpoPushTokenAsync.mockResolvedValue({ data: 'ExponentPushToken[test]' });
+    mockSetNotificationChannelAsync.mockResolvedValue(undefined);
+    mockApiPost.mockResolvedValue({ data: {} });
+    resetPushRegistrationStateForTests();
+  });
+
+  it('skips a recent successful registration', async () => {
+    await ensurePushRegistrationIfStale(60_000);
+    await ensurePushRegistrationIfStale(60_000);
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries when the last attempt failed', async () => {
+    mockApiPost.mockRejectedValueOnce(new Error('offline'));
+    await ensurePushRegistrationIfStale(60_000);
+    await ensurePushRegistrationIfStale(60_000);
+    expect(mockApiPost).toHaveBeenCalledTimes(2);
+  });
+
+  it('addPushTokenListener subscribes to device token changes', async () => {
+    const remove = jest.fn();
+    mockAddPushTokenListener.mockReturnValue({ remove });
+    const cb = jest.fn();
+    const sub = await addPushTokenListener(cb);
+    expect(mockAddPushTokenListener).toHaveBeenCalledWith(cb);
+    sub?.remove();
+    expect(remove).toHaveBeenCalled();
   });
 });
