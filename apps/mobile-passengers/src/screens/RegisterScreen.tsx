@@ -20,6 +20,7 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { resolvePassengerPostAuthPath } from '../lib/postAuthRouting';
 import {
+  afterPostOAuthHandoff,
   beginOAuthBrandBridge,
   endOAuthBrandBridge,
   endOAuthBrandBridgeAfterPaint,
@@ -68,11 +69,7 @@ async function replaceAfterGoogleAuth(
     },
     navigate: (path) => replacePathAfterAuth(replace, path, userId),
   });
-  if (result === 'skipped' || result === 'joined') {
-    const target = getLastOAuthHandoffTarget();
-    if (target) replacePathAfterAuth(replace, target, userId);
-  }
-  endOAuthBrandBridgeAfterPaint();
+  afterPostOAuthHandoff(result, (target) => replacePathAfterAuth(replace, target, userId));
 }
 
 export function RegisterScreen() {

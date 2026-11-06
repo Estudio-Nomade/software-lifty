@@ -7,6 +7,7 @@ import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams
 import { shouldTreatAuthCallbackAsSuccess } from '../lib/oauthSessionRecovery';
 import { resolvePassengerPostAuthPathWithRetry } from '../lib/postAuthRouting';
 import {
+  afterPostOAuthHandoff,
   beginOAuthBrandBridge,
   endOAuthBrandBridge,
   endOAuthBrandBridgeAfterPaint,
@@ -85,10 +86,8 @@ export function AuthCallbackScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Single visual bridge for cold + warm OAuth.
-    beginOAuthBrandBridge();
-
-    // Remount after handoff already done — leave immediately, no second splash.
+    // Remount after handoff already done — leave once, no second splash.
+    // Do NOT begin bridge here (would stick on early returns).
     if (isPostOAuthHandoffCompleted()) {
       const target = getLastOAuthHandoffTarget() ?? '/home';
       router.replace(
@@ -111,16 +110,20 @@ export function AuthCallbackScreen() {
       if (startedKeysRef.current.has(attemptKey)) return;
       startedKeysRef.current.add(attemptKey);
     } else if (noParamsBootRef.current) {
+      // Stray remount without params — never light the overlay.
       return;
     } else {
       noParamsBootRef.current = true;
     }
 
+    // Only after we commit to running exchange/handoff.
+    beginOAuthBrandBridge();
+
     let cancelled = false;
 
     const navigateTo = (target: string) => {
       if (cancelled) return;
-      if (__DEV__) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.log('[AuthCallback] finishOk target=', target);
       }
       router.replace(
@@ -169,25 +172,21 @@ export function AuthCallbackScreen() {
         });
 
         if (cancelled) return;
-        // skipped/joined: ensure we are not stuck on this route with a blank plain view
-        if (result === 'skipped' || result === 'joined') {
-          const target = getLastOAuthHandoffTarget() ?? (userId ? '/home' : '/login-credentials');
-          navigateTo(target);
-        }
-        endOAuthBrandBridgeAfterPaint();
+        // joined → leader owns navigate+end; skipped → leave once if needed
+        afterPostOAuthHandoff(result, (target) => navigateTo(target));
       } catch {
         if (cancelled) return;
         finishedOkRef.current = false;
         const userId = useAuthStore.getState().userId;
         const fallback = userId ? '/complete-profile' : '/login-credentials';
         try {
-          await runPostOAuthHandoff({
+          const result = await runPostOAuthHandoff({
             key: userId ?? 'session',
             owner: 'AuthCallback',
             resolveTarget: async () => fallback,
             navigate: navigateTo,
           });
-          endOAuthBrandBridgeAfterPaint();
+          if (!cancelled) afterPostOAuthHandoff(result, (target) => navigateTo(target));
         } catch {
           endOAuthBrandBridge();
         }
@@ -206,7 +205,7 @@ export function AuthCallbackScreen() {
         await finishOk();
         return;
       }
-      if (__DEV__) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
         const raw =
           typeof err === 'object' && err !== null && 'message' in err
             ? String((err as { message?: unknown }).message ?? '')

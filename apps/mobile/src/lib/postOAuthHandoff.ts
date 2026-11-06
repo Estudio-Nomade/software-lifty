@@ -79,6 +79,24 @@ export function getLastOAuthHandoffTarget(): string | null {
   return lastTarget;
 }
 
+/**
+ * Settle after runPostOAuthHandoff at a call site.
+ * - navigated: end bridge after paint (this owner led)
+ * - skipped: optional one leaveTo(lastTarget) to unmount bridge screens + end
+ * - joined: no-op — leader already navigated and will end the bridge
+ */
+export function afterPostOAuthHandoff(
+  result: PostOAuthHandoffResult,
+  leaveTo?: (target: string) => void,
+): void {
+  if (result === 'joined') return;
+  if (result === 'skipped' && leaveTo) {
+    const target = getLastOAuthHandoffTarget();
+    if (target) leaveTo(target);
+  }
+  endOAuthBrandBridgeAfterPaint();
+}
+
 export function resetPostOAuthHandoff(): void {
   generation += 1;
   inflight = null;

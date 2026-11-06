@@ -29,6 +29,7 @@ import {
   routeForDriverStatus,
 } from '../lib/postAuthRouting';
 import {
+  afterPostOAuthHandoff,
   beginOAuthBrandBridge,
   endOAuthBrandBridge,
   endOAuthBrandBridgeAfterPaint,
@@ -141,11 +142,7 @@ export const LoginCredentialsScreen: React.FC = () => {
             navigation.replace(screen);
           },
         });
-        if (result === 'skipped' || result === 'joined') {
-          const target = getLastOAuthHandoffTarget();
-          if (target) navigation.replace(target);
-        }
-        endOAuthBrandBridgeAfterPaint();
+        afterPostOAuthHandoff(result, (target) => navigation.replace(target));
       } catch (err: unknown) {
         endOAuthBrandBridge();
         const message =

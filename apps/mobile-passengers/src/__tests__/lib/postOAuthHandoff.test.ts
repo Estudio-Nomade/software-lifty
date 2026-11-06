@@ -1,6 +1,7 @@
 import {
   OAUTH_HANDOFF_ABORTED,
   WELCOME_HOP_REFUSED,
+  afterPostOAuthHandoff,
   beginOAuthBrandBridge,
   endOAuthBrandBridge,
   getLastOAuthHandoffTarget,
@@ -168,4 +169,27 @@ describe('runPostOAuthHandoff', () => {
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith('/home');
   });
+
+  it('afterPostOAuthHandoff joined is no-op; skipped leaveTo + end', async () => {
+    const navigate = jest.fn();
+    await runPostOAuthHandoff({
+      key: 'user-settle',
+      owner: 'AuthCallback',
+      resolveTarget: async () => '/home',
+      navigate,
+    });
+    expect(getLastOAuthHandoffTarget()).toBe('/home');
+
+    const leave = jest.fn();
+    beginOAuthBrandBridge();
+    afterPostOAuthHandoff('joined', leave);
+    expect(leave).not.toHaveBeenCalled();
+    expect(isOAuthBrandBridgeActive()).toBe(true);
+
+    afterPostOAuthHandoff('skipped', leave);
+    expect(leave).toHaveBeenCalledWith('/home');
+    endOAuthBrandBridge(); // sync end; afterPaint is async
+    expect(isOAuthBrandBridgeActive()).toBe(false);
+  });
+
 });

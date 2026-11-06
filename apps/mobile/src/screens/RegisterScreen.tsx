@@ -22,6 +22,7 @@ import { useResendCode, useSignUp, useVerifyEmail } from '../hooks/useAuth';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
 import {
+  afterPostOAuthHandoff,
   beginOAuthBrandBridge,
   endOAuthBrandBridge,
   endOAuthBrandBridgeAfterPaint,
@@ -93,11 +94,7 @@ export const RegisterScreen: React.FC = () => {
           navigation.replace(screen);
         },
       });
-      if (result === 'skipped' || result === 'joined') {
-        const target = getLastOAuthHandoffTarget();
-        if (target) navigation.replace(target);
-      }
-      endOAuthBrandBridgeAfterPaint();
+      afterPostOAuthHandoff(result, (target) => navigation.replace(target));
     } catch (err) {
       endOAuthBrandBridge();
       setError(getFriendlyAuthError(err));
