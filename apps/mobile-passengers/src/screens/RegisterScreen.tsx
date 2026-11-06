@@ -19,13 +19,14 @@ import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { resolvePassengerPostAuthPath } from '../lib/postAuthRouting';
+import { resetPostOAuthHandoff, runPostOAuthHandoff } from '../lib/postOAuthHandoff';
 import { theme } from '../theme';
 
-async function replaceAfterAuth(
+function replacePathAfterAuth(
   replace: ReturnType<typeof useAppNavigation>['replace'],
+  path: string,
   userId: string | null | undefined,
 ) {
-  const path = await resolvePassengerPostAuthPath(userId ?? null);
   if (path === '/complete-profile') {
     replace('CompleteProfile');
     return;
@@ -43,6 +44,23 @@ async function replaceAfterAuth(
     return;
   }
   replace('Welcome');
+}
+
+async function replaceAfterGoogleAuth(
+  replace: ReturnType<typeof useAppNavigation>['replace'],
+  userId: string,
+  owner: string,
+) {
+  await runPostOAuthHandoff({
+    key: userId,
+    owner,
+    resolveTarget: async () => {
+      const path = await resolvePassengerPostAuthPath(userId);
+      if (path === '/' && userId) return '/complete-profile';
+      return path === '/' ? '/login-credentials' : path;
+    },
+    navigate: (path) => replacePathAfterAuth(replace, path, userId),
+  });
 }
 
 export function RegisterScreen() {
@@ -80,6 +98,7 @@ export function RegisterScreen() {
     }
     setError(null);
     setGoogleLoading(true);
+    resetPostOAuthHandoff();
     try {
       clearDraft();
       const session = await signInWithGoogle();
@@ -88,7 +107,7 @@ export function RegisterScreen() {
           (session.user.user_metadata as { full_name?: string } | undefined)?.full_name ??
           undefined;
         await registerPassenger(undefined, metaName).catch(() => {});
-        await replaceAfterAuth(replace, session.user.id);
+        await replaceAfterGoogleAuth(replace, session.user.id, 'Register');
         return;
       }
       setError('Inicio de sesión cancelado.');

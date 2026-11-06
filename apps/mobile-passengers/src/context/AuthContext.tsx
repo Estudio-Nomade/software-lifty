@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { unregisterPush } from '../lib/notifications';
+import { resetPostOAuthHandoff } from '../lib/postOAuthHandoff';
 import { type SocialProvider, signInWithProvider } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
@@ -122,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     // Unregister while the JWT is still valid so a shared phone stops receiving
     // this account's pushes.
+    resetPostOAuthHandoff();
     await unregisterPush();
     await supabase.auth.signOut();
   }, []);
