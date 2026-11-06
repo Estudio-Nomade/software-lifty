@@ -17,6 +17,7 @@ import {
   handleNotificationResponse,
   setupNotificationHandler,
 } from '../lib/notifications';
+import { ensureActiveServiceMarkets } from '../lib/serviceArea';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { useTripStore } from '../store/tripStore';
@@ -100,6 +101,9 @@ function SessionRestore() {
           } catch (statusErr: any) {
             console.log('[SessionRestore] /drivers/me/status ERROR:', statusErr?.message);
           }
+
+          // Multi-hub pickup preview (Tandil etc.) — soft fail keeps legacy VD.
+          void ensureActiveServiceMarkets().catch(() => undefined);
         } catch (err: any) {
           console.log('[SessionRestore] /auth/me ERROR:', err?.message);
         } finally {

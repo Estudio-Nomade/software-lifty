@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import type React from 'react';
-import { type ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
+import { type ComponentRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -38,7 +38,11 @@ import {
 import { exitOnboardingToWelcome } from '../lib/exitOnboardingToWelcome';
 import { getCurrentPosition } from '../lib/location';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
-import { isInsidePickupArea } from '../lib/serviceArea';
+import {
+  ensureActiveServiceMarkets,
+  getServiceMarketsVersion,
+  isInsidePickupArea,
+} from '../lib/serviceArea';
 import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { theme } from '../theme';
@@ -171,6 +175,8 @@ export const OnboardingStep1Screen: React.FC = () => {
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitError, setSubmitError] = useState('');
   const [keyboardPad, setKeyboardPad] = useState(0);
+  /** Bumps when GET /service-markets/active hydrates so zone re-evaluates (Tandil etc.). */
+  const [marketsVersion, setMarketsVersion] = useState(getServiceMarketsVersion);
   const profileLoaded = useRef(false);
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const addressFieldRef = useRef<ComponentRef<typeof View>>(null);
@@ -188,9 +194,10 @@ export const OnboardingStep1Screen: React.FC = () => {
     error: placesError,
   } = usePlaceAutocomplete(showSuggestions ? addressLine : '', placeBias);
 
-  const addressZone: AddressZone = selectedPlace
-    ? zoneForCoords(selectedPlace.lat, selectedPlace.lng)
-    : 'unknown';
+  const addressZone: AddressZone = useMemo(() => {
+    if (!selectedPlace) return 'unknown';
+    return zoneForCoords(selectedPlace.lat, selectedPlace.lng);
+  }, [selectedPlace, marketsVersion]);
   // Banner only from live pin — never sticky after a prior waitlisted submit.
   const showWaitlistBanner = addressZone === 'outside';
 
@@ -199,6 +206,17 @@ export const OnboardingStep1Screen: React.FC = () => {
   const showSuggestionsEmpty =
     addressQueryActive && !placesLoading && !placesError && suggestions.length === 0;
   const showPlacesError = addressQueryActive && !placesLoading && !!placesError;
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const version = await ensureActiveServiceMarkets();
+      if (!cancelled) setMarketsVersion(version);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (profileLoaded.current) return;
