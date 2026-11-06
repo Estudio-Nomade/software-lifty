@@ -9,7 +9,7 @@ export type OAuthAttemptState = {
   startedAt: number;
   /**
    * Local session user id present when the attempt started (before local signOut).
-   * Must never be treated as OAuth success unless createSessionFromUrl marked it.
+   * Informational only — success requires markOAuthAttemptSession proof.
    */
   blockedUserId: string | null;
   /** User id accepted via exchange / twin recovery for this attempt. */
@@ -62,19 +62,18 @@ export function isTwinPathCodeReuseError(error: unknown): boolean {
   );
 }
 
+/**
+ * Only sessions proven via markOAuthAttemptSession (createSessionFromUrl exchange)
+ * count as belonging to this attempt — never an unmarked getSession leftover.
+ */
 export function sessionBelongsToFreshOAuthAttempt(session: Session | null | undefined): boolean {
   if (!currentAttempt || !session?.access_token || !session.user?.id) return false;
-  if (currentAttempt.acceptedUserId === session.user.id) return true;
-  // Stale pre-OAuth identity without exchange proof — never success.
-  if (currentAttempt.blockedUserId && session.user.id === currentAttempt.blockedUserId) {
-    return false;
-  }
-  return true;
+  return currentAttempt.acceptedUserId === session.user.id;
 }
 
 /**
  * When PKCE exchange fails because the twin path already consumed the code,
- * treat an existing session as success only if it belongs to this OAuth attempt.
+ * treat an existing session as success only if that twin already marked it.
  */
 export async function resolveSessionAfterAuthError(
   error: unknown,
@@ -90,23 +89,20 @@ export async function resolveSessionAfterAuthError(
   const session = data.session;
   if (!session?.access_token) throw error;
   if (!sessionBelongsToFreshOAuthAttempt(session)) throw error;
-  markOAuthAttemptSession(session);
   return session;
 }
 
-/** finishErr gate: do not bounce to login if this attempt already has a fresh session. */
+/** finishErr gate: success only if this attempt already marked a matching session. */
 export async function shouldTreatAuthCallbackAsSuccess(
   getSession: () => Promise<GetSessionResult>,
 ): Promise<boolean> {
   const { data } = await getSession();
-  if (!sessionBelongsToFreshOAuthAttempt(data.session)) return false;
-  markOAuthAttemptSession(data.session);
-  return true;
+  return sessionBelongsToFreshOAuthAttempt(data.session);
 }
 
 /**
- * Browser dismiss/cancel: only return a session proven for this OAuth attempt
- * (twin-path exchange), never a leftover local session from another account.
+ * Browser dismiss/cancel: only return a session already marked for this attempt
+ * (twin-path exchange), never an unmarked leftover.
  */
 export async function resolveSessionAfterBrowserDismiss(
   getSession: () => Promise<GetSessionResult>,
@@ -114,6 +110,5 @@ export async function resolveSessionAfterBrowserDismiss(
   if (!currentAttempt) return null;
   const { data } = await getSession();
   if (!sessionBelongsToFreshOAuthAttempt(data.session)) return null;
-  markOAuthAttemptSession(data.session);
   return data.session;
 }

@@ -2,6 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import {
   beginOAuthAttempt,
   clearOAuthAttempt,
+  getCurrentOAuthAttempt,
   markOAuthAttemptSession,
   resolveSessionAfterAuthError,
   resolveSessionAfterBrowserDismiss,
@@ -23,7 +24,7 @@ describe('resolveSessionAfterAuthError', () => {
     clearOAuthAttempt();
   });
 
-  it('returns existing session when twin path already signed in for this attempt', async () => {
+  it('returns existing session when twin path already marked for this attempt', async () => {
     beginOAuthAttempt(null);
     const session = stubSession('at', 'user-a');
     markOAuthAttemptSession(session);
@@ -34,14 +35,13 @@ describe('resolveSessionAfterAuthError', () => {
     expect(result).toBe(session);
   });
 
-  it('returns fresh session after local clear when twin path left a new user', async () => {
+  it('rethrows unmarked session even when user id differs from blockedUserId', async () => {
     beginOAuthAttempt('user-b');
     const session = stubSession('at-a', 'user-a');
-    const result = await resolveSessionAfterAuthError(
-      new Error('invalid request: code already used'),
-      async () => ({ data: { session } }),
-    );
-    expect(result).toBe(session);
+    const err = new Error('invalid request: code already used');
+    await expect(
+      resolveSessionAfterAuthError(err, async () => ({ data: { session } })),
+    ).rejects.toBe(err);
   });
 
   it('rethrows when exchange fails and there is no session', async () => {
@@ -52,10 +52,11 @@ describe('resolveSessionAfterAuthError', () => {
     ).rejects.toBe(err);
   });
 
-  it('rethrows when error is not twin-path code reuse even if session exists', async () => {
+  it('rethrows when error is not twin-path code reuse even if session is marked', async () => {
     beginOAuthAttempt(null);
     const err = new Error('network down');
     const session = stubSession();
+    markOAuthAttemptSession(session);
     await expect(
       resolveSessionAfterAuthError(err, async () => ({ data: { session } })),
     ).rejects.toBe(err);
@@ -84,12 +85,22 @@ describe('shouldTreatAuthCallbackAsSuccess', () => {
     clearOAuthAttempt();
   });
 
-  it('is true when getSession has access_token for this attempt', async () => {
+  it('is true only when session user matches mark for this attempt', async () => {
+    beginOAuthAttempt(null);
+    const session = stubSession('at', 'user-a');
+    markOAuthAttemptSession(session);
+    const ok = await shouldTreatAuthCallbackAsSuccess(async () => ({
+      data: { session },
+    }));
+    expect(ok).toBe(true);
+  });
+
+  it('is false for unmarked session even with active attempt', async () => {
     beginOAuthAttempt(null);
     const ok = await shouldTreatAuthCallbackAsSuccess(async () => ({
       data: { session: stubSession('at', 'user-a') },
     }));
-    expect(ok).toBe(true);
+    expect(ok).toBe(false);
   });
 
   it('is false when there is no session', async () => {
@@ -114,6 +125,18 @@ describe('shouldTreatAuthCallbackAsSuccess', () => {
     }));
     expect(ok).toBe(false);
   });
+
+  it('is false after clearOAuthAttempt even if session remains', async () => {
+    beginOAuthAttempt(null);
+    const session = stubSession('at', 'user-a');
+    markOAuthAttemptSession(session);
+    clearOAuthAttempt();
+    expect(getCurrentOAuthAttempt()).toBeNull();
+    const ok = await shouldTreatAuthCallbackAsSuccess(async () => ({
+      data: { session },
+    }));
+    expect(ok).toBe(false);
+  });
 });
 
 describe('resolveSessionAfterBrowserDismiss', () => {
@@ -125,6 +148,14 @@ describe('resolveSessionAfterBrowserDismiss', () => {
     beginOAuthAttempt('user-b');
     const session = await resolveSessionAfterBrowserDismiss(async () => ({
       data: { session: stubSession('at-b', 'user-b') },
+    }));
+    expect(session).toBeNull();
+  });
+
+  it('returns null for unmarked different user (no auto-accept)', async () => {
+    beginOAuthAttempt('user-b');
+    const session = await resolveSessionAfterBrowserDismiss(async () => ({
+      data: { session: stubSession('at-a', 'user-a') },
     }));
     expect(session).toBeNull();
   });

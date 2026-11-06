@@ -3,6 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { getAuthQueryParams } from './authUrlParams';
 import {
   beginOAuthAttempt,
+  clearOAuthAttempt,
   markOAuthAttemptSession,
   resolveSessionAfterAuthError,
   resolveSessionAfterBrowserDismiss,
@@ -121,72 +122,78 @@ export async function signInWithProvider(provider: SocialProvider) {
   const blockedUserId = await clearLocalSessionBeforeOAuth();
   const attemptId = beginOAuthAttempt(blockedUserId);
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: {
-      redirectTo: authRedirectUri,
-      skipBrowserRedirect: true,
-      queryParams: { prompt: 'select_account' },
-    },
-  });
-  if (error) throw error;
-  if (!data?.url) throw new Error('No se pudo iniciar el flujo de autenticacion.');
-
-  const result = await WebBrowser.openAuthSessionAsync(data.url, authRedirectUri);
-
-  if (__DEV__) {
-    const pathOnly =
-      result.type === 'success' && result.url ? result.url.split('?')[0]?.split('#')[0] : null;
-    console.log('[socialAuth] openAuthSession', {
-      type: result.type,
-      path: pathOnly,
-      attemptId,
-      blockedUserId,
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: authRedirectUri,
+        skipBrowserRedirect: true,
+        queryParams: { prompt: 'select_account' },
+      },
     });
-  }
+    if (error) throw error;
+    if (!data?.url) throw new Error('No se pudo iniciar el flujo de autenticacion.');
 
-  if (result.type === 'success' && result.url) {
-    const session = await createSessionFromUrl(result.url);
+    const result = await WebBrowser.openAuthSessionAsync(data.url, authRedirectUri);
+
     if (__DEV__) {
-      console.log('[socialAuth] post-OAuth session', {
+      const pathOnly =
+        result.type === 'success' && result.url ? result.url.split('?')[0]?.split('#')[0] : null;
+      console.log('[socialAuth] openAuthSession', {
+        type: result.type,
+        path: pathOnly,
         attemptId,
-        userId: session?.user?.id ?? null,
-        email: session?.user?.email ?? null,
+        blockedUserId,
       });
     }
-    return session;
-  }
 
-  // Deep link may have completed exchange while browser reported dismiss.
-  if (result.type === 'dismiss' || result.type === 'cancel') {
-    if (inflightSessionFromUrl) {
-      try {
-        const twin = await inflightSessionFromUrl.promise;
-        if (twin?.access_token) {
-          if (__DEV__) {
-            console.log('[socialAuth] dismiss recovered inflight', {
-              attemptId,
-              userId: twin.user?.id ?? null,
-              email: twin.user?.email ?? null,
-            });
-          }
-          return twin;
-        }
-      } catch {
-        // fall through to attempt-scoped dismiss recovery
+    if (result.type === 'success' && result.url) {
+      const session = await createSessionFromUrl(result.url);
+      if (__DEV__) {
+        console.log('[socialAuth] post-OAuth session', {
+          attemptId,
+          userId: session?.user?.id ?? null,
+          email: session?.user?.email ?? null,
+        });
       }
+      return session;
     }
-    const recovered = await resolveSessionAfterBrowserDismiss(() => supabase.auth.getSession());
-    if (__DEV__) {
-      console.log('[socialAuth] dismiss recovery', {
-        attemptId,
-        hit: Boolean(recovered),
-        userId: recovered?.user?.id ?? null,
-        email: recovered?.user?.email ?? null,
-      });
-    }
-    return recovered;
-  }
 
-  return null;
+    // Deep link may have completed exchange while browser reported dismiss.
+    if (result.type === 'dismiss' || result.type === 'cancel') {
+      if (inflightSessionFromUrl) {
+        try {
+          const twin = await inflightSessionFromUrl.promise;
+          if (twin?.access_token) {
+            if (__DEV__) {
+              console.log('[socialAuth] dismiss recovered inflight', {
+                attemptId,
+                userId: twin.user?.id ?? null,
+                email: twin.user?.email ?? null,
+              });
+            }
+            return twin;
+          }
+        } catch {
+          // fall through to attempt-scoped dismiss recovery
+        }
+      }
+      const recovered = await resolveSessionAfterBrowserDismiss(() => supabase.auth.getSession());
+      if (__DEV__) {
+        console.log('[socialAuth] dismiss recovery', {
+          attemptId,
+          hit: Boolean(recovered),
+          userId: recovered?.user?.id ?? null,
+          email: recovered?.user?.email ?? null,
+        });
+      }
+      return recovered;
+    }
+
+    return null;
+  } finally {
+    // Drop attempt so a later stray AuthCallback finishErr cannot reuse mark.
+    // Twin finishOk does not need the attempt; dismiss recovery above already ran.
+    clearOAuthAttempt();
+  }
 }

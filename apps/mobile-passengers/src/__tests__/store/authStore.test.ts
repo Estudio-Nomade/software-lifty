@@ -1,4 +1,4 @@
-import { useAuthStore } from '../../store/authStore';
+import { mergePassengerAuthPersist, useAuthStore } from '../../store/authStore';
 
 function resetStore() {
   useAuthStore.setState({
@@ -10,6 +10,19 @@ function resetStore() {
     email: null,
     fullName: null,
   });
+}
+
+function baseState(): ReturnType<typeof useAuthStore.getState> {
+  return {
+    ...useAuthStore.getState(),
+    token: null,
+    userId: null,
+    email: null,
+    fullName: null,
+    isAuthenticated: false,
+    needsRedirect: false,
+    sessionRestored: false,
+  };
 }
 
 describe('authStore.setSession identity replace', () => {
@@ -66,5 +79,63 @@ describe('authStore.setSession identity replace', () => {
     useAuthStore.getState().resetRedirect();
     useAuthStore.getState().clearAuth();
     expect(useAuthStore.getState().needsRedirect).toBe(false);
+  });
+});
+
+describe('mergePassengerAuthPersist', () => {
+  it('keeps live identity when current already has token+userId', () => {
+    const current = {
+      ...baseState(),
+      token: 'live-a',
+      userId: 'user-a',
+      email: 'a@x.com',
+      fullName: null,
+      isAuthenticated: true,
+    };
+    const merged = mergePassengerAuthPersist(
+      {
+        token: 'tok-b',
+        userId: 'user-b',
+        email: 'b@x.com',
+        fullName: 'Estudio',
+        isAuthenticated: true,
+      },
+      current,
+    );
+    expect(merged.token).toBe('live-a');
+    expect(merged.userId).toBe('user-a');
+    expect(merged.email).toBe('a@x.com');
+    expect(merged.fullName).toBe('Estudio');
+    expect(merged.isAuthenticated).toBe(true);
+  });
+
+  it('forces isAuthenticated from token on cold hydrate', () => {
+    const current = baseState();
+    const withToken = mergePassengerAuthPersist(
+      {
+        token: 'tok-b',
+        userId: 'user-b',
+        email: 'b@x.com',
+        fullName: 'Estudio',
+        isAuthenticated: true,
+      },
+      current,
+    );
+    expect(withToken.token).toBe('tok-b');
+    expect(withToken.userId).toBe('user-b');
+    expect(withToken.isAuthenticated).toBe(true);
+
+    const stickyTrueNoToken = mergePassengerAuthPersist(
+      {
+        token: null,
+        userId: 'user-b',
+        email: 'b@x.com',
+        fullName: 'Estudio',
+        isAuthenticated: true,
+      },
+      current,
+    );
+    expect(stickyTrueNoToken.token).toBeNull();
+    expect(stickyTrueNoToken.isAuthenticated).toBe(false);
   });
 });

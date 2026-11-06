@@ -25,6 +25,34 @@ interface AuthState {
   setFullName: (fullName: string | null) => void;
 }
 
+/** Persist rehydrate merge — exported for unit tests. */
+export function mergePassengerAuthPersist(persisted: unknown, current: AuthState): AuthState {
+  const p = persisted as Partial<AuthState> | undefined;
+  // Prefer live identity over stale persist (do not glue old fullName onto new user).
+  if (current.token && current.userId) {
+    return {
+      ...current,
+      token: current.token,
+      userId: current.userId,
+      email: current.email ?? p?.email ?? null,
+      fullName: current.fullName ?? p?.fullName ?? null,
+      isAuthenticated: true,
+    };
+  }
+  // Cold start / no live session: hydrate from disk, but isAuthenticated
+  // must follow token presence (never keep a sticky true from partial p).
+  const token = p?.token ?? current.token ?? null;
+  const userId = p?.userId ?? current.userId ?? null;
+  return {
+    ...current,
+    token,
+    userId,
+    email: p?.email ?? current.email ?? null,
+    fullName: p?.fullName ?? current.fullName ?? null,
+    isAuthenticated: Boolean(token),
+  };
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -110,26 +138,7 @@ export const useAuthStore = create<AuthState>()(
         fullName: state.fullName,
         isAuthenticated: state.isAuthenticated,
       }),
-      merge: (persisted: unknown, current: AuthState) => {
-        const p = persisted as Partial<AuthState> | undefined;
-        // Prefer live identity over stale persist (do not glue old fullName onto new user).
-        if (current.token && current.userId) {
-          return {
-            ...current,
-            ...p,
-            token: current.token,
-            userId: current.userId,
-            email: current.email ?? p?.email ?? null,
-            fullName: current.fullName ?? p?.fullName ?? null,
-            isAuthenticated: true,
-          };
-        }
-        return {
-          ...current,
-          ...p,
-          fullName: p?.fullName ?? current.fullName ?? null,
-        };
-      },
+      merge: mergePassengerAuthPersist,
     },
   ),
 );
