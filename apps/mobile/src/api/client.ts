@@ -1,6 +1,7 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
 import type { z } from 'zod';
+import { getCurrentOAuthAttempt, isOAuthLocalSignOutInFlight } from '../lib/oauthSessionRecovery';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { ApiError, apiErrorSchema } from './types';
@@ -127,7 +128,11 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        useAuthStore.getState().clearAuth();
+        if (getCurrentOAuthAttempt() || isOAuthLocalSignOutInFlight()) {
+          useAuthStore.getState().clearAuthState();
+        } else {
+          useAuthStore.getState().clearAuth();
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

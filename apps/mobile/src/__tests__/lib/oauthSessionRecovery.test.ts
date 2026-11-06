@@ -1,16 +1,19 @@
 import type { Session } from '@supabase/supabase-js';
 import {
   beginOAuthAttempt,
+  beginOAuthLocalSignOut,
   canFinishAuthCallbackWithSession,
   clearOAuthAttempt,
   getCurrentOAuthAttempt,
   isBlockedOAuthUser,
+  isOAuthLocalSignOutInFlight,
   markOAuthAttemptSession,
   releaseOAuthBlockedUser,
   resetOAuthAttemptStateForTests,
   resolveApiAccessToken,
   resolveSessionAfterAuthError,
   resolveSessionAfterBrowserDismiss,
+  resolveSignedOutStoreAction,
   shouldTreatAuthCallbackAsSuccess,
 } from '../../lib/oauthSessionRecovery';
 
@@ -264,5 +267,49 @@ describe('resolveSessionAfterBrowserDismiss', () => {
       data: { session: stubSession() },
     }));
     expect(session).toBeNull();
+  });
+});
+
+describe('resolveSignedOutStoreAction / oauth local sign-out', () => {
+  afterEach(() => {
+    resetOAuthAttemptStateForTests();
+  });
+
+  it('SIGNED_OUT during OAuth attempt does not choose clearAuth (no needsRedirect)', () => {
+    expect(
+      resolveSignedOutStoreAction({
+        oauthAttemptActive: true,
+        oauthLocalSignOutInFlight: false,
+        liveSessionExists: false,
+      }),
+    ).toBe('clearAuthLocal');
+  });
+
+  it('SIGNED_OUT during local prep does not choose clearAuth', () => {
+    expect(
+      resolveSignedOutStoreAction({
+        oauthAttemptActive: false,
+        oauthLocalSignOutInFlight: true,
+        liveSessionExists: false,
+      }),
+    ).toBe('clearAuthLocal');
+  });
+
+  it('stale SIGNED_OUT with live session resyncs', () => {
+    expect(
+      resolveSignedOutStoreAction({
+        oauthAttemptActive: false,
+        oauthLocalSignOutInFlight: false,
+        liveSessionExists: true,
+      }),
+    ).toBe('resync');
+  });
+
+  it('beginOAuthLocalSignOut marks in-flight until attempt mark', () => {
+    beginOAuthLocalSignOut();
+    expect(isOAuthLocalSignOutInFlight()).toBe(true);
+    beginOAuthAttempt('u1');
+    markOAuthAttemptSession(stubSession('at', 'u2'));
+    expect(isOAuthLocalSignOutInFlight()).toBe(false);
   });
 });

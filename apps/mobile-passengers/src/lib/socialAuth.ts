@@ -3,7 +3,9 @@ import * as WebBrowser from 'expo-web-browser';
 import { getAuthQueryParams } from './authUrlParams';
 import {
   beginOAuthAttempt,
+  beginOAuthLocalSignOut,
   clearOAuthAttempt,
+  endOAuthLocalSignOut,
   markOAuthAttemptSession,
   releaseOAuthBlockedUser,
   resolveSessionAfterAuthError,
@@ -85,6 +87,8 @@ export async function createSessionFromUrl(url: string) {
 async function clearLocalSessionBeforeOAuth(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   const blockedUserId = data.session?.user?.id ?? null;
+  // Always mark prep so SIGNED_OUT from empty/local wipe never arms Welcome.
+  beginOAuthLocalSignOut();
   if (!data.session) return null;
   if (__DEV__) {
     console.log('[socialAuth] pre-OAuth local signOut', {
@@ -92,14 +96,19 @@ async function clearLocalSessionBeforeOAuth(): Promise<string | null> {
       email: data.session.user?.email ?? null,
     });
   }
-  await supabase.auth.signOut({ scope: 'local' });
-  // Verify — if storage still has a session, force another local wipe.
-  const after = await supabase.auth.getSession();
-  if (after.data.session) {
-    if (__DEV__) {
-      console.log('[socialAuth] pre-OAuth session still present after signOut — retry');
-    }
+  try {
     await supabase.auth.signOut({ scope: 'local' });
+    // Verify — if storage still has a session, force another local wipe.
+    const after = await supabase.auth.getSession();
+    if (after.data.session) {
+      if (__DEV__) {
+        console.log('[socialAuth] pre-OAuth session still present after signOut — retry');
+      }
+      await supabase.auth.signOut({ scope: 'local' });
+    }
+  } catch (e) {
+    endOAuthLocalSignOut();
+    throw e;
   }
   return blockedUserId;
 }

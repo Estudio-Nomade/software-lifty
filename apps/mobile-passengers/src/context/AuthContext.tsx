@@ -10,6 +10,11 @@ import {
 } from 'react';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { unregisterPush } from '../lib/notifications';
+import {
+  getCurrentOAuthAttempt,
+  isOAuthLocalSignOutInFlight,
+  resolveSignedOutStoreAction,
+} from '../lib/oauthSessionRecovery';
 import { invalidatePassengerProfileCompleteCache } from '../lib/passengerProfileGate';
 import { resetPostOAuthHandoff } from '../lib/postOAuthHandoff';
 import { type SocialProvider, signInWithProvider } from '../lib/socialAuth';
@@ -93,9 +98,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(nextSession);
       if (nextSession?.access_token) {
         syncStore(nextSession);
-      } else if (event === 'SIGNED_OUT') {
-        useAuthStore.getState().clearAuth();
+        return;
       }
+      if (event !== 'SIGNED_OUT') return;
+
+      const attempt = getCurrentOAuthAttempt();
+      const localPrep = isOAuthLocalSignOutInFlight();
+      if (__DEV__) {
+        console.log('[auth] SIGNED_OUT', {
+          attemptId: attempt?.id ?? null,
+          blockedUserId: attempt?.blockedUserId ?? null,
+          localPrep,
+          storeAuth: useAuthStore.getState().isAuthenticated,
+          storeEmail: useAuthStore.getState().email,
+        });
+      }
+
+      // OAuth prep / active attempt: never arm Welcome needsRedirect.
+      if (attempt || localPrep) {
+        useAuthStore.getState().clearAuthLocal();
+        return;
+      }
+
+      // Stale SIGNED_OUT after password/Google setSession — verify live session.
+      void (async () => {
+        const { data } = await supabase.auth.getSession();
+        const live = Boolean(data.session?.access_token);
+        const action = resolveSignedOutStoreAction({
+          oauthAttemptActive: Boolean(getCurrentOAuthAttempt()),
+          oauthLocalSignOutInFlight: isOAuthLocalSignOutInFlight(),
+          liveSessionExists: live,
+        });
+        if (__DEV__) {
+          console.log('[auth] SIGNED_OUT action', {
+            action,
+            liveEmail: data.session?.user?.email ?? null,
+          });
+        }
+        if (action === 'resync' && data.session) {
+          setSession(data.session);
+          syncStore(data.session);
+          return;
+        }
+        if (action === 'clearAuthLocal') {
+          useAuthStore.getState().clearAuthLocal();
+          return;
+        }
+        useAuthStore.getState().clearAuth();
+      })();
     });
 
     return () => {

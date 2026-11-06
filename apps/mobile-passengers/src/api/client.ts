@@ -1,6 +1,10 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
-import { resolveApiAccessToken } from '../lib/oauthSessionRecovery';
+import {
+  getCurrentOAuthAttempt,
+  isOAuthLocalSignOutInFlight,
+  resolveApiAccessToken,
+} from '../lib/oauthSessionRecovery';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 
@@ -126,7 +130,12 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        useAuthStore.getState().clearAuth();
+        // During OAuth prep / attempt, never arm Welcome via needsRedirect.
+        if (getCurrentOAuthAttempt() || isOAuthLocalSignOutInFlight()) {
+          useAuthStore.getState().clearAuthLocal();
+        } else {
+          useAuthStore.getState().clearAuth();
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

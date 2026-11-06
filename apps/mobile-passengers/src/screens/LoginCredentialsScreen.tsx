@@ -19,6 +19,7 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
   GOOGLE_ONLY_LOGIN_MESSAGE,
   getFriendlyAuthError,
+  getFriendlyPasswordLoginError,
   isInvalidLoginCredentialsError,
 } from '../lib/authErrors';
 import {
@@ -173,6 +174,17 @@ export function LoginCredentialsScreen() {
             (data.user?.user_metadata as { full_name?: string } | undefined)?.full_name ??
             fullName ??
             undefined;
+          // Sync Zustand before any API call — same race as Google handoff.
+          // Without this, getProfile 401 → clearAuth → Welcome / OTP-looking errors.
+          useAuthStore
+            .getState()
+            .setSession(
+              data.session.access_token,
+              data.session.user.id,
+              data.session.user.email ?? null,
+              typeof metaName === 'string' ? metaName : null,
+            );
+          useAuthStore.getState().setSessionRestored(true);
           await registerPassenger(undefined, metaName).catch(() => {});
           await replaceAfterAuth(replace, data.session.user?.id);
         }
@@ -187,7 +199,8 @@ export function LoginCredentialsScreen() {
           return;
         }
       }
-      setError(getFriendlyAuthError(err));
+      // Password path must never show OTP “código” copy (H3).
+      setError(isSignUp ? getFriendlyAuthError(err) : getFriendlyPasswordLoginError(err));
     } finally {
       setLoading(false);
     }

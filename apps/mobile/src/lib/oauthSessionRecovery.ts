@@ -25,6 +25,45 @@ let currentAttempt: OAuthAttemptState | null = null;
  */
 let blockedOAuthUserId: string | null = null;
 
+/**
+ * Pre-OAuth `signOut({ scope: 'local' })` is intentional — SIGNED_OUT must not
+ * arm Welcome redirect or wipe a session established mid-race.
+ */
+let oauthLocalSignOutInFlight = false;
+let oauthLocalSignOutGraceUntil = 0;
+
+const OAUTH_LOCAL_SIGNOUT_GRACE_MS = 2_500;
+
+export function beginOAuthLocalSignOut(): void {
+  oauthLocalSignOutInFlight = true;
+  oauthLocalSignOutGraceUntil = 0;
+}
+
+export function endOAuthLocalSignOut(): void {
+  oauthLocalSignOutInFlight = false;
+  oauthLocalSignOutGraceUntil = Date.now() + OAUTH_LOCAL_SIGNOUT_GRACE_MS;
+}
+
+export function isOAuthLocalSignOutInFlight(): boolean {
+  if (oauthLocalSignOutInFlight) return true;
+  if (oauthLocalSignOutGraceUntil > 0 && Date.now() < oauthLocalSignOutGraceUntil) return true;
+  return false;
+}
+
+export function resolveSignedOutStoreAction(input: {
+  oauthAttemptActive: boolean;
+  oauthLocalSignOutInFlight: boolean;
+  liveSessionExists: boolean;
+}): 'clearAuthLocal' | 'clearAuth' | 'resync' {
+  if (input.oauthAttemptActive || input.oauthLocalSignOutInFlight) {
+    return 'clearAuthLocal';
+  }
+  if (input.liveSessionExists) {
+    return 'resync';
+  }
+  return 'clearAuth';
+}
+
 export function beginOAuthAttempt(blockedUserId: string | null = null): string {
   const id = `oauth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   currentAttempt = {
@@ -41,6 +80,8 @@ export function markOAuthAttemptSession(session: Session | null | undefined): vo
   if (!currentAttempt || !session?.access_token || !session.user?.id) return;
   currentAttempt.acceptedUserId = session.user.id;
   blockedOAuthUserId = null;
+  oauthLocalSignOutInFlight = false;
+  oauthLocalSignOutGraceUntil = 0;
 }
 
 export function getCurrentOAuthAttempt(): OAuthAttemptState | null {
@@ -49,6 +90,11 @@ export function getCurrentOAuthAttempt(): OAuthAttemptState | null {
 
 export function clearOAuthAttempt(): void {
   currentAttempt = null;
+  if (oauthLocalSignOutInFlight) {
+    endOAuthLocalSignOut();
+  } else if (oauthLocalSignOutGraceUntil === 0) {
+    oauthLocalSignOutGraceUntil = Date.now() + OAUTH_LOCAL_SIGNOUT_GRACE_MS;
+  }
 }
 
 /** Call on clean cancel/dismiss with no session so residual block does not stick forever. */
@@ -172,4 +218,6 @@ export async function resolveSessionAfterBrowserDismiss(
 export function resetOAuthAttemptStateForTests(): void {
   currentAttempt = null;
   blockedOAuthUserId = null;
+  oauthLocalSignOutInFlight = false;
+  oauthLocalSignOutGraceUntil = 0;
 }
