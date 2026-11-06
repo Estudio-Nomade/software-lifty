@@ -18,7 +18,10 @@ import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
-import { resolvePassengerPostAuthPath } from '../lib/postAuthRouting';
+import {
+  resolvePassengerPostAuthPath,
+  resolvePassengerPostAuthPathWithRetry,
+} from '../lib/postAuthRouting';
 import {
   afterPostOAuthHandoff,
   beginOAuthBrandBridge,
@@ -28,6 +31,7 @@ import {
   resetPostOAuthHandoff,
   runPostOAuthHandoff,
 } from '../lib/postOAuthHandoff';
+import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
 function replacePathAfterAuth(
@@ -63,9 +67,10 @@ async function replaceAfterGoogleAuth(
     key: userId,
     owner,
     resolveTarget: async () => {
-      const path = await resolvePassengerPostAuthPath(userId);
-      if (path === '/' && userId) return '/complete-profile';
-      return path === '/' ? '/login-credentials' : path;
+      let path = await resolvePassengerPostAuthPathWithRetry(userId);
+      if (path === '/' && userId) path = '/complete-profile';
+      if (path === '/') return '/login-credentials';
+      return path;
     },
     navigate: (path) => replacePathAfterAuth(replace, path, userId),
   });
@@ -108,14 +113,32 @@ export function RegisterScreen() {
     setError(null);
     setGoogleLoading(true);
     resetPostOAuthHandoff();
-    beginOAuthBrandBridge();
     try {
       clearDraft();
       const session = await signInWithGoogle();
       if (session?.user) {
+        beginOAuthBrandBridge();
+        const meta = session.user.user_metadata as
+          | {
+              full_name?: string;
+              name?: string;
+              given_name?: string;
+              family_name?: string;
+            }
+          | undefined;
         const metaName =
-          (session.user.user_metadata as { full_name?: string } | undefined)?.full_name ??
+          meta?.full_name?.trim() ||
+          meta?.name?.trim() ||
+          [meta?.given_name, meta?.family_name].filter(Boolean).join(' ').trim() ||
           undefined;
+        useAuthStore
+          .getState()
+          .setSession(
+            session.access_token,
+            session.user.id,
+            session.user.email ?? null,
+            metaName ?? null,
+          );
         await registerPassenger(undefined, metaName).catch(() => {});
         await replaceAfterGoogleAuth(replace, session.user.id, 'Register');
         return;

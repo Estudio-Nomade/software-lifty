@@ -19,9 +19,13 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
   GOOGLE_ONLY_LOGIN_MESSAGE,
   getFriendlyAuthError,
+  getFriendlyPasswordLoginError,
   isInvalidLoginCredentialsError,
 } from '../lib/authErrors';
-import { resolvePassengerPostAuthPath } from '../lib/postAuthRouting';
+import {
+  resolvePassengerPostAuthPath,
+  resolvePassengerPostAuthPathWithRetry,
+} from '../lib/postAuthRouting';
 import {
   afterPostOAuthHandoff,
   beginOAuthBrandBridge,
@@ -33,6 +37,7 @@ import {
 } from '../lib/postOAuthHandoff';
 import { classifySignUpResult } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../store/authStore';
 import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 import { theme } from '../theme';
 
@@ -79,9 +84,11 @@ async function replaceAfterGoogleAuth(
     key: userId,
     owner,
     resolveTarget: async () => {
-      const path = await resolvePassengerPostAuthPath(userId);
-      if (path === '/' && userId) return '/complete-profile';
-      return path === '/' ? '/login-credentials' : path;
+      // Retry profile gate like AuthCallback so established accounts reach /home.
+      let path = await resolvePassengerPostAuthPathWithRetry(userId);
+      if (path === '/' && userId) path = '/complete-profile';
+      if (path === '/') return '/login-credentials';
+      return path;
     },
     navigate: (path) => replacePathAfterAuth(replace, path, userId),
   });
@@ -167,6 +174,17 @@ export function LoginCredentialsScreen() {
             (data.user?.user_metadata as { full_name?: string } | undefined)?.full_name ??
             fullName ??
             undefined;
+          // Sync Zustand before any API call — same race as Google handoff.
+          // Without this, getProfile 401 → clearAuth → Welcome / OTP-looking errors.
+          useAuthStore
+            .getState()
+            .setSession(
+              data.session.access_token,
+              data.session.user.id,
+              data.session.user.email ?? null,
+              typeof metaName === 'string' ? metaName : null,
+            );
+          useAuthStore.getState().setSessionRestored(true);
           await registerPassenger(undefined, metaName).catch(() => {});
           await replaceAfterAuth(replace, data.session.user?.id);
         }
@@ -181,7 +199,8 @@ export function LoginCredentialsScreen() {
           return;
         }
       }
-      setError(getFriendlyAuthError(err));
+      // Password path must never show OTP “código” copy (H3).
+      setError(isSignUp ? getFriendlyAuthError(err) : getFriendlyPasswordLoginError(err));
     } finally {
       setLoading(false);
     }
@@ -193,19 +212,45 @@ export function LoginCredentialsScreen() {
     setInfo(null);
     setHighlightGoogle(false);
     setGoogleLoading(true);
-    // New Google attempt — clear prior handoff lock; one BrandSplash overlay.
+    // New Google attempt — clear prior handoff lock. Cover only after session
+    // (plain root bridge, no L+tagline) so cancel never flashes brand lockup.
     resetPostOAuthHandoff();
-    beginOAuthBrandBridge();
     try {
       const session = await signInWithGoogle();
       if (__DEV__) {
-        console.log('[oauth] handleGoogle session?', Boolean(session?.user));
+        console.log('[oauth] handleGoogle session?', {
+          hasUser: Boolean(session?.user),
+          email: session?.user?.email ?? null,
+          userId: session?.user?.id ?? null,
+        });
       }
       if (session?.user) {
+        beginOAuthBrandBridge();
+        // Google identity only — never fall back to registrationDraft (other account name).
+        clearDraft();
+        const meta = session.user.user_metadata as
+          | {
+              full_name?: string;
+              name?: string;
+              given_name?: string;
+              family_name?: string;
+            }
+          | undefined;
         const metaName =
-          (session.user.user_metadata as { full_name?: string } | undefined)?.full_name ??
-          fullName ??
+          meta?.full_name?.trim() ||
+          meta?.name?.trim() ||
+          [meta?.given_name, meta?.family_name].filter(Boolean).join(' ').trim() ||
           undefined;
+        // Sync Zustand before any API/handoff — Bearer comes only from the store.
+        // Without this, getProfile 401 → clearAuth → Welcome bounce.
+        useAuthStore
+          .getState()
+          .setSession(
+            session.access_token,
+            session.user.id,
+            session.user.email ?? null,
+            metaName ?? null,
+          );
         await registerPassenger(undefined, metaName).catch(() => {});
         await replaceAfterGoogleAuth(replace, session.user.id, 'LoginCredentials');
         return;

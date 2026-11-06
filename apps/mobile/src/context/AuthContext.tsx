@@ -11,6 +11,11 @@ import {
 import { apiClient } from '../api/client';
 import { stopTracking } from '../lib/location';
 import { unregisterPush } from '../lib/notifications';
+import {
+  getCurrentOAuthAttempt,
+  isOAuthLocalSignOutInFlight,
+  resolveSignedOutStoreAction,
+} from '../lib/oauthSessionRecovery';
 import { resetPostOAuthHandoff } from '../lib/postOAuthHandoff';
 import { queryClient } from '../lib/queryClient';
 import { type SocialProvider, signInWithProvider } from '../lib/socialAuth';
@@ -88,9 +93,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(nextSession);
       if (nextSession?.access_token) {
         syncStore(nextSession);
-      } else if (event === 'SIGNED_OUT') {
-        useAuthStore.getState().clearAuth();
+        return;
       }
+      if (event !== 'SIGNED_OUT') return;
+
+      const attempt = getCurrentOAuthAttempt();
+      const localPrep = isOAuthLocalSignOutInFlight();
+      if (__DEV__) {
+        console.log('[auth] SIGNED_OUT', {
+          attemptId: attempt?.id ?? null,
+          localPrep,
+          storeAuth: useAuthStore.getState().isAuthenticated,
+        });
+      }
+
+      if (attempt || localPrep) {
+        useAuthStore.getState().clearAuthState();
+        return;
+      }
+
+      void (async () => {
+        const { data } = await supabase.auth.getSession();
+        const store = useAuthStore.getState();
+        const action = resolveSignedOutStoreAction({
+          oauthAttemptActive: Boolean(getCurrentOAuthAttempt()),
+          oauthLocalSignOutInFlight: isOAuthLocalSignOutInFlight(),
+          liveSessionExists: Boolean(data.session?.access_token),
+          storeHasSession: Boolean(store.token && store.isAuthenticated),
+        });
+        if (action === 'resync' && data.session) {
+          setSession(data.session);
+          syncStore(data.session);
+          return;
+        }
+        if (action === 'keepStore') {
+          return;
+        }
+        if (action === 'clearAuthLocal') {
+          useAuthStore.getState().clearAuthState();
+          return;
+        }
+        useAuthStore.getState().clearAuth();
+      })();
     });
 
     return () => {
@@ -100,7 +144,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signInWithGoogle = useCallback(() => signInWithProvider('google'), []);
+  const signInWithGoogle = useCallback(async () => {
+    // Drop Zustand identity so a prior account cannot stick while socialAuth
+    // clears the local Supabase session for this OAuth attempt.
+    const store = useAuthStore.getState();
+    if (store.token || store.driverId || store.isAuthenticated) {
+      store.clearAuthState();
+    }
+    return signInWithProvider('google');
+  }, []);
 
   const sendEmailOtp = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({

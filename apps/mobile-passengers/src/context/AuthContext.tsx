@@ -10,6 +10,12 @@ import {
 } from 'react';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { unregisterPush } from '../lib/notifications';
+import {
+  getCurrentOAuthAttempt,
+  isOAuthLocalSignOutInFlight,
+  resolveSignedOutStoreAction,
+} from '../lib/oauthSessionRecovery';
+import { invalidatePassengerProfileCompleteCache } from '../lib/passengerProfileGate';
 import { resetPostOAuthHandoff } from '../lib/postOAuthHandoff';
 import { type SocialProvider, signInWithProvider } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
@@ -36,6 +42,18 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function googleDisplayName(metadata: Record<string, unknown> | undefined): string | null {
+  if (!metadata) return null;
+  const full = typeof metadata.full_name === 'string' ? metadata.full_name.trim() : '';
+  if (full) return full;
+  const name = typeof metadata.name === 'string' ? metadata.name.trim() : '';
+  if (name) return name;
+  const given = typeof metadata.given_name === 'string' ? metadata.given_name.trim() : '';
+  const family = typeof metadata.family_name === 'string' ? metadata.family_name.trim() : '';
+  const joined = [given, family].filter(Boolean).join(' ').trim();
+  return joined || null;
+}
+
 function syncStore(session: Session | null) {
   const store = useAuthStore.getState();
   if (session?.access_token) {
@@ -44,7 +62,7 @@ function syncStore(session: Session | null) {
       session.access_token,
       session.user?.id ?? null,
       session.user?.email ?? null,
-      (metadata?.full_name as string) ?? undefined,
+      googleDisplayName(metadata),
     );
   }
 }
@@ -80,9 +98,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(nextSession);
       if (nextSession?.access_token) {
         syncStore(nextSession);
-      } else if (event === 'SIGNED_OUT') {
-        useAuthStore.getState().clearAuth();
+        return;
       }
+      if (event !== 'SIGNED_OUT') return;
+
+      const attempt = getCurrentOAuthAttempt();
+      const localPrep = isOAuthLocalSignOutInFlight();
+      if (__DEV__) {
+        console.log('[auth] SIGNED_OUT', {
+          attemptId: attempt?.id ?? null,
+          blockedUserId: attempt?.blockedUserId ?? null,
+          localPrep,
+          storeAuth: useAuthStore.getState().isAuthenticated,
+          storeEmail: useAuthStore.getState().email,
+        });
+      }
+
+      // OAuth prep / active attempt: never arm Welcome needsRedirect.
+      if (attempt || localPrep) {
+        useAuthStore.getState().clearAuthLocal();
+        return;
+      }
+
+      // Stale SIGNED_OUT after password/Google setSession — verify live session.
+      void (async () => {
+        const { data } = await supabase.auth.getSession();
+        // Re-check after await: OAuth/prep or store may have moved during getSession.
+        const store = useAuthStore.getState();
+        const action = resolveSignedOutStoreAction({
+          oauthAttemptActive: Boolean(getCurrentOAuthAttempt()),
+          oauthLocalSignOutInFlight: isOAuthLocalSignOutInFlight(),
+          liveSessionExists: Boolean(data.session?.access_token),
+          storeHasSession: Boolean(store.token && store.isAuthenticated),
+        });
+        if (__DEV__) {
+          console.log('[auth] SIGNED_OUT action', {
+            action,
+            liveEmail: data.session?.user?.email ?? null,
+            storeEmail: store.email,
+          });
+        }
+        if (action === 'resync' && data.session) {
+          setSession(data.session);
+          syncStore(data.session);
+          return;
+        }
+        if (action === 'keepStore') {
+          return;
+        }
+        if (action === 'clearAuthLocal') {
+          useAuthStore.getState().clearAuthLocal();
+          return;
+        }
+        useAuthStore.getState().clearAuth();
+      })();
     });
 
     return () => {
@@ -92,7 +161,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signInWithGoogle = useCallback(() => signInWithProvider('google'), []);
+  const signInWithGoogle = useCallback(async () => {
+    // Guest / re-tap Google: drop Zustand identity so a prior account cannot stick
+    // while socialAuth clears the local Supabase session for this attempt.
+    const store = useAuthStore.getState();
+    if (store.token || store.userId || store.isAuthenticated) {
+      store.clearAuthLocal();
+      invalidatePassengerProfileCompleteCache();
+    }
+    return signInWithProvider('google');
+  }, []);
 
   const sendEmailOtp = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({

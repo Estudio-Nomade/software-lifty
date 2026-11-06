@@ -1,7 +1,16 @@
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { getAuthQueryParams } from './authUrlParams';
-import { resolveSessionAfterAuthError } from './oauthSessionRecovery';
+import {
+  beginOAuthAttempt,
+  beginOAuthLocalSignOut,
+  clearOAuthAttempt,
+  endOAuthLocalSignOut,
+  markOAuthAttemptSession,
+  releaseOAuthBlockedUser,
+  resolveSessionAfterAuthError,
+  resolveSessionAfterBrowserDismiss,
+} from './oauthSessionRecovery';
 import { supabase } from './supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -39,12 +48,14 @@ async function runCreateSessionFromUrl(url: string) {
     if (code) {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) throw error;
+      markOAuthAttemptSession(data.session);
       return data.session;
     }
 
     if (access_token && refresh_token) {
       const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
       if (error) throw error;
+      markOAuthAttemptSession(data.session);
       return data.session;
     }
 
@@ -69,38 +80,123 @@ export async function createSessionFromUrl(url: string) {
   return promise;
 }
 
+/**
+ * Drop any leftover local Supabase session so dismiss/recovery cannot "succeed"
+ * as a previous Google account on the same device.
+ */
+async function clearLocalSessionBeforeOAuth(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  const blockedUserId = data.session?.user?.id ?? null;
+  // No local session → nothing to wipe; OAuth attempt flag covers SIGNED_OUT.
+  // Do not leave oauthLocalSignOutInFlight stuck true forever.
+  if (!data.session) return null;
+  beginOAuthLocalSignOut();
+  if (__DEV__) {
+    console.log('[socialAuth] pre-OAuth local signOut', {
+      blockedUserId,
+      email: data.session.user?.email ?? null,
+    });
+  }
+  try {
+    await supabase.auth.signOut({ scope: 'local' });
+    // Verify — if storage still has a session, force another local wipe.
+    const after = await supabase.auth.getSession();
+    if (after.data.session) {
+      if (__DEV__) {
+        console.log('[socialAuth] pre-OAuth session still present after signOut — retry');
+      }
+      await supabase.auth.signOut({ scope: 'local' });
+    }
+  } catch (e) {
+    endOAuthLocalSignOut();
+    throw e;
+  }
+  return blockedUserId;
+}
+
 export async function signInWithProvider(provider: SocialProvider) {
   if (__DEV__) {
     console.log('[socialAuth] authRedirectUri', authRedirectUri);
   }
 
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: {
-      redirectTo: authRedirectUri,
-      skipBrowserRedirect: true,
-    },
-  });
-  if (error) throw error;
-  if (!data?.url) throw new Error('No se pudo iniciar el flujo de autenticacion.');
+  const blockedUserId = await clearLocalSessionBeforeOAuth();
+  const attemptId = beginOAuthAttempt(blockedUserId);
 
-  const result = await WebBrowser.openAuthSessionAsync(data.url, authRedirectUri);
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: authRedirectUri,
+        skipBrowserRedirect: true,
+        queryParams: { prompt: 'select_account' },
+      },
+    });
+    if (error) throw error;
+    if (!data?.url) throw new Error('No se pudo iniciar el flujo de autenticacion.');
 
-  if (__DEV__) {
-    const pathOnly =
-      result.type === 'success' && result.url ? result.url.split('?')[0]?.split('#')[0] : null;
-    console.log('[socialAuth] openAuthSession', { type: result.type, path: pathOnly });
+    const result = await WebBrowser.openAuthSessionAsync(data.url, authRedirectUri);
+
+    if (__DEV__) {
+      const pathOnly =
+        result.type === 'success' && result.url ? result.url.split('?')[0]?.split('#')[0] : null;
+      console.log('[socialAuth] openAuthSession', {
+        type: result.type,
+        path: pathOnly,
+        attemptId,
+        blockedUserId,
+      });
+    }
+
+    if (result.type === 'success' && result.url) {
+      const session = await createSessionFromUrl(result.url);
+      if (__DEV__) {
+        console.log('[socialAuth] post-OAuth session', {
+          attemptId,
+          userId: session?.user?.id ?? null,
+          email: session?.user?.email ?? null,
+        });
+      }
+      if (!session) releaseOAuthBlockedUser();
+      return session;
+    }
+
+    // Deep link may have completed exchange while browser reported dismiss.
+    if (result.type === 'dismiss' || result.type === 'cancel') {
+      if (inflightSessionFromUrl) {
+        try {
+          const twin = await inflightSessionFromUrl.promise;
+          if (twin?.access_token) {
+            if (__DEV__) {
+              console.log('[socialAuth] dismiss recovered inflight', {
+                attemptId,
+                userId: twin.user?.id ?? null,
+                email: twin.user?.email ?? null,
+              });
+            }
+            return twin;
+          }
+        } catch {
+          // fall through to attempt-scoped dismiss recovery
+        }
+      }
+      const recovered = await resolveSessionAfterBrowserDismiss(() => supabase.auth.getSession());
+      if (__DEV__) {
+        console.log('[socialAuth] dismiss recovery', {
+          attemptId,
+          hit: Boolean(recovered),
+          userId: recovered?.user?.id ?? null,
+          email: recovered?.user?.email ?? null,
+        });
+      }
+      if (!recovered) releaseOAuthBlockedUser();
+      return recovered;
+    }
+
+    releaseOAuthBlockedUser();
+    return null;
+  } finally {
+    // Drop attempt so a later stray AuthCallback finishErr cannot reuse mark.
+    // blockedOAuthUserId stays until mark (success) or release (cancel above).
+    clearOAuthAttempt();
   }
-
-  if (result.type === 'success' && result.url) {
-    return createSessionFromUrl(result.url);
-  }
-
-  // Deep link may have completed exchange while browser reported dismiss.
-  if (result.type === 'dismiss' || result.type === 'cancel') {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData.session) return sessionData.session;
-  }
-
-  return null;
 }

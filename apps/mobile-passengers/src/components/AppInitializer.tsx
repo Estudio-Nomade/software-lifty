@@ -73,13 +73,39 @@ function SessionRestore() {
     };
 
     const timeoutId = setTimeout(() => {
-      console.log('[SessionRestore] timeout — marking session restored');
-      settle(() => {
-        if (shouldClearGhostOnRestoreFailure(sessionConfirmed)) {
-          clearAuth();
+      console.log('[SessionRestore] timeout — re-check Supabase before clear');
+      void (async () => {
+        if (cancelled || restoreSettled) return;
+        // Google may have signed in while getSession hung — never wipe a live session.
+        try {
+          const { data } = await supabase.auth.getSession();
+          const token = data.session?.access_token ?? null;
+          if (token && shouldApplySessionAfterSettle(restoreSettled)) {
+            settle(() => {
+              sessionConfirmed = true;
+              const metadata = data.session?.user?.user_metadata as
+                | Record<string, unknown>
+                | undefined;
+              setSession(
+                token,
+                data.session?.user?.id ?? null,
+                data.session?.user?.email ?? null,
+                (metadata?.full_name as string) ?? undefined,
+              );
+              markRestored();
+            });
+            return;
+          }
+        } catch {
+          // fall through to ghost policy
         }
-        markRestored();
-      });
+        settle(() => {
+          if (shouldClearGhostOnRestoreFailure(sessionConfirmed)) {
+            clearAuth();
+          }
+          markRestored();
+        });
+      })();
     }, SESSION_RESTORE_TIMEOUT_MS);
 
     const restore = async () => {
@@ -126,15 +152,15 @@ function SessionRestore() {
 
 function PassengerProfileRegistrar() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const fullName = useAuthStore((s) => s.fullName);
   const registeredRef = useRef(false);
 
   useEffect(() => {
     if (!isAuthenticated || registeredRef.current) return;
     registeredRef.current = true;
-    // Minimal row only — phone/name completion happens on CompleteProfile or email path.
-    registerPassenger(undefined, fullName ?? undefined).catch(() => {});
-  }, [isAuthenticated, fullName]);
+    // Minimal row only — never push sticky store fullName (wrong Google account).
+    // Name/phone completion happens on CompleteProfile or email path.
+    registerPassenger(undefined, undefined).catch(() => {});
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) {

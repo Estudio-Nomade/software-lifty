@@ -5,7 +5,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams';
-import { shouldTreatAuthCallbackAsSuccess } from '../lib/oauthSessionRecovery';
+import {
+  canFinishAuthCallbackWithSession,
+  shouldTreatAuthCallbackAsSuccess,
+} from '../lib/oauthSessionRecovery';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
 import {
   WELCOME_HOP_REFUSED,
@@ -250,9 +253,15 @@ export function AuthCallbackScreen() {
         }
 
         const { data } = await supabase.auth.getSession();
-        if (data.session) {
+        if (canFinishAuthCallbackWithSession(data.session)) {
           await finishOk();
           return;
+        }
+        if (__DEV__ && data.session) {
+          console.log('[AuthCallback] skip residual session handoff', {
+            userId: data.session.user?.id ?? null,
+            email: data.session.user?.email ?? null,
+          });
         }
 
         await new Promise<void>((resolve) => {
@@ -267,7 +276,7 @@ export function AuthCallbackScreen() {
         }
 
         const session2 = await supabase.auth.getSession();
-        if (session2.data.session) {
+        if (canFinishAuthCallbackWithSession(session2.data.session)) {
           await finishOk();
           return;
         }

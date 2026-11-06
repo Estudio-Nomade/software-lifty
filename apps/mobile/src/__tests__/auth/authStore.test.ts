@@ -58,6 +58,14 @@ describe('authStore.clearAuth', () => {
     expect(useAuthStore.getState().driverStatus).toBeNull();
     expect(useAuthStore.getState().onboardingStep).toBeNull();
   });
+
+  it('replaces driverId when switching accounts (no sticky previous id)', () => {
+    useAuthStore.getState().setSession('token-b', 'driver-b');
+    useAuthStore.getState().setSession('token-a', 'driver-a');
+
+    expect(useAuthStore.getState().driverId).toBe('driver-a');
+    expect(useAuthStore.getState().token).toBe('token-a');
+  });
 });
 
 describe('authStore.clearAuthState', () => {
