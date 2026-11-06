@@ -2,12 +2,18 @@ import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { BrandSplash } from '../components/BrandSplash';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams';
 import { shouldTreatAuthCallbackAsSuccess } from '../lib/oauthSessionRecovery';
 import { resolvePassengerPostAuthPathWithRetry } from '../lib/postAuthRouting';
-import { runPostOAuthHandoff } from '../lib/postOAuthHandoff';
+import {
+  beginOAuthBrandBridge,
+  endOAuthBrandBridge,
+  endOAuthBrandBridgeAfterPaint,
+  getLastOAuthHandoffTarget,
+  isPostOAuthHandoffCompleted,
+  runPostOAuthHandoff,
+} from '../lib/postOAuthHandoff';
 import { createSessionFromUrl } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
@@ -55,9 +61,8 @@ function paramsAttemptKey(parts: {
 
 /**
  * Absorbs `lifty-passenger://auth-callback` deep links on native APK.
- * Without this file, expo-router shows Unmatched Route + sitemap.
- * Session exchange is idempotent with openAuthSessionAsync (double entry OK).
- * Navigation is single-flight via runPostOAuthHandoff (never double BrandSplash).
+ * BrandSplash is ONLY the root OAuthBrandBridge overlay — this screen stays plain
+ * so twin-path never paints splash ×2.
  */
 export function AuthCallbackScreen() {
   const router = useRouter();
@@ -80,6 +85,19 @@ export function AuthCallbackScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Single visual bridge for cold + warm OAuth.
+    beginOAuthBrandBridge();
+
+    // Remount after handoff already done — leave immediately, no second splash.
+    if (isPostOAuthHandoffCompleted()) {
+      const target = getLastOAuthHandoffTarget() ?? '/home';
+      router.replace(
+        target as '/complete-profile' | '/location-permissions' | '/home' | '/login-credentials',
+      );
+      endOAuthBrandBridgeAfterPaint();
+      return;
+    }
+
     if (finishedOkRef.current) return;
 
     const attemptKey = paramsAttemptKey({
@@ -100,9 +118,19 @@ export function AuthCallbackScreen() {
 
     let cancelled = false;
 
+    const navigateTo = (target: string) => {
+      if (cancelled) return;
+      if (__DEV__) {
+        console.log('[AuthCallback] finishOk target=', target);
+      }
+      router.replace(
+        target as '/complete-profile' | '/location-permissions' | '/home' | '/login-credentials',
+      );
+    };
+
     /**
-     * Single post-OAuth handoff: resolve complete-profile vs home while BrandSplash
-     * stays up, then one replace via module lock. Never hop via Welcome guest CTAs.
+     * Single post-OAuth handoff via module lock. Root OAuthBrandBridge holds the
+     * one BrandSplash; this screen never paints its own.
      */
     const finishOk = async () => {
       if (cancelled || finishedOkRef.current) return;
@@ -124,12 +152,11 @@ export function AuthCallbackScreen() {
         }
         const userId = session?.user?.id ?? useAuthStore.getState().userId;
 
-        await runPostOAuthHandoff({
+        const result = await runPostOAuthHandoff({
           key: userId ?? 'session',
           owner: 'AuthCallback',
           resolveTarget: async () => {
             let target = await resolvePassengerPostAuthPathWithRetry(userId ?? null);
-            // Never land guest Welcome if we still have a session/userId.
             if (target === '/' && userId) {
               target = '/complete-profile';
             }
@@ -138,39 +165,37 @@ export function AuthCallbackScreen() {
             }
             return target;
           },
-          navigate: (target) => {
-            if (cancelled) return;
-            if (__DEV__) {
-              console.log('[AuthCallback] finishOk target=', target);
-            }
-            router.replace(
-              target as
-                | '/complete-profile'
-                | '/location-permissions'
-                | '/home'
-                | '/login-credentials',
-            );
-          },
+          navigate: navigateTo,
         });
+
+        if (cancelled) return;
+        // skipped/joined: ensure we are not stuck on this route with a blank plain view
+        if (result === 'skipped' || result === 'joined') {
+          const target = getLastOAuthHandoffTarget() ?? (userId ? '/home' : '/login-credentials');
+          navigateTo(target);
+        }
+        endOAuthBrandBridgeAfterPaint();
       } catch {
         if (cancelled) return;
+        finishedOkRef.current = false;
         const userId = useAuthStore.getState().userId;
         const fallback = userId ? '/complete-profile' : '/login-credentials';
-        await runPostOAuthHandoff({
-          key: userId ?? 'session',
-          owner: 'AuthCallback',
-          resolveTarget: async () => fallback,
-          navigate: (target) => {
-            if (cancelled) return;
-            router.replace(target as '/complete-profile' | '/login-credentials');
-          },
-        });
+        try {
+          await runPostOAuthHandoff({
+            key: userId ?? 'session',
+            owner: 'AuthCallback',
+            resolveTarget: async () => fallback,
+            navigate: navigateTo,
+          });
+          endOAuthBrandBridgeAfterPaint();
+        } catch {
+          endOAuthBrandBridge();
+        }
       }
     };
 
     const finishErr = async (err: unknown) => {
       if (cancelled || finishedOkRef.current) return;
-      // Race: twin path may still be writing session — brief re-check.
       if (await shouldTreatAuthCallbackAsSuccess(() => supabase.auth.getSession())) {
         await finishOk();
         return;
@@ -188,6 +213,7 @@ export function AuthCallbackScreen() {
             : String(err ?? '');
         console.error('[AuthCallback] finishErr', raw);
       }
+      endOAuthBrandBridge();
       const msg = getFriendlyAuthError(err);
       setError(msg);
       setTimeout(() => {
@@ -237,7 +263,6 @@ export function AuthCallbackScreen() {
           return;
         }
 
-        // Twin path (openAuthSessionAsync) may still be exchanging — wait briefly.
         await new Promise<void>((resolve) => {
           setTimeout(resolve, 1200);
         });
@@ -285,27 +310,14 @@ export function AuthCallbackScreen() {
     );
   }
 
-  return (
-    <View style={styles.splashRoot}>
-      <BrandSplash />
-      <Text style={styles.splashHint}>Completando inicio de sesion…</Text>
-    </View>
-  );
+  // Plain underlay — BrandSplash lives only on root OAuthBrandBridge (≤1).
+  return <View style={styles.plainRoot} />;
 }
 
 const styles = StyleSheet.create({
-  splashRoot: {
+  plainRoot: {
     flex: 1,
-  },
-  splashHint: {
-    position: 'absolute',
-    bottom: theme.spacing.xl * 2,
-    left: theme.spacing.lg,
-    right: theme.spacing.lg,
-    textAlign: 'center',
-    color: theme.colors.mediumGray,
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
+    backgroundColor: theme.colors.background,
   },
   errorRoot: {
     flex: 1,

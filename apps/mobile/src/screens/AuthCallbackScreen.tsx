@@ -2,13 +2,20 @@ import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { BrandSplash } from '../components/BrandSplash';
 import { Button } from '../components/Button';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams';
 import { shouldTreatAuthCallbackAsSuccess } from '../lib/oauthSessionRecovery';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
-import { WELCOME_HOP_REFUSED, runPostOAuthHandoff } from '../lib/postOAuthHandoff';
+import {
+  WELCOME_HOP_REFUSED,
+  beginOAuthBrandBridge,
+  endOAuthBrandBridge,
+  endOAuthBrandBridgeAfterPaint,
+  getLastOAuthHandoffTarget,
+  isPostOAuthHandoffCompleted,
+  runPostOAuthHandoff,
+} from '../lib/postOAuthHandoff';
 import { routePathForScreen } from '../lib/screenRoutes';
 import { createSessionFromUrl } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
@@ -92,7 +99,7 @@ export function AuthCallbackScreen() {
       const { data } = await supabase.auth.getSession();
       const userId = data.session?.user?.id ?? 'session';
 
-      await runPostOAuthHandoff({
+      const result = await runPostOAuthHandoff({
         key: userId,
         owner: 'AuthCallback',
         resolveTarget: async () => {
@@ -114,8 +121,14 @@ export function AuthCallbackScreen() {
           router.replace(target);
         },
       });
+      if (result === 'skipped' || result === 'joined') {
+        const target = getLastOAuthHandoffTarget();
+        if (target) router.replace(target);
+      }
+      endOAuthBrandBridgeAfterPaint();
     } catch (err) {
       finishedOkRef.current = false;
+      endOAuthBrandBridge();
       if (err instanceof Error && err.message === WELCOME_HOP_REFUSED) {
         if (__DEV__) {
           console.log('[AuthCallback] refuse Welcome hop; staying for recovery');
@@ -152,6 +165,15 @@ export function AuthCallbackScreen() {
   }, [finishOk, retrying]);
 
   useEffect(() => {
+    beginOAuthBrandBridge();
+
+    if (isPostOAuthHandoffCompleted()) {
+      const target = getLastOAuthHandoffTarget() ?? '/online';
+      router.replace(target);
+      endOAuthBrandBridgeAfterPaint();
+      return;
+    }
+
     if (finishedOkRef.current) return;
 
     const attemptKey = paramsAttemptKey({
@@ -185,6 +207,7 @@ export function AuthCallbackScreen() {
             : String(err ?? '');
         console.error('[AuthCallback] finishErr', raw);
       }
+      endOAuthBrandBridge();
       const msg = getFriendlyAuthError(err);
       setError(msg);
       setTimeout(() => {
@@ -304,27 +327,14 @@ export function AuthCallbackScreen() {
     );
   }
 
-  return (
-    <View style={styles.splashRoot}>
-      <BrandSplash />
-      <Text style={styles.splashHint}>Completando inicio de sesion…</Text>
-    </View>
-  );
+  // Plain underlay — BrandSplash lives only on root OAuthBrandBridge (≤1).
+  return <View style={styles.plainRoot} />;
 }
 
 const styles = StyleSheet.create({
-  splashRoot: {
+  plainRoot: {
     flex: 1,
-  },
-  splashHint: {
-    position: 'absolute',
-    bottom: theme.spacing.xl * 2,
-    left: theme.spacing.lg,
-    right: theme.spacing.lg,
-    textAlign: 'center',
-    color: theme.colors.mediumGray,
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
+    backgroundColor: theme.colors.background,
   },
   errorRoot: {
     flex: 1,

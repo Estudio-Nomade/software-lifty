@@ -22,7 +22,14 @@ import {
   isInvalidLoginCredentialsError,
 } from '../lib/authErrors';
 import { resolvePassengerPostAuthPath } from '../lib/postAuthRouting';
-import { resetPostOAuthHandoff, runPostOAuthHandoff } from '../lib/postOAuthHandoff';
+import {
+  beginOAuthBrandBridge,
+  endOAuthBrandBridge,
+  endOAuthBrandBridgeAfterPaint,
+  getLastOAuthHandoffTarget,
+  resetPostOAuthHandoff,
+  runPostOAuthHandoff,
+} from '../lib/postOAuthHandoff';
 import { classifySignUpResult } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
 import { useRegistrationDraftStore } from '../store/registrationDraftStore';
@@ -67,7 +74,7 @@ async function replaceAfterGoogleAuth(
   userId: string,
   owner: string,
 ) {
-  await runPostOAuthHandoff({
+  const result = await runPostOAuthHandoff({
     key: userId,
     owner,
     resolveTarget: async () => {
@@ -77,6 +84,11 @@ async function replaceAfterGoogleAuth(
     },
     navigate: (path) => replacePathAfterAuth(replace, path, userId),
   });
+  if (result === 'skipped' || result === 'joined') {
+    const target = getLastOAuthHandoffTarget();
+    if (target) replacePathAfterAuth(replace, target, userId);
+  }
+  endOAuthBrandBridgeAfterPaint();
 }
 
 export function LoginCredentialsScreen() {
@@ -184,8 +196,9 @@ export function LoginCredentialsScreen() {
     setInfo(null);
     setHighlightGoogle(false);
     setGoogleLoading(true);
-    // New Google attempt may re-login same user — clear prior handoff lock.
+    // New Google attempt — clear prior handoff lock; one BrandSplash overlay.
     resetPostOAuthHandoff();
+    beginOAuthBrandBridge();
     try {
       const session = await signInWithGoogle();
       if (__DEV__) {
@@ -201,8 +214,10 @@ export function LoginCredentialsScreen() {
         return;
       }
       // Cancel / dismiss without session — stay on login, no fake success.
+      endOAuthBrandBridge();
       setInfo('Inicio de sesión cancelado.');
     } catch (err) {
+      endOAuthBrandBridge();
       setError(getFriendlyAuthError(err));
     } finally {
       setGoogleLoading(false);

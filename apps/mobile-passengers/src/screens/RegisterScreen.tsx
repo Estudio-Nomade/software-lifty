@@ -19,7 +19,14 @@ import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { resolvePassengerPostAuthPath } from '../lib/postAuthRouting';
-import { resetPostOAuthHandoff, runPostOAuthHandoff } from '../lib/postOAuthHandoff';
+import {
+  beginOAuthBrandBridge,
+  endOAuthBrandBridge,
+  endOAuthBrandBridgeAfterPaint,
+  getLastOAuthHandoffTarget,
+  resetPostOAuthHandoff,
+  runPostOAuthHandoff,
+} from '../lib/postOAuthHandoff';
 import { theme } from '../theme';
 
 function replacePathAfterAuth(
@@ -51,7 +58,7 @@ async function replaceAfterGoogleAuth(
   userId: string,
   owner: string,
 ) {
-  await runPostOAuthHandoff({
+  const result = await runPostOAuthHandoff({
     key: userId,
     owner,
     resolveTarget: async () => {
@@ -61,6 +68,11 @@ async function replaceAfterGoogleAuth(
     },
     navigate: (path) => replacePathAfterAuth(replace, path, userId),
   });
+  if (result === 'skipped' || result === 'joined') {
+    const target = getLastOAuthHandoffTarget();
+    if (target) replacePathAfterAuth(replace, target, userId);
+  }
+  endOAuthBrandBridgeAfterPaint();
 }
 
 export function RegisterScreen() {
@@ -99,6 +111,7 @@ export function RegisterScreen() {
     setError(null);
     setGoogleLoading(true);
     resetPostOAuthHandoff();
+    beginOAuthBrandBridge();
     try {
       clearDraft();
       const session = await signInWithGoogle();
@@ -110,8 +123,10 @@ export function RegisterScreen() {
         await replaceAfterGoogleAuth(replace, session.user.id, 'Register');
         return;
       }
+      endOAuthBrandBridge();
       setError('Inicio de sesión cancelado.');
     } catch (err) {
+      endOAuthBrandBridge();
       setError(getFriendlyAuthError(err));
     } finally {
       setGoogleLoading(false);

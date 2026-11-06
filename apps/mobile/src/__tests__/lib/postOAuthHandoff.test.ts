@@ -1,6 +1,10 @@
 import {
   OAUTH_HANDOFF_ABORTED,
   WELCOME_HOP_REFUSED,
+  beginOAuthBrandBridge,
+  endOAuthBrandBridge,
+  getLastOAuthHandoffTarget,
+  isOAuthBrandBridgeActive,
   isPostOAuthHandoffCompleted,
   resetPostOAuthHandoff,
   resetPostOAuthHandoffForTests,
@@ -12,7 +16,7 @@ describe('runPostOAuthHandoff', () => {
     resetPostOAuthHandoffForTests();
   });
 
-  it('navigates once for a key', async () => {
+  it('navigates once for a key and turns brand bridge on', async () => {
     const navigate = jest.fn();
     const resolveTarget = jest.fn().mockResolvedValue('/active');
 
@@ -27,6 +31,18 @@ describe('runPostOAuthHandoff', () => {
     expect(resolveTarget).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith('/active');
     expect(isPostOAuthHandoffCompleted('user-1')).toBe(true);
+    expect(getLastOAuthHandoffTarget()).toBe('/active');
+    expect(isOAuthBrandBridgeActive()).toBe(true);
+    endOAuthBrandBridge();
+    expect(isOAuthBrandBridgeActive()).toBe(false);
+  });
+
+  it('beginOAuthBrandBridge is idempotent single visual', () => {
+    beginOAuthBrandBridge();
+    beginOAuthBrandBridge();
+    expect(isOAuthBrandBridgeActive()).toBe(true);
+    endOAuthBrandBridge();
+    expect(isOAuthBrandBridgeActive()).toBe(false);
   });
 
   it('second call same key is no-op (skipped)', async () => {

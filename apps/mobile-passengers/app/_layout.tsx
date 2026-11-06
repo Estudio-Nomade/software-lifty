@@ -7,17 +7,23 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { AppInitializer } from '../src/components/AppInitializer';
 import { BrandSplash } from '../src/components/BrandSplash';
+import { OAuthBrandBridge } from '../src/components/OAuthBrandBridge';
 import { ConnectivityBanner } from '../src/components/feedback/ConnectivityBanner';
 import { ErrorBoundary } from '../src/components/feedback/ErrorBoundary';
 import { AuthProvider } from '../src/context/AuthContext';
+import { isOAuthBrandBridgeActive, subscribeOAuthBrandBridge } from '../src/lib/postOAuthHandoff';
 import { queryClient } from '../src/lib/queryClient';
 import { theme } from '../src/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+function useOAuthQuietAnimation(): boolean {
+  return useSyncExternalStore(subscribeOAuthBrandBridge, isOAuthBrandBridgeActive, () => false);
+}
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -26,6 +32,8 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+  const oauthQuiet = useOAuthQuietAnimation();
+  const postAuthAnimation = oauthQuiet ? 'none' : 'slide_from_right';
 
   useEffect(() => {
     if (fontsLoaded || fontError) {
@@ -56,8 +64,20 @@ export default function RootLayout() {
                 name="auth-callback"
                 options={{ animation: 'none', gestureEnabled: false }}
               />
+              {/* Quiet entry while single BrandSplash overlay is up */}
+              <Stack.Screen name="home" options={{ animation: postAuthAnimation }} />
+              <Stack.Screen name="complete-profile" options={{ animation: postAuthAnimation }} />
+              <Stack.Screen
+                name="location-permissions"
+                options={{ animation: postAuthAnimation }}
+              />
+              <Stack.Screen
+                name="index"
+                options={{ animation: oauthQuiet ? 'none' : 'slide_from_right' }}
+              />
             </Stack>
             <AppInitializer />
+            <OAuthBrandBridge />
             <ConnectivityBanner />
           </View>
         </AuthProvider>
