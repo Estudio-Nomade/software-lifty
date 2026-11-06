@@ -117,7 +117,13 @@ export default function RootLayout() {
                     animation: 'slide_from_right',
                     contentStyle: { backgroundColor: theme.colors.background },
                   }}
-                />
+                >
+                  {/* Static OAuth bridge — no slide-in BrandSplash perception */}
+                  <Stack.Screen
+                    name="auth-callback"
+                    options={{ animation: 'none', gestureEnabled: false }}
+                  />
+                </Stack>
                 <TabBarShell />
                 <RouteSync />
                 <AppInitializer />

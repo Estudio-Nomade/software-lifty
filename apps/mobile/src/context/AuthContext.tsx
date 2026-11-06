@@ -11,6 +11,7 @@ import {
 import { apiClient } from '../api/client';
 import { stopTracking } from '../lib/location';
 import { unregisterPush } from '../lib/notifications';
+import { resetPostOAuthHandoff } from '../lib/postOAuthHandoff';
 import { queryClient } from '../lib/queryClient';
 import { type SocialProvider, signInWithProvider } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
@@ -136,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     // Stop bg location/FGS before clearing session so queued OS updates don't keep heartbeating.
+    resetPostOAuthHandoff();
     const hb = useOnlineStore.getState().heartbeatIntervalRef;
     if (hb) clearInterval(hb);
     useOnlineStore.getState().setHeartbeatRef(null);

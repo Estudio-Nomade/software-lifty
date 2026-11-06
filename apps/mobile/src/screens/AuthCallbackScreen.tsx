@@ -1,12 +1,14 @@
 import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { BrandSplash } from '../components/BrandSplash';
+import { Button } from '../components/Button';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams';
 import { shouldTreatAuthCallbackAsSuccess } from '../lib/oauthSessionRecovery';
-import { resolvePostAuthRoute } from '../lib/postAuthRouting';
+import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
+import { runPostOAuthHandoff } from '../lib/postOAuthHandoff';
 import { routePathForScreen } from '../lib/screenRoutes';
 import { createSessionFromUrl } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
@@ -56,6 +58,8 @@ function paramsAttemptKey(parts: {
  * Absorbs `lifty://auth-callback` deep links on native APK.
  * Without this file, expo-router shows Unmatched Route + sitemap.
  * Session exchange is idempotent with openAuthSessionAsync (double entry OK).
+ * Navigation is single-flight via runPostOAuthHandoff (never double BrandSplash).
+ * Transient status failure stays here (recovery) — never hop Welcome BrandSplash.
  */
 export function AuthCallbackScreen() {
   const router = useRouter();
@@ -76,6 +80,82 @@ export function AuthCallbackScreen() {
   const noParamsBootRef = useRef(false);
   const finishedOkRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [recovery, setRecovery] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  const finishOk = useCallback(async () => {
+    if (finishedOkRef.current) return;
+    finishedOkRef.current = true;
+    setRecovery(false);
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const userId = data.session?.user?.id ?? 'session';
+
+      await runPostOAuthHandoff({
+        key: userId,
+        owner: 'AuthCallback',
+        resolveTarget: async () => {
+          // resolvePostAuthRoute only throws on transient network; other errors → onboarding.
+          const route = await resolvePostAuthRoute();
+          if (route.blockedMessage) {
+            throw new Error(route.blockedMessage);
+          }
+          if (!route.screen) {
+            throw new Error('No se pudo determinar el siguiente paso.');
+          }
+          return routePathForScreen(route.screen);
+        },
+        navigate: (target) => {
+          // Never replace('/') — Welcome BrandSplash is a second splash transition.
+          if (target === '/' || target === '') {
+            if (__DEV__) {
+              console.log('[AuthCallback] refuse Welcome hop; staying for recovery');
+            }
+            finishedOkRef.current = false;
+            setRecovery(true);
+            // Throw so completedKey is not set and retry can re-run handoff.
+            throw new Error('WELCOME_HOP_REFUSED');
+          }
+          if (__DEV__) {
+            console.log('[AuthCallback] finishOk target=', target);
+          }
+          router.replace(target);
+        },
+      });
+    } catch (err) {
+      finishedOkRef.current = false;
+      if (err instanceof Error && err.message === 'WELCOME_HOP_REFUSED') {
+        setRecovery(true);
+        return;
+      }
+      if (isTransientStatusFailure(err)) {
+        setRecovery(true);
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'No pudimos hablar con el servidor de Lifty. Revisá conexión.',
+        );
+        return;
+      }
+      const msg = err instanceof Error ? err.message : getFriendlyAuthError(err);
+      // Blocked account message stays on this screen (no Welcome hop).
+      setError(msg);
+      setRecovery(true);
+    }
+  }, [router]);
+
+  const handleRetry = useCallback(async () => {
+    if (retrying) return;
+    setRetrying(true);
+    setError(null);
+    finishedOkRef.current = false;
+    try {
+      await finishOk();
+    } finally {
+      setRetrying(false);
+    }
+  }, [finishOk, retrying]);
 
   useEffect(() => {
     if (finishedOkRef.current) return;
@@ -97,30 +177,6 @@ export function AuthCallbackScreen() {
     }
 
     let cancelled = false;
-
-    /**
-     * Single post-OAuth handoff: resolve destination while BrandSplash stays up,
-     * then one replace. Never hop via Welcome (that re-mounts BrandSplash + anim).
-     * Transient status failure → `/` for Welcome recovery (auth + unresolved).
-     */
-    const finishOk = async () => {
-      if (cancelled || finishedOkRef.current) return;
-      // Claim before await so twin-path exchange cannot re-enter while status loads.
-      finishedOkRef.current = true;
-      let target = '/';
-      try {
-        // resolvePostAuthRoute only throws on transient network; other errors → onboarding.
-        const route = await resolvePostAuthRoute();
-        if (route.screen) {
-          target = routePathForScreen(route.screen);
-        }
-      } catch {
-        // Transient status fail → Welcome recovery (auth + unresolved status).
-        target = '/';
-      }
-      if (cancelled) return;
-      router.replace(target);
-    };
 
     const finishErr = async (err: unknown) => {
       if (cancelled || finishedOkRef.current) return;
@@ -152,6 +208,7 @@ export function AuthCallbackScreen() {
       if (startedKeysRef.current.has(key) && finishedOkRef.current) return;
       startedKeysRef.current.add(key);
       await createSessionFromUrl(url);
+      if (cancelled) return;
       await finishOk();
     };
 
@@ -222,7 +279,28 @@ export function AuthCallbackScreen() {
       cancelled = true;
       sub.remove();
     };
-  }, [router, code, accessToken, refreshToken, oauthError, oauthErrorDescription]);
+  }, [router, code, accessToken, refreshToken, oauthError, oauthErrorDescription, finishOk]);
+
+  if (recovery) {
+    return (
+      <View style={styles.errorRoot}>
+        <Text style={styles.recoveryTitle}>No pudimos cargar tu cuenta</Text>
+        <Text style={styles.recoveryBody}>
+          Hay sesión, pero el servidor no respondió. Reintentá sin salir de esta pantalla.
+        </Text>
+        {error !== null && <Text style={styles.errorText}>{error}</Text>}
+        <View style={styles.recoveryActions}>
+          <Button title="Reintentar" onPress={handleRetry} loading={retrying} disabled={retrying} />
+          <Button
+            title="Volver al login"
+            onPress={() => router.replace('/login-credentials')}
+            variant="secondary"
+            disabled={retrying}
+          />
+        </View>
+      </View>
+    );
+  }
 
   if (error) {
     return (
@@ -260,6 +338,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
+    gap: theme.spacing.sm,
+  },
+  recoveryTitle: {
+    color: theme.colors.deepBlue,
+    fontSize: theme.fontSize.lg,
+    fontFamily: theme.fontFamily.bold,
+    textAlign: 'center',
+  },
+  recoveryBody: {
+    color: theme.colors.mediumGray,
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.regular,
+    textAlign: 'center',
+    maxWidth: 320,
+    lineHeight: 20,
+    marginBottom: theme.spacing.sm,
+  },
+  recoveryActions: {
+    width: '100%',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
   },
   errorText: {
     color: theme.colors.dangerRed,

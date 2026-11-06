@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { HANDOFF_TIMEOUT_MS, welcomeEntryMode } from '../lib/driverStatusGate';
 import { handoffScreenFromStore, routeForDriverStatus } from '../lib/postAuthRouting';
+import { isPostOAuthHandoffCompleted } from '../lib/postOAuthHandoff';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -64,6 +65,7 @@ export const WelcomeScreen: React.FC = () => {
 
   // Self-navigate out of handoff so we don't depend solely on AuthRedirectWatcher
   // (Android Expo Go can no-op watcher replace and leave BrandSplash forever).
+  // Still replace even after OAuth handoff completed (plain bg, no second BrandSplash).
   useEffect(() => {
     if (mode !== 'handoff') {
       handoffAttempted.current = false;
@@ -137,7 +139,11 @@ export const WelcomeScreen: React.FC = () => {
   // Boot / session restore: brand only (no Crear cuenta).
   // loading = fonts/session; handoff = logged-in, watcher routing away.
   // Guest CTAs only when unauthenticated after restore.
+  // Post-OAuth already showed AuthCallback BrandSplash — plain bg, no second mark.
   if (mode === 'loading' || mode === 'handoff') {
+    if (mode === 'handoff' && isPostOAuthHandoffCompleted()) {
+      return <View style={styles.plainBridge} />;
+    }
     return <BrandSplash />;
   }
 
@@ -218,6 +224,10 @@ export const WelcomeScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  plainBridge: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+  },
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,

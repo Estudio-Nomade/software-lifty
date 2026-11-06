@@ -71,6 +71,7 @@ export function AuthRedirectWatcher() {
 
   // Authenticated on welcome/public entry → continue onboarding or home.
   // Auth without status/step (API/CORS fail after login) → stay; Welcome recovery UI.
+  // First OAuth hop is owned by postOAuthHandoff; this only kicks if still on public entry.
   useEffect(() => {
     if (!navReady) return;
     if (!sessionRestored) return;

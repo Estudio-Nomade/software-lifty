@@ -21,6 +21,7 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useResendCode, useSignUp, useVerifyEmail } from '../hooks/useAuth';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
+import { resetPostOAuthHandoff, runPostOAuthHandoff } from '../lib/postOAuthHandoff';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -60,17 +61,28 @@ export const RegisterScreen: React.FC = () => {
     if (googleLoading) return;
     setError(null);
     setGoogleLoading(true);
+    resetPostOAuthHandoff();
     try {
       const session = await signInWithGoogle();
-      if (!session) return;
-      const route = await resolvePostAuthRoute();
-      if (route.blockedMessage) {
-        setError(route.blockedMessage);
-        return;
-      }
-      if (route.screen) {
-        navigation.replace(route.screen);
-      }
+      if (!session?.user) return;
+      await runPostOAuthHandoff({
+        key: session.user.id,
+        owner: 'Register',
+        resolveTarget: async () => {
+          const route = await resolvePostAuthRoute();
+          if (route.blockedMessage) {
+            throw new Error(route.blockedMessage);
+          }
+          if (!route.screen) {
+            throw new Error('No se pudo determinar el siguiente paso.');
+          }
+          return route.screen;
+        },
+        navigate: (screen) => {
+          if (!screen || screen === 'Welcome') return;
+          navigation.replace(screen);
+        },
+      });
     } catch (err) {
       setError(getFriendlyAuthError(err));
       await clearSessionAfterStatusFail(err, signOut);
