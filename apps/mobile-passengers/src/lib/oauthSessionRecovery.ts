@@ -25,6 +25,58 @@ let currentAttempt: OAuthAttemptState | null = null;
  */
 let blockedOAuthUserId: string | null = null;
 
+/**
+ * Pre-OAuth `signOut({ scope: 'local' })` is intentional — SIGNED_OUT must not
+ * arm Welcome `needsRedirect` or wipe a session established mid-race.
+ * Survives a short grace after clearOAuthAttempt for late auth events.
+ */
+let oauthLocalSignOutInFlight = false;
+let oauthLocalSignOutGraceUntil = 0;
+
+const OAUTH_LOCAL_SIGNOUT_GRACE_MS = 2_500;
+
+export function beginOAuthLocalSignOut(): void {
+  oauthLocalSignOutInFlight = true;
+  oauthLocalSignOutGraceUntil = 0;
+}
+
+export function endOAuthLocalSignOut(): void {
+  oauthLocalSignOutInFlight = false;
+  oauthLocalSignOutGraceUntil = Date.now() + OAUTH_LOCAL_SIGNOUT_GRACE_MS;
+}
+
+export function isOAuthLocalSignOutInFlight(): boolean {
+  if (oauthLocalSignOutInFlight) return true;
+  if (oauthLocalSignOutGraceUntil > 0 && Date.now() < oauthLocalSignOutGraceUntil) return true;
+  return false;
+}
+
+/**
+ * Pure policy for SIGNED_OUT → store action (unit-tested).
+ * - oauth prep / attempt / grace → clearAuthLocal (never needsRedirect)
+ * - live session already present (stale SIGNED_OUT after new login) → resync
+ * - else → clearAuth (user-facing logout / Welcome)
+ */
+export function resolveSignedOutStoreAction(input: {
+  oauthAttemptActive: boolean;
+  oauthLocalSignOutInFlight: boolean;
+  liveSessionExists: boolean;
+  /** Zustand already holds a session (password/Google setSession raced ahead). */
+  storeHasSession?: boolean;
+}): 'clearAuthLocal' | 'clearAuth' | 'resync' | 'keepStore' {
+  if (input.oauthAttemptActive || input.oauthLocalSignOutInFlight) {
+    return 'clearAuthLocal';
+  }
+  if (input.liveSessionExists) {
+    return 'resync';
+  }
+  // Stale SIGNED_OUT while store already has the new login — do not wipe.
+  if (input.storeHasSession) {
+    return 'keepStore';
+  }
+  return 'clearAuth';
+}
+
 export function beginOAuthAttempt(blockedUserId: string | null = null): string {
   const id = `oauth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   currentAttempt = {
@@ -43,6 +95,9 @@ export function markOAuthAttemptSession(session: Session | null | undefined): vo
   currentAttempt.acceptedUserId = session.user.id;
   // Exchange proved identity — drop block (including same-account re-pick).
   blockedOAuthUserId = null;
+  // Success: stop treating further SIGNED_OUT as prep (session is real).
+  oauthLocalSignOutInFlight = false;
+  oauthLocalSignOutGraceUntil = 0;
 }
 
 export function getCurrentOAuthAttempt(): OAuthAttemptState | null {
@@ -52,6 +107,11 @@ export function getCurrentOAuthAttempt(): OAuthAttemptState | null {
 export function clearOAuthAttempt(): void {
   currentAttempt = null;
   // Keep blockedOAuthUserId until mark or releaseOAuthBlockedUser.
+  // Only start grace if we actually ran local signOut prep — never sticky forever
+  // when OAuth started with no prior session.
+  if (oauthLocalSignOutInFlight) {
+    endOAuthLocalSignOut();
+  }
 }
 
 /** Call on clean cancel/dismiss with no session so residual block does not stick forever. */
@@ -191,4 +251,6 @@ export async function resolveSessionAfterBrowserDismiss(
 export function resetOAuthAttemptStateForTests(): void {
   currentAttempt = null;
   blockedOAuthUserId = null;
+  oauthLocalSignOutInFlight = false;
+  oauthLocalSignOutGraceUntil = 0;
 }

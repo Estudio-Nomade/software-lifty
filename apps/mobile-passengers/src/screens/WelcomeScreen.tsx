@@ -4,6 +4,7 @@ import { BrandSplash } from '../components/BrandSplash';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useAuthStore } from '../store/authStore';
+import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 import { theme } from '../theme';
 
 /** Teal L monogram (portrait mark). Wordmark + tagline are text below. */
@@ -52,7 +53,14 @@ export function WelcomeScreen() {
           <Button variant="cta" onPress={() => navigate('Register')}>
             Crear cuenta
           </Button>
-          <Button variant="secondary" onPress={() => navigate('LoginCredentials')}>
+          <Button
+            variant="secondary"
+            onPress={() => {
+              // Drop sticky signup draft so LoginCredentials is password login, not signUp.
+              useRegistrationDraftStore.getState().clear();
+              navigate('LoginCredentials');
+            }}
+          >
             Iniciar sesión
           </Button>
           <Text style={styles.terms}>Al continuar aceptás los Términos y Condiciones</Text>
