@@ -79,7 +79,6 @@ export const RegisterScreen: React.FC = () => {
           return route.screen;
         },
         navigate: (screen) => {
-          if (!screen || screen === 'Welcome') return;
           navigation.replace(screen);
         },
       });

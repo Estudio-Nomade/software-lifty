@@ -8,7 +8,7 @@ import { getFriendlyAuthError } from '../lib/authErrors';
 import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams';
 import { shouldTreatAuthCallbackAsSuccess } from '../lib/oauthSessionRecovery';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
-import { runPostOAuthHandoff } from '../lib/postOAuthHandoff';
+import { WELCOME_HOP_REFUSED, runPostOAuthHandoff } from '../lib/postOAuthHandoff';
 import { routePathForScreen } from '../lib/screenRoutes';
 import { createSessionFromUrl } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
@@ -107,16 +107,7 @@ export function AuthCallbackScreen() {
           return routePathForScreen(route.screen);
         },
         navigate: (target) => {
-          // Never replace('/') — Welcome BrandSplash is a second splash transition.
-          if (target === '/' || target === '') {
-            if (__DEV__) {
-              console.log('[AuthCallback] refuse Welcome hop; staying for recovery');
-            }
-            finishedOkRef.current = false;
-            setRecovery(true);
-            // Throw so completedKey is not set and retry can re-run handoff.
-            throw new Error('WELCOME_HOP_REFUSED');
-          }
+          // Forbidden targets (/ , Welcome) rejected by lock before navigate.
           if (__DEV__) {
             console.log('[AuthCallback] finishOk target=', target);
           }
@@ -125,7 +116,10 @@ export function AuthCallbackScreen() {
       });
     } catch (err) {
       finishedOkRef.current = false;
-      if (err instanceof Error && err.message === 'WELCOME_HOP_REFUSED') {
+      if (err instanceof Error && err.message === WELCOME_HOP_REFUSED) {
+        if (__DEV__) {
+          console.log('[AuthCallback] refuse Welcome hop; staying for recovery');
+        }
         setRecovery(true);
         return;
       }
