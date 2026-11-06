@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
-import { SERVICE_AREA_HUB } from '../lib/serviceArea';
+import { getDefaultPlaceBias } from '../lib/serviceArea';
 
 export type PlaceSuggestion = {
   description: string;
@@ -17,12 +17,6 @@ export type PlaceAutocompleteResult = {
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY_CHARS = 2;
-
-/** Villa Dolores bias when GPS unknown — same footprint as passenger / BE catalog. */
-const DEFAULT_BIAS = {
-  lat: SERVICE_AREA_HUB.lat,
-  lng: SERVICE_AREA_HUB.lng,
-} as const;
 
 function isAbortError(err: unknown, signal?: AbortSignal): boolean {
   if (signal?.aborted) return true;
@@ -114,8 +108,14 @@ export function usePlaceAutocomplete(
             biasLng != null &&
             Number.isFinite(biasLat) &&
             Number.isFinite(biasLng);
-          params.lat = hasGps ? biasLat : DEFAULT_BIAS.lat;
-          params.lng = hasGps ? biasLng : DEFAULT_BIAS.lng;
+          if (hasGps) {
+            params.lat = biasLat;
+            params.lng = biasLng;
+          } else {
+            const fallback = getDefaultPlaceBias();
+            params.lat = fallback.lat;
+            params.lng = fallback.lng;
+          }
 
           const { data } = await apiClient.get<unknown>('/maps/places/autocomplete', {
             params,
