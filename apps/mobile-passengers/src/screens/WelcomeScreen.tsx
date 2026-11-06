@@ -39,19 +39,14 @@ export function WelcomeScreen() {
             accessibilityLabel="Lifty"
           />
           <Text style={styles.wordmark}>Lifty</Text>
-          <View
-            style={styles.taglineBlock}
-            accessible
-            accessibilityRole="text"
-            accessibilityLabel="Movilidad que te eleva"
+          <Text
+            style={styles.tagline}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
           >
-            <Text style={styles.tagline} accessible={false}>
-              Movilidad que
-            </Text>
-            <Text style={styles.tagline} accessible={false}>
-              te eleva
-            </Text>
-          </View>
+            Movilidad que te eleva
+          </Text>
         </View>
         <View style={styles.actions}>
           <Button variant="cta" onPress={() => navigate('Register')}>
@@ -100,18 +95,13 @@ const styles = StyleSheet.create({
     color: theme.colors.deepBlue,
     letterSpacing: -0.8,
   },
-  taglineBlock: {
-    alignItems: 'center',
-    maxWidth: 280,
-    minHeight: 44,
-    paddingBottom: theme.spacing.xs,
-    overflow: 'visible',
-  },
   tagline: {
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.medium,
     color: theme.colors.tagline,
     textAlign: 'center',
+    maxWidth: 320,
+    width: '100%',
     lineHeight: 22,
   },
   actions: {

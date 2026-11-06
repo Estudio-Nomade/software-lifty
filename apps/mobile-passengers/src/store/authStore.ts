@@ -42,14 +42,15 @@ export const useAuthStore = create<AuthState>()(
           needsRedirect: token ? false : state.needsRedirect,
         })),
       clearAuth: () =>
-        set({
+        set((state) => ({
           token: null,
           userId: null,
           email: null,
           fullName: null,
           isAuthenticated: false,
-          needsRedirect: true,
-        }),
+          // Only bounce to Welcome if we were actually logged in (not guest ghost clear).
+          needsRedirect: state.isAuthenticated,
+        })),
       resetRedirect: () => set({ needsRedirect: false }),
       setSessionRestored: (sessionRestored) => set({ sessionRestored }),
       setFullName: (fullName) => set({ fullName }),

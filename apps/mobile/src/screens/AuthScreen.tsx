@@ -122,7 +122,6 @@ export const AuthScreen: React.FC = () => {
     setError(null);
     setGoogleLoading(true);
     resetPostOAuthHandoff();
-    beginOAuthBrandBridge();
     try {
       const session = await signInWithGoogle();
       if (!session?.user) {
@@ -130,6 +129,8 @@ export const AuthScreen: React.FC = () => {
         endOAuthBrandBridge();
         return;
       }
+      beginOAuthBrandBridge();
+      useAuthStore.getState().setSession(session.access_token, session.user.id);
       await finishGoogleAuth(session.user.id);
     } catch (err) {
       endOAuthBrandBridge();

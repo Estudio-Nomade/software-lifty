@@ -167,13 +167,14 @@ export const LoginCredentialsScreen: React.FC = () => {
     setError(null);
     setGoogleLoading(true);
     resetPostOAuthHandoff();
-    beginOAuthBrandBridge();
     try {
       const session = await signInWithGoogle();
       if (!session?.user) {
         endOAuthBrandBridge();
         return;
       }
+      beginOAuthBrandBridge();
+      useAuthStore.getState().setSession(session.access_token, session.user.id);
       await finishGoogleAuth(session.user.id);
     } catch (err) {
       endOAuthBrandBridge();
