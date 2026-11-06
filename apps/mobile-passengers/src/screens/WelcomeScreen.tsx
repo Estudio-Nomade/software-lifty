@@ -3,7 +3,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BrandSplash } from '../components/BrandSplash';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { isOAuthBrandBridgeActive, isPostOAuthHandoffCompleted } from '../lib/postOAuthHandoff';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -16,11 +15,11 @@ export function WelcomeScreen() {
   const sessionRestored = useAuthStore((s) => s.sessionRestored);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  // Boot / session restore: brand only. Logged-in → watcher routes to home.
+  // Boot guest: brand only. Authed → plain bg (root OAuthBrandBridge owns the
+  // single BrandSplash) so Google success never flashes L+tagline twice.
   // Never flash Crear cuenta / Iniciar sesión when session already exists.
-  // Post-OAuth: root OAuthBrandBridge owns the single BrandSplash — plain bg here.
   if (!sessionRestored || isAuthenticated) {
-    if (isAuthenticated && (isPostOAuthHandoffCompleted() || isOAuthBrandBridgeActive())) {
+    if (isAuthenticated) {
       return <View style={styles.plainBridge} />;
     }
     return <BrandSplash />;
@@ -40,7 +39,19 @@ export function WelcomeScreen() {
             accessibilityLabel="Lifty"
           />
           <Text style={styles.wordmark}>Lifty</Text>
-          <Text style={styles.tagline}>Movilidad que te eleva</Text>
+          <View
+            style={styles.taglineBlock}
+            accessible
+            accessibilityRole="text"
+            accessibilityLabel="Movilidad que te eleva"
+          >
+            <Text style={styles.tagline} accessible={false}>
+              Movilidad que
+            </Text>
+            <Text style={styles.tagline} accessible={false}>
+              te eleva
+            </Text>
+          </View>
         </View>
         <View style={styles.actions}>
           <Button variant="cta" onPress={() => navigate('Register')}>
@@ -89,12 +100,19 @@ const styles = StyleSheet.create({
     color: theme.colors.deepBlue,
     letterSpacing: -0.8,
   },
+  taglineBlock: {
+    alignItems: 'center',
+    maxWidth: 280,
+    minHeight: 44,
+    paddingBottom: theme.spacing.xs,
+    overflow: 'visible',
+  },
   tagline: {
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.medium,
-    color: theme.colors.mediumGray,
+    color: theme.colors.tagline,
     textAlign: 'center',
-    maxWidth: 280,
+    lineHeight: 22,
   },
   actions: {
     width: '100%',

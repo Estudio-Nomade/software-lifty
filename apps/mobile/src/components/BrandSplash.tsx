@@ -1,4 +1,4 @@
-import { Image, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../theme';
 
 const MARK_L = require('../../assets/lifty-mark-l.png');
@@ -61,12 +61,16 @@ const styles = StyleSheet.create({
   taglineBlock: {
     alignItems: 'center',
     maxWidth: 280,
+    minHeight: 44,
+    paddingBottom: theme.spacing.xs,
+    overflow: 'visible',
   },
   tagline: {
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.medium,
-    color: theme.colors.mediumGray,
+    color: theme.colors.tagline,
     textAlign: 'center',
     lineHeight: 22,
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
   },
 });
