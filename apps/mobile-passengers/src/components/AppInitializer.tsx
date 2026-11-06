@@ -73,13 +73,39 @@ function SessionRestore() {
     };
 
     const timeoutId = setTimeout(() => {
-      console.log('[SessionRestore] timeout — marking session restored');
-      settle(() => {
-        if (shouldClearGhostOnRestoreFailure(sessionConfirmed)) {
-          clearAuth();
+      console.log('[SessionRestore] timeout — re-check Supabase before clear');
+      void (async () => {
+        if (cancelled || restoreSettled) return;
+        // Google may have signed in while getSession hung — never wipe a live session.
+        try {
+          const { data } = await supabase.auth.getSession();
+          const token = data.session?.access_token ?? null;
+          if (token && shouldApplySessionAfterSettle(restoreSettled)) {
+            settle(() => {
+              sessionConfirmed = true;
+              const metadata = data.session?.user?.user_metadata as
+                | Record<string, unknown>
+                | undefined;
+              setSession(
+                token,
+                data.session?.user?.id ?? null,
+                data.session?.user?.email ?? null,
+                (metadata?.full_name as string) ?? undefined,
+              );
+              markRestored();
+            });
+            return;
+          }
+        } catch {
+          // fall through to ghost policy
         }
-        markRestored();
-      });
+        settle(() => {
+          if (shouldClearGhostOnRestoreFailure(sessionConfirmed)) {
+            clearAuth();
+          }
+          markRestored();
+        });
+      })();
     }, SESSION_RESTORE_TIMEOUT_MS);
 
     const restore = async () => {

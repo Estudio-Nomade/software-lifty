@@ -129,6 +129,7 @@ export const AuthScreen: React.FC = () => {
         return;
       }
       beginOAuthBrandBridge();
+      useAuthStore.getState().setSession(session.access_token, session.user.id);
       await finishGoogleAuth(session.user.id);
     } catch (err) {
       endOAuthBrandBridge();

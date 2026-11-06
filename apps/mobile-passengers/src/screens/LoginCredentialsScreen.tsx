@@ -21,7 +21,10 @@ import {
   getFriendlyAuthError,
   isInvalidLoginCredentialsError,
 } from '../lib/authErrors';
-import { resolvePassengerPostAuthPath } from '../lib/postAuthRouting';
+import {
+  resolvePassengerPostAuthPath,
+  resolvePassengerPostAuthPathWithRetry,
+} from '../lib/postAuthRouting';
 import {
   afterPostOAuthHandoff,
   beginOAuthBrandBridge,
@@ -33,6 +36,7 @@ import {
 } from '../lib/postOAuthHandoff';
 import { classifySignUpResult } from '../lib/signupEmail';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../store/authStore';
 import { useRegistrationDraftStore } from '../store/registrationDraftStore';
 import { theme } from '../theme';
 
@@ -79,9 +83,11 @@ async function replaceAfterGoogleAuth(
     key: userId,
     owner,
     resolveTarget: async () => {
-      const path = await resolvePassengerPostAuthPath(userId);
-      if (path === '/' && userId) return '/complete-profile';
-      return path === '/' ? '/login-credentials' : path;
+      // Retry profile gate like AuthCallback so established accounts reach /home.
+      let path = await resolvePassengerPostAuthPathWithRetry(userId);
+      if (path === '/' && userId) path = '/complete-profile';
+      if (path === '/') return '/login-credentials';
+      return path;
     },
     navigate: (path) => replacePathAfterAuth(replace, path, userId),
   });
@@ -207,6 +213,11 @@ export function LoginCredentialsScreen() {
           (session.user.user_metadata as { full_name?: string } | undefined)?.full_name ??
           fullName ??
           undefined;
+        // Sync Zustand before any API/handoff — Bearer comes only from the store.
+        // Without this, getProfile 401 → clearAuth → Welcome bounce.
+        useAuthStore
+          .getState()
+          .setSession(session.access_token, session.user.id, session.user.email ?? null, metaName);
         await registerPassenger(undefined, metaName).catch(() => {});
         await replaceAfterGoogleAuth(replace, session.user.id, 'LoginCredentials');
         return;

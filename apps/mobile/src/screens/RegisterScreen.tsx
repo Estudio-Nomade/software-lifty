@@ -76,6 +76,7 @@ export const RegisterScreen: React.FC = () => {
         return;
       }
       beginOAuthBrandBridge();
+      useAuthStore.getState().setSession(session.access_token, session.user.id);
       const result = await runPostOAuthHandoff({
         key: session.user.id,
         owner: 'Register',
