@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
+  type KeyboardEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -167,7 +170,12 @@ export const OnboardingStep1Screen: React.FC = () => {
   const [locating, setLocating] = useState(false);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [submitError, setSubmitError] = useState('');
+  const [keyboardPad, setKeyboardPad] = useState(0);
   const profileLoaded = useRef(false);
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const addressFieldRef = useRef<ComponentRef<typeof View>>(null);
+  const scrollOffsetY = useRef(0);
+  const keyboardHeightRef = useRef(0);
 
   const gpsLat = useLocationStore((s) => s.lat);
   const gpsLng = useLocationStore((s) => s.lng);
@@ -236,6 +244,78 @@ export const OnboardingStep1Screen: React.FC = () => {
       cancelled = true;
     };
   }, []);
+
+  const addressFocusedRef = useRef(false);
+  const scrollAddressIntoViewRef = useRef<() => void>(() => {});
+
+  const scrollAddressIntoView = useCallback(() => {
+    const run = () => {
+      const field = addressFieldRef.current;
+      const scroll = scrollRef.current;
+      if (!field || !scroll) return;
+
+      field.measureInWindow((_x, fieldY, _w, fieldH) => {
+        const winH = Dimensions.get('window').height;
+        const kb = keyboardHeightRef.current;
+        // Keep caret band (top of multiline) above keyboard with margin.
+        const visibleBottom = winH - kb - 24;
+        const fieldTopTarget = fieldY;
+        const fieldCaretBand = fieldY + Math.min(fieldH, 72);
+        const topGuard = Platform.OS === 'ios' ? 96 : 72;
+
+        let delta = 0;
+        if (fieldCaretBand > visibleBottom) {
+          delta = fieldCaretBand - visibleBottom;
+        } else if (fieldTopTarget < topGuard) {
+          delta = fieldTopTarget - topGuard;
+        }
+        if (delta === 0) return;
+        scroll.scrollTo({
+          y: Math.max(0, scrollOffsetY.current + delta),
+          animated: true,
+        });
+      });
+    };
+    requestAnimationFrame(() => {
+      setTimeout(run, Platform.OS === 'ios' ? 60 : 100);
+    });
+  }, []);
+
+  useEffect(() => {
+    scrollAddressIntoViewRef.current = scrollAddressIntoView;
+  }, [scrollAddressIntoView]);
+
+  // Extra bottom room while keyboard is open so Domicilio can scroll above it.
+  // Android adjustResize already shrinks the window — modest pad only.
+  // iOS keeps automaticallyAdjustKeyboardInsets; pad is a scroll runway, not KAV.
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = (e: KeyboardEvent) => {
+      const h = e.endCoordinates.height;
+      keyboardHeightRef.current = h;
+      setKeyboardPad(Platform.OS === 'android' ? Math.max(160, Math.round(h * 0.2)) : 120);
+      if (addressFocusedRef.current) {
+        setTimeout(() => scrollAddressIntoViewRef.current(), Platform.OS === 'ios' ? 40 : 80);
+      }
+    };
+    const onHide = () => {
+      keyboardHeightRef.current = 0;
+      setKeyboardPad(0);
+    };
+    const subShow = Keyboard.addListener(showEvt, onShow);
+    const subHide = Keyboard.addListener(hideEvt, onHide);
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, []);
+
+  const handleAddressFocus = useCallback(() => {
+    addressFocusedRef.current = true;
+    setShowSuggestions(true);
+    scrollAddressIntoView();
+  }, [scrollAddressIntoView]);
 
   const setError = (field: keyof ValidationErrors, error: string | undefined) => {
     setErrors((prev) => ({ ...prev, [field]: error }));
@@ -528,7 +608,11 @@ export const OnboardingStep1Screen: React.FC = () => {
           />
         </View>
 
-        <View style={[styles.fieldGroup, styles.addressFieldGroup]}>
+        <View
+          ref={addressFieldRef}
+          collapsable={false}
+          style={[styles.fieldGroup, styles.addressFieldGroup]}
+        >
           <Text style={styles.fieldLabel}>Domicilio</Text>
           <View style={styles.addressBlock}>
             <Input
@@ -543,6 +627,7 @@ export const OnboardingStep1Screen: React.FC = () => {
                 setError('address', undefined);
               }}
               onBlur={() => {
+                addressFocusedRef.current = false;
                 if (
                   addressLine.trim().length > 0 &&
                   addressLine.trim().length < MIN_ADDRESS_CHARS
@@ -552,14 +637,15 @@ export const OnboardingStep1Screen: React.FC = () => {
                   setError('address', ADDRESS_PICK_REQUIRED_MSG);
                 }
               }}
-              onFocus={() => setShowSuggestions(true)}
+              onFocus={handleAddressFocus}
               error={errors.address}
               containerStyle={styles.input}
               maxLength={200}
               autoCorrect={false}
               multiline
               numberOfLines={3}
-              scrollEnabled
+              // Parent ScrollView owns vertical gestures (multiline internal scroll steals them).
+              scrollEnabled={false}
               rightElement={
                 addressLine.length > 0 ? (
                   <Pressable
@@ -696,6 +782,15 @@ export const OnboardingStep1Screen: React.FC = () => {
     </>
   );
 
+  const contentStyle = [
+    styles.content,
+    keyboardPad > 0 ? { paddingBottom: theme.spacing['2xl'] + keyboardPad } : null,
+  ];
+
+  const onScrollOffset = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    scrollOffsetY.current = e.nativeEvent.contentOffset.y;
+  }, []);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -703,25 +798,32 @@ export const OnboardingStep1Screen: React.FC = () => {
       {/*
         Android: no KeyboardAvoidingView — SO already resizes; KAV leaves a gray gap.
         iOS: padding KAV. Keep #406 dismiss modes.
+        Both: scroll Domicilio into view on focus (scrollRef + measureInWindow).
       */}
       {Platform.OS === 'ios' ? (
         <KeyboardAvoidingView style={styles.flex} behavior="padding">
           <ScrollView
-            contentContainerStyle={styles.content}
+            ref={scrollRef}
+            contentContainerStyle={contentStyle}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             automaticallyAdjustKeyboardInsets
+            onScroll={onScrollOffset}
+            scrollEventThrottle={16}
           >
             {formBody}
           </ScrollView>
         </KeyboardAvoidingView>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.content}
+          ref={scrollRef}
+          contentContainerStyle={contentStyle}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          onScroll={onScrollOffset}
+          scrollEventThrottle={16}
         >
           {formBody}
         </ScrollView>
