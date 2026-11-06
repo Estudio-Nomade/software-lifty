@@ -248,10 +248,16 @@ export const OnboardingStep1Screen: React.FC = () => {
   const addressFocusedRef = useRef(false);
   const scrollAddressIntoViewRef = useRef<() => void>(() => {});
   const scrollRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const typeScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAddressFieldHRef = useRef(0);
 
   const clearScrollRetries = useCallback(() => {
     for (const t of scrollRetryTimersRef.current) clearTimeout(t);
     scrollRetryTimersRef.current = [];
+    if (typeScrollTimerRef.current) {
+      clearTimeout(typeScrollTimerRef.current);
+      typeScrollTimerRef.current = null;
+    }
   }, []);
 
   const resolveKeyboardHeight = useCallback(() => {
@@ -273,6 +279,7 @@ export const OnboardingStep1Screen: React.FC = () => {
 
       field.measureInWindow((_x, fieldY, _w, fieldH) => {
         if (!addressFocusedRef.current) return;
+        lastAddressFieldHRef.current = fieldH;
         const winH = Dimensions.get('window').height;
         const screenH = Dimensions.get('screen').height;
         // Android adjustResize: window already excludes IME — subtracting kb again
@@ -303,10 +310,11 @@ export const OnboardingStep1Screen: React.FC = () => {
     });
   }, [resolveKeyboardHeight]);
 
-  // Pad layout + IME settle are async; retry while Domicilio stays focused.
+  // Keyboard/focus path: Android needs a few passes (pad + IME). iOS: one post-KAV settle
+  // only — multi-retry stacks with automaticallyAdjustKeyboardInsets and double-jumps.
   const scheduleScrollAddressIntoView = useCallback(() => {
     clearScrollRetries();
-    const delays = Platform.OS === 'ios' ? [40, 140, 300] : [60, 160, 340];
+    const delays = Platform.OS === 'ios' ? [180] : [60, 160, 340];
     for (const d of delays) {
       const t = setTimeout(() => {
         if (addressFocusedRef.current) scrollAddressIntoViewRef.current();
@@ -314,6 +322,27 @@ export const OnboardingStep1Screen: React.FC = () => {
       scrollRetryTimersRef.current.push(t);
     }
   }, [clearScrollRetries]);
+
+  // Typing path: trailing debounce, single measure — no retry storm per keystroke.
+  const scheduleScrollOnAddressType = useCallback(() => {
+    if (typeScrollTimerRef.current) clearTimeout(typeScrollTimerRef.current);
+    typeScrollTimerRef.current = setTimeout(() => {
+      typeScrollTimerRef.current = null;
+      if (!addressFocusedRef.current) return;
+      const field = addressFieldRef.current;
+      if (!field) {
+        scrollAddressIntoViewRef.current();
+        return;
+      }
+      // Only nudge when multiline actually grew past last known height.
+      field.measureInWindow((_x, _y, _w, fieldH) => {
+        if (!addressFocusedRef.current) return;
+        if (fieldH <= lastAddressFieldHRef.current + 2) return;
+        lastAddressFieldHRef.current = fieldH;
+        scrollAddressIntoViewRef.current();
+      });
+    }, 220);
+  }, []);
 
   useEffect(() => {
     scrollAddressIntoViewRef.current = scrollAddressIntoView;
@@ -338,6 +367,7 @@ export const OnboardingStep1Screen: React.FC = () => {
     const onHide = () => {
       keyboardHeightRef.current = 0;
       setKeyboardPad(0);
+      lastAddressFieldHRef.current = 0;
       clearScrollRetries();
     };
     const subShow = Keyboard.addListener(showEvt, onShow);
@@ -352,11 +382,12 @@ export const OnboardingStep1Screen: React.FC = () => {
   const handleAddressFocus = useCallback(() => {
     addressFocusedRef.current = true;
     setShowSuggestions(true);
-    // Keyboard already open (refocus / metrics): scroll now. First open: onShow owns scroll.
-    if (resolveKeyboardHeight() > 0) {
+    // Keyboard already open (refocus): scroll now. First open: onShow owns scroll.
+    // Avoid stacking with onShow when height is still settling from a fresh open.
+    if (keyboardHeightRef.current > 0) {
       scheduleScrollAddressIntoView();
     }
-  }, [resolveKeyboardHeight, scheduleScrollAddressIntoView]);
+  }, [scheduleScrollAddressIntoView]);
 
   const setError = (field: keyof ValidationErrors, error: string | undefined) => {
     setErrors((prev) => ({ ...prev, [field]: error }));
@@ -666,13 +697,14 @@ export const OnboardingStep1Screen: React.FC = () => {
                 setSelectedPlace(null);
                 setShowSuggestions(true);
                 setError('address', undefined);
-                // Multiline grows under IME while typing — nudge parent after layout.
+                // Multiline may grow under IME — debounced height-gated nudge (not per key).
                 if (addressFocusedRef.current) {
-                  scheduleScrollAddressIntoView();
+                  scheduleScrollOnAddressType();
                 }
               }}
               onBlur={() => {
                 addressFocusedRef.current = false;
+                lastAddressFieldHRef.current = 0;
                 clearScrollRetries();
                 if (
                   addressLine.trim().length > 0 &&
