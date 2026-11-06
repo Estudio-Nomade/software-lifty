@@ -122,8 +122,16 @@ export function isPostOAuthHandoffCompleted(key?: string): boolean {
   return completedKey === key;
 }
 
+/**
+ * Handoff targets must be expo-router pathnames ("/…").
+ * ScreenNames break twin-path: useAppNavigation.replace(path) is a silent no-op,
+ * and AuthCallback router.replace('ScreenName') is not a valid route.
+ */
 function isForbiddenTarget(target: string): boolean {
-  return !target || target === '/' || target === 'Welcome';
+  if (!target || target === '/' || target === 'Welcome') return true;
+  // Reject ScreenName-style targets (no leading slash).
+  if (!target.startsWith('/')) return true;
+  return false;
 }
 
 function toError(error: unknown): Error {

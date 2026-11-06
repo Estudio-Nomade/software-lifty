@@ -7,7 +7,7 @@ import { getFriendlyAuthError } from '../lib/authErrors';
 import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams';
 import {
   canFinishAuthCallbackWithSession,
-  shouldTreatAuthCallbackAsSuccess,
+  decideAuthCallbackFinishErrAction,
 } from '../lib/oauthSessionRecovery';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
 import {
@@ -23,6 +23,7 @@ import {
 import { routePathForScreen } from '../lib/screenRoutes';
 import { createSessionFromUrl } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
 const AUTH_SCHEME = 'lifty';
@@ -100,7 +101,11 @@ export function AuthCallbackScreen() {
 
     try {
       const { data } = await supabase.auth.getSession();
-      const userId = data.session?.user?.id ?? 'session';
+      const live = data.session;
+      if (live?.access_token) {
+        useAuthStore.getState().setSession(live.access_token, live.user?.id ?? null);
+      }
+      const userId = live?.user?.id ?? 'session';
 
       const result = await runPostOAuthHandoff({
         key: userId,
@@ -196,27 +201,60 @@ export function AuthCallbackScreen() {
 
     const finishErr = async (err: unknown) => {
       if (cancelled || finishedOkRef.current) return;
-      if (await shouldTreatAuthCallbackAsSuccess(() => supabase.auth.getSession())) {
-        await finishOk();
-        return;
-      }
+
+      const { data: sessionSnap } = await supabase.auth.getSession();
+      const action = decideAuthCallbackFinishErrAction(sessionSnap.session, {
+        handoffCompleted: isPostOAuthHandoffCompleted(),
+      });
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         const raw =
           typeof err === 'object' && err !== null && 'message' in err
             ? String((err as { message?: unknown }).message ?? '')
             : String(err ?? '');
-        console.error('[AuthCallback] finishErr', raw);
+        console.error('[AuthCallback] finishErr', {
+          raw,
+          action,
+          session: Boolean(sessionSnap.session?.user?.id),
+          email: sessionSnap.session?.user?.email ?? null,
+        });
       }
+      if (action === 'finishOk') {
+        await finishOk();
+        return;
+      }
+      if (action === 'recovery') {
+        endOAuthBrandBridge();
+        setError(getFriendlyAuthError(err));
+        setRecovery(true);
+        return;
+      }
+
       endOAuthBrandBridge();
       const msg = getFriendlyAuthError(err);
       setError(msg);
       setTimeout(() => {
-        if (!cancelled && !finishedOkRef.current) {
-          router.replace({
-            pathname: '/login-credentials',
-            params: { authError: msg },
+        void (async () => {
+          if (cancelled || finishedOkRef.current) return;
+          // Re-check right before bounce — twin path may have completed mid-flash.
+          const again = await supabase.auth.getSession();
+          const late = decideAuthCallbackFinishErrAction(again.data.session, {
+            handoffCompleted: isPostOAuthHandoffCompleted(),
           });
-        }
+          if (late === 'finishOk') {
+            await finishOk();
+            return;
+          }
+          if (late === 'recovery') {
+            setRecovery(true);
+            return;
+          }
+          if (!cancelled && !finishedOkRef.current) {
+            router.replace({
+              pathname: '/login-credentials',
+              params: { authError: msg },
+            });
+          }
+        })();
       }, 900);
     };
 

@@ -4,7 +4,7 @@ import {
   isTransientStatusFailure,
   routeForDriverStatus,
 } from '../../lib/postAuthRouting';
-import { routePathForScreen } from '../../lib/screenRoutes';
+import { SCREEN_TO_ROUTE, routePathForScreen } from '../../lib/screenRoutes';
 
 describe('STEP_ROUTE order', () => {
   it('keeps KYC before vehicle before documents', () => {
@@ -181,5 +181,10 @@ describe('dual-role notice (existing passenger opening the driver app)', () => {
 
   it('registers the notice route path', () => {
     expect(routePathForScreen('PassengerAccountNotice')).toBe('/passenger-account-notice');
+  });
+
+  it('SCREEN_TO_ROUTE does not index path strings (useAppNavigation no-op trap)', () => {
+    expect(SCREEN_TO_ROUTE['/passenger-account-notice' as keyof typeof SCREEN_TO_ROUTE]).toBeUndefined();
+    expect(SCREEN_TO_ROUTE.PassengerAccountNotice).toBe('/passenger-account-notice');
   });
 });

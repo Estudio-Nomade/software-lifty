@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -38,11 +38,10 @@ import {
   afterPostOAuthHandoff,
   beginOAuthBrandBridge,
   endOAuthBrandBridge,
-  endOAuthBrandBridgeAfterPaint,
-  getLastOAuthHandoffTarget,
   resetPostOAuthHandoff,
   runPostOAuthHandoff,
 } from '../lib/postOAuthHandoff';
+import { routePathForScreen } from '../lib/screenRoutes';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -52,6 +51,7 @@ const COOLDOWN_SECONDS = 30;
 
 export const LoginCredentialsScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -127,9 +127,15 @@ export const LoginCredentialsScreen: React.FC = () => {
     }
   }, [navigation, termsAccepted, signOut]);
 
-  /** Google twin-path: single-flight replace (shared with AuthCallback). */
+  /** Google twin-path: single-flight replace (shared with AuthCallback). Paths only. */
   const finishGoogleAuth = useCallback(
     async (userId: string) => {
+      const navigatePath = (path: string) => {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.log('[oauth-handoff] replace →', path, 'owner=LoginCredentials');
+        }
+        router.replace(path);
+      };
       try {
         const result = await runPostOAuthHandoff({
           key: userId,
@@ -139,17 +145,15 @@ export const LoginCredentialsScreen: React.FC = () => {
             if (route.blockedMessage) {
               throw new Error(route.blockedMessage);
             }
-            if (!termsAccepted) return 'Terms';
+            if (!termsAccepted) return routePathForScreen('Terms');
             if (!route.screen) {
               throw new Error('No se pudo determinar el siguiente paso.');
             }
-            return route.screen;
+            return routePathForScreen(route.screen);
           },
-          navigate: (screen) => {
-            navigation.replace(screen);
-          },
+          navigate: navigatePath,
         });
-        afterPostOAuthHandoff(result, (target) => navigation.replace(target));
+        afterPostOAuthHandoff(result, navigatePath);
       } catch (err: unknown) {
         endOAuthBrandBridge();
         const message =
@@ -166,7 +170,7 @@ export const LoginCredentialsScreen: React.FC = () => {
         }
       }
     },
-    [navigation, termsAccepted, signOut],
+    [router, termsAccepted, signOut],
   );
 
   const handleGoogle = useCallback(async () => {
@@ -178,8 +182,18 @@ export const LoginCredentialsScreen: React.FC = () => {
     try {
       const session = await signInWithGoogle();
       if (!session?.user) {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.log('[oauth] handleGoogle session? null owner=LoginCredentials');
+        }
         endOAuthBrandBridge();
         return;
+      }
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.log('[oauth] handleGoogle session?', {
+          hasUser: true,
+          email: session.user.email ?? null,
+          owner: 'LoginCredentials',
+        });
       }
       beginOAuthBrandBridge();
       useAuthStore.getState().setSession(session.access_token, session.user.id);

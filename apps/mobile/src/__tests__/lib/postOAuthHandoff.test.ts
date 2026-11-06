@@ -142,6 +142,48 @@ describe('runPostOAuthHandoff', () => {
     expect(isPostOAuthHandoffCompleted('user-4')).toBe(false);
   });
 
+  it('refuses ScreenName targets (must be path) so twin-path leaveTo cannot no-op', async () => {
+    const navigate = jest.fn();
+    await expect(
+      runPostOAuthHandoff({
+        key: 'user-screen-name',
+        owner: 'Register',
+        resolveTarget: async () => 'PassengerAccountNotice',
+        navigate,
+      }),
+    ).rejects.toThrow(WELCOME_HOP_REFUSED);
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(isPostOAuthHandoffCompleted('user-screen-name')).toBe(false);
+  });
+
+  it('accepts dual-role notice path', async () => {
+    const navigate = jest.fn();
+    const result = await runPostOAuthHandoff({
+      key: 'user-dual',
+      owner: 'AuthCallback',
+      resolveTarget: async () => '/passenger-account-notice',
+      navigate,
+    });
+    expect(result).toBe('navigated');
+    expect(navigate).toHaveBeenCalledWith('/passenger-account-notice');
+    expect(getLastOAuthHandoffTarget()).toBe('/passenger-account-notice');
+  });
+
+  it('skipped leaveTo receives path lastTarget (not ScreenName)', async () => {
+    const navigate = jest.fn();
+    await runPostOAuthHandoff({
+      key: 'user-leave',
+      owner: 'AuthCallback',
+      resolveTarget: async () => '/passenger-account-notice',
+      navigate,
+    });
+    const leave = jest.fn();
+    afterPostOAuthHandoff('skipped', leave);
+    expect(leave).toHaveBeenCalledWith('/passenger-account-notice');
+    endOAuthBrandBridge();
+  });
+
   it('leader failure propagates; joiner can become leader', async () => {
     const navigate = jest.fn();
     let release!: (v: string) => void;
