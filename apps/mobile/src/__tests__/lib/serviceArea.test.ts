@@ -2,6 +2,8 @@ import {
   LEGACY_VD_MARKET,
   PICKUP_RADIUS_KM,
   SERVICE_AREA_HUB,
+  bindActiveServiceMarketsFetcher,
+  ensureActiveServiceMarkets,
   findPickupMarket,
   getActiveServiceMarkets,
   isInsidePickupArea,
@@ -32,6 +34,7 @@ function tandilMarket(overrides: Partial<ServiceMarketGeo> = {}): ServiceMarketG
 
 describe('serviceArea (driver address preview)', () => {
   afterEach(() => {
+    bindActiveServiceMarketsFetcher(null);
     resetServiceMarketsToLegacy();
   });
 
@@ -78,5 +81,28 @@ describe('serviceArea (driver address preview)', () => {
     setActiveServiceMarkets([]);
     expect(isInsidePickupArea(SERVICE_AREA_HUB.lat, SERVICE_AREA_HUB.lng)).toBe(true);
     expect(isInsidePickupArea(TANDIL.lat, TANDIL.lng)).toBe(false);
+  });
+
+  it('successful empty /active response falls back to legacy (drops prior Tandil)', async () => {
+    setActiveServiceMarkets([LEGACY_VD_MARKET, tandilMarket()]);
+    expect(isInsidePickupArea(TANDIL.lat, TANDIL.lng)).toBe(true);
+
+    bindActiveServiceMarketsFetcher(async () => ({ items: [] }));
+    await ensureActiveServiceMarkets({ force: true });
+
+    expect(isInsidePickupArea(TANDIL.lat, TANDIL.lng)).toBe(false);
+    expect(isInsidePickupArea(SERVICE_AREA_HUB.lat, SERVICE_AREA_HUB.lng)).toBe(true);
+  });
+
+  it('failed fetch advances backoff so the next call skips network within TTL', async () => {
+    let calls = 0;
+    bindActiveServiceMarketsFetcher(async () => {
+      calls += 1;
+      throw new Error('offline');
+    });
+
+    await ensureActiveServiceMarkets({ force: true });
+    await ensureActiveServiceMarkets();
+    expect(calls).toBe(1);
   });
 });

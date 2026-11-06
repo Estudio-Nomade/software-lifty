@@ -170,14 +170,16 @@ type FetchActiveMarkets = () => Promise<unknown>;
 let fetchActiveMarketsImpl: FetchActiveMarkets | null = null;
 
 /** Injected from ensureServiceMarkets (avoids apiClient import cycle in pure geo). */
-export function bindActiveServiceMarketsFetcher(fn: FetchActiveMarkets): void {
+export function bindActiveServiceMarketsFetcher(fn: FetchActiveMarkets | null): void {
   fetchActiveMarketsImpl = fn;
 }
 
 /**
  * Fetch GET /service-markets/active and hydrate module cache.
- * On failure / empty → keep previous or legacy VD (no crash).
- * Returns marketsVersion after hydrate (or current if skipped/failed).
+ * - Success with items → set those markets
+ * - Success empty → legacy VD (setActiveServiceMarkets([]))
+ * - Failure → keep previous markets (or legacy boot); still advance lastFetchedAt for TTL backoff
+ * Returns marketsVersion after hydrate (or current if skipped).
  */
 export async function ensureActiveServiceMarkets(options?: {
   force?: boolean;
@@ -195,16 +197,13 @@ export async function ensureActiveServiceMarkets(options?: {
         fetchActiveMarketsImpl = fetchActiveServiceMarketsPayload;
       }
       const data = await fetchActiveMarketsImpl();
-      const markets = parseActiveMarketsPayload(data);
-      if (markets.length > 0) {
-        setActiveServiceMarkets(markets);
-      }
-      lastFetchedAt = Date.now();
+      // Always apply successful body — empty list → legacy VD via setActiveServiceMarkets([]).
+      setActiveServiceMarkets(parseActiveMarketsPayload(data));
     } catch {
-      if (lastFetchedAt === 0) {
-        // stay on legacy boot markets
-      }
+      // Offline / 401 — keep last good or legacy boot; do not wipe markets.
     } finally {
+      // Advance on success and failure so TTL backs off repeated failing requests.
+      lastFetchedAt = Date.now();
       inFlight = null;
     }
     return marketsVersion;
