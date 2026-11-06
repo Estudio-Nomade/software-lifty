@@ -203,4 +203,19 @@ describe('runPostOAuthHandoff', () => {
     expect(isOAuthBrandBridgeActive()).toBe(false);
   });
 
+  it('begin cancels pending afterPaint so stale end cannot kill new bridge', () => {
+    jest.useFakeTimers();
+    beginOAuthBrandBridge();
+    afterPostOAuthHandoff('navigated');
+    expect(isOAuthBrandBridgeActive()).toBe(true);
+
+    beginOAuthBrandBridge();
+    jest.advanceTimersByTime(250);
+    expect(isOAuthBrandBridgeActive()).toBe(true);
+
+    endOAuthBrandBridge();
+    expect(isOAuthBrandBridgeActive()).toBe(false);
+    jest.useRealTimers();
+  });
+
 });

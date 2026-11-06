@@ -51,6 +51,8 @@ export function isOAuthBrandBridgeActive(): boolean {
 
 /** Show the single BrandSplash overlay (warm Google / cold AuthCallback). */
 export function beginOAuthBrandBridge(): void {
+  // Cancel stale afterPaint end so a new attempt is not killed mid-flow.
+  clearPendingEndBridge();
   if (brandBridgeActive) return;
   brandBridgeActive = true;
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
