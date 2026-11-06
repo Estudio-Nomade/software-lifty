@@ -1,5 +1,10 @@
 import { Elysia } from 'elysia';
-import { verifyHmac } from '../../shared/lib/didit';
+import {
+  WebhookSecretMissingError,
+  getDiditEnv,
+  verifyWebhookSignature,
+} from '../../shared/lib/didit';
+import { logger } from '../../shared/lib/logger';
 import { safeCall } from '../../shared/lib/route-utils';
 import { authGuard } from '../../shared/middleware/require-auth';
 import { decisionParams, sessionParams } from './schema';
@@ -45,13 +50,8 @@ export const kycRoutes = new Elysia({ prefix: '/kyc' })
     { params: decisionParams, requireAuth: true },
   )
   .post('/webhook/didit', async ({ request, set }) => {
-    // DIDIT sends X-Signature (raw-body HMAC) and X-Signature-V2 (canonical);
-    // X-Didit-Signature is kept for backward-compat / tests.
-    const signature =
-      request.headers.get('X-Signature') ||
-      request.headers.get('X-Signature-V2') ||
-      request.headers.get('X-Didit-Signature') ||
-      '';
+    // DIDIT sends X-Signature-V2 (canonical JSON, preferred) and X-Signature
+    // (raw-body HMAC); X-Didit-Signature is kept for backward-compat / tests.
     const text = await request.text();
     let body: any;
     try {
@@ -73,9 +73,26 @@ export const kycRoutes = new Elysia({ prefix: '/kyc' })
       return { error: 'Unauthorized', message: 'Timestamp expired' };
     }
 
-    if (!verifyHmac(text, signature)) {
-      set.status = 401;
-      return { error: 'Unauthorized', message: 'Invalid HMAC signature' };
+    try {
+      if (!verifyWebhookSignature({ rawBody: text, parsedBody: body, headers: request.headers })) {
+        set.status = 401;
+        return { error: 'Unauthorized', message: 'Invalid HMAC signature' };
+      }
+    } catch (err) {
+      if (err instanceof WebhookSecretMissingError) {
+        set.status = 503;
+        return { error: 'Service Unavailable', message: 'Webhook secret not configured' };
+      }
+      throw err;
+    }
+
+    // Never let a sandbox event move KYC state on a live deployment (or vice versa).
+    if (typeof body?.environment === 'string' && body.environment !== getDiditEnv()) {
+      logger.warn('[KYC] Ignoring webhook from mismatched Didit environment', {
+        received: body.environment,
+        expected: getDiditEnv(),
+      });
+      return { message: 'Ignored: environment mismatch' };
     }
 
     const { userId, status, documentNumber, fullName } = extractWebhookData(body);

@@ -54,7 +54,7 @@ Copiar `.env.example` a `.env` y completar las credenciales según el entorno.
 | Variable | Servicio | Se usa para |
 |---|---|---|
 | `TWILIO_*` | Twilio | Envío de SMS (OTP). En dev se muestra por consola. |
-| `DIDIT_API_KEY`, `DIDIT_WEBHOOK_SECRET` | DIDIT | Verificación de identidad (KYC). |
+| `DIDIT_API_KEY`, `DIDIT_WORKFLOW_ID`, `DIDIT_WEBHOOK_SECRET`, `DIDIT_ENV`, `DIDIT_SANDBOX_SCENARIO` | DIDIT | Verificación de identidad (KYC). Ver [Didit sandbox](#didit-sandbox). |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Supabase Storage | Almacenamiento de documentos del conductor. |
 | `PHOTON_URL`, `OSRM_URL` | Komoot / OSRM | Geocodificación y cálculo de rutas. Tienen defaults públicos. |
 
@@ -187,3 +187,17 @@ GitHub Actions ejecuta en cada push a `main` y `develop`:
 ## Licencia
 
 Propietario — Lifty.
+
+
+## Didit sandbox
+
+Sandbox es una **aplicación separada** en la consola de Didit (no un flag del request): tiene su propia API key, workflow UUID y webhook secret. Proveedores mockeados, sin facturación, cuota de 500 sesiones/24h. Los resultados dependen del *scenario*, no de las imágenes.
+
+1. Consola Didit → crear app **Sandbox** → publicar workflow KYC → copiar `DIDIT_API_KEY`, `DIDIT_WORKFLOW_ID` y el `secret_shared_key` del webhook (`DIDIT_WEBHOOK_SECRET`).
+2. En `.env`: `DIDIT_ENV=sandbox` y (opcional) `DIDIT_SANDBOX_SCENARIO=approve` (`decline_aml_hit`, `decline_document_expired`, …; catálogo: `GET https://verification.didit.me/v1/sandbox/scenarios/` con `x-api-key`; ese endpoint responde 200 solo con key sandbox).
+3. Resultado del KYC, dos caminos que convergen al mismo estado:
+   - **Polling** (siempre): la app llama `GET /api/kyc/decision/:session_id`.
+   - **Webhook** (opcional, requiere túnel): `cloudflared tunnel --url http://localhost:3001` y pegar `<url>/api/kyc/webhook/didit` en el webhook de la app sandbox. Se valida `X-Signature-V2` (JSON canónico) o `X-Signature` + `X-Timestamp` ±300s. Si falta `DIDIT_WEBHOOK_SECRET` responde 503.
+4. Un webhook cuyo `environment` no coincide con `DIDIT_ENV` se ignora (200 + warning), para no mezclar sandbox y live.
+
+`DIDIT_ENV` en producción debe ser `live`. Las imágenes sí se guardan realmente en Didit: no subir documentos reales en sandbox.

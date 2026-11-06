@@ -1,9 +1,14 @@
 process.env.NODE_ENV = 'test';
+// bun auto-loads .env; the legacy-signature tests need the secret unset.
+delete process.env.DIDIT_WEBHOOK_SECRET;
+delete process.env.DIDIT_ENV;
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://lifty:lifty@localhost:5433/lifty_test';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { eq } from 'drizzle-orm';
+import { createHmac } from 'node:crypto';
 import { createApp } from '../../index';
+import { canonicalize, createSession, verifyWebhookSignature } from '../../shared/lib/didit';
 import { getDb, resetDb } from '../../shared/db/client';
 import { driverDocuments, drivers, users, vehicles } from '../../shared/db/schema';
 import { createTestAuthPlugin, createTestToken } from '../../shared/testing/utils';
@@ -555,5 +560,91 @@ describe('KYC single source of truth + verified name lock', () => {
 
     const [u] = await getDb().select().from(users).where(eq(users.id, userId));
     expect(u.full_name).toBe('Nuevo Nombre');
+  });
+});
+
+
+describe('Didit webhook signature (V2)', () => {
+  const SECRET = 'test-secret';
+  const body = { status: 'Approved', vendor_data: 'u-1', score: 1.0, name: 'José', b: 1, a: { z: 1, y: [2, 1] } };
+  const sign = (data: string) => createHmac('sha256', SECRET).update(data).digest('hex');
+  const raw = JSON.stringify(body);
+
+  beforeEach(() => {
+    process.env.DIDIT_WEBHOOK_SECRET = SECRET;
+  });
+  afterAll(() => {
+    delete process.env.DIDIT_WEBHOOK_SECRET;
+  });
+
+  test('canonicalize sorts keys, is compact and keeps unicode', () => {
+    expect(canonicalize(body)).toBe('{"a":{"y":[2,1],"z":1},"b":1,"name":"José","score":1,"status":"Approved","vendor_data":"u-1"}');
+  });
+
+  test('accepts a valid X-Signature-V2', () => {
+    const headers = new Headers({ 'X-Signature-V2': sign(canonicalize(body)) });
+    expect(verifyWebhookSignature({ rawBody: raw, parsedBody: body, headers })).toBe(true);
+  });
+
+  test('accepts a valid raw X-Signature', () => {
+    const headers = new Headers({ 'X-Signature': sign(raw) });
+    expect(verifyWebhookSignature({ rawBody: raw, parsedBody: body, headers })).toBe(true);
+  });
+
+  test('rejects a tampered body and a bad signature', () => {
+    const headers = new Headers({ 'X-Signature-V2': sign(canonicalize(body)) });
+    expect(verifyWebhookSignature({ rawBody: raw, parsedBody: { ...body, status: 'Declined' }, headers })).toBe(false);
+    expect(verifyWebhookSignature({ rawBody: raw, parsedBody: body, headers: new Headers({ 'X-Signature-V2': 'deadbeef' }) })).toBe(false);
+    expect(verifyWebhookSignature({ rawBody: raw, parsedBody: body, headers: new Headers() })).toBe(false);
+  });
+
+  test('webhook route: 401 on bad signature, ignores environment mismatch', async () => {
+    app = createApp(createTestAuthPlugin());
+    const payload = { status: 'Approved', vendor_data: 'x', environment: 'sandbox' };
+    const post = async (headers: Record<string, string>) => {
+      const res = await app.handle(
+        new Request('http://localhost/api/kyc/webhook/didit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...webhookHeaders(), ...headers },
+          body: JSON.stringify(payload),
+        }),
+      );
+      return { status: res.status, data: await res.json() };
+    };
+    expect((await post({ 'X-Signature-V2': 'deadbeef' })).status).toBe(401);
+    const ok = await post({ 'X-Signature-V2': sign(canonicalize(payload)) });
+    expect(ok.status).toBe(200); // DIDIT_ENV unset => live => sandbox event ignored
+    expect(ok.data.message).toContain('Ignored');
+  });
+});
+
+describe('Didit createSession sandbox_scenario', () => {
+  test('sends sandbox_scenario only when DIDIT_ENV=sandbox', async () => {
+    const realFetch = globalThis.fetch;
+    const bodies: any[] = [];
+    globalThis.fetch = (async (_url: any, init: any) => {
+      bodies.push(JSON.parse(init.body));
+      return new Response(JSON.stringify({ session_id: 's', session_token: 't', url: 'u' }), { status: 200 });
+    }) as any;
+    const prev = { ...process.env };
+    process.env.NODE_ENV = 'development';
+    process.env.DIDIT_API_KEY = 'k';
+    process.env.DIDIT_WORKFLOW_ID = 'w';
+    process.env.DIDIT_SANDBOX_SCENARIO = 'approve';
+    try {
+      process.env.DIDIT_ENV = 'live';
+      await createSession('u1');
+      process.env.DIDIT_ENV = 'sandbox';
+      await createSession('u1');
+    } finally {
+      globalThis.fetch = realFetch;
+      process.env.NODE_ENV = 'test';
+      for (const k of ['DIDIT_API_KEY', 'DIDIT_WORKFLOW_ID', 'DIDIT_SANDBOX_SCENARIO', 'DIDIT_ENV']) {
+        if (prev[k] === undefined) delete process.env[k];
+        else process.env[k] = prev[k];
+      }
+    }
+    expect(bodies[0].sandbox_scenario).toBeUndefined();
+    expect(bodies[1].sandbox_scenario).toBe('approve');
   });
 });
