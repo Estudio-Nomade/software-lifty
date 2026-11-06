@@ -205,19 +205,39 @@ export function LoginCredentialsScreen() {
     try {
       const session = await signInWithGoogle();
       if (__DEV__) {
-        console.log('[oauth] handleGoogle session?', Boolean(session?.user));
+        console.log('[oauth] handleGoogle session?', {
+          hasUser: Boolean(session?.user),
+          email: session?.user?.email ?? null,
+          userId: session?.user?.id ?? null,
+        });
       }
       if (session?.user) {
         beginOAuthBrandBridge();
+        // Google identity only — never fall back to registrationDraft (other account name).
+        clearDraft();
+        const meta = session.user.user_metadata as
+          | {
+              full_name?: string;
+              name?: string;
+              given_name?: string;
+              family_name?: string;
+            }
+          | undefined;
         const metaName =
-          (session.user.user_metadata as { full_name?: string } | undefined)?.full_name ??
-          fullName ??
+          meta?.full_name?.trim() ||
+          meta?.name?.trim() ||
+          [meta?.given_name, meta?.family_name].filter(Boolean).join(' ').trim() ||
           undefined;
         // Sync Zustand before any API/handoff — Bearer comes only from the store.
         // Without this, getProfile 401 → clearAuth → Welcome bounce.
         useAuthStore
           .getState()
-          .setSession(session.access_token, session.user.id, session.user.email ?? null, metaName);
+          .setSession(
+            session.access_token,
+            session.user.id,
+            session.user.email ?? null,
+            metaName ?? null,
+          );
         await registerPassenger(undefined, metaName).catch(() => {});
         await replaceAfterGoogleAuth(replace, session.user.id, 'LoginCredentials');
         return;

@@ -100,7 +100,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signInWithGoogle = useCallback(() => signInWithProvider('google'), []);
+  const signInWithGoogle = useCallback(async () => {
+    // Drop Zustand identity so a prior account cannot stick while socialAuth
+    // clears the local Supabase session for this OAuth attempt.
+    const store = useAuthStore.getState();
+    if (store.token || store.driverId || store.isAuthenticated) {
+      store.clearAuthState();
+    }
+    return signInWithProvider('google');
+  }, []);
 
   const sendEmailOtp = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
