@@ -208,6 +208,27 @@ export async function shouldTreatAuthCallbackAsSuccess(
   return sessionBelongsToFreshOAuthAttempt(data.session);
 }
 
+/**
+ * finishErr decision (pure): never auto-bounce to login when a usable session exists.
+ * - finishOk: marked attempt or canFinish residual
+ * - recovery: live session present but not finishable yet (status/API may still recover)
+ * - bounceLogin: truly unauthenticated failure
+ */
+export type AuthCallbackFinishErrAction = 'finishOk' | 'recovery' | 'bounceLogin';
+
+export function decideAuthCallbackFinishErrAction(
+  session: Session | null | undefined,
+  opts?: { handoffCompleted?: boolean },
+): AuthCallbackFinishErrAction {
+  if (opts?.handoffCompleted) return 'finishOk';
+  if (sessionBelongsToFreshOAuthAttempt(session)) return 'finishOk';
+  if (canFinishAuthCallbackWithSession(session)) return 'finishOk';
+  if (session?.access_token && session.user?.id && !isBlockedOAuthUser(session.user.id)) {
+    return 'recovery';
+  }
+  return 'bounceLogin';
+}
+
 export async function resolveSessionAfterBrowserDismiss(
   getSession: () => Promise<GetSessionResult>,
 ): Promise<Session | null> {

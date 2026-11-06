@@ -7,10 +7,11 @@ import { getFriendlyAuthError } from '../lib/authErrors';
 import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams';
 import {
   canFinishAuthCallbackWithSession,
-  shouldTreatAuthCallbackAsSuccess,
+  decideAuthCallbackFinishErrAction,
 } from '../lib/oauthSessionRecovery';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
 import {
+  HANDOFF_TARGET_NOT_PATH,
   WELCOME_HOP_REFUSED,
   afterPostOAuthHandoff,
   beginOAuthBrandBridge,
@@ -23,6 +24,7 @@ import {
 import { routePathForScreen } from '../lib/screenRoutes';
 import { createSessionFromUrl } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
 const AUTH_SCHEME = 'lifty';
@@ -100,7 +102,11 @@ export function AuthCallbackScreen() {
 
     try {
       const { data } = await supabase.auth.getSession();
-      const userId = data.session?.user?.id ?? 'session';
+      const live = data.session;
+      if (live?.access_token) {
+        useAuthStore.getState().setSession(live.access_token, live.user?.id ?? null);
+      }
+      const userId = live?.user?.id ?? 'session';
 
       const result = await runPostOAuthHandoff({
         key: userId,
@@ -128,9 +134,15 @@ export function AuthCallbackScreen() {
       finishedOkRef.current = false;
       // Drop overlay so recovery UI is tappable; retry begins bridge again.
       endOAuthBrandBridge();
-      if (err instanceof Error && err.message === WELCOME_HOP_REFUSED) {
+      if (
+        err instanceof Error &&
+        (err.message === WELCOME_HOP_REFUSED || err.message === HANDOFF_TARGET_NOT_PATH)
+      ) {
         if (typeof __DEV__ !== 'undefined' && __DEV__) {
-          console.log('[AuthCallback] refuse Welcome hop; staying for recovery');
+          console.log(
+            '[AuthCallback] refuse bad handoff target; staying for recovery',
+            err.message,
+          );
         }
         setRecovery(true);
         return;
@@ -150,17 +162,21 @@ export function AuthCallbackScreen() {
     }
   }, [router]);
 
+  // finishErr / 900ms timeout must call the latest finishOk (not a stale effect closure).
+  const finishOkLatestRef = useRef(finishOk);
+  finishOkLatestRef.current = finishOk;
+
   const handleRetry = useCallback(async () => {
     if (retrying) return;
     setRetrying(true);
     setError(null);
     finishedOkRef.current = false;
     try {
-      await finishOk();
+      await finishOkLatestRef.current();
     } finally {
       setRetrying(false);
     }
-  }, [finishOk, retrying]);
+  }, [retrying]);
 
   useEffect(() => {
     // Do NOT begin bridge before early-return guards (stuck overlay risk).
@@ -196,27 +212,62 @@ export function AuthCallbackScreen() {
 
     const finishErr = async (err: unknown) => {
       if (cancelled || finishedOkRef.current) return;
-      if (await shouldTreatAuthCallbackAsSuccess(() => supabase.auth.getSession())) {
-        await finishOk();
-        return;
-      }
+
+      const { data: sessionSnap } = await supabase.auth.getSession();
+      const action = decideAuthCallbackFinishErrAction(sessionSnap.session, {
+        handoffCompleted: isPostOAuthHandoffCompleted(),
+      });
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
         const raw =
           typeof err === 'object' && err !== null && 'message' in err
             ? String((err as { message?: unknown }).message ?? '')
             : String(err ?? '');
-        console.error('[AuthCallback] finishErr', raw);
+        console.error('[AuthCallback] finishErr', {
+          raw,
+          action,
+          session: Boolean(sessionSnap.session?.user?.id),
+          email: sessionSnap.session?.user?.email ?? null,
+        });
       }
+      if (action === 'finishOk') {
+        await finishOkLatestRef.current();
+        return;
+      }
+      if (action === 'recovery') {
+        // Session present: stay here with Reintentar (handleRetry → finishOk). Never wipe to login.
+        endOAuthBrandBridge();
+        setError(getFriendlyAuthError(err));
+        setRecovery(true);
+        return;
+      }
+
       endOAuthBrandBridge();
       const msg = getFriendlyAuthError(err);
       setError(msg);
       setTimeout(() => {
-        if (!cancelled && !finishedOkRef.current) {
-          router.replace({
-            pathname: '/login-credentials',
-            params: { authError: msg },
+        void (async () => {
+          if (cancelled || finishedOkRef.current) return;
+          // Re-check right before bounce — twin path may have completed mid-flash.
+          const again = await supabase.auth.getSession();
+          const late = decideAuthCallbackFinishErrAction(again.data.session, {
+            handoffCompleted: isPostOAuthHandoffCompleted(),
           });
-        }
+          if (late === 'finishOk') {
+            await finishOkLatestRef.current();
+            return;
+          }
+          if (late === 'recovery') {
+            setError(msg);
+            setRecovery(true);
+            return;
+          }
+          if (!cancelled && !finishedOkRef.current) {
+            router.replace({
+              pathname: '/login-credentials',
+              params: { authError: msg },
+            });
+          }
+        })();
       }, 900);
     };
 
@@ -226,7 +277,7 @@ export function AuthCallbackScreen() {
       startedKeysRef.current.add(key);
       await createSessionFromUrl(url);
       if (cancelled) return;
-      await finishOk();
+      await finishOkLatestRef.current();
     };
 
     const isCallbackPayload = (url: string) =>
@@ -254,7 +305,7 @@ export function AuthCallbackScreen() {
 
         const { data } = await supabase.auth.getSession();
         if (canFinishAuthCallbackWithSession(data.session)) {
-          await finishOk();
+          await finishOkLatestRef.current();
           return;
         }
         if (__DEV__ && data.session) {
@@ -277,7 +328,7 @@ export function AuthCallbackScreen() {
 
         const session2 = await supabase.auth.getSession();
         if (canFinishAuthCallbackWithSession(session2.data.session)) {
-          await finishOk();
+          await finishOkLatestRef.current();
           return;
         }
 
@@ -301,7 +352,8 @@ export function AuthCallbackScreen() {
       cancelled = true;
       sub.remove();
     };
-  }, [router, code, accessToken, refreshToken, oauthError, oauthErrorDescription, finishOk]);
+    // finishOk via finishOkLatestRef — omit from deps so param-only remounts drive the effect.
+  }, [router, code, accessToken, refreshToken, oauthError, oauthErrorDescription]);
 
   if (recovery) {
     return (

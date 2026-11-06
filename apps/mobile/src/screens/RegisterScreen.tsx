@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import type React from 'react';
 import { useCallback, useState } from 'react';
 import {
@@ -30,11 +31,10 @@ import {
   afterPostOAuthHandoff,
   beginOAuthBrandBridge,
   endOAuthBrandBridge,
-  endOAuthBrandBridgeAfterPaint,
-  getLastOAuthHandoffTarget,
   resetPostOAuthHandoff,
   runPostOAuthHandoff,
 } from '../lib/postOAuthHandoff';
+import { routePathForScreen } from '../lib/screenRoutes';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -52,6 +52,7 @@ async function clearSessionAfterStatusFail(
 
 export const RegisterScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const setDriverStatus = useAuthStore((s) => s.setDriverStatus);
   const { loading, signInWithGoogle, signOut } = useAuth();
@@ -80,11 +81,27 @@ export const RegisterScreen: React.FC = () => {
     try {
       const session = await signInWithGoogle();
       if (!session?.user) {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.log('[oauth] handleGoogle session? null owner=Register');
+        }
         endOAuthBrandBridge();
         return;
       }
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.log('[oauth] handleGoogle session?', {
+          hasUser: true,
+          email: session.user.email ?? null,
+          owner: 'Register',
+        });
+      }
       beginOAuthBrandBridge();
       useAuthStore.getState().setSession(session.access_token, session.user.id);
+      const navigatePath = (path: string) => {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.log('[oauth-handoff] replace →', path, 'owner=Register');
+        }
+        router.replace(path);
+      };
       const result = await runPostOAuthHandoff({
         key: session.user.id,
         owner: 'Register',
@@ -96,13 +113,11 @@ export const RegisterScreen: React.FC = () => {
           if (!route.screen) {
             throw new Error('No se pudo determinar el siguiente paso.');
           }
-          return route.screen;
+          return routePathForScreen(route.screen);
         },
-        navigate: (screen) => {
-          navigation.replace(screen);
-        },
+        navigate: navigatePath,
       });
-      afterPostOAuthHandoff(result, (target) => navigation.replace(target));
+      afterPostOAuthHandoff(result, navigatePath);
     } catch (err) {
       endOAuthBrandBridge();
       setError(getFriendlyAuthError(err));
@@ -110,7 +125,7 @@ export const RegisterScreen: React.FC = () => {
     } finally {
       setGoogleLoading(false);
     }
-  }, [googleLoading, signInWithGoogle, navigation, signOut]);
+  }, [googleLoading, signInWithGoogle, router, signOut]);
 
   const passwordMatch =
     password.length > 0 && confirmPassword.length > 0 && password === confirmPassword;

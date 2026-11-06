@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -23,11 +24,10 @@ import {
   afterPostOAuthHandoff,
   beginOAuthBrandBridge,
   endOAuthBrandBridge,
-  endOAuthBrandBridgeAfterPaint,
-  getLastOAuthHandoffTarget,
   resetPostOAuthHandoff,
   runPostOAuthHandoff,
 } from '../lib/postOAuthHandoff';
+import { routePathForScreen } from '../lib/screenRoutes';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -38,6 +38,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const AuthScreen: React.FC = () => {
   const navigation = useAppNavigation();
+  const router = useRouter();
   const { signInWithGoogle, sendEmailOtp, verifyEmailOtp, resendEmailOtp, signOut } = useAuth();
 
   const [step, setStep] = useState<Step>('method');
@@ -80,9 +81,15 @@ export const AuthScreen: React.FC = () => {
     }
   }, [navigation, signOut]);
 
-  /** Google twin-path: single-flight replace (shared with AuthCallback). */
+  /** Google twin-path: single-flight replace (shared with AuthCallback). Paths only. */
   const finishGoogleAuth = useCallback(
     async (userId: string) => {
+      const navigatePath = (path: string) => {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.log('[oauth-handoff] replace →', path, 'owner=AuthScreen');
+        }
+        router.replace(path);
+      };
       try {
         const result = await runPostOAuthHandoff({
           key: userId,
@@ -95,13 +102,11 @@ export const AuthScreen: React.FC = () => {
             if (!route.screen) {
               throw new Error('No se pudo determinar el siguiente paso.');
             }
-            return route.screen;
+            return routePathForScreen(route.screen);
           },
-          navigate: (screen) => {
-            navigation.replace(screen);
-          },
+          navigate: navigatePath,
         });
-        afterPostOAuthHandoff(result, (target) => navigation.replace(target));
+        afterPostOAuthHandoff(result, navigatePath);
       } catch (err) {
         endOAuthBrandBridge();
         setError(getFriendlyAuthError(err));
@@ -114,7 +119,7 @@ export const AuthScreen: React.FC = () => {
         }
       }
     },
-    [navigation, signOut],
+    [router, signOut],
   );
 
   const handleGoogle = async () => {

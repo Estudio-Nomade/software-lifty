@@ -4,6 +4,7 @@ import {
   beginOAuthLocalSignOut,
   canFinishAuthCallbackWithSession,
   clearOAuthAttempt,
+  decideAuthCallbackFinishErrAction,
   getCurrentOAuthAttempt,
   isBlockedOAuthUser,
   isOAuthLocalSignOutInFlight,
@@ -144,6 +145,49 @@ describe('shouldTreatAuthCallbackAsSuccess', () => {
       data: { session },
     }));
     expect(ok).toBe(false);
+  });
+});
+
+describe('decideAuthCallbackFinishErrAction', () => {
+  afterEach(() => {
+    resetOAuthAttemptStateForTests();
+  });
+
+  it('finishOk when handoff already completed (no bounce to login)', () => {
+    expect(decideAuthCallbackFinishErrAction(null, { handoffCompleted: true })).toBe('finishOk');
+  });
+
+  it('finishOk for marked fresh OAuth session', () => {
+    beginOAuthAttempt(null);
+    const session = stubSession('at', 'user-a');
+    markOAuthAttemptSession(session);
+    expect(decideAuthCallbackFinishErrAction(session)).toBe('finishOk');
+  });
+
+  it('finishOk for residual session after attempt cleared (post socialAuth finally)', () => {
+    beginOAuthAttempt(null);
+    const session = stubSession('at', 'user-a');
+    markOAuthAttemptSession(session);
+    clearOAuthAttempt();
+    expect(decideAuthCallbackFinishErrAction(session)).toBe('finishOk');
+  });
+
+  it('recovery for live session that is not finishable yet (no login bounce)', () => {
+    beginOAuthAttempt(null);
+    // Attempt open, unmarked — not canFinish, but session is real → stay recovery.
+    const session = stubSession('at', 'user-a');
+    expect(canFinishAuthCallbackWithSession(session)).toBe(false);
+    expect(decideAuthCallbackFinishErrAction(session)).toBe('recovery');
+  });
+
+  it('bounceLogin when there is no session', () => {
+    expect(decideAuthCallbackFinishErrAction(null)).toBe('bounceLogin');
+  });
+
+  it('bounceLogin for blocked residual user without mark', () => {
+    beginOAuthAttempt('user-b');
+    clearOAuthAttempt();
+    expect(decideAuthCallbackFinishErrAction(stubSession('at-b', 'user-b'))).toBe('bounceLogin');
   });
 });
 
