@@ -7,6 +7,8 @@ const brand = {
   deepBlue: '#0D2B45',
   lightGray: '#F1F4F6',
   mediumGray: '#A8B1BA',
+  /** Brand lockup tagline on background — ≥4.5:1 (mediumGray is ~2:1). */
+  tagline: '#5C6B7A',
   white: '#FFFFFF',
   background: '#EEF7F6',
   surface: '#FFFFFF',
@@ -26,6 +28,7 @@ export const theme = {
     deepBlue: brand.deepBlue,
     lightGray: brand.lightGray,
     mediumGray: brand.mediumGray,
+    tagline: brand.tagline,
     white: brand.white,
     background: brand.background,
     surface: brand.surface,

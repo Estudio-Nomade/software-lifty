@@ -191,4 +191,15 @@ describe('runPostOAuthHandoff', () => {
     expect(isOAuthBrandBridgeActive()).toBe(false);
   });
 
+  it('reset does not kill brand bridge mid-flight (call site re-begin)', () => {
+    beginOAuthBrandBridge();
+    expect(isOAuthBrandBridgeActive()).toBe(true);
+    resetPostOAuthHandoff();
+    expect(isOAuthBrandBridgeActive()).toBe(true);
+    beginOAuthBrandBridge();
+    expect(isOAuthBrandBridgeActive()).toBe(true);
+    endOAuthBrandBridge();
+    expect(isOAuthBrandBridgeActive()).toBe(false);
+  });
+
 });

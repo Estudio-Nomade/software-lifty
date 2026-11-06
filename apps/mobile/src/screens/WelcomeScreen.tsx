@@ -12,7 +12,6 @@ import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { HANDOFF_TIMEOUT_MS, welcomeEntryMode } from '../lib/driverStatusGate';
 import { handoffScreenFromStore, routeForDriverStatus } from '../lib/postAuthRouting';
-import { isOAuthBrandBridgeActive, isPostOAuthHandoffCompleted } from '../lib/postOAuthHandoff';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -136,12 +135,11 @@ export const WelcomeScreen: React.FC = () => {
     }
   }, [signOut, signingOut]);
 
-  // Boot / session restore: brand only (no Crear cuenta).
-  // loading = fonts/session; handoff = logged-in, watcher routing away.
-  // Guest CTAs only when unauthenticated after restore.
-  // Post-OAuth already showed AuthCallback BrandSplash — plain bg, no second mark.
+  // Boot / session restore: brand only (no Crear cuenta) for guests.
+  // Authed (loading or handoff): plain bg — root OAuthBrandBridge owns the single
+  // BrandSplash so Google success never flashes L+tagline twice.
   if (mode === 'loading' || mode === 'handoff') {
-    if (mode === 'handoff' && (isPostOAuthHandoffCompleted() || isOAuthBrandBridgeActive())) {
+    if (isAuthenticated) {
       return <View style={styles.plainBridge} />;
     }
     return <BrandSplash />;
@@ -203,7 +201,19 @@ export const WelcomeScreen: React.FC = () => {
             accessibilityLabel="Lifty"
           />
           <Text style={styles.wordmark}>Lifty</Text>
-          <Text style={styles.tagline}>Movilidad que te eleva</Text>
+          <View
+            style={styles.taglineBlock}
+            accessible
+            accessibilityRole="text"
+            accessibilityLabel="Movilidad que te eleva"
+          >
+            <Text style={styles.tagline} accessible={false}>
+              Movilidad que
+            </Text>
+            <Text style={styles.tagline} accessible={false}>
+              te eleva
+            </Text>
+          </View>
         </View>
         <View style={styles.actions}>
           <Button
@@ -265,13 +275,20 @@ const styles = StyleSheet.create({
     color: theme.colors.deepBlue,
     letterSpacing: -0.8,
   },
+  taglineBlock: {
+    alignItems: 'center',
+    maxWidth: 280,
+    minHeight: 44,
+    paddingBottom: theme.spacing.xs,
+    overflow: 'visible',
+  },
   tagline: {
     fontSize: theme.fontSize.md,
     fontFamily: theme.fontFamily.medium,
     fontWeight: theme.fontWeight.medium,
-    color: theme.colors.mediumGray,
+    color: theme.colors.tagline,
     textAlign: 'center',
-    maxWidth: 280,
+    lineHeight: 22,
   },
   recoveryTitle: {
     fontSize: theme.fontSize.lg,

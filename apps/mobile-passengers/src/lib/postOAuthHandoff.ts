@@ -21,12 +21,20 @@ let lastTarget: string | null = null;
 /** One global BrandSplash overlay while OAuth completes (root layout). */
 let brandBridgeActive = false;
 const brandBridgeListeners = new Set<() => void>();
+let endBridgeTimer: ReturnType<typeof setTimeout> | null = null;
 
 export type PostOAuthHandoffResult = 'navigated' | 'skipped' | 'joined';
 
 function notifyBrandBridge(): void {
   for (const listener of brandBridgeListeners) {
     listener();
+  }
+}
+
+function clearPendingEndBridge(): void {
+  if (endBridgeTimer != null) {
+    clearTimeout(endBridgeTimer);
+    endBridgeTimer = null;
   }
 }
 
@@ -53,6 +61,7 @@ export function beginOAuthBrandBridge(): void {
 
 /** Hide overlay after destination is on screen. */
 export function endOAuthBrandBridge(): void {
+  clearPendingEndBridge();
   if (!brandBridgeActive) return;
   brandBridgeActive = false;
   if (typeof __DEV__ !== 'undefined' && __DEV__) {
@@ -61,18 +70,13 @@ export function endOAuthBrandBridge(): void {
   notifyBrandBridge();
 }
 
-/** End bridge on next frames so replace paints under the splash first. */
+/** End bridge after destination can paint under the splash (cap ~200ms). */
 export function endOAuthBrandBridgeAfterPaint(): void {
-  const raf = globalThis.requestAnimationFrame?.bind(globalThis);
-  if (typeof raf === 'function') {
-    raf(() => {
-      raf(() => {
-        endOAuthBrandBridge();
-      });
-    });
-    return;
-  }
-  setTimeout(() => endOAuthBrandBridge(), 32);
+  clearPendingEndBridge();
+  endBridgeTimer = setTimeout(() => {
+    endBridgeTimer = null;
+    endOAuthBrandBridge();
+  }, 200);
 }
 
 export function getLastOAuthHandoffTarget(): string | null {
