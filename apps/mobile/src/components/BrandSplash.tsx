@@ -16,19 +16,15 @@ export function BrandSplash() {
           accessibilityLabel="Lifty"
         />
         <Text style={styles.wordmark}>Lifty</Text>
-        <View
-          style={styles.taglineBlock}
-          accessible
+        <Text
+          style={styles.tagline}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
           accessibilityRole="text"
-          accessibilityLabel="Movilidad que te eleva"
         >
-          <Text style={styles.tagline} accessible={false}>
-            Movilidad que
-          </Text>
-          <Text style={styles.tagline} accessible={false}>
-            te eleva
-          </Text>
-        </View>
+          Movilidad que te eleva
+        </Text>
       </View>
     </View>
   );
@@ -45,6 +41,7 @@ const styles = StyleSheet.create({
   brand: {
     alignItems: 'center',
     gap: theme.spacing.sm,
+    width: '100%',
   },
   mark: {
     width: 148,
@@ -58,20 +55,14 @@ const styles = StyleSheet.create({
     color: theme.colors.deepBlue,
     letterSpacing: -0.8,
   },
-  taglineBlock: {
-    alignItems: 'center',
-    maxWidth: 280,
-    minHeight: 52,
-    gap: 2,
-    paddingBottom: theme.spacing.xs,
-    overflow: 'visible',
-  },
   tagline: {
     fontSize: theme.fontSize.md,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.tagline,
     textAlign: 'center',
-    lineHeight: 24,
+    maxWidth: 320,
+    width: '100%',
+    lineHeight: 22,
     ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
   },
 });

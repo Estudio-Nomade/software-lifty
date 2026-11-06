@@ -193,15 +193,16 @@ export function LoginCredentialsScreen() {
     setInfo(null);
     setHighlightGoogle(false);
     setGoogleLoading(true);
-    // New Google attempt — clear prior handoff lock; one BrandSplash overlay.
+    // New Google attempt — clear prior handoff lock. Cover only after session
+    // (plain root bridge, no L+tagline) so cancel never flashes brand lockup.
     resetPostOAuthHandoff();
-    beginOAuthBrandBridge();
     try {
       const session = await signInWithGoogle();
       if (__DEV__) {
         console.log('[oauth] handleGoogle session?', Boolean(session?.user));
       }
       if (session?.user) {
+        beginOAuthBrandBridge();
         const metaName =
           (session.user.user_metadata as { full_name?: string } | undefined)?.full_name ??
           fullName ??
@@ -211,7 +212,6 @@ export function LoginCredentialsScreen() {
         return;
       }
       // Cancel / dismiss without session — stay on login, no fake success.
-      endOAuthBrandBridge();
       setInfo('Inicio de sesión cancelado.');
     } catch (err) {
       endOAuthBrandBridge();

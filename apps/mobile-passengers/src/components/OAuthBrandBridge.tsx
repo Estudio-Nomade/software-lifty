@@ -1,11 +1,11 @@
 import { useSyncExternalStore } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { isOAuthBrandBridgeActive, subscribeOAuthBrandBridge } from '../lib/postOAuthHandoff';
-import { BrandSplash } from './BrandSplash';
+import { theme } from '../theme';
 
 /**
- * Root-level single BrandSplash during Google OAuth.
- * AuthCallback / Welcome must NOT paint a second BrandSplash while this is up.
+ * Root cover during Google OAuth handoff — plain bg only (no L+tagline).
+ * BrandSplash is boot/Welcome only so Google success never re-flashes the lockup.
  */
 export function OAuthBrandBridge() {
   const active = useSyncExternalStore(
@@ -21,15 +21,14 @@ export function OAuthBrandBridge() {
       style={styles.overlay}
       pointerEvents="auto"
       accessibilityLabel="Completando inicio de sesion"
-    >
-      <BrandSplash />
-    </View>
+    />
   );
 }
 
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFill,
+    backgroundColor: theme.colors.background,
     zIndex: 1000,
     elevation: 1000,
   },

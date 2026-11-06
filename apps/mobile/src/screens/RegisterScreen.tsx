@@ -70,13 +70,12 @@ export const RegisterScreen: React.FC = () => {
     setError(null);
     setGoogleLoading(true);
     resetPostOAuthHandoff();
-    beginOAuthBrandBridge();
     try {
       const session = await signInWithGoogle();
       if (!session?.user) {
-        endOAuthBrandBridge();
         return;
       }
+      beginOAuthBrandBridge();
       const result = await runPostOAuthHandoff({
         key: session.user.id,
         owner: 'Register',

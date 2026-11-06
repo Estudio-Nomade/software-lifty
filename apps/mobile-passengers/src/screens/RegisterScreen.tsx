@@ -108,11 +108,11 @@ export function RegisterScreen() {
     setError(null);
     setGoogleLoading(true);
     resetPostOAuthHandoff();
-    beginOAuthBrandBridge();
     try {
       clearDraft();
       const session = await signInWithGoogle();
       if (session?.user) {
+        beginOAuthBrandBridge();
         const metaName =
           (session.user.user_metadata as { full_name?: string } | undefined)?.full_name ??
           undefined;
@@ -120,7 +120,6 @@ export function RegisterScreen() {
         await replaceAfterGoogleAuth(replace, session.user.id, 'Register');
         return;
       }
-      endOAuthBrandBridge();
       setError('Inicio de sesión cancelado.');
     } catch (err) {
       endOAuthBrandBridge();
