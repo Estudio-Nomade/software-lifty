@@ -9,7 +9,7 @@ import {
   canFinishAuthCallbackWithSession,
   decideAuthCallbackFinishErrAction,
 } from '../lib/oauthSessionRecovery';
-import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
+import { isTransientStatusFailure, resolvePostGoogleOAuthPath } from '../lib/postAuthRouting';
 import {
   HANDOFF_TARGET_NOT_PATH,
   WELCOME_HOP_REFUSED,
@@ -21,7 +21,6 @@ import {
   isPostOAuthHandoffCompleted,
   runPostOAuthHandoff,
 } from '../lib/postOAuthHandoff';
-import { routePathForScreen } from '../lib/screenRoutes';
 import { createSessionFromUrl } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
@@ -111,16 +110,7 @@ export function AuthCallbackScreen() {
       const result = await runPostOAuthHandoff({
         key: userId,
         owner: 'AuthCallback',
-        resolveTarget: async () => {
-          const route = await resolvePostAuthRoute();
-          if (route.blockedMessage) {
-            throw new Error(route.blockedMessage);
-          }
-          if (!route.screen) {
-            throw new Error('No se pudo determinar el siguiente paso.');
-          }
-          return routePathForScreen(route.screen);
-        },
+        resolveTarget: () => resolvePostGoogleOAuthPath(),
         navigate: (target) => {
           if (typeof __DEV__ !== 'undefined' && __DEV__) {
             console.log('[AuthCallback] finishOk target=', target);
@@ -233,39 +223,83 @@ export function AuthCallbackScreen() {
         await finishOkLatestRef.current();
         return;
       }
-      if (action === 'recovery') {
-        // Session present: stay here with Reintentar (handleRetry → finishOk). Never wipe to login.
-        endOAuthBrandBridge();
-        setError(getFriendlyAuthError(err));
-        setRecovery(true);
-        return;
-      }
 
-      endOAuthBrandBridge();
+      // recovery / bounceLogin: stay silent briefly so twin path (Register/Login Google)
+      // can finish → Terms → perfil without flashing "No pudimos…".
       const msg = getFriendlyAuthError(err);
-      setError(msg);
       setTimeout(() => {
         void (async () => {
-          if (cancelled || finishedOkRef.current) return;
-          // Re-check right before bounce — twin path may have completed mid-flash.
-          const again = await supabase.auth.getSession();
-          const late = decideAuthCallbackFinishErrAction(again.data.session, {
-            handoffCompleted: isPostOAuthHandoffCompleted(),
-          });
-          if (late === 'finishOk') {
-            await finishOkLatestRef.current();
-            return;
-          }
-          if (late === 'recovery') {
+          // Always settle the brand bridge on every exit — never leave blank splash.
+          const settleFailed = () => {
+            endOAuthBrandBridge();
+            if (cancelled || finishedOkRef.current) return;
             setError(msg);
             setRecovery(true);
-            return;
-          }
-          if (!cancelled && !finishedOkRef.current) {
+          };
+
+          try {
+            if (finishedOkRef.current) {
+              // Twin finishOk already navigated; afterPostOAuthHandoff owns bridge end.
+              return;
+            }
+            if (isPostOAuthHandoffCompleted()) {
+              const target = getLastOAuthHandoffTarget();
+              if (target) {
+                if (!cancelled) router.replace(target);
+                endOAuthBrandBridgeAfterPaint();
+              } else {
+                endOAuthBrandBridge();
+              }
+              return;
+            }
+            if (cancelled) {
+              // Effect teardown before twin finished — drop overlay; do not paint error on dead screen.
+              endOAuthBrandBridge();
+              return;
+            }
+
+            const again = await supabase.auth.getSession();
+            if (finishedOkRef.current) return;
+            if (isPostOAuthHandoffCompleted()) {
+              const target = getLastOAuthHandoffTarget();
+              if (target) {
+                if (!cancelled) router.replace(target);
+                endOAuthBrandBridgeAfterPaint();
+              } else {
+                endOAuthBrandBridge();
+              }
+              return;
+            }
+            if (cancelled) {
+              endOAuthBrandBridge();
+              return;
+            }
+
+            const late = decideAuthCallbackFinishErrAction(again.data.session, {
+              handoffCompleted: isPostOAuthHandoffCompleted(),
+            });
+            if (late === 'finishOk') {
+              await finishOkLatestRef.current();
+              return;
+            }
+            if (late === 'recovery') {
+              endOAuthBrandBridge();
+              if (!cancelled && !finishedOkRef.current) {
+                setError(msg);
+                setRecovery(true);
+              }
+              return;
+            }
+
+            // bounceLogin — real failure after grace window
+            endOAuthBrandBridge();
+            if (cancelled || finishedOkRef.current) return;
             router.replace({
               pathname: '/login-credentials',
               params: { authError: msg },
             });
+          } catch {
+            settleFailed();
           }
         })();
       }, 900);

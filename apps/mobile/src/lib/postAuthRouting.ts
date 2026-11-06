@@ -2,7 +2,7 @@ import { apiClient } from '../api/client';
 import type { DriverStatus } from '../api/types';
 import { ApiError, driverStatusSchema } from '../api/types';
 import { useAuthStore } from '../store/authStore';
-import type { ScreenName } from './screenRoutes';
+import { type ScreenName, routePathForScreen } from './screenRoutes';
 
 /** Network / CORS / timeout — do not invent pending onboarding. */
 export function isTransientStatusFailure(err: unknown): boolean {
@@ -60,11 +60,9 @@ export function routeForDriverStatus(driverData: DriverStatus): {
     return { screen: '', status, blockedMessage: 'Tu cuenta ha sido suspendida.' };
   }
 
-  // Someone who is already a passenger and has no driver profile yet: ask before
-  // starting driver onboarding (dual-role account).
-  if (step === 'profile' && driverData.has_passenger_profile === true) {
-    return { screen: 'PassengerAccountNotice', status: 'pending' };
-  }
+  // Dual-role (passenger already exists): same entry as brand-new drivers.
+  // Product lock (Crear cuenta + Google): TyC → OnboardingStep1 — no notice screen.
+  // has_passenger_profile stays on the API payload; UI does not branch on it here.
 
   const byStep = step ? STEP_ROUTE[step] : undefined;
   if (byStep) {
@@ -142,4 +140,23 @@ export async function resolvePostAuthRoute(): Promise<PostAuthRoute> {
     useAuthStore.getState().setDriverStatus('pending');
     return { screen: 'OnboardingStep1', status: 'pending' };
   }
+}
+
+/**
+ * Expo-router path after Google OAuth (Crear cuenta / login / AuthCallback twin path).
+ * Always TyC first when not yet accepted, then status-driven screen (perfil, KYC, …).
+ * Read termsAccepted AFTER status await so a concurrent accept is not ignored.
+ */
+export async function resolvePostGoogleOAuthPath(): Promise<string> {
+  const route = await resolvePostAuthRoute();
+  if (route.blockedMessage) {
+    throw new Error(route.blockedMessage);
+  }
+  if (!useAuthStore.getState().termsAccepted) {
+    return routePathForScreen('Terms');
+  }
+  if (!route.screen) {
+    throw new Error('No se pudo determinar el siguiente paso.');
+  }
+  return routePathForScreen(route.screen);
 }

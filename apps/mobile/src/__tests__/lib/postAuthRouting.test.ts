@@ -150,14 +150,14 @@ describe('isTransientStatusFailure', () => {
   });
 });
 
-describe('dual-role notice (existing passenger opening the driver app)', () => {
-  it('asks before onboarding when the person already has a passenger profile', () => {
+describe('dual-role (existing passenger opening the driver app)', () => {
+  it('goes straight to onboarding profile (no intermediate notice screen)', () => {
     const r = routeForDriverStatus({
       status: 'pending',
       step: 'profile',
       has_passenger_profile: true,
     });
-    expect(r.screen).toBe('PassengerAccountNotice');
+    expect(r.screen).toBe('OnboardingStep1');
     expect(r.status).toBe('pending');
   });
 
@@ -170,7 +170,7 @@ describe('dual-role notice (existing passenger opening the driver app)', () => {
     expect(r.screen).toBe('OnboardingStep1');
   });
 
-  it('does not show the notice once onboarding is past the profile step', () => {
+  it('does not divert once onboarding is past the profile step', () => {
     const r = routeForDriverStatus({
       status: 'pending',
       step: 'kyc',
@@ -179,7 +179,7 @@ describe('dual-role notice (existing passenger opening the driver app)', () => {
     expect(r.screen).toBe('KYCVerify');
   });
 
-  it('registers the notice route path', () => {
+  it('still registers the legacy notice route path (deep links / unused screen)', () => {
     expect(routePathForScreen('PassengerAccountNotice')).toBe('/passenger-account-notice');
   });
 

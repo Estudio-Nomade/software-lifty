@@ -19,7 +19,11 @@ import { Text } from '../components/ui/Text';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
-import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
+import {
+  isTransientStatusFailure,
+  resolvePostAuthRoute,
+  resolvePostGoogleOAuthPath,
+} from '../lib/postAuthRouting';
 import {
   afterPostOAuthHandoff,
   beginOAuthBrandBridge,
@@ -27,7 +31,6 @@ import {
   resetPostOAuthHandoff,
   runPostOAuthHandoff,
 } from '../lib/postOAuthHandoff';
-import { routePathForScreen } from '../lib/screenRoutes';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -94,16 +97,7 @@ export const AuthScreen: React.FC = () => {
         const result = await runPostOAuthHandoff({
           key: userId,
           owner: 'AuthScreen',
-          resolveTarget: async () => {
-            const route = await resolvePostAuthRoute();
-            if (route.blockedMessage) {
-              throw new Error(route.blockedMessage);
-            }
-            if (!route.screen) {
-              throw new Error('No se pudo determinar el siguiente paso.');
-            }
-            return routePathForScreen(route.screen);
-          },
+          resolveTarget: () => resolvePostGoogleOAuthPath(),
           navigate: navigatePath,
         });
         afterPostOAuthHandoff(result, navigatePath);
