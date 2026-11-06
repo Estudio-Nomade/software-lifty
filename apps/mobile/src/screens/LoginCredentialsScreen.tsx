@@ -28,7 +28,15 @@ import {
   resolvePostAuthRoute,
   routeForDriverStatus,
 } from '../lib/postAuthRouting';
-import { resetPostOAuthHandoff, runPostOAuthHandoff } from '../lib/postOAuthHandoff';
+import {
+  afterPostOAuthHandoff,
+  beginOAuthBrandBridge,
+  endOAuthBrandBridge,
+  endOAuthBrandBridgeAfterPaint,
+  getLastOAuthHandoffTarget,
+  resetPostOAuthHandoff,
+  runPostOAuthHandoff,
+} from '../lib/postOAuthHandoff';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -116,7 +124,7 @@ export const LoginCredentialsScreen: React.FC = () => {
   const finishGoogleAuth = useCallback(
     async (userId: string) => {
       try {
-        await runPostOAuthHandoff({
+        const result = await runPostOAuthHandoff({
           key: userId,
           owner: 'LoginCredentials',
           resolveTarget: async () => {
@@ -134,7 +142,9 @@ export const LoginCredentialsScreen: React.FC = () => {
             navigation.replace(screen);
           },
         });
+        afterPostOAuthHandoff(result, (target) => navigation.replace(target));
       } catch (err: unknown) {
+        endOAuthBrandBridge();
         const message =
           err instanceof Error
             ? err.message
@@ -157,11 +167,16 @@ export const LoginCredentialsScreen: React.FC = () => {
     setError(null);
     setGoogleLoading(true);
     resetPostOAuthHandoff();
+    beginOAuthBrandBridge();
     try {
       const session = await signInWithGoogle();
-      if (!session?.user) return;
+      if (!session?.user) {
+        endOAuthBrandBridge();
+        return;
+      }
       await finishGoogleAuth(session.user.id);
     } catch (err) {
+      endOAuthBrandBridge();
       setError(getFriendlyAuthError(err));
     } finally {
       setGoogleLoading(false);

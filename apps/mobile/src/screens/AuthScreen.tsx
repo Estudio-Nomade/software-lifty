@@ -19,7 +19,15 @@ import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
-import { resetPostOAuthHandoff, runPostOAuthHandoff } from '../lib/postOAuthHandoff';
+import {
+  afterPostOAuthHandoff,
+  beginOAuthBrandBridge,
+  endOAuthBrandBridge,
+  endOAuthBrandBridgeAfterPaint,
+  getLastOAuthHandoffTarget,
+  resetPostOAuthHandoff,
+  runPostOAuthHandoff,
+} from '../lib/postOAuthHandoff';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -76,7 +84,7 @@ export const AuthScreen: React.FC = () => {
   const finishGoogleAuth = useCallback(
     async (userId: string) => {
       try {
-        await runPostOAuthHandoff({
+        const result = await runPostOAuthHandoff({
           key: userId,
           owner: 'AuthScreen',
           resolveTarget: async () => {
@@ -93,7 +101,9 @@ export const AuthScreen: React.FC = () => {
             navigation.replace(screen);
           },
         });
+        afterPostOAuthHandoff(result, (target) => navigation.replace(target));
       } catch (err) {
+        endOAuthBrandBridge();
         setError(getFriendlyAuthError(err));
         if (isTransientStatusFailure(err)) {
           try {
@@ -112,14 +122,17 @@ export const AuthScreen: React.FC = () => {
     setError(null);
     setGoogleLoading(true);
     resetPostOAuthHandoff();
+    beginOAuthBrandBridge();
     try {
       const session = await signInWithGoogle();
       if (!session?.user) {
         // User dismissed the browser — no error, just stop.
+        endOAuthBrandBridge();
         return;
       }
       await finishGoogleAuth(session.user.id);
     } catch (err) {
+      endOAuthBrandBridge();
       setError(getFriendlyAuthError(err));
     } finally {
       setGoogleLoading(false);

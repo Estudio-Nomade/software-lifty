@@ -1,7 +1,8 @@
 /**
- * Single-flight post-OAuth navigation lock.
+ * Single-flight post-OAuth navigation + single BrandSplash bridge.
  * Survives AuthCallback remount (module-level). Twin path (deep link +
- * handleGoogle) must share this so BrandSplash / replace only happens once.
+ * handleGoogle) must share this so BrandSplash mounts ≤1 time and replace
+ * happens once.
  *
  * Generation token: resetPostOAuthHandoff() invalidates in-flight work so a
  * stale resolve cannot navigate or mark completedKey after a new Google attempt.
@@ -15,17 +16,100 @@ type HandoffOutcome = { ok: true; target: string } | { ok: false; error: unknown
 let generation = 0;
 let inflight: Promise<HandoffOutcome> | null = null;
 let completedKey: string | null = null;
+let lastTarget: string | null = null;
+
+/** One global BrandSplash overlay while OAuth completes (root layout). */
+let brandBridgeActive = false;
+const brandBridgeListeners = new Set<() => void>();
 
 export type PostOAuthHandoffResult = 'navigated' | 'skipped' | 'joined';
+
+function notifyBrandBridge(): void {
+  for (const listener of brandBridgeListeners) {
+    listener();
+  }
+}
+
+export function subscribeOAuthBrandBridge(listener: () => void): () => void {
+  brandBridgeListeners.add(listener);
+  return () => {
+    brandBridgeListeners.delete(listener);
+  };
+}
+
+export function isOAuthBrandBridgeActive(): boolean {
+  return brandBridgeActive;
+}
+
+/** Show the single BrandSplash overlay (warm Google / cold AuthCallback). */
+export function beginOAuthBrandBridge(): void {
+  if (brandBridgeActive) return;
+  brandBridgeActive = true;
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.log('[oauth-handoff] brand bridge ON');
+  }
+  notifyBrandBridge();
+}
+
+/** Hide overlay after destination is on screen. */
+export function endOAuthBrandBridge(): void {
+  if (!brandBridgeActive) return;
+  brandBridgeActive = false;
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.log('[oauth-handoff] brand bridge OFF');
+  }
+  notifyBrandBridge();
+}
+
+/** End bridge on next frames so replace paints under the splash first. */
+export function endOAuthBrandBridgeAfterPaint(): void {
+  const raf = globalThis.requestAnimationFrame?.bind(globalThis);
+  if (typeof raf === 'function') {
+    raf(() => {
+      raf(() => {
+        endOAuthBrandBridge();
+      });
+    });
+    return;
+  }
+  setTimeout(() => endOAuthBrandBridge(), 32);
+}
+
+export function getLastOAuthHandoffTarget(): string | null {
+  return lastTarget;
+}
+
+/**
+ * Settle after runPostOAuthHandoff at a call site.
+ * - navigated: end bridge after paint (this owner led)
+ * - skipped: optional one leaveTo(lastTarget) to unmount bridge screens + end
+ * - joined: no-op — leader already navigated and will end the bridge
+ */
+export function afterPostOAuthHandoff(
+  result: PostOAuthHandoffResult,
+  leaveTo?: (target: string) => void,
+): void {
+  if (result === 'joined') return;
+  if (result === 'skipped' && leaveTo) {
+    const target = getLastOAuthHandoffTarget();
+    if (target) leaveTo(target);
+  }
+  endOAuthBrandBridgeAfterPaint();
+}
 
 export function resetPostOAuthHandoff(): void {
   generation += 1;
   inflight = null;
   completedKey = null;
+  lastTarget = null;
+  // Keep or restart bridge via beginOAuthBrandBridge at call site.
 }
 
 /** @deprecated alias for tests */
-export const resetPostOAuthHandoffForTests = resetPostOAuthHandoff;
+export const resetPostOAuthHandoffForTests = (): void => {
+  resetPostOAuthHandoff();
+  endOAuthBrandBridge();
+};
 
 export function isPostOAuthHandoffCompleted(key?: string): boolean {
   if (completedKey == null) return false;
@@ -57,12 +141,15 @@ export async function runPostOAuthHandoff(opts: {
   const key = opts.key || 'session';
   const genAtStart = generation;
 
+  // Ensure the single visual bridge is up for the whole resolve+navigate window.
+  beginOAuthBrandBridge();
+
   for (let attempt = 0; attempt < 4; attempt++) {
     if (generation !== genAtStart) {
       throw new Error(OAUTH_HANDOFF_ABORTED);
     }
     if (completedKey === key) {
-      if (__DEV__) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.log('[oauth-handoff] skip already completed key=', key, 'owner=', opts.owner);
       }
       return attempt === 0 ? 'skipped' : 'joined';
@@ -70,7 +157,7 @@ export async function runPostOAuthHandoff(opts: {
 
     const existing = inflight;
     if (existing) {
-      if (__DEV__) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
         console.log('[oauth-handoff] join inflight owner=', opts.owner);
       }
       const outcome = await existing;
@@ -88,7 +175,7 @@ export async function runPostOAuthHandoff(opts: {
       continue;
     }
 
-    if (__DEV__) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
       console.log('[oauth-handoff] start key=', key, 'owner=', opts.owner);
     }
 
@@ -102,9 +189,10 @@ export async function runPostOAuthHandoff(opts: {
         if (isForbiddenTarget(target)) {
           return { ok: false, error: new Error(WELCOME_HOP_REFUSED) };
         }
-        if (__DEV__) {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
           console.log('[oauth-handoff] replace →', target, 'owner=', opts.owner);
         }
+        lastTarget = target;
         opts.navigate(target);
         if (generation !== myGen) {
           return { ok: false, error: new Error(OAUTH_HANDOFF_ABORTED) };

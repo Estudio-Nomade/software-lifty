@@ -1,6 +1,11 @@
 import {
   OAUTH_HANDOFF_ABORTED,
   WELCOME_HOP_REFUSED,
+  afterPostOAuthHandoff,
+  beginOAuthBrandBridge,
+  endOAuthBrandBridge,
+  getLastOAuthHandoffTarget,
+  isOAuthBrandBridgeActive,
   isPostOAuthHandoffCompleted,
   resetPostOAuthHandoff,
   resetPostOAuthHandoffForTests,
@@ -12,7 +17,7 @@ describe('runPostOAuthHandoff', () => {
     resetPostOAuthHandoffForTests();
   });
 
-  it('navigates once for a key', async () => {
+  it('navigates once for a key and turns brand bridge on', async () => {
     const navigate = jest.fn();
     const resolveTarget = jest.fn().mockResolvedValue('/active');
 
@@ -27,6 +32,18 @@ describe('runPostOAuthHandoff', () => {
     expect(resolveTarget).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith('/active');
     expect(isPostOAuthHandoffCompleted('user-1')).toBe(true);
+    expect(getLastOAuthHandoffTarget()).toBe('/active');
+    expect(isOAuthBrandBridgeActive()).toBe(true);
+    endOAuthBrandBridge();
+    expect(isOAuthBrandBridgeActive()).toBe(false);
+  });
+
+  it('beginOAuthBrandBridge is idempotent single visual', () => {
+    beginOAuthBrandBridge();
+    beginOAuthBrandBridge();
+    expect(isOAuthBrandBridgeActive()).toBe(true);
+    endOAuthBrandBridge();
+    expect(isOAuthBrandBridgeActive()).toBe(false);
   });
 
   it('second call same key is no-op (skipped)', async () => {
@@ -151,4 +168,27 @@ describe('runPostOAuthHandoff', () => {
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith('/active');
   });
+
+  it('afterPostOAuthHandoff joined is no-op; skipped leaveTo + end', async () => {
+    const navigate = jest.fn();
+    await runPostOAuthHandoff({
+      key: 'user-settle',
+      owner: 'AuthCallback',
+      resolveTarget: async () => '/home',
+      navigate,
+    });
+    expect(getLastOAuthHandoffTarget()).toBe('/home');
+
+    const leave = jest.fn();
+    beginOAuthBrandBridge();
+    afterPostOAuthHandoff('joined', leave);
+    expect(leave).not.toHaveBeenCalled();
+    expect(isOAuthBrandBridgeActive()).toBe(true);
+
+    afterPostOAuthHandoff('skipped', leave);
+    expect(leave).toHaveBeenCalledWith('/home');
+    endOAuthBrandBridge(); // sync end; afterPaint is async
+    expect(isOAuthBrandBridgeActive()).toBe(false);
+  });
+
 });

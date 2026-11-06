@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BrandSplash } from '../components/BrandSplash';
 import { Button } from '../components/Button';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { isPostOAuthHandoffCompleted } from '../lib/postOAuthHandoff';
+import { isOAuthBrandBridgeActive, isPostOAuthHandoffCompleted } from '../lib/postOAuthHandoff';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -18,9 +18,9 @@ export function WelcomeScreen() {
 
   // Boot / session restore: brand only. Logged-in → watcher routes to home.
   // Never flash Crear cuenta / Iniciar sesión when session already exists.
-  // Post-OAuth already showed AuthCallback BrandSplash — plain bg, no second mark.
+  // Post-OAuth: root OAuthBrandBridge owns the single BrandSplash — plain bg here.
   if (!sessionRestored || isAuthenticated) {
-    if (isAuthenticated && isPostOAuthHandoffCompleted()) {
+    if (isAuthenticated && (isPostOAuthHandoffCompleted() || isOAuthBrandBridgeActive())) {
       return <View style={styles.plainBridge} />;
     }
     return <BrandSplash />;

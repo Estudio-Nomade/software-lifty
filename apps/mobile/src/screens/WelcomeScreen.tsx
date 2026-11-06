@@ -12,7 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { HANDOFF_TIMEOUT_MS, welcomeEntryMode } from '../lib/driverStatusGate';
 import { handoffScreenFromStore, routeForDriverStatus } from '../lib/postAuthRouting';
-import { isPostOAuthHandoffCompleted } from '../lib/postOAuthHandoff';
+import { isOAuthBrandBridgeActive, isPostOAuthHandoffCompleted } from '../lib/postOAuthHandoff';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -141,7 +141,7 @@ export const WelcomeScreen: React.FC = () => {
   // Guest CTAs only when unauthenticated after restore.
   // Post-OAuth already showed AuthCallback BrandSplash — plain bg, no second mark.
   if (mode === 'loading' || mode === 'handoff') {
-    if (mode === 'handoff' && isPostOAuthHandoffCompleted()) {
+    if (mode === 'handoff' && (isPostOAuthHandoffCompleted() || isOAuthBrandBridgeActive())) {
       return <View style={styles.plainBridge} />;
     }
     return <BrandSplash />;

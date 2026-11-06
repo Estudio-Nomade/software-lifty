@@ -2,13 +2,21 @@ import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { BrandSplash } from '../components/BrandSplash';
 import { Button } from '../components/Button';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams';
 import { shouldTreatAuthCallbackAsSuccess } from '../lib/oauthSessionRecovery';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
-import { WELCOME_HOP_REFUSED, runPostOAuthHandoff } from '../lib/postOAuthHandoff';
+import {
+  WELCOME_HOP_REFUSED,
+  afterPostOAuthHandoff,
+  beginOAuthBrandBridge,
+  endOAuthBrandBridge,
+  endOAuthBrandBridgeAfterPaint,
+  getLastOAuthHandoffTarget,
+  isPostOAuthHandoffCompleted,
+  runPostOAuthHandoff,
+} from '../lib/postOAuthHandoff';
 import { routePathForScreen } from '../lib/screenRoutes';
 import { createSessionFromUrl } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
@@ -56,9 +64,7 @@ function paramsAttemptKey(parts: {
 
 /**
  * Absorbs `lifty://auth-callback` deep links on native APK.
- * Without this file, expo-router shows Unmatched Route + sitemap.
- * Session exchange is idempotent with openAuthSessionAsync (double entry OK).
- * Navigation is single-flight via runPostOAuthHandoff (never double BrandSplash).
+ * BrandSplash is ONLY the root OAuthBrandBridge overlay — this screen stays plain.
  * Transient status failure stays here (recovery) — never hop Welcome BrandSplash.
  */
 export function AuthCallbackScreen() {
@@ -87,16 +93,16 @@ export function AuthCallbackScreen() {
     if (finishedOkRef.current) return;
     finishedOkRef.current = true;
     setRecovery(false);
+    beginOAuthBrandBridge();
 
     try {
       const { data } = await supabase.auth.getSession();
       const userId = data.session?.user?.id ?? 'session';
 
-      await runPostOAuthHandoff({
+      const result = await runPostOAuthHandoff({
         key: userId,
         owner: 'AuthCallback',
         resolveTarget: async () => {
-          // resolvePostAuthRoute only throws on transient network; other errors → onboarding.
           const route = await resolvePostAuthRoute();
           if (route.blockedMessage) {
             throw new Error(route.blockedMessage);
@@ -107,17 +113,20 @@ export function AuthCallbackScreen() {
           return routePathForScreen(route.screen);
         },
         navigate: (target) => {
-          // Forbidden targets (/ , Welcome) rejected by lock before navigate.
-          if (__DEV__) {
+          if (typeof __DEV__ !== 'undefined' && __DEV__) {
             console.log('[AuthCallback] finishOk target=', target);
           }
           router.replace(target);
         },
       });
+      // joined → leader owns end; skipped → leave once; navigated → end after paint
+      afterPostOAuthHandoff(result, (target) => router.replace(target));
     } catch (err) {
       finishedOkRef.current = false;
+      // Drop overlay so recovery UI is tappable; retry begins bridge again.
+      endOAuthBrandBridge();
       if (err instanceof Error && err.message === WELCOME_HOP_REFUSED) {
-        if (__DEV__) {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
           console.log('[AuthCallback] refuse Welcome hop; staying for recovery');
         }
         setRecovery(true);
@@ -133,7 +142,6 @@ export function AuthCallbackScreen() {
         return;
       }
       const msg = err instanceof Error ? err.message : getFriendlyAuthError(err);
-      // Blocked account message stays on this screen (no Welcome hop).
       setError(msg);
       setRecovery(true);
     }
@@ -152,6 +160,14 @@ export function AuthCallbackScreen() {
   }, [finishOk, retrying]);
 
   useEffect(() => {
+    // Do NOT begin bridge before early-return guards (stuck overlay risk).
+    if (isPostOAuthHandoffCompleted()) {
+      const target = getLastOAuthHandoffTarget() ?? '/online';
+      router.replace(target);
+      endOAuthBrandBridgeAfterPaint();
+      return;
+    }
+
     if (finishedOkRef.current) return;
 
     const attemptKey = paramsAttemptKey({
@@ -165,10 +181,13 @@ export function AuthCallbackScreen() {
       if (startedKeysRef.current.has(attemptKey)) return;
       startedKeysRef.current.add(attemptKey);
     } else if (noParamsBootRef.current) {
+      // Stray remount without params — never light the overlay.
       return;
     } else {
       noParamsBootRef.current = true;
     }
+
+    beginOAuthBrandBridge();
 
     let cancelled = false;
 
@@ -178,13 +197,14 @@ export function AuthCallbackScreen() {
         await finishOk();
         return;
       }
-      if (__DEV__) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
         const raw =
           typeof err === 'object' && err !== null && 'message' in err
             ? String((err as { message?: unknown }).message ?? '')
             : String(err ?? '');
         console.error('[AuthCallback] finishErr', raw);
       }
+      endOAuthBrandBridge();
       const msg = getFriendlyAuthError(err);
       setError(msg);
       setTimeout(() => {
@@ -235,7 +255,6 @@ export function AuthCallbackScreen() {
           return;
         }
 
-        // Twin path (openAuthSessionAsync) may still be exchanging — wait briefly.
         await new Promise<void>((resolve) => {
           setTimeout(resolve, 1200);
         });
@@ -287,7 +306,10 @@ export function AuthCallbackScreen() {
           <Button title="Reintentar" onPress={handleRetry} loading={retrying} disabled={retrying} />
           <Button
             title="Volver al login"
-            onPress={() => router.replace('/login-credentials')}
+            onPress={() => {
+              endOAuthBrandBridge();
+              router.replace('/login-credentials');
+            }}
             variant="secondary"
             disabled={retrying}
           />
@@ -304,27 +326,13 @@ export function AuthCallbackScreen() {
     );
   }
 
-  return (
-    <View style={styles.splashRoot}>
-      <BrandSplash />
-      <Text style={styles.splashHint}>Completando inicio de sesion…</Text>
-    </View>
-  );
+  return <View style={styles.plainRoot} />;
 }
 
 const styles = StyleSheet.create({
-  splashRoot: {
+  plainRoot: {
     flex: 1,
-  },
-  splashHint: {
-    position: 'absolute',
-    bottom: theme.spacing.xl * 2,
-    left: theme.spacing.lg,
-    right: theme.spacing.lg,
-    textAlign: 'center',
-    color: theme.colors.mediumGray,
-    fontSize: theme.fontSize.sm,
-    fontFamily: theme.fontFamily.regular,
+    backgroundColor: theme.colors.background,
   },
   errorRoot: {
     flex: 1,

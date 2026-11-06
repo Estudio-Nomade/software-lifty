@@ -7,7 +7,7 @@ import { useFonts } from 'expo-font';
 import { Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 // Side-effect: register TaskManager location task before any startLocationUpdatesAsync.
@@ -15,6 +15,7 @@ import '../src/lib/backgroundLocationTask';
 import { AppInitializer } from '../src/components/AppInitializer';
 import { BrandSplash } from '../src/components/BrandSplash';
 import { LocationSync } from '../src/components/LocationSync';
+import { OAuthBrandBridge } from '../src/components/OAuthBrandBridge';
 import { TabBar, type TabKey } from '../src/components/TabBar';
 import { ConnectivityBanner } from '../src/components/feedback/ConnectivityBanner';
 import { ErrorBoundary } from '../src/components/feedback/ErrorBoundary';
@@ -22,6 +23,7 @@ import { AuthProvider } from '../src/context/AuthContext';
 import { TabBarProvider, useTabBar } from '../src/context/TabBarContext';
 import { TabBarVisibilityProvider } from '../src/context/TabBarVisibilityContext';
 import { useAppNavigation } from '../src/hooks/useAppNavigation';
+import { isOAuthBrandBridgeActive, subscribeOAuthBrandBridge } from '../src/lib/postOAuthHandoff';
 import { queryClient } from '../src/lib/queryClient';
 import {
   isSameTabRoute,
@@ -64,6 +66,10 @@ function RouteSync() {
 
 const FONT_BOOT_TIMEOUT_MS = 2_500;
 
+function useOAuthQuietAnimation(): boolean {
+  return useSyncExternalStore(subscribeOAuthBrandBridge, isOAuthBrandBridgeActive, () => false);
+}
+
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
@@ -71,6 +77,8 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+  const oauthQuiet = useOAuthQuietAnimation();
+  const postAuthAnimation = oauthQuiet ? 'none' : 'slide_from_right';
   // Android Expo Go can leave useFonts pending forever (asset race). Without a
   // timeout the whole tree never mounts → native/Brand splash stuck. iOS usually
   // resolves quickly; timeout only fires if fonts still pending.
@@ -123,11 +131,27 @@ export default function RootLayout() {
                     name="auth-callback"
                     options={{ animation: 'none', gestureEnabled: false }}
                   />
+                  <Stack.Screen
+                    name="index"
+                    options={{ animation: oauthQuiet ? 'none' : 'slide_from_right' }}
+                  />
+                  <Stack.Screen name="online" options={{ animation: postAuthAnimation }} />
+                  <Stack.Screen name="active" options={{ animation: postAuthAnimation }} />
+                  <Stack.Screen
+                    name="onboarding-step1"
+                    options={{ animation: postAuthAnimation }}
+                  />
+                  <Stack.Screen
+                    name="onboarding-step2"
+                    options={{ animation: postAuthAnimation }}
+                  />
+                  <Stack.Screen name="under-review" options={{ animation: postAuthAnimation }} />
                 </Stack>
                 <TabBarShell />
                 <RouteSync />
                 <AppInitializer />
                 <LocationSync />
+                <OAuthBrandBridge />
                 <ConnectivityBanner />
               </SafeAreaView>
             </TabBarVisibilityProvider>

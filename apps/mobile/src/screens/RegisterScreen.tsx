@@ -21,7 +21,15 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useResendCode, useSignUp, useVerifyEmail } from '../hooks/useAuth';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
-import { resetPostOAuthHandoff, runPostOAuthHandoff } from '../lib/postOAuthHandoff';
+import {
+  afterPostOAuthHandoff,
+  beginOAuthBrandBridge,
+  endOAuthBrandBridge,
+  endOAuthBrandBridgeAfterPaint,
+  getLastOAuthHandoffTarget,
+  resetPostOAuthHandoff,
+  runPostOAuthHandoff,
+} from '../lib/postOAuthHandoff';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -62,10 +70,14 @@ export const RegisterScreen: React.FC = () => {
     setError(null);
     setGoogleLoading(true);
     resetPostOAuthHandoff();
+    beginOAuthBrandBridge();
     try {
       const session = await signInWithGoogle();
-      if (!session?.user) return;
-      await runPostOAuthHandoff({
+      if (!session?.user) {
+        endOAuthBrandBridge();
+        return;
+      }
+      const result = await runPostOAuthHandoff({
         key: session.user.id,
         owner: 'Register',
         resolveTarget: async () => {
@@ -82,7 +94,9 @@ export const RegisterScreen: React.FC = () => {
           navigation.replace(screen);
         },
       });
+      afterPostOAuthHandoff(result, (target) => navigation.replace(target));
     } catch (err) {
+      endOAuthBrandBridge();
       setError(getFriendlyAuthError(err));
       await clearSessionAfterStatusFail(err, signOut);
     } finally {
