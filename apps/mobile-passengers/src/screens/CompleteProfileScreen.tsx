@@ -25,7 +25,7 @@ import {
   isPassengerPhoneComplete,
   isPassengerProfileComplete,
   joinFullName,
-  splitGoogleName,
+  resolveCompleteProfileBootIdentity,
   writePassengerProfileCompleteCache,
 } from '../lib/passengerProfileGate';
 import { getFriendlyProfileError } from '../lib/profileErrors';
@@ -85,17 +85,31 @@ export function CompleteProfileScreen() {
             }
           | undefined;
 
-        const fromMeta = splitGoogleName(meta);
-        const fromProfile = splitGoogleName({
-          full_name: profile?.full_name ?? undefined,
+        // Session is SoT — never prefill Estudio Nomade profile over martinayaquinta session.
+        const boot = resolveCompleteProfileBootIdentity({
+          sessionEmail: data.user?.email,
+          sessionMeta: meta,
+          profileEmail: profile?.email,
+          profileFullName: profile?.full_name,
+          profilePhone: profile?.phone,
+          storeEmail: emailFromStore,
         });
+        if (__DEV__ && boot.preferSessionIdentity) {
+          console.log('[CompleteProfile] profile/session email mismatch — using session', {
+            sessionEmail: data.user?.email ?? null,
+            profileEmail: profile?.email ?? null,
+          });
+        }
+        setFirstName(boot.firstName);
+        setLastName(boot.lastName);
+        setEmail(boot.email);
+        setPhone(boot.phone);
+        if (boot.preferSessionIdentity) {
+          // Drop stale store name so registrar/UI cannot keep previous account.
+          setFullName(joinFullName(boot.firstName, boot.lastName) || null);
+        }
 
-        setFirstName(fromProfile.firstName || fromMeta.firstName);
-        setLastName(fromProfile.lastName || fromMeta.lastName);
-        setEmail(profile?.email || data.user?.email || emailFromStore || '');
-        setPhone(profile?.phone?.trim() || meta?.phone?.trim() || meta?.phone_number?.trim() || '');
-
-        if (isPassengerHomeResolved(profile ?? {})) {
+        if (!boot.preferSessionIdentity && isPassengerHomeResolved(profile ?? {})) {
           const line = profile!.home_address_line!.trim();
           setAddressLine(line);
           setSelectedPlace({

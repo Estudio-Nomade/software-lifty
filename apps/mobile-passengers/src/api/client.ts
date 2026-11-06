@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
+import { resolveApiAccessToken } from '../lib/oauthSessionRecovery';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 
@@ -43,10 +44,26 @@ const api = axios.create({
   },
 });
 
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = useAuthStore.getState().token;
+api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  // Live session preferred when safe; never send pre-OAuth blocked account JWT
+  // (handoff window where getSession still has Estudio Nomade).
+  const store = useAuthStore.getState();
+  let liveSession = null as Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'];
+  try {
+    const { data } = await supabase.auth.getSession();
+    liveSession = data.session;
+  } catch {
+    liveSession = null;
+  }
+  const token = resolveApiAccessToken({
+    storeToken: store.token,
+    storeUserId: store.userId,
+    liveSession,
+  });
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  } else {
+    config.headers.Authorization = undefined;
   }
   return config;
 });

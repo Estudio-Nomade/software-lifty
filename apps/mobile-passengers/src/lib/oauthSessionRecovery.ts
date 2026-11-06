@@ -18,6 +18,13 @@ export type OAuthAttemptState = {
 
 let currentAttempt: OAuthAttemptState | null = null;
 
+/**
+ * Pre-OAuth local user id. Survives clearOAuthAttempt.
+ * Cleared only on successful exchange mark or explicit release (cancel) —
+ * not on wall-clock TTL (slow Google picker must not re-enable stale handoff).
+ */
+let blockedOAuthUserId: string | null = null;
+
 export function beginOAuthAttempt(blockedUserId: string | null = null): string {
   const id = `oauth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   currentAttempt = {
@@ -26,12 +33,16 @@ export function beginOAuthAttempt(blockedUserId: string | null = null): string {
     blockedUserId,
     acceptedUserId: null,
   };
+  // New attempt replaces the block list (null = no prior local user).
+  blockedOAuthUserId = blockedUserId;
   return id;
 }
 
 export function markOAuthAttemptSession(session: Session | null | undefined): void {
   if (!currentAttempt || !session?.access_token || !session.user?.id) return;
   currentAttempt.acceptedUserId = session.user.id;
+  // Exchange proved identity — drop block (including same-account re-pick).
+  blockedOAuthUserId = null;
 }
 
 export function getCurrentOAuthAttempt(): OAuthAttemptState | null {
@@ -40,6 +51,69 @@ export function getCurrentOAuthAttempt(): OAuthAttemptState | null {
 
 export function clearOAuthAttempt(): void {
   currentAttempt = null;
+  // Keep blockedOAuthUserId until mark or releaseOAuthBlockedUser.
+}
+
+/** Call on clean cancel/dismiss with no session so residual block does not stick forever. */
+export function releaseOAuthBlockedUser(): void {
+  blockedOAuthUserId = null;
+}
+
+/** Pre-OAuth local user — never hand off / never send as Bearer without exchange mark. */
+export function isBlockedOAuthUser(userId: string | null | undefined): boolean {
+  if (!userId || !blockedOAuthUserId) return false;
+  return userId === blockedOAuthUserId;
+}
+
+/** @deprecated use isBlockedOAuthUser */
+export function isRecentBlockedOAuthUser(userId: string | null | undefined): boolean {
+  return isBlockedOAuthUser(userId);
+}
+
+/**
+ * Whether AuthCallback may finishOk with this session (no-params / residual path).
+ * Rejects the pre-OAuth blocked user unless createSessionFromUrl marked them.
+ */
+export function canFinishAuthCallbackWithSession(session: Session | null | undefined): boolean {
+  if (!session?.access_token || !session.user?.id) return false;
+  if (sessionBelongsToFreshOAuthAttempt(session)) return true;
+  if (isBlockedOAuthUser(session.user.id)) return false;
+  // Active attempt still open: only marked sessions (above). Unmarked = wait for code.
+  if (currentAttempt) return false;
+  return true;
+}
+
+/**
+ * Bearer for API: never send the pre-OAuth blocked user's JWT.
+ * Prefer live session when safe; else store; else null.
+ */
+export function resolveApiAccessToken(input: {
+  storeToken: string | null;
+  storeUserId: string | null;
+  liveSession: Session | null | undefined;
+}): string | null {
+  const live = input.liveSession;
+  const liveToken = live?.access_token ?? null;
+  const liveUserId = live?.user?.id ?? null;
+
+  if (liveToken && liveUserId) {
+    if (sessionBelongsToFreshOAuthAttempt(live)) {
+      return liveToken;
+    }
+    if (isBlockedOAuthUser(liveUserId)) {
+      // Live leftover is the account we signed out of — do not call API as them.
+      if (input.storeToken && input.storeUserId && !isBlockedOAuthUser(input.storeUserId)) {
+        return input.storeToken;
+      }
+      return null;
+    }
+    return liveToken;
+  }
+
+  if (input.storeToken && input.storeUserId && isBlockedOAuthUser(input.storeUserId)) {
+    return null;
+  }
+  return input.storeToken;
 }
 
 function errorMessage(error: unknown): string {
@@ -111,4 +185,10 @@ export async function resolveSessionAfterBrowserDismiss(
   const { data } = await getSession();
   if (!sessionBelongsToFreshOAuthAttempt(data.session)) return null;
   return data.session;
+}
+
+/** Test helper — reset module state. */
+export function resetOAuthAttemptStateForTests(): void {
+  currentAttempt = null;
+  blockedOAuthUserId = null;
 }

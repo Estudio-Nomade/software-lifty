@@ -1,9 +1,14 @@
 import type { Session } from '@supabase/supabase-js';
 import {
   beginOAuthAttempt,
+  canFinishAuthCallbackWithSession,
   clearOAuthAttempt,
   getCurrentOAuthAttempt,
+  isBlockedOAuthUser,
   markOAuthAttemptSession,
+  releaseOAuthBlockedUser,
+  resetOAuthAttemptStateForTests,
+  resolveApiAccessToken,
   resolveSessionAfterAuthError,
   resolveSessionAfterBrowserDismiss,
   shouldTreatAuthCallbackAsSuccess,
@@ -21,7 +26,7 @@ function stubSession(access_token = 'at', userId = 'u1'): Session {
 
 describe('resolveSessionAfterAuthError', () => {
   afterEach(() => {
-    clearOAuthAttempt();
+    resetOAuthAttemptStateForTests();
   });
 
   it('returns existing session when twin path already marked for this attempt', async () => {
@@ -82,7 +87,7 @@ describe('resolveSessionAfterAuthError', () => {
 
 describe('shouldTreatAuthCallbackAsSuccess', () => {
   afterEach(() => {
-    clearOAuthAttempt();
+    resetOAuthAttemptStateForTests();
   });
 
   it('is true only when session user matches mark for this attempt', async () => {
@@ -139,9 +144,85 @@ describe('shouldTreatAuthCallbackAsSuccess', () => {
   });
 });
 
+describe('canFinishAuthCallbackWithSession', () => {
+  afterEach(() => {
+    resetOAuthAttemptStateForTests();
+  });
+
+  it('rejects blocked user after attempt cleared without mark (no TTL expiry)', () => {
+    beginOAuthAttempt('user-b');
+    clearOAuthAttempt();
+    expect(isBlockedOAuthUser('user-b')).toBe(true);
+    expect(canFinishAuthCallbackWithSession(stubSession('at-b', 'user-b'))).toBe(false);
+  });
+
+  it('allows blocked user after releaseOAuthBlockedUser (cancel)', () => {
+    beginOAuthAttempt('user-b');
+    clearOAuthAttempt();
+    releaseOAuthBlockedUser();
+    expect(canFinishAuthCallbackWithSession(stubSession('at-b', 'user-b'))).toBe(true);
+  });
+
+  it('allows marked session for blocked user after re-pick', () => {
+    beginOAuthAttempt('user-b');
+    const session = stubSession('at-b', 'user-b');
+    markOAuthAttemptSession(session);
+    expect(canFinishAuthCallbackWithSession(session)).toBe(true);
+    expect(isBlockedOAuthUser('user-b')).toBe(false);
+  });
+
+  it('rejects unmarked session while attempt is open', () => {
+    beginOAuthAttempt(null);
+    expect(canFinishAuthCallbackWithSession(stubSession('at', 'user-a'))).toBe(false);
+  });
+
+  it('allows unrelated session when no attempt and no blocked user', () => {
+    expect(canFinishAuthCallbackWithSession(stubSession('at', 'user-a'))).toBe(true);
+  });
+});
+
+describe('resolveApiAccessToken', () => {
+  afterEach(() => {
+    resetOAuthAttemptStateForTests();
+  });
+
+  it('does not send blocked live session JWT during handoff', () => {
+    beginOAuthAttempt('user-b');
+    clearOAuthAttempt();
+    const token = resolveApiAccessToken({
+      storeToken: null,
+      storeUserId: null,
+      liveSession: stubSession('tok-b', 'user-b'),
+    });
+    expect(token).toBeNull();
+  });
+
+  it('prefers marked live session over store', () => {
+    beginOAuthAttempt('user-b');
+    const live = stubSession('tok-a', 'user-a');
+    markOAuthAttemptSession(live);
+    const token = resolveApiAccessToken({
+      storeToken: 'tok-store',
+      storeUserId: 'user-a',
+      liveSession: live,
+    });
+    expect(token).toBe('tok-a');
+  });
+
+  it('uses store when live is blocked and store is the new user', () => {
+    beginOAuthAttempt('user-b');
+    const token = resolveApiAccessToken({
+      storeToken: 'tok-a',
+      storeUserId: 'user-a',
+      liveSession: stubSession('tok-b', 'user-b'),
+    });
+    expect(token).toBe('tok-a');
+  });
+});
+
 describe('resolveSessionAfterBrowserDismiss', () => {
   afterEach(() => {
-    clearOAuthAttempt();
+    resetOAuthAttemptStateForTests();
   });
 
   it('returns null without exchange when only stale blocked session remains', async () => {
