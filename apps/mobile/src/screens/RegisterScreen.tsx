@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { fetchLoginHint } from '../api/loginHint';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { OTPInput } from '../components/OTPInput';
@@ -19,7 +20,11 @@ import { Text } from '../components/ui/Text';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useResendCode, useSignUp, useVerifyEmail } from '../hooks/useAuth';
-import { getFriendlyAuthError } from '../lib/authErrors';
+import {
+  EXISTING_DUAL_ROLE_ACCOUNT_MESSAGE,
+  GOOGLE_ONLY_LOGIN_MESSAGE,
+  getFriendlyAuthError,
+} from '../lib/authErrors';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
 import {
   afterPostOAuthHandoff,
@@ -60,6 +65,7 @@ export const RegisterScreen: React.FC = () => {
   const [step, setStep] = useState<'form' | 'verify'>('form');
   const [verificationCode, setVerificationCode] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [highlightGoogle, setHighlightGoogle] = useState(false);
 
   const signUp = useSignUp();
   const verifyEmail = useVerifyEmail();
@@ -68,6 +74,7 @@ export const RegisterScreen: React.FC = () => {
   const handleGoogle = useCallback(async () => {
     if (googleLoading) return;
     setError(null);
+    setHighlightGoogle(false);
     setGoogleLoading(true);
     resetPostOAuthHandoff();
     try {
@@ -113,16 +120,17 @@ export const RegisterScreen: React.FC = () => {
   const handleRegister = async () => {
     setError(null);
     setInfo(null);
+    setHighlightGoogle(false);
     if (!email.trim()) {
       setError('Ingresa tu email');
       return;
     }
     if (password.length < 6) {
-      setError('La contrasena debe tener al menos 6 caracteres');
+      setError('La contraseña debe tener al menos 6 caracteres');
       return;
     }
     if (password !== confirmPassword) {
-      setError('Las contrasenas no coinciden');
+      setError('Las contraseñas no coinciden');
       return;
     }
 
@@ -156,9 +164,14 @@ export const RegisterScreen: React.FC = () => {
       }
 
       // Existing Lifty account (passenger or driver) — no mail is sent.
-      setError(
-        'Este email ya esta registrado en Lifty. Inicia sesion en lugar de crear una cuenta nueva. Si ya sos pasajero, usa el mismo email y contrasena.',
-      );
+      // Hint distinguishes Google-only (no password to reuse) from dual-role with password.
+      const hint = await fetchLoginHint(email.trim()).catch(() => null);
+      if (hint?.googleOnly) {
+        setError(GOOGLE_ONLY_LOGIN_MESSAGE);
+        setHighlightGoogle(true);
+        return;
+      }
+      setError(EXISTING_DUAL_ROLE_ACCOUNT_MESSAGE);
     } catch (err: unknown) {
       setError(getFriendlyAuthError(err));
     }
@@ -273,6 +286,7 @@ export const RegisterScreen: React.FC = () => {
         onChangeText={(t) => {
           setEmail(t);
           setError(null);
+          if (highlightGoogle) setHighlightGoogle(false);
         }}
         keyboardType="email-address"
         autoCapitalize="none"
@@ -329,7 +343,11 @@ export const RegisterScreen: React.FC = () => {
         title={googleLoading ? '' : 'Continuar con Google'}
         onPress={handleGoogle}
         loading={googleLoading}
-        style={[styles.button, styles.googleButton]}
+        style={[
+          styles.button,
+          styles.googleButton,
+          highlightGoogle ? styles.googleHighlight : null,
+        ]}
         textStyle={styles.googleButtonText}
       />
       {error !== null && <Text style={styles.errorText}>{error}</Text>}
@@ -490,6 +508,10 @@ const styles = StyleSheet.create({
   },
   googleButton: {
     backgroundColor: theme.colors.deepBlue,
+  },
+  googleHighlight: {
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
   },
   googleButtonText: {
     color: theme.colors.white,
