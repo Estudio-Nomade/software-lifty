@@ -28,6 +28,7 @@ import {
   resolvePostAuthRoute,
   routeForDriverStatus,
 } from '../lib/postAuthRouting';
+import { resetPostOAuthHandoff, runPostOAuthHandoff } from '../lib/postOAuthHandoff';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -111,20 +112,61 @@ export const LoginCredentialsScreen: React.FC = () => {
     }
   }, [navigation, termsAccepted, signOut]);
 
+  /** Google twin-path: single-flight replace (shared with AuthCallback). */
+  const finishGoogleAuth = useCallback(
+    async (userId: string) => {
+      try {
+        await runPostOAuthHandoff({
+          key: userId,
+          owner: 'LoginCredentials',
+          resolveTarget: async () => {
+            const route = await resolvePostAuthRoute();
+            if (route.blockedMessage) {
+              throw new Error(route.blockedMessage);
+            }
+            if (!termsAccepted) return 'Terms';
+            if (!route.screen) {
+              throw new Error('No se pudo determinar el siguiente paso.');
+            }
+            return route.screen;
+          },
+          navigate: (screen) => {
+            navigation.replace(screen);
+          },
+        });
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : 'No pudimos hablar con el servidor de Lifty. Revisá conexión.';
+        setError(message);
+        if (isTransientStatusFailure(err)) {
+          try {
+            await signOut();
+          } catch {
+            useAuthStore.getState().clearAuthState();
+          }
+        }
+      }
+    },
+    [navigation, termsAccepted, signOut],
+  );
+
   const handleGoogle = useCallback(async () => {
     if (googleLoading) return;
     setError(null);
     setGoogleLoading(true);
+    resetPostOAuthHandoff();
     try {
       const session = await signInWithGoogle();
-      if (!session) return;
-      await finishAuth();
+      if (!session?.user) return;
+      await finishGoogleAuth(session.user.id);
     } catch (err) {
       setError(getFriendlyAuthError(err));
     } finally {
       setGoogleLoading(false);
     }
-  }, [googleLoading, signInWithGoogle, finishAuth]);
+  }, [googleLoading, signInWithGoogle, finishGoogleAuth]);
 
   const handleLogin = async () => {
     setError(null);

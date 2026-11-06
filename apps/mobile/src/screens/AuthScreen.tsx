@@ -19,6 +19,7 @@ import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
+import { resetPostOAuthHandoff, runPostOAuthHandoff } from '../lib/postOAuthHandoff';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -71,17 +72,53 @@ export const AuthScreen: React.FC = () => {
     }
   }, [navigation, signOut]);
 
+  /** Google twin-path: single-flight replace (shared with AuthCallback). */
+  const finishGoogleAuth = useCallback(
+    async (userId: string) => {
+      try {
+        await runPostOAuthHandoff({
+          key: userId,
+          owner: 'AuthScreen',
+          resolveTarget: async () => {
+            const route = await resolvePostAuthRoute();
+            if (route.blockedMessage) {
+              throw new Error(route.blockedMessage);
+            }
+            if (!route.screen) {
+              throw new Error('No se pudo determinar el siguiente paso.');
+            }
+            return route.screen;
+          },
+          navigate: (screen) => {
+            navigation.replace(screen);
+          },
+        });
+      } catch (err) {
+        setError(getFriendlyAuthError(err));
+        if (isTransientStatusFailure(err)) {
+          try {
+            await signOut();
+          } catch {
+            useAuthStore.getState().clearAuthState();
+          }
+        }
+      }
+    },
+    [navigation, signOut],
+  );
+
   const handleGoogle = async () => {
     if (googleLoading) return;
     setError(null);
     setGoogleLoading(true);
+    resetPostOAuthHandoff();
     try {
       const session = await signInWithGoogle();
-      if (!session) {
+      if (!session?.user) {
         // User dismissed the browser — no error, just stop.
         return;
       }
-      await finishAuth();
+      await finishGoogleAuth(session.user.id);
     } catch (err) {
       setError(getFriendlyAuthError(err));
     } finally {

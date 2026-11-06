@@ -7,6 +7,7 @@ import { getFriendlyAuthError } from '../lib/authErrors';
 import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams';
 import { shouldTreatAuthCallbackAsSuccess } from '../lib/oauthSessionRecovery';
 import { resolvePassengerPostAuthPathWithRetry } from '../lib/postAuthRouting';
+import { runPostOAuthHandoff } from '../lib/postOAuthHandoff';
 import { createSessionFromUrl } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
@@ -56,6 +57,7 @@ function paramsAttemptKey(parts: {
  * Absorbs `lifty-passenger://auth-callback` deep links on native APK.
  * Without this file, expo-router shows Unmatched Route + sitemap.
  * Session exchange is idempotent with openAuthSessionAsync (double entry OK).
+ * Navigation is single-flight via runPostOAuthHandoff (never double BrandSplash).
  */
 export function AuthCallbackScreen() {
   const router = useRouter();
@@ -100,19 +102,12 @@ export function AuthCallbackScreen() {
 
     /**
      * Single post-OAuth handoff: resolve complete-profile vs home while BrandSplash
-     * stays up, then one replace. Never hop via Welcome guest CTAs when session exists.
+     * stays up, then one replace via module lock. Never hop via Welcome guest CTAs.
      */
     const finishOk = async () => {
       if (cancelled || finishedOkRef.current) return;
-      // Claim before await so twin-path exchange cannot re-enter.
       finishedOkRef.current = true;
-      type FinishTarget =
-        | '/complete-profile'
-        | '/location-permissions'
-        | '/home'
-        | '/'
-        | '/login-credentials';
-      let target: FinishTarget = '/complete-profile';
+
       try {
         const { data } = await supabase.auth.getSession();
         const session = data.session;
@@ -128,24 +123,49 @@ export function AuthCallbackScreen() {
             );
         }
         const userId = session?.user?.id ?? useAuthStore.getState().userId;
-        target = await resolvePassengerPostAuthPathWithRetry(userId ?? null);
-        // Belt: never land guest Welcome if we still have a session.
-        if (target === '/' && userId) {
-          target = '/complete-profile';
-        }
+
+        await runPostOAuthHandoff({
+          key: userId ?? 'session',
+          owner: 'AuthCallback',
+          resolveTarget: async () => {
+            let target = await resolvePassengerPostAuthPathWithRetry(userId ?? null);
+            // Never land guest Welcome if we still have a session/userId.
+            if (target === '/' && userId) {
+              target = '/complete-profile';
+            }
+            if (target === '/' && !userId) {
+              return '/login-credentials';
+            }
+            return target;
+          },
+          navigate: (target) => {
+            if (cancelled) return;
+            if (__DEV__) {
+              console.log('[AuthCallback] finishOk target=', target);
+            }
+            router.replace(
+              target as
+                | '/complete-profile'
+                | '/location-permissions'
+                | '/home'
+                | '/login-credentials',
+            );
+          },
+        });
       } catch {
+        if (cancelled) return;
         const userId = useAuthStore.getState().userId;
-        target = userId ? '/complete-profile' : '/login-credentials';
+        const fallback = userId ? '/complete-profile' : '/login-credentials';
+        await runPostOAuthHandoff({
+          key: userId ?? 'session',
+          owner: 'AuthCallback',
+          resolveTarget: async () => fallback,
+          navigate: (target) => {
+            if (cancelled) return;
+            router.replace(target as '/complete-profile' | '/login-credentials');
+          },
+        });
       }
-      if (__DEV__) {
-        console.log('[AuthCallback] finishOk target=', target);
-      }
-      if (cancelled) return;
-      if (target === '/login-credentials') {
-        router.replace('/login-credentials');
-        return;
-      }
-      router.replace(target);
     };
 
     const finishErr = async (err: unknown) => {
