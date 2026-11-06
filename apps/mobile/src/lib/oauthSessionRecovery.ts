@@ -54,12 +54,16 @@ export function resolveSignedOutStoreAction(input: {
   oauthAttemptActive: boolean;
   oauthLocalSignOutInFlight: boolean;
   liveSessionExists: boolean;
-}): 'clearAuthLocal' | 'clearAuth' | 'resync' {
+  storeHasSession?: boolean;
+}): 'clearAuthLocal' | 'clearAuth' | 'resync' | 'keepStore' {
   if (input.oauthAttemptActive || input.oauthLocalSignOutInFlight) {
     return 'clearAuthLocal';
   }
   if (input.liveSessionExists) {
     return 'resync';
+  }
+  if (input.storeHasSession) {
+    return 'keepStore';
   }
   return 'clearAuth';
 }
@@ -92,8 +96,6 @@ export function clearOAuthAttempt(): void {
   currentAttempt = null;
   if (oauthLocalSignOutInFlight) {
     endOAuthLocalSignOut();
-  } else if (oauthLocalSignOutGraceUntil === 0) {
-    oauthLocalSignOutGraceUntil = Date.now() + OAUTH_LOCAL_SIGNOUT_GRACE_MS;
   }
 }
 

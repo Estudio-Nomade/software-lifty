@@ -61,12 +61,18 @@ export function resolveSignedOutStoreAction(input: {
   oauthAttemptActive: boolean;
   oauthLocalSignOutInFlight: boolean;
   liveSessionExists: boolean;
-}): 'clearAuthLocal' | 'clearAuth' | 'resync' {
+  /** Zustand already holds a session (password/Google setSession raced ahead). */
+  storeHasSession?: boolean;
+}): 'clearAuthLocal' | 'clearAuth' | 'resync' | 'keepStore' {
   if (input.oauthAttemptActive || input.oauthLocalSignOutInFlight) {
     return 'clearAuthLocal';
   }
   if (input.liveSessionExists) {
     return 'resync';
+  }
+  // Stale SIGNED_OUT while store already has the new login — do not wipe.
+  if (input.storeHasSession) {
+    return 'keepStore';
   }
   return 'clearAuth';
 }
@@ -101,12 +107,10 @@ export function getCurrentOAuthAttempt(): OAuthAttemptState | null {
 export function clearOAuthAttempt(): void {
   currentAttempt = null;
   // Keep blockedOAuthUserId until mark or releaseOAuthBlockedUser.
-  // Grace so a late SIGNED_OUT from pre-OAuth signOut cannot arm Welcome
-  // after finally() cleared the attempt.
+  // Only start grace if we actually ran local signOut prep — never sticky forever
+  // when OAuth started with no prior session.
   if (oauthLocalSignOutInFlight) {
     endOAuthLocalSignOut();
-  } else if (oauthLocalSignOutGraceUntil === 0) {
-    oauthLocalSignOutGraceUntil = Date.now() + OAUTH_LOCAL_SIGNOUT_GRACE_MS;
   }
 }
 

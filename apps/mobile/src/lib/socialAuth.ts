@@ -97,8 +97,9 @@ export async function createSessionFromUrl(url: string) {
 async function clearLocalSessionBeforeOAuth(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   const blockedUserId = data.session?.user?.id ?? null;
-  beginOAuthLocalSignOut();
+  // No local session → nothing to wipe; OAuth attempt flag covers SIGNED_OUT.
   if (!data.session) return null;
+  beginOAuthLocalSignOut();
   if (__DEV__) {
     console.log('[socialAuth] pre-OAuth local signOut', {
       blockedUserId,

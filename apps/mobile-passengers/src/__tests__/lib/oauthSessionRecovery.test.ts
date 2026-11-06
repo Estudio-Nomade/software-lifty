@@ -305,6 +305,17 @@ describe('resolveSignedOutStoreAction / oauth local sign-out', () => {
     ).toBe('resync');
   });
 
+  it('stale SIGNED_OUT with store session but no live keeps store', () => {
+    expect(
+      resolveSignedOutStoreAction({
+        oauthAttemptActive: false,
+        oauthLocalSignOutInFlight: false,
+        liveSessionExists: false,
+        storeHasSession: true,
+      }),
+    ).toBe('keepStore');
+  });
+
   it('real SIGNED_OUT clears with redirect path', () => {
     expect(
       resolveSignedOutStoreAction({
@@ -321,6 +332,12 @@ describe('resolveSignedOutStoreAction / oauth local sign-out', () => {
     beginOAuthAttempt('u1');
     const session = stubSession('at', 'u2');
     markOAuthAttemptSession(session);
+    expect(isOAuthLocalSignOutInFlight()).toBe(false);
+  });
+
+  it('clearOAuthAttempt without prior local signOut does not leave grace stuck', () => {
+    beginOAuthAttempt(null);
+    clearOAuthAttempt();
     expect(isOAuthLocalSignOutInFlight()).toBe(false);
   });
 });

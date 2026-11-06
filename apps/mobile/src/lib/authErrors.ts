@@ -46,8 +46,24 @@ export function isSessionOrRefreshAuthError(error: unknown): boolean {
 export function isOtpAuthError(error: unknown): boolean {
   const message = errorMessage(error);
   if (!message) return false;
+  if (isSessionOrRefreshAuthError(error)) return false;
   if (message.includes('invalid otp') || message.includes('otp')) return true;
   if (message.includes('token has expired or is invalid')) return true;
+  if (
+    message.includes('email link') &&
+    (message.includes('invalid') || message.includes('expired') || message.includes('expir'))
+  ) {
+    return true;
+  }
+  if (
+    (message.includes('expired') || message.includes('expir')) &&
+    (message.includes('token') ||
+      message.includes('code') ||
+      message.includes('link') ||
+      message.includes('magic'))
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -137,12 +153,11 @@ export function getFriendlyAuthError(error: unknown): string {
     return SESSION_AUTH_RETRY_MESSAGE;
   }
 
-  if (message.includes('token has expired or is invalid')) {
-    return OTP_INVALID_MESSAGE;
-  }
-
-  if (message.includes('otp')) {
+  if (isOtpAuthError(error)) {
     if (message.includes('expired') || message.includes('expir')) {
+      if (message.includes('invalid') || message.includes('token has expired or is invalid')) {
+        return OTP_INVALID_MESSAGE;
+      }
       return OTP_EXPIRED_MESSAGE;
     }
     return OTP_INVALID_MESSAGE;

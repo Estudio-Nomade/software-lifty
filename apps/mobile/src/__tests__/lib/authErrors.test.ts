@@ -24,6 +24,12 @@ describe('getFriendlyAuthError', () => {
     );
   });
 
+  it('maps email link / magic-link expiry to OTP copy', () => {
+    expect(getFriendlyAuthError(new Error('Email link is invalid or has expired'))).toMatch(
+      /codigo/i,
+    );
+  });
+
   it('maps email not confirmed', () => {
     expect(getFriendlyAuthError(new Error('Email not confirmed'))).toBe(
       'Confirmá tu email antes de iniciar sesión.',

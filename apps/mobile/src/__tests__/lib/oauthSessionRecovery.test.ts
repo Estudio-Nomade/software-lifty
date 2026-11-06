@@ -305,11 +305,28 @@ describe('resolveSignedOutStoreAction / oauth local sign-out', () => {
     ).toBe('resync');
   });
 
+  it('stale SIGNED_OUT with store session but no live keeps store', () => {
+    expect(
+      resolveSignedOutStoreAction({
+        oauthAttemptActive: false,
+        oauthLocalSignOutInFlight: false,
+        liveSessionExists: false,
+        storeHasSession: true,
+      }),
+    ).toBe('keepStore');
+  });
+
   it('beginOAuthLocalSignOut marks in-flight until attempt mark', () => {
     beginOAuthLocalSignOut();
     expect(isOAuthLocalSignOutInFlight()).toBe(true);
     beginOAuthAttempt('u1');
     markOAuthAttemptSession(stubSession('at', 'u2'));
+    expect(isOAuthLocalSignOutInFlight()).toBe(false);
+  });
+
+  it('clearOAuthAttempt without prior local signOut does not leave grace stuck', () => {
+    beginOAuthAttempt(null);
+    clearOAuthAttempt();
     expect(isOAuthLocalSignOutInFlight()).toBe(false);
   });
 });

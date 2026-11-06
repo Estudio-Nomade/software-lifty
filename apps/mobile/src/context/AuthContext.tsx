@@ -114,15 +114,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       void (async () => {
         const { data } = await supabase.auth.getSession();
-        const live = Boolean(data.session?.access_token);
+        const store = useAuthStore.getState();
         const action = resolveSignedOutStoreAction({
           oauthAttemptActive: Boolean(getCurrentOAuthAttempt()),
           oauthLocalSignOutInFlight: isOAuthLocalSignOutInFlight(),
-          liveSessionExists: live,
+          liveSessionExists: Boolean(data.session?.access_token),
+          storeHasSession: Boolean(store.token && store.isAuthenticated),
         });
         if (action === 'resync' && data.session) {
           setSession(data.session);
           syncStore(data.session);
+          return;
+        }
+        if (action === 'keepStore') {
           return;
         }
         if (action === 'clearAuthLocal') {
