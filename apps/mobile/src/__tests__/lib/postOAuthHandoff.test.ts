@@ -149,7 +149,7 @@ describe('runPostOAuthHandoff', () => {
       runPostOAuthHandoff({
         key: 'user-screen-name',
         owner: 'Register',
-        resolveTarget: async () => 'PassengerAccountNotice',
+        resolveTarget: async () => 'OnboardingStep1',
         navigate,
       }),
     ).rejects.toThrow(HANDOFF_TARGET_NOT_PATH);
@@ -158,17 +158,17 @@ describe('runPostOAuthHandoff', () => {
     expect(isPostOAuthHandoffCompleted('user-screen-name')).toBe(false);
   });
 
-  it('accepts dual-role notice path', async () => {
+  it('accepts Terms path (Crear cuenta Google first hop)', async () => {
     const navigate = jest.fn();
     const result = await runPostOAuthHandoff({
-      key: 'user-dual',
+      key: 'user-terms',
       owner: 'AuthCallback',
-      resolveTarget: async () => '/passenger-account-notice',
+      resolveTarget: async () => '/terms',
       navigate,
     });
     expect(result).toBe('navigated');
-    expect(navigate).toHaveBeenCalledWith('/passenger-account-notice');
-    expect(getLastOAuthHandoffTarget()).toBe('/passenger-account-notice');
+    expect(navigate).toHaveBeenCalledWith('/terms');
+    expect(getLastOAuthHandoffTarget()).toBe('/terms');
   });
 
   it('skipped leaveTo receives path lastTarget (not ScreenName)', async () => {
@@ -176,12 +176,12 @@ describe('runPostOAuthHandoff', () => {
     await runPostOAuthHandoff({
       key: 'user-leave',
       owner: 'AuthCallback',
-      resolveTarget: async () => '/passenger-account-notice',
+      resolveTarget: async () => '/onboarding-step1',
       navigate,
     });
     const leave = jest.fn();
     afterPostOAuthHandoff('skipped', leave);
-    expect(leave).toHaveBeenCalledWith('/passenger-account-notice');
+    expect(leave).toHaveBeenCalledWith('/onboarding-step1');
     endOAuthBrandBridge();
   });
 

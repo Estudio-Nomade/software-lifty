@@ -26,7 +26,11 @@ import {
   GOOGLE_ONLY_LOGIN_MESSAGE,
   getFriendlyAuthError,
 } from '../lib/authErrors';
-import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
+import {
+  isTransientStatusFailure,
+  resolvePostAuthRoute,
+  resolvePostGoogleOAuthPath,
+} from '../lib/postAuthRouting';
 import {
   afterPostOAuthHandoff,
   beginOAuthBrandBridge,
@@ -34,7 +38,6 @@ import {
   resetPostOAuthHandoff,
   runPostOAuthHandoff,
 } from '../lib/postOAuthHandoff';
-import { routePathForScreen } from '../lib/screenRoutes';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -105,16 +108,7 @@ export const RegisterScreen: React.FC = () => {
       const result = await runPostOAuthHandoff({
         key: session.user.id,
         owner: 'Register',
-        resolveTarget: async () => {
-          const route = await resolvePostAuthRoute();
-          if (route.blockedMessage) {
-            throw new Error(route.blockedMessage);
-          }
-          if (!route.screen) {
-            throw new Error('No se pudo determinar el siguiente paso.');
-          }
-          return routePathForScreen(route.screen);
-        },
+        resolveTarget: () => resolvePostGoogleOAuthPath(),
         navigate: navigatePath,
       });
       afterPostOAuthHandoff(result, navigatePath);

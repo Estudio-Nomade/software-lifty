@@ -32,6 +32,7 @@ import {
 import {
   isTransientStatusFailure,
   resolvePostAuthRoute,
+  resolvePostGoogleOAuthPath,
   routeForDriverStatus,
 } from '../lib/postAuthRouting';
 import {
@@ -41,7 +42,6 @@ import {
   resetPostOAuthHandoff,
   runPostOAuthHandoff,
 } from '../lib/postOAuthHandoff';
-import { routePathForScreen } from '../lib/screenRoutes';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -140,17 +140,7 @@ export const LoginCredentialsScreen: React.FC = () => {
         const result = await runPostOAuthHandoff({
           key: userId,
           owner: 'LoginCredentials',
-          resolveTarget: async () => {
-            const route = await resolvePostAuthRoute();
-            if (route.blockedMessage) {
-              throw new Error(route.blockedMessage);
-            }
-            if (!termsAccepted) return routePathForScreen('Terms');
-            if (!route.screen) {
-              throw new Error('No se pudo determinar el siguiente paso.');
-            }
-            return routePathForScreen(route.screen);
-          },
+          resolveTarget: () => resolvePostGoogleOAuthPath(),
           navigate: navigatePath,
         });
         afterPostOAuthHandoff(result, navigatePath);
@@ -170,7 +160,7 @@ export const LoginCredentialsScreen: React.FC = () => {
         }
       }
     },
-    [router, termsAccepted, signOut],
+    [router, signOut],
   );
 
   const handleGoogle = useCallback(async () => {
