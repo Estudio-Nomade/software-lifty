@@ -28,6 +28,7 @@ import { tripRoutes, tripWebhookRoute } from './features/trips/routes';
 import { tripService } from './features/trips/service';
 import { getDb, getPool, resetDb } from './shared/db/client';
 import { startStaleDriverCleanup, stopStaleDriverCleanup } from './shared/lib/cleanup';
+import { getDiditEnv } from './shared/lib/didit';
 import { runReadyChecks } from './shared/lib/health';
 import { logger } from './shared/lib/logger';
 import { dbPoolAvailable, dbPoolSize, registry } from './shared/lib/metrics';
@@ -54,6 +55,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 export function createApp(customAuthPlugin?: typeof authPlugin) {
+  getDiditEnv(); // fail fast on an invalid DIDIT_ENV
   const app = new Elysia();
 
   if (process.env.NODE_ENV !== 'production') {
