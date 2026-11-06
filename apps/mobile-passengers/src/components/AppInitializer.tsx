@@ -152,15 +152,15 @@ function SessionRestore() {
 
 function PassengerProfileRegistrar() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const fullName = useAuthStore((s) => s.fullName);
   const registeredRef = useRef(false);
 
   useEffect(() => {
     if (!isAuthenticated || registeredRef.current) return;
     registeredRef.current = true;
-    // Minimal row only — phone/name completion happens on CompleteProfile or email path.
-    registerPassenger(undefined, fullName ?? undefined).catch(() => {});
-  }, [isAuthenticated, fullName]);
+    // Minimal row only — never push sticky store fullName (wrong Google account).
+    // Name/phone completion happens on CompleteProfile or email path.
+    registerPassenger(undefined, undefined).catch(() => {});
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) {

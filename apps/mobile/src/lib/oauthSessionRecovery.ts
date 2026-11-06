@@ -18,6 +18,11 @@ export type OAuthAttemptState = {
 
 let currentAttempt: OAuthAttemptState | null = null;
 
+/** Survives clearOAuthAttempt so AuthCallback cannot hand off the pre-OAuth user. */
+let recentBlockedUserId: string | null = null;
+let recentBlockedUntil = 0;
+const BLOCKED_USER_TTL_MS = 120_000;
+
 export function beginOAuthAttempt(blockedUserId: string | null = null): string {
   const id = `oauth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   currentAttempt = {
@@ -26,12 +31,21 @@ export function beginOAuthAttempt(blockedUserId: string | null = null): string {
     blockedUserId,
     acceptedUserId: null,
   };
+  if (blockedUserId) {
+    recentBlockedUserId = blockedUserId;
+    recentBlockedUntil = Date.now() + BLOCKED_USER_TTL_MS;
+  }
   return id;
 }
 
 export function markOAuthAttemptSession(session: Session | null | undefined): void {
   if (!currentAttempt || !session?.access_token || !session.user?.id) return;
   currentAttempt.acceptedUserId = session.user.id;
+  // Re-picking the same Google account is allowed once exchange proves it.
+  if (session.user.id === recentBlockedUserId) {
+    recentBlockedUserId = null;
+    recentBlockedUntil = 0;
+  }
 }
 
 export function getCurrentOAuthAttempt(): OAuthAttemptState | null {
@@ -40,6 +54,26 @@ export function getCurrentOAuthAttempt(): OAuthAttemptState | null {
 
 export function clearOAuthAttempt(): void {
   currentAttempt = null;
+}
+
+/** Pre-OAuth local user — never hand off as success without exchange mark. */
+export function isRecentBlockedOAuthUser(userId: string | null | undefined): boolean {
+  if (!userId || !recentBlockedUserId) return false;
+  if (Date.now() > recentBlockedUntil) return false;
+  return userId === recentBlockedUserId;
+}
+
+/**
+ * Whether AuthCallback may finishOk with this session (no-params / residual path).
+ * Rejects the pre-OAuth blocked user unless createSessionFromUrl marked them.
+ */
+export function canFinishAuthCallbackWithSession(session: Session | null | undefined): boolean {
+  if (!session?.access_token || !session.user?.id) return false;
+  if (sessionBelongsToFreshOAuthAttempt(session)) return true;
+  if (isRecentBlockedOAuthUser(session.user.id)) return false;
+  // Active attempt still open: only marked sessions (above). Unmarked = wait for code.
+  if (currentAttempt) return false;
+  return true;
 }
 
 function errorMessage(error: unknown): string {
@@ -111,4 +145,11 @@ export async function resolveSessionAfterBrowserDismiss(
   const { data } = await getSession();
   if (!sessionBelongsToFreshOAuthAttempt(data.session)) return null;
   return data.session;
+}
+
+/** Test helper — reset module state. */
+export function resetOAuthAttemptStateForTests(): void {
+  currentAttempt = null;
+  recentBlockedUserId = null;
+  recentBlockedUntil = 0;
 }

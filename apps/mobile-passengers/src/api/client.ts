@@ -43,8 +43,17 @@ const api = axios.create({
   },
 });
 
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = useAuthStore.getState().token;
+api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  // Prefer live Supabase session over Zustand — store can lag a tick behind OAuth
+  // and would call /passenger/profile as the previous Google account.
+  let token = useAuthStore.getState().token;
+  try {
+    const { data } = await supabase.auth.getSession();
+    const live = data.session?.access_token ?? null;
+    if (live) token = live;
+  } catch {
+    // keep store token
+  }
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

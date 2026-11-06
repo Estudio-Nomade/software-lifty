@@ -61,6 +61,77 @@ export function splitGoogleName(
   };
 }
 
+function normalizeEmail(email: string | null | undefined): string {
+  return (email ?? '').trim().toLowerCase();
+}
+
+/**
+ * CompleteProfile boot identity: Supabase session is source of truth.
+ * Never prefill name/email from a backend profile that belongs to another account
+ * (Bearer/store race) when session email differs.
+ */
+export function resolveCompleteProfileBootIdentity(input: {
+  sessionEmail?: string | null;
+  sessionMeta?: {
+    given_name?: string;
+    family_name?: string;
+    full_name?: string;
+    name?: string;
+    phone?: string;
+    phone_number?: string;
+  } | null;
+  profileEmail?: string | null;
+  profileFullName?: string | null;
+  profilePhone?: string | null;
+  storeEmail?: string | null;
+}): {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  preferSessionIdentity: boolean;
+} {
+  const sessionEmail = normalizeEmail(input.sessionEmail);
+  const profileEmail = normalizeEmail(input.profileEmail);
+  const storeEmail = normalizeEmail(input.storeEmail);
+
+  const fromMeta = splitGoogleName(input.sessionMeta ?? null);
+  const fromProfile = splitGoogleName({
+    full_name: input.profileFullName ?? undefined,
+  });
+
+  const preferSessionIdentity =
+    Boolean(sessionEmail) && Boolean(profileEmail) && sessionEmail !== profileEmail;
+
+  if (preferSessionIdentity) {
+    return {
+      email: input.sessionEmail?.trim() || storeEmail || '',
+      firstName: fromMeta.firstName,
+      lastName: fromMeta.lastName,
+      phone: input.sessionMeta?.phone?.trim() || input.sessionMeta?.phone_number?.trim() || '',
+      preferSessionIdentity: true,
+    };
+  }
+
+  const email =
+    (sessionEmail && input.sessionEmail?.trim()) ||
+    (profileEmail && input.profileEmail?.trim()) ||
+    (storeEmail && input.storeEmail?.trim()) ||
+    '';
+
+  return {
+    email,
+    firstName: fromProfile.firstName || fromMeta.firstName,
+    lastName: fromProfile.lastName || fromMeta.lastName,
+    phone:
+      input.profilePhone?.trim() ||
+      input.sessionMeta?.phone?.trim() ||
+      input.sessionMeta?.phone_number?.trim() ||
+      '',
+    preferSessionIdentity: false,
+  };
+}
+
 export function joinFullName(first: string, last: string): string {
   return [first.trim(), last.trim()].filter(Boolean).join(' ');
 }

@@ -1,9 +1,11 @@
 import type { Session } from '@supabase/supabase-js';
 import {
   beginOAuthAttempt,
+  canFinishAuthCallbackWithSession,
   clearOAuthAttempt,
   getCurrentOAuthAttempt,
   markOAuthAttemptSession,
+  resetOAuthAttemptStateForTests,
   resolveSessionAfterAuthError,
   resolveSessionAfterBrowserDismiss,
   shouldTreatAuthCallbackAsSuccess,
@@ -21,7 +23,7 @@ function stubSession(access_token = 'at', userId = 'u1'): Session {
 
 describe('resolveSessionAfterAuthError', () => {
   afterEach(() => {
-    clearOAuthAttempt();
+    resetOAuthAttemptStateForTests();
   });
 
   it('returns existing session when twin path already marked for this attempt', async () => {
@@ -82,7 +84,7 @@ describe('resolveSessionAfterAuthError', () => {
 
 describe('shouldTreatAuthCallbackAsSuccess', () => {
   afterEach(() => {
-    clearOAuthAttempt();
+    resetOAuthAttemptStateForTests();
   });
 
   it('is true only when session user matches mark for this attempt', async () => {
@@ -139,9 +141,37 @@ describe('shouldTreatAuthCallbackAsSuccess', () => {
   });
 });
 
+describe('canFinishAuthCallbackWithSession', () => {
+  afterEach(() => {
+    resetOAuthAttemptStateForTests();
+  });
+
+  it('rejects recent blocked user after attempt cleared (no mark)', () => {
+    beginOAuthAttempt('user-b');
+    clearOAuthAttempt();
+    expect(canFinishAuthCallbackWithSession(stubSession('at-b', 'user-b'))).toBe(false);
+  });
+
+  it('allows marked session for blocked user after re-pick', () => {
+    beginOAuthAttempt('user-b');
+    const session = stubSession('at-b', 'user-b');
+    markOAuthAttemptSession(session);
+    expect(canFinishAuthCallbackWithSession(session)).toBe(true);
+  });
+
+  it('rejects unmarked session while attempt is open', () => {
+    beginOAuthAttempt(null);
+    expect(canFinishAuthCallbackWithSession(stubSession('at', 'user-a'))).toBe(false);
+  });
+
+  it('allows unrelated session when no attempt and no blocked user', () => {
+    expect(canFinishAuthCallbackWithSession(stubSession('at', 'user-a'))).toBe(true);
+  });
+});
+
 describe('resolveSessionAfterBrowserDismiss', () => {
   afterEach(() => {
-    clearOAuthAttempt();
+    resetOAuthAttemptStateForTests();
   });
 
   it('returns null without exchange when only stale blocked session remains', async () => {

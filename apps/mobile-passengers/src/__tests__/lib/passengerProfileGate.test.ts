@@ -6,6 +6,7 @@ import {
   joinFullName,
   phoneDigitCount,
   readPassengerProfileCompleteCache,
+  resolveCompleteProfileBootIdentity,
   splitGoogleName,
   writePassengerProfileCompleteCache,
 } from '../../lib/passengerProfileGate';
@@ -50,6 +51,39 @@ describe('joinFullName', () => {
 
   it('handles missing last name', () => {
     expect(joinFullName('Ana', '')).toBe('Ana');
+  });
+});
+
+describe('resolveCompleteProfileBootIdentity', () => {
+  it('prefers session identity when profile email is a different account', () => {
+    const boot = resolveCompleteProfileBootIdentity({
+      sessionEmail: 'martinayaquinta@gmail.com',
+      sessionMeta: { given_name: 'Martin', family_name: 'Aya', full_name: 'Martin Aya' },
+      profileEmail: 'estudionomade@gmail.com',
+      profileFullName: 'Estudio Nomade',
+      profilePhone: '11111111',
+      storeEmail: 'estudionomade@gmail.com',
+    });
+    expect(boot.preferSessionIdentity).toBe(true);
+    expect(boot.email).toBe('martinayaquinta@gmail.com');
+    expect(boot.firstName).toBe('Martin');
+    expect(boot.lastName).toBe('Aya');
+    expect(boot.phone).toBe('');
+  });
+
+  it('uses profile name when emails match', () => {
+    const boot = resolveCompleteProfileBootIdentity({
+      sessionEmail: 'a@x.com',
+      sessionMeta: { full_name: 'From Google' },
+      profileEmail: 'a@x.com',
+      profileFullName: 'From Profile',
+      profilePhone: '1123456789',
+    });
+    expect(boot.preferSessionIdentity).toBe(false);
+    expect(boot.email).toBe('a@x.com');
+    expect(boot.firstName).toBe('From');
+    expect(boot.lastName).toBe('Profile');
+    expect(boot.phone).toBe('1123456789');
   });
 });
 

@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { hasOAuthCallbackPayload, isAuthCallbackUrl } from '../lib/authUrlParams';
-import { shouldTreatAuthCallbackAsSuccess } from '../lib/oauthSessionRecovery';
+import {
+  canFinishAuthCallbackWithSession,
+  shouldTreatAuthCallbackAsSuccess,
+} from '../lib/oauthSessionRecovery';
 import { resolvePassengerPostAuthPathWithRetry } from '../lib/postAuthRouting';
 import {
   afterPostOAuthHandoff,
@@ -268,9 +271,17 @@ export function AuthCallbackScreen() {
         }
 
         const { data } = await supabase.auth.getSession();
-        if (data.session) {
+        // Never finishOk with pre-OAuth leftover (blocked user) or unmarked
+        // session while an OAuth attempt is still open — wait for code exchange.
+        if (canFinishAuthCallbackWithSession(data.session)) {
           await finishOk();
           return;
+        }
+        if (__DEV__ && data.session) {
+          console.log('[AuthCallback] skip residual session handoff', {
+            userId: data.session.user?.id ?? null,
+            email: data.session.user?.email ?? null,
+          });
         }
 
         await new Promise<void>((resolve) => {
@@ -285,7 +296,7 @@ export function AuthCallbackScreen() {
         }
 
         const session2 = await supabase.auth.getSession();
-        if (session2.data.session) {
+        if (canFinishAuthCallbackWithSession(session2.data.session)) {
           await finishOk();
           return;
         }

@@ -102,6 +102,13 @@ async function clearLocalSessionBeforeOAuth(): Promise<string | null> {
     });
   }
   await supabase.auth.signOut({ scope: 'local' });
+  const after = await supabase.auth.getSession();
+  if (after.data.session) {
+    if (__DEV__) {
+      console.log('[socialAuth] pre-OAuth session still present after signOut — retry');
+    }
+    await supabase.auth.signOut({ scope: 'local' });
+  }
   return blockedUserId;
 }
 
