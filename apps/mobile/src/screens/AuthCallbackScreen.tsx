@@ -229,37 +229,77 @@ export function AuthCallbackScreen() {
       const msg = getFriendlyAuthError(err);
       setTimeout(() => {
         void (async () => {
-          if (cancelled || finishedOkRef.current) return;
-          if (isPostOAuthHandoffCompleted()) {
-            const target = getLastOAuthHandoffTarget();
-            if (target) {
-              router.replace(target);
-              endOAuthBrandBridgeAfterPaint();
-            } else {
-              endOAuthBrandBridge();
-            }
-            return;
-          }
-          const again = await supabase.auth.getSession();
-          const late = decideAuthCallbackFinishErrAction(again.data.session, {
-            handoffCompleted: isPostOAuthHandoffCompleted(),
-          });
-          if (late === 'finishOk') {
-            await finishOkLatestRef.current();
-            return;
-          }
-          if (late === 'recovery') {
+          // Always settle the brand bridge on every exit — never leave blank splash.
+          const settleFailed = () => {
             endOAuthBrandBridge();
+            if (cancelled || finishedOkRef.current) return;
             setError(msg);
             setRecovery(true);
-            return;
-          }
-          endOAuthBrandBridge();
-          if (!cancelled && !finishedOkRef.current) {
+          };
+
+          try {
+            if (finishedOkRef.current) {
+              // Twin finishOk already navigated; afterPostOAuthHandoff owns bridge end.
+              return;
+            }
+            if (isPostOAuthHandoffCompleted()) {
+              const target = getLastOAuthHandoffTarget();
+              if (target) {
+                if (!cancelled) router.replace(target);
+                endOAuthBrandBridgeAfterPaint();
+              } else {
+                endOAuthBrandBridge();
+              }
+              return;
+            }
+            if (cancelled) {
+              // Effect teardown before twin finished — drop overlay; do not paint error on dead screen.
+              endOAuthBrandBridge();
+              return;
+            }
+
+            const again = await supabase.auth.getSession();
+            if (finishedOkRef.current) return;
+            if (isPostOAuthHandoffCompleted()) {
+              const target = getLastOAuthHandoffTarget();
+              if (target) {
+                if (!cancelled) router.replace(target);
+                endOAuthBrandBridgeAfterPaint();
+              } else {
+                endOAuthBrandBridge();
+              }
+              return;
+            }
+            if (cancelled) {
+              endOAuthBrandBridge();
+              return;
+            }
+
+            const late = decideAuthCallbackFinishErrAction(again.data.session, {
+              handoffCompleted: isPostOAuthHandoffCompleted(),
+            });
+            if (late === 'finishOk') {
+              await finishOkLatestRef.current();
+              return;
+            }
+            if (late === 'recovery') {
+              endOAuthBrandBridge();
+              if (!cancelled && !finishedOkRef.current) {
+                setError(msg);
+                setRecovery(true);
+              }
+              return;
+            }
+
+            // bounceLogin — real failure after grace window
+            endOAuthBrandBridge();
+            if (cancelled || finishedOkRef.current) return;
             router.replace({
               pathname: '/login-credentials',
               params: { authError: msg },
             });
+          } catch {
+            settleFailed();
           }
         })();
       }, 900);

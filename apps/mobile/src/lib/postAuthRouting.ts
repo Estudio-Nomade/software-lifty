@@ -145,14 +145,14 @@ export async function resolvePostAuthRoute(): Promise<PostAuthRoute> {
 /**
  * Expo-router path after Google OAuth (Crear cuenta / login / AuthCallback twin path).
  * Always TyC first when not yet accepted, then status-driven screen (perfil, KYC, …).
+ * Read termsAccepted AFTER status await so a concurrent accept is not ignored.
  */
 export async function resolvePostGoogleOAuthPath(): Promise<string> {
-  const termsAccepted = useAuthStore.getState().termsAccepted;
   const route = await resolvePostAuthRoute();
   if (route.blockedMessage) {
     throw new Error(route.blockedMessage);
   }
-  if (!termsAccepted) {
+  if (!useAuthStore.getState().termsAccepted) {
     return routePathForScreen('Terms');
   }
   if (!route.screen) {
