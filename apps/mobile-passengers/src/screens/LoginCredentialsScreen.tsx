@@ -223,6 +223,7 @@ export function LoginCredentialsScreen() {
         return;
       }
       // Cancel / dismiss without session — stay on login, no fake success.
+      endOAuthBrandBridge();
       setInfo('Inicio de sesión cancelado.');
     } catch (err) {
       endOAuthBrandBridge();

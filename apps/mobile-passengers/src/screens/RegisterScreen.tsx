@@ -128,6 +128,7 @@ export function RegisterScreen() {
         await replaceAfterGoogleAuth(replace, session.user.id, 'Register');
         return;
       }
+      endOAuthBrandBridge();
       setError('Inicio de sesión cancelado.');
     } catch (err) {
       endOAuthBrandBridge();

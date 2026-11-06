@@ -126,6 +126,7 @@ export const AuthScreen: React.FC = () => {
       const session = await signInWithGoogle();
       if (!session?.user) {
         // User dismissed the browser — no error, just stop.
+        endOAuthBrandBridge();
         return;
       }
       beginOAuthBrandBridge();

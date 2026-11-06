@@ -170,6 +170,7 @@ export const LoginCredentialsScreen: React.FC = () => {
     try {
       const session = await signInWithGoogle();
       if (!session?.user) {
+        endOAuthBrandBridge();
         return;
       }
       beginOAuthBrandBridge();
