@@ -1,4 +1,5 @@
 import {
+  HANDOFF_TARGET_NOT_PATH,
   OAUTH_HANDOFF_ABORTED,
   WELCOME_HOP_REFUSED,
   afterPostOAuthHandoff,
@@ -142,7 +143,7 @@ describe('runPostOAuthHandoff', () => {
     expect(isPostOAuthHandoffCompleted('user-4')).toBe(false);
   });
 
-  it('refuses ScreenName targets (must be path) so twin-path leaveTo cannot no-op', async () => {
+  it('refuses ScreenName targets with distinct HANDOFF_TARGET_NOT_PATH', async () => {
     const navigate = jest.fn();
     await expect(
       runPostOAuthHandoff({
@@ -151,7 +152,7 @@ describe('runPostOAuthHandoff', () => {
         resolveTarget: async () => 'PassengerAccountNotice',
         navigate,
       }),
-    ).rejects.toThrow(WELCOME_HOP_REFUSED);
+    ).rejects.toThrow(HANDOFF_TARGET_NOT_PATH);
 
     expect(navigate).not.toHaveBeenCalled();
     expect(isPostOAuthHandoffCompleted('user-screen-name')).toBe(false);

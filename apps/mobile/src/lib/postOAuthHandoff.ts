@@ -10,6 +10,8 @@
 
 export const OAUTH_HANDOFF_ABORTED = 'OAUTH_HANDOFF_ABORTED';
 export const WELCOME_HOP_REFUSED = 'WELCOME_HOP_REFUSED';
+/** Target is a ScreenName or non-pathname — callers must pass routePathForScreen(...). */
+export const HANDOFF_TARGET_NOT_PATH = 'HANDOFF_TARGET_NOT_PATH';
 
 type HandoffOutcome = { ok: true; target: string } | { ok: false; error: unknown };
 
@@ -127,11 +129,15 @@ export function isPostOAuthHandoffCompleted(key?: string): boolean {
  * ScreenNames break twin-path: useAppNavigation.replace(path) is a silent no-op,
  * and AuthCallback router.replace('ScreenName') is not a valid route.
  */
-function isForbiddenTarget(target: string): boolean {
-  if (!target || target === '/' || target === 'Welcome') return true;
-  // Reject ScreenName-style targets (no leading slash).
-  if (!target.startsWith('/')) return true;
-  return false;
+function handoffTargetError(target: string): Error | null {
+  if (!target || target === '/' || target === 'Welcome') {
+    return new Error(WELCOME_HOP_REFUSED);
+  }
+  // Reject ScreenName-style / relative targets (must start with "/").
+  if (!target.startsWith('/')) {
+    return new Error(HANDOFF_TARGET_NOT_PATH);
+  }
+  return null;
 }
 
 function toError(error: unknown): Error {
@@ -196,8 +202,9 @@ export async function runPostOAuthHandoff(opts: {
         if (generation !== myGen) {
           return { ok: false, error: new Error(OAUTH_HANDOFF_ABORTED) };
         }
-        if (isForbiddenTarget(target)) {
-          return { ok: false, error: new Error(WELCOME_HOP_REFUSED) };
+        const badTarget = handoffTargetError(target);
+        if (badTarget) {
+          return { ok: false, error: badTarget };
         }
         if (typeof __DEV__ !== 'undefined' && __DEV__) {
           console.log('[oauth-handoff] replace →', target, 'owner=', opts.owner);

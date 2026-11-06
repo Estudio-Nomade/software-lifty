@@ -11,6 +11,7 @@ import {
 } from '../lib/oauthSessionRecovery';
 import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
 import {
+  HANDOFF_TARGET_NOT_PATH,
   WELCOME_HOP_REFUSED,
   afterPostOAuthHandoff,
   beginOAuthBrandBridge,
@@ -133,9 +134,15 @@ export function AuthCallbackScreen() {
       finishedOkRef.current = false;
       // Drop overlay so recovery UI is tappable; retry begins bridge again.
       endOAuthBrandBridge();
-      if (err instanceof Error && err.message === WELCOME_HOP_REFUSED) {
+      if (
+        err instanceof Error &&
+        (err.message === WELCOME_HOP_REFUSED || err.message === HANDOFF_TARGET_NOT_PATH)
+      ) {
         if (typeof __DEV__ !== 'undefined' && __DEV__) {
-          console.log('[AuthCallback] refuse Welcome hop; staying for recovery');
+          console.log(
+            '[AuthCallback] refuse bad handoff target; staying for recovery',
+            err.message,
+          );
         }
         setRecovery(true);
         return;
@@ -155,17 +162,21 @@ export function AuthCallbackScreen() {
     }
   }, [router]);
 
+  // finishErr / 900ms timeout must call the latest finishOk (not a stale effect closure).
+  const finishOkLatestRef = useRef(finishOk);
+  finishOkLatestRef.current = finishOk;
+
   const handleRetry = useCallback(async () => {
     if (retrying) return;
     setRetrying(true);
     setError(null);
     finishedOkRef.current = false;
     try {
-      await finishOk();
+      await finishOkLatestRef.current();
     } finally {
       setRetrying(false);
     }
-  }, [finishOk, retrying]);
+  }, [retrying]);
 
   useEffect(() => {
     // Do NOT begin bridge before early-return guards (stuck overlay risk).
@@ -219,10 +230,11 @@ export function AuthCallbackScreen() {
         });
       }
       if (action === 'finishOk') {
-        await finishOk();
+        await finishOkLatestRef.current();
         return;
       }
       if (action === 'recovery') {
+        // Session present: stay here with Reintentar (handleRetry → finishOk). Never wipe to login.
         endOAuthBrandBridge();
         setError(getFriendlyAuthError(err));
         setRecovery(true);
@@ -241,10 +253,11 @@ export function AuthCallbackScreen() {
             handoffCompleted: isPostOAuthHandoffCompleted(),
           });
           if (late === 'finishOk') {
-            await finishOk();
+            await finishOkLatestRef.current();
             return;
           }
           if (late === 'recovery') {
+            setError(msg);
             setRecovery(true);
             return;
           }
@@ -264,7 +277,7 @@ export function AuthCallbackScreen() {
       startedKeysRef.current.add(key);
       await createSessionFromUrl(url);
       if (cancelled) return;
-      await finishOk();
+      await finishOkLatestRef.current();
     };
 
     const isCallbackPayload = (url: string) =>
@@ -292,7 +305,7 @@ export function AuthCallbackScreen() {
 
         const { data } = await supabase.auth.getSession();
         if (canFinishAuthCallbackWithSession(data.session)) {
-          await finishOk();
+          await finishOkLatestRef.current();
           return;
         }
         if (__DEV__ && data.session) {
@@ -315,7 +328,7 @@ export function AuthCallbackScreen() {
 
         const session2 = await supabase.auth.getSession();
         if (canFinishAuthCallbackWithSession(session2.data.session)) {
-          await finishOk();
+          await finishOkLatestRef.current();
           return;
         }
 
@@ -339,7 +352,8 @@ export function AuthCallbackScreen() {
       cancelled = true;
       sub.remove();
     };
-  }, [router, code, accessToken, refreshToken, oauthError, oauthErrorDescription, finishOk]);
+    // finishOk via finishOkLatestRef — omit from deps so param-only remounts drive the effect.
+  }, [router, code, accessToken, refreshToken, oauthError, oauthErrorDescription]);
 
   if (recovery) {
     return (
