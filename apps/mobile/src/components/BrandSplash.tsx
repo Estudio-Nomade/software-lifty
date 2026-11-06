@@ -61,7 +61,8 @@ const styles = StyleSheet.create({
   taglineBlock: {
     alignItems: 'center',
     maxWidth: 280,
-    minHeight: 44,
+    minHeight: 52,
+    gap: 2,
     paddingBottom: theme.spacing.xs,
     overflow: 'visible',
   },
@@ -70,7 +71,7 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.tagline,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 24,
     ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
   },
 });
