@@ -253,6 +253,8 @@ export const OnboardingStep1Screen: React.FC = () => {
       const field = addressFieldRef.current;
       const scroll = scrollRef.current;
       if (!field || !scroll) return;
+      // Wait for real keyboard height so visibleBottom is not full-window (wrong delta).
+      if (keyboardHeightRef.current <= 0) return;
 
       field.measureInWindow((_x, fieldY, _w, fieldH) => {
         const winH = Dimensions.get('window').height;
@@ -270,10 +272,10 @@ export const OnboardingStep1Screen: React.FC = () => {
           delta = fieldTopTarget - topGuard;
         }
         if (delta === 0) return;
-        scroll.scrollTo({
-          y: Math.max(0, scrollOffsetY.current + delta),
-          animated: true,
-        });
+        const nextY = Math.max(0, scrollOffsetY.current + delta);
+        // Keep offset in sync — onScroll may lag behind programmatic scrollTo.
+        scrollOffsetY.current = nextY;
+        scroll.scrollTo({ y: nextY, animated: true });
       });
     };
     requestAnimationFrame(() => {
@@ -288,6 +290,7 @@ export const OnboardingStep1Screen: React.FC = () => {
   // Extra bottom room while keyboard is open so Domicilio can scroll above it.
   // Android adjustResize already shrinks the window — modest pad only.
   // iOS keeps automaticallyAdjustKeyboardInsets; pad is a scroll runway, not KAV.
+  // Primary scroll trigger is keyboard show (height known); focus alone is a no-op until then.
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
@@ -314,7 +317,10 @@ export const OnboardingStep1Screen: React.FC = () => {
   const handleAddressFocus = useCallback(() => {
     addressFocusedRef.current = true;
     setShowSuggestions(true);
-    scrollAddressIntoView();
+    // Keyboard already open (refocus): scroll now. First open: keyboard onShow owns scroll.
+    if (keyboardHeightRef.current > 0) {
+      scrollAddressIntoView();
+    }
   }, [scrollAddressIntoView]);
 
   const setError = (field: keyof ValidationErrors, error: string | undefined) => {
