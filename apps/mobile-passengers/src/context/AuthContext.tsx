@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { unregisterPush } from '../lib/notifications';
+import { invalidatePassengerProfileCompleteCache } from '../lib/passengerProfileGate';
 import { resetPostOAuthHandoff } from '../lib/postOAuthHandoff';
 import { type SocialProvider, signInWithProvider } from '../lib/socialAuth';
 import { supabase } from '../lib/supabase';
@@ -36,6 +37,18 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function googleDisplayName(metadata: Record<string, unknown> | undefined): string | null {
+  if (!metadata) return null;
+  const full = typeof metadata.full_name === 'string' ? metadata.full_name.trim() : '';
+  if (full) return full;
+  const name = typeof metadata.name === 'string' ? metadata.name.trim() : '';
+  if (name) return name;
+  const given = typeof metadata.given_name === 'string' ? metadata.given_name.trim() : '';
+  const family = typeof metadata.family_name === 'string' ? metadata.family_name.trim() : '';
+  const joined = [given, family].filter(Boolean).join(' ').trim();
+  return joined || null;
+}
+
 function syncStore(session: Session | null) {
   const store = useAuthStore.getState();
   if (session?.access_token) {
@@ -44,7 +57,7 @@ function syncStore(session: Session | null) {
       session.access_token,
       session.user?.id ?? null,
       session.user?.email ?? null,
-      (metadata?.full_name as string) ?? undefined,
+      googleDisplayName(metadata),
     );
   }
 }
@@ -92,7 +105,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signInWithGoogle = useCallback(() => signInWithProvider('google'), []);
+  const signInWithGoogle = useCallback(async () => {
+    // Guest / re-tap Google: drop Zustand identity so a prior account cannot stick
+    // while socialAuth clears the local Supabase session for this attempt.
+    const store = useAuthStore.getState();
+    if (store.token || store.userId || store.isAuthenticated) {
+      store.clearAuthLocal();
+      invalidatePassengerProfileCompleteCache();
+    }
+    return signInWithProvider('google');
+  }, []);
 
   const sendEmailOtp = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({

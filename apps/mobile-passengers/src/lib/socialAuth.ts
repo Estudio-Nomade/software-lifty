@@ -1,7 +1,12 @@
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { getAuthQueryParams } from './authUrlParams';
-import { resolveSessionAfterAuthError } from './oauthSessionRecovery';
+import {
+  beginOAuthAttempt,
+  markOAuthAttemptSession,
+  resolveSessionAfterAuthError,
+  resolveSessionAfterBrowserDismiss,
+} from './oauthSessionRecovery';
 import { supabase } from './supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -39,12 +44,14 @@ async function runCreateSessionFromUrl(url: string) {
     if (code) {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) throw error;
+      markOAuthAttemptSession(data.session);
       return data.session;
     }
 
     if (access_token && refresh_token) {
       const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
       if (error) throw error;
+      markOAuthAttemptSession(data.session);
       return data.session;
     }
 
@@ -69,16 +76,38 @@ export async function createSessionFromUrl(url: string) {
   return promise;
 }
 
+/**
+ * Drop any leftover local Supabase session so dismiss/recovery cannot "succeed"
+ * as a previous Google account on the same device.
+ */
+async function clearLocalSessionBeforeOAuth(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  const blockedUserId = data.session?.user?.id ?? null;
+  if (!data.session) return null;
+  if (__DEV__) {
+    console.log('[socialAuth] pre-OAuth local signOut', {
+      blockedUserId,
+      email: data.session.user?.email ?? null,
+    });
+  }
+  await supabase.auth.signOut({ scope: 'local' });
+  return blockedUserId;
+}
+
 export async function signInWithProvider(provider: SocialProvider) {
   if (__DEV__) {
     console.log('[socialAuth] authRedirectUri', authRedirectUri);
   }
+
+  const blockedUserId = await clearLocalSessionBeforeOAuth();
+  const attemptId = beginOAuthAttempt(blockedUserId);
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
       redirectTo: authRedirectUri,
       skipBrowserRedirect: true,
+      queryParams: { prompt: 'select_account' },
     },
   });
   if (error) throw error;
@@ -89,17 +118,55 @@ export async function signInWithProvider(provider: SocialProvider) {
   if (__DEV__) {
     const pathOnly =
       result.type === 'success' && result.url ? result.url.split('?')[0]?.split('#')[0] : null;
-    console.log('[socialAuth] openAuthSession', { type: result.type, path: pathOnly });
+    console.log('[socialAuth] openAuthSession', {
+      type: result.type,
+      path: pathOnly,
+      attemptId,
+      blockedUserId,
+    });
   }
 
   if (result.type === 'success' && result.url) {
-    return createSessionFromUrl(result.url);
+    const session = await createSessionFromUrl(result.url);
+    if (__DEV__) {
+      console.log('[socialAuth] post-OAuth session', {
+        attemptId,
+        userId: session?.user?.id ?? null,
+        email: session?.user?.email ?? null,
+      });
+    }
+    return session;
   }
 
   // Deep link may have completed exchange while browser reported dismiss.
   if (result.type === 'dismiss' || result.type === 'cancel') {
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData.session) return sessionData.session;
+    if (inflightSessionFromUrl) {
+      try {
+        const twin = await inflightSessionFromUrl.promise;
+        if (twin?.access_token) {
+          if (__DEV__) {
+            console.log('[socialAuth] dismiss recovered inflight', {
+              attemptId,
+              userId: twin.user?.id ?? null,
+              email: twin.user?.email ?? null,
+            });
+          }
+          return twin;
+        }
+      } catch {
+        // fall through to attempt-scoped dismiss recovery
+      }
+    }
+    const recovered = await resolveSessionAfterBrowserDismiss(() => supabase.auth.getSession());
+    if (__DEV__) {
+      console.log('[socialAuth] dismiss recovery', {
+        attemptId,
+        hit: Boolean(recovered),
+        userId: recovered?.user?.id ?? null,
+        email: recovered?.user?.email ?? null,
+      });
+    }
+    return recovered;
   }
 
   return null;

@@ -144,13 +144,24 @@ export function AuthCallbackScreen() {
         const session = data.session;
         if (session?.access_token) {
           const metadata = session.user?.user_metadata as Record<string, unknown> | undefined;
+          const full =
+            (typeof metadata?.full_name === 'string' && metadata.full_name.trim()) ||
+            (typeof metadata?.name === 'string' && metadata.name.trim()) ||
+            [
+              typeof metadata?.given_name === 'string' ? metadata.given_name.trim() : '',
+              typeof metadata?.family_name === 'string' ? metadata.family_name.trim() : '',
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .trim() ||
+            null;
           useAuthStore
             .getState()
             .setSession(
               session.access_token,
               session.user?.id ?? null,
               session.user?.email ?? null,
-              (metadata?.full_name as string) ?? undefined,
+              full,
             );
         }
         const userId = session?.user?.id ?? useAuthStore.getState().userId;

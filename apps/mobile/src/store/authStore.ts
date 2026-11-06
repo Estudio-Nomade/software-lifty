@@ -42,11 +42,23 @@ export const useAuthStore = create<AuthState>()(
       kycSessionId: null,
       termsAccepted: false,
       setSession: (token, userId) =>
-        set((state) => ({
-          token,
-          isAuthenticated: !!token,
-          driverId: userId ?? state.driverId,
-        })),
+        set((state) => {
+          if (!token) {
+            return {
+              token: null,
+              isAuthenticated: false,
+              driverId: userId !== undefined ? userId : null,
+            };
+          }
+          // Authenticated session: replace driverId — never keep previous account
+          // via `?? state.driverId` when switching Google users on the same device.
+          const nextDriverId = userId !== undefined ? userId : state.driverId;
+          return {
+            token,
+            isAuthenticated: true,
+            driverId: nextDriverId ?? null,
+          };
+        }),
       setDriverId: (driverId) => set({ driverId }),
       clearAuth: () =>
         set((state) => ({
