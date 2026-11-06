@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
+import { fetchLoginHint } from '../api/loginHint';
 import type { DriverStatus } from '../api/types';
 import { driverStatusSchema } from '../api/types';
 import { Button } from '../components/Button';
@@ -22,7 +23,12 @@ import { Text } from '../components/ui/Text';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useLogin } from '../hooks/useAuth';
-import { getFriendlyAuthError } from '../lib/authErrors';
+import {
+  GOOGLE_ONLY_LOGIN_MESSAGE,
+  getFriendlyAuthError,
+  getFriendlyPasswordLoginError,
+  isInvalidLoginCredentialsError,
+} from '../lib/authErrors';
 import {
   isTransientStatusFailure,
   resolvePostAuthRoute,
@@ -58,6 +64,7 @@ export const LoginCredentialsScreen: React.FC = () => {
   const [verifying, setVerifying] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [highlightGoogle, setHighlightGoogle] = useState(false);
   const setDriverStatus = useAuthStore((s) => s.setDriverStatus);
 
   // Same dual-safe chrome as Navbar: inset owns status bar; sm keeps «← Volver» tappable.
@@ -165,6 +172,7 @@ export const LoginCredentialsScreen: React.FC = () => {
   const handleGoogle = useCallback(async () => {
     if (googleLoading) return;
     setError(null);
+    setHighlightGoogle(false);
     setGoogleLoading(true);
     resetPostOAuthHandoff();
     try {
@@ -186,14 +194,22 @@ export const LoginCredentialsScreen: React.FC = () => {
 
   const handleLogin = async () => {
     setError(null);
+    setHighlightGoogle(false);
     try {
       const result = await login.mutateAsync({ email: username.trim(), password });
       if (result.access_token) {
         useAuthStore.getState().setSession(result.access_token, result.user?.id ?? null);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al iniciar sesion';
-      setError(message);
+      if (isInvalidLoginCredentialsError(err)) {
+        const hint = await fetchLoginHint(username.trim()).catch(() => null);
+        if (hint?.googleOnly) {
+          setError(GOOGLE_ONLY_LOGIN_MESSAGE);
+          setHighlightGoogle(true);
+          return;
+        }
+      }
+      setError(getFriendlyPasswordLoginError(err));
       return;
     }
 
@@ -346,7 +362,13 @@ export const LoginCredentialsScreen: React.FC = () => {
         <Input
           placeholder="Email"
           value={username}
-          onChangeText={setUsername}
+          onChangeText={(v) => {
+            setUsername(v);
+            if (highlightGoogle) {
+              setHighlightGoogle(false);
+              setError(null);
+            }
+          }}
           keyboardType="email-address"
           autoCapitalize="none"
           containerStyle={styles.inputField}
@@ -382,7 +404,11 @@ export const LoginCredentialsScreen: React.FC = () => {
           title={googleLoading ? '' : 'Continuar con Google'}
           onPress={handleGoogle}
           loading={googleLoading}
-          style={[styles.button, styles.googleButton]}
+          style={[
+            styles.button,
+            styles.googleButton,
+            highlightGoogle ? styles.googleHighlight : null,
+          ]}
           textStyle={styles.googleButtonText}
         />
         {error !== null && <Text style={styles.errorText}>{error}</Text>}
@@ -497,6 +523,10 @@ const styles = StyleSheet.create({
   },
   googleButton: {
     backgroundColor: theme.colors.deepBlue,
+  },
+  googleHighlight: {
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
   },
   googleButtonText: {
     color: theme.colors.white,

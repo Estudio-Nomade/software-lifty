@@ -3,8 +3,16 @@
  * Keep this the single place where raw auth errors become user-facing copy.
  */
 
+/** Copy when account is Google-only (no password provider). */
+export const GOOGLE_ONLY_LOGIN_MESSAGE =
+  'Esta cuenta se creó con Google. Tocá Continuar con Google para entrar.';
+
 export const INVALID_CREDENTIALS_MESSAGE = 'Email o contraseña incorrectos.';
 export const SESSION_AUTH_RETRY_MESSAGE = 'No se pudo iniciar sesión. Probá de nuevo.';
+
+/** Existing dual-role account that is not Google-only (may have password). */
+export const EXISTING_DUAL_ROLE_ACCOUNT_MESSAGE =
+  'Este email ya está registrado en Lifty. Iniciá sesión (misma cuenta pasajero/conductor). Si entraste con Google como pasajera, usá Continuar con Google.';
 
 const OTP_INVALID_MESSAGE = 'El codigo es invalido o expiro. Pedi uno nuevo.';
 const OTP_EXPIRED_MESSAGE = 'El codigo expiro. Pedi uno nuevo.';

@@ -1,8 +1,11 @@
 import {
+  EXISTING_DUAL_ROLE_ACCOUNT_MESSAGE,
+  GOOGLE_ONLY_LOGIN_MESSAGE,
   INVALID_CREDENTIALS_MESSAGE,
   SESSION_AUTH_RETRY_MESSAGE,
   getFriendlyAuthError,
   getFriendlyPasswordLoginError,
+  isInvalidLoginCredentialsError,
 } from '../../lib/authErrors';
 
 describe('getFriendlyAuthError', () => {
@@ -10,6 +13,18 @@ describe('getFriendlyAuthError', () => {
     expect(getFriendlyAuthError(new Error('Invalid login credentials'))).toBe(
       INVALID_CREDENTIALS_MESSAGE,
     );
+    expect(isInvalidLoginCredentialsError(new Error('Invalid login credentials'))).toBe(true);
+  });
+
+  it('exposes Google-only copy constant for hint path', () => {
+    expect(GOOGLE_ONLY_LOGIN_MESSAGE).toContain('Google');
+    expect(GOOGLE_ONLY_LOGIN_MESSAGE).not.toMatch(/otp|codigo/i);
+  });
+
+  it('exposes dual-role existing-account copy without password-only lie', () => {
+    expect(EXISTING_DUAL_ROLE_ACCOUNT_MESSAGE).toMatch(/pasajero|conductor/i);
+    expect(EXISTING_DUAL_ROLE_ACCOUNT_MESSAGE).toContain('Google');
+    expect(EXISTING_DUAL_ROLE_ACCOUNT_MESSAGE).not.toMatch(/usa el mismo email y contrase[nñ]a/i);
   });
 
   it('maps OTP token invalid/expired to OTP copy', () => {
