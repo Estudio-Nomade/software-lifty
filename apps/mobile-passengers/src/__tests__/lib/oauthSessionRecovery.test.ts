@@ -4,8 +4,11 @@ import {
   canFinishAuthCallbackWithSession,
   clearOAuthAttempt,
   getCurrentOAuthAttempt,
+  isBlockedOAuthUser,
   markOAuthAttemptSession,
+  releaseOAuthBlockedUser,
   resetOAuthAttemptStateForTests,
+  resolveApiAccessToken,
   resolveSessionAfterAuthError,
   resolveSessionAfterBrowserDismiss,
   shouldTreatAuthCallbackAsSuccess,
@@ -146,10 +149,18 @@ describe('canFinishAuthCallbackWithSession', () => {
     resetOAuthAttemptStateForTests();
   });
 
-  it('rejects recent blocked user after attempt cleared (no mark)', () => {
+  it('rejects blocked user after attempt cleared without mark (no TTL expiry)', () => {
     beginOAuthAttempt('user-b');
     clearOAuthAttempt();
+    expect(isBlockedOAuthUser('user-b')).toBe(true);
     expect(canFinishAuthCallbackWithSession(stubSession('at-b', 'user-b'))).toBe(false);
+  });
+
+  it('allows blocked user after releaseOAuthBlockedUser (cancel)', () => {
+    beginOAuthAttempt('user-b');
+    clearOAuthAttempt();
+    releaseOAuthBlockedUser();
+    expect(canFinishAuthCallbackWithSession(stubSession('at-b', 'user-b'))).toBe(true);
   });
 
   it('allows marked session for blocked user after re-pick', () => {
@@ -157,6 +168,7 @@ describe('canFinishAuthCallbackWithSession', () => {
     const session = stubSession('at-b', 'user-b');
     markOAuthAttemptSession(session);
     expect(canFinishAuthCallbackWithSession(session)).toBe(true);
+    expect(isBlockedOAuthUser('user-b')).toBe(false);
   });
 
   it('rejects unmarked session while attempt is open', () => {
@@ -166,6 +178,45 @@ describe('canFinishAuthCallbackWithSession', () => {
 
   it('allows unrelated session when no attempt and no blocked user', () => {
     expect(canFinishAuthCallbackWithSession(stubSession('at', 'user-a'))).toBe(true);
+  });
+});
+
+describe('resolveApiAccessToken', () => {
+  afterEach(() => {
+    resetOAuthAttemptStateForTests();
+  });
+
+  it('does not send blocked live session JWT during handoff', () => {
+    beginOAuthAttempt('user-b');
+    clearOAuthAttempt();
+    const token = resolveApiAccessToken({
+      storeToken: null,
+      storeUserId: null,
+      liveSession: stubSession('tok-b', 'user-b'),
+    });
+    expect(token).toBeNull();
+  });
+
+  it('prefers marked live session over store', () => {
+    beginOAuthAttempt('user-b');
+    const live = stubSession('tok-a', 'user-a');
+    markOAuthAttemptSession(live);
+    const token = resolveApiAccessToken({
+      storeToken: 'tok-store',
+      storeUserId: 'user-a',
+      liveSession: live,
+    });
+    expect(token).toBe('tok-a');
+  });
+
+  it('uses store when live is blocked and store is the new user', () => {
+    beginOAuthAttempt('user-b');
+    const token = resolveApiAccessToken({
+      storeToken: 'tok-a',
+      storeUserId: 'user-a',
+      liveSession: stubSession('tok-b', 'user-b'),
+    });
+    expect(token).toBe('tok-a');
   });
 });
 

@@ -18,10 +18,12 @@ export type OAuthAttemptState = {
 
 let currentAttempt: OAuthAttemptState | null = null;
 
-/** Survives clearOAuthAttempt so AuthCallback cannot hand off the pre-OAuth user. */
-let recentBlockedUserId: string | null = null;
-let recentBlockedUntil = 0;
-const BLOCKED_USER_TTL_MS = 120_000;
+/**
+ * Pre-OAuth local user id. Survives clearOAuthAttempt.
+ * Cleared only on successful exchange mark or explicit release (cancel) —
+ * not on wall-clock TTL (slow Google picker must not re-enable stale handoff).
+ */
+let blockedOAuthUserId: string | null = null;
 
 export function beginOAuthAttempt(blockedUserId: string | null = null): string {
   const id = `oauth-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -31,21 +33,16 @@ export function beginOAuthAttempt(blockedUserId: string | null = null): string {
     blockedUserId,
     acceptedUserId: null,
   };
-  if (blockedUserId) {
-    recentBlockedUserId = blockedUserId;
-    recentBlockedUntil = Date.now() + BLOCKED_USER_TTL_MS;
-  }
+  // New attempt replaces the block list (null = no prior local user).
+  blockedOAuthUserId = blockedUserId;
   return id;
 }
 
 export function markOAuthAttemptSession(session: Session | null | undefined): void {
   if (!currentAttempt || !session?.access_token || !session.user?.id) return;
   currentAttempt.acceptedUserId = session.user.id;
-  // Re-picking the same Google account is allowed once exchange proves it.
-  if (session.user.id === recentBlockedUserId) {
-    recentBlockedUserId = null;
-    recentBlockedUntil = 0;
-  }
+  // Exchange proved identity — drop block (including same-account re-pick).
+  blockedOAuthUserId = null;
 }
 
 export function getCurrentOAuthAttempt(): OAuthAttemptState | null {
@@ -54,13 +51,23 @@ export function getCurrentOAuthAttempt(): OAuthAttemptState | null {
 
 export function clearOAuthAttempt(): void {
   currentAttempt = null;
+  // Keep blockedOAuthUserId until mark or releaseOAuthBlockedUser.
 }
 
-/** Pre-OAuth local user — never hand off as success without exchange mark. */
+/** Call on clean cancel/dismiss with no session so residual block does not stick forever. */
+export function releaseOAuthBlockedUser(): void {
+  blockedOAuthUserId = null;
+}
+
+/** Pre-OAuth local user — never hand off / never send as Bearer without exchange mark. */
+export function isBlockedOAuthUser(userId: string | null | undefined): boolean {
+  if (!userId || !blockedOAuthUserId) return false;
+  return userId === blockedOAuthUserId;
+}
+
+/** @deprecated use isBlockedOAuthUser */
 export function isRecentBlockedOAuthUser(userId: string | null | undefined): boolean {
-  if (!userId || !recentBlockedUserId) return false;
-  if (Date.now() > recentBlockedUntil) return false;
-  return userId === recentBlockedUserId;
+  return isBlockedOAuthUser(userId);
 }
 
 /**
@@ -70,10 +77,43 @@ export function isRecentBlockedOAuthUser(userId: string | null | undefined): boo
 export function canFinishAuthCallbackWithSession(session: Session | null | undefined): boolean {
   if (!session?.access_token || !session.user?.id) return false;
   if (sessionBelongsToFreshOAuthAttempt(session)) return true;
-  if (isRecentBlockedOAuthUser(session.user.id)) return false;
+  if (isBlockedOAuthUser(session.user.id)) return false;
   // Active attempt still open: only marked sessions (above). Unmarked = wait for code.
   if (currentAttempt) return false;
   return true;
+}
+
+/**
+ * Bearer for API: never send the pre-OAuth blocked user's JWT.
+ * Prefer live session when safe; else store; else null.
+ */
+export function resolveApiAccessToken(input: {
+  storeToken: string | null;
+  storeUserId: string | null;
+  liveSession: Session | null | undefined;
+}): string | null {
+  const live = input.liveSession;
+  const liveToken = live?.access_token ?? null;
+  const liveUserId = live?.user?.id ?? null;
+
+  if (liveToken && liveUserId) {
+    if (sessionBelongsToFreshOAuthAttempt(live)) {
+      return liveToken;
+    }
+    if (isBlockedOAuthUser(liveUserId)) {
+      // Live leftover is the account we signed out of — do not call API as them.
+      if (input.storeToken && input.storeUserId && !isBlockedOAuthUser(input.storeUserId)) {
+        return input.storeToken;
+      }
+      return null;
+    }
+    return liveToken;
+  }
+
+  if (input.storeToken && input.storeUserId && isBlockedOAuthUser(input.storeUserId)) {
+    return null;
+  }
+  return input.storeToken;
 }
 
 function errorMessage(error: unknown): string {
@@ -150,6 +190,5 @@ export async function resolveSessionAfterBrowserDismiss(
 /** Test helper — reset module state. */
 export function resetOAuthAttemptStateForTests(): void {
   currentAttempt = null;
-  recentBlockedUserId = null;
-  recentBlockedUntil = 0;
+  blockedOAuthUserId = null;
 }

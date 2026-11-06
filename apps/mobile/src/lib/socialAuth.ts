@@ -5,6 +5,7 @@ import {
   beginOAuthAttempt,
   clearOAuthAttempt,
   markOAuthAttemptSession,
+  releaseOAuthBlockedUser,
   resolveSessionAfterAuthError,
   resolveSessionAfterBrowserDismiss,
 } from './oauthSessionRecovery';
@@ -163,6 +164,7 @@ export async function signInWithProvider(provider: SocialProvider) {
           email: session?.user?.email ?? null,
         });
       }
+      if (!session) releaseOAuthBlockedUser();
       return session;
     }
 
@@ -194,13 +196,15 @@ export async function signInWithProvider(provider: SocialProvider) {
           email: recovered?.user?.email ?? null,
         });
       }
+      if (!recovered) releaseOAuthBlockedUser();
       return recovered;
     }
 
+    releaseOAuthBlockedUser();
     return null;
   } finally {
     // Drop attempt so a later stray AuthCallback finishErr cannot reuse mark.
-    // Twin finishOk does not need the attempt; dismiss recovery above already ran.
+    // blockedOAuthUserId stays until mark (success) or release (cancel above).
     clearOAuthAttempt();
   }
 }

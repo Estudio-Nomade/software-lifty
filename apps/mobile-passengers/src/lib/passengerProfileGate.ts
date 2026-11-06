@@ -104,6 +104,8 @@ export function resolveCompleteProfileBootIdentity(input: {
     Boolean(sessionEmail) && Boolean(profileEmail) && sessionEmail !== profileEmail;
 
   if (preferSessionIdentity) {
+    // Intentional: do NOT use profilePhone from the other account (B).
+    // Empty phone → user re-enters on CompleteProfile for account A.
     return {
       email: input.sessionEmail?.trim() || storeEmail || '',
       firstName: fromMeta.firstName,
