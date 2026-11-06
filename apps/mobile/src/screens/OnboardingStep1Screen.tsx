@@ -247,23 +247,43 @@ export const OnboardingStep1Screen: React.FC = () => {
 
   const addressFocusedRef = useRef(false);
   const scrollAddressIntoViewRef = useRef<() => void>(() => {});
+  const scrollRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const clearScrollRetries = useCallback(() => {
+    for (const t of scrollRetryTimersRef.current) clearTimeout(t);
+    scrollRetryTimersRef.current = [];
+  }, []);
+
+  const resolveKeyboardHeight = useCallback(() => {
+    if (keyboardHeightRef.current > 0) return keyboardHeightRef.current;
+    return Keyboard.metrics()?.height ?? 0;
+  }, []);
 
   const scrollAddressIntoView = useCallback(() => {
     const run = () => {
+      if (!addressFocusedRef.current) return;
       const field = addressFieldRef.current;
       const scroll = scrollRef.current;
       if (!field || !scroll) return;
+
+      const kb = resolveKeyboardHeight();
       // Wait for real keyboard height so visibleBottom is not full-window (wrong delta).
-      if (keyboardHeightRef.current <= 0) return;
+      if (kb <= 0) return;
+      keyboardHeightRef.current = kb;
 
       field.measureInWindow((_x, fieldY, _w, fieldH) => {
+        if (!addressFocusedRef.current) return;
         const winH = Dimensions.get('window').height;
-        const kb = keyboardHeightRef.current;
-        // Keep caret band (top of multiline) above keyboard with margin.
-        const visibleBottom = winH - kb - 24;
+        const screenH = Dimensions.get('screen').height;
+        // Android adjustResize: window already excludes IME — subtracting kb again
+        // collapses visibleBottom and clamps scroll short of the caret.
+        const androidWindowShrunk =
+          Platform.OS === 'android' && screenH - winH >= Math.min(kb * 0.45, 100);
+        const visibleBottom = androidWindowShrunk ? winH - 28 : winH - kb - 28;
         const fieldTopTarget = fieldY;
-        const fieldCaretBand = fieldY + Math.min(fieldH, 72);
-        const topGuard = Platform.OS === 'ios' ? 96 : 72;
+        // Caret lives near top of multiline; keep a short band above the IME.
+        const fieldCaretBand = fieldY + Math.min(Math.max(fieldH, 48), 64);
+        const topGuard = Platform.OS === 'ios' ? 100 : 72;
 
         let delta = 0;
         if (fieldCaretBand > visibleBottom) {
@@ -271,7 +291,7 @@ export const OnboardingStep1Screen: React.FC = () => {
         } else if (fieldTopTarget < topGuard) {
           delta = fieldTopTarget - topGuard;
         }
-        if (delta === 0) return;
+        if (Math.abs(delta) < 2) return;
         const nextY = Math.max(0, scrollOffsetY.current + delta);
         // Keep offset in sync — onScroll may lag behind programmatic scrollTo.
         scrollOffsetY.current = nextY;
@@ -279,17 +299,29 @@ export const OnboardingStep1Screen: React.FC = () => {
       });
     };
     requestAnimationFrame(() => {
-      setTimeout(run, Platform.OS === 'ios' ? 60 : 100);
+      setTimeout(run, Platform.OS === 'ios' ? 50 : 80);
     });
-  }, []);
+  }, [resolveKeyboardHeight]);
+
+  // Pad layout + IME settle are async; retry while Domicilio stays focused.
+  const scheduleScrollAddressIntoView = useCallback(() => {
+    clearScrollRetries();
+    const delays = Platform.OS === 'ios' ? [40, 140, 300] : [60, 160, 340];
+    for (const d of delays) {
+      const t = setTimeout(() => {
+        if (addressFocusedRef.current) scrollAddressIntoViewRef.current();
+      }, d);
+      scrollRetryTimersRef.current.push(t);
+    }
+  }, [clearScrollRetries]);
 
   useEffect(() => {
     scrollAddressIntoViewRef.current = scrollAddressIntoView;
   }, [scrollAddressIntoView]);
 
   // Extra bottom room while keyboard is open so Domicilio can scroll above it.
-  // Android adjustResize already shrinks the window — modest pad only.
-  // iOS keeps automaticallyAdjustKeyboardInsets; pad is a scroll runway, not KAV.
+  // Android adjustResize shrinks the window — pad is scroll runway (not KAV).
+  // iOS: KAV + automaticallyAdjustKeyboardInsets own the lift; pad stays modest.
   // Primary scroll trigger is keyboard show (height known); focus alone is a no-op until then.
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -297,31 +329,34 @@ export const OnboardingStep1Screen: React.FC = () => {
     const onShow = (e: KeyboardEvent) => {
       const h = e.endCoordinates.height;
       keyboardHeightRef.current = h;
-      setKeyboardPad(Platform.OS === 'android' ? Math.max(160, Math.round(h * 0.2)) : 120);
+      // Android residual post-#522: max(160, h*0.2) left no runway under photo+3 fields.
+      setKeyboardPad(Platform.OS === 'android' ? Math.max(280, Math.round(h * 0.55)) : 80);
       if (addressFocusedRef.current) {
-        setTimeout(() => scrollAddressIntoViewRef.current(), Platform.OS === 'ios' ? 40 : 80);
+        scheduleScrollAddressIntoView();
       }
     };
     const onHide = () => {
       keyboardHeightRef.current = 0;
       setKeyboardPad(0);
+      clearScrollRetries();
     };
     const subShow = Keyboard.addListener(showEvt, onShow);
     const subHide = Keyboard.addListener(hideEvt, onHide);
     return () => {
       subShow.remove();
       subHide.remove();
+      clearScrollRetries();
     };
-  }, []);
+  }, [scheduleScrollAddressIntoView, clearScrollRetries]);
 
   const handleAddressFocus = useCallback(() => {
     addressFocusedRef.current = true;
     setShowSuggestions(true);
-    // Keyboard already open (refocus): scroll now. First open: keyboard onShow owns scroll.
-    if (keyboardHeightRef.current > 0) {
-      scrollAddressIntoView();
+    // Keyboard already open (refocus / metrics): scroll now. First open: onShow owns scroll.
+    if (resolveKeyboardHeight() > 0) {
+      scheduleScrollAddressIntoView();
     }
-  }, [scrollAddressIntoView]);
+  }, [resolveKeyboardHeight, scheduleScrollAddressIntoView]);
 
   const setError = (field: keyof ValidationErrors, error: string | undefined) => {
     setErrors((prev) => ({ ...prev, [field]: error }));
@@ -631,9 +666,14 @@ export const OnboardingStep1Screen: React.FC = () => {
                 setSelectedPlace(null);
                 setShowSuggestions(true);
                 setError('address', undefined);
+                // Multiline grows under IME while typing — nudge parent after layout.
+                if (addressFocusedRef.current) {
+                  scheduleScrollAddressIntoView();
+                }
               }}
               onBlur={() => {
                 addressFocusedRef.current = false;
+                clearScrollRetries();
                 if (
                   addressLine.trim().length > 0 &&
                   addressLine.trim().length < MIN_ADDRESS_CHARS
