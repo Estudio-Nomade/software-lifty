@@ -72,6 +72,12 @@ export const kycRoutes = new Elysia({ prefix: '/kyc' })
       set.status = 401;
       return { error: 'Unauthorized', message: 'Timestamp expired' };
     }
+    // The X-Timestamp header is not covered by the signature; the body's own
+    // `timestamp` is (V2), so a captured webhook cannot be replayed with a fresh header.
+    if (typeof body?.timestamp === 'number' && Math.abs(now - body.timestamp) > 300) {
+      set.status = 401;
+      return { error: 'Unauthorized', message: 'Timestamp expired' };
+    }
 
     try {
       if (!verifyWebhookSignature({ rawBody: text, parsedBody: body, headers: request.headers })) {
@@ -88,7 +94,7 @@ export const kycRoutes = new Elysia({ prefix: '/kyc' })
 
     // Never let a sandbox event move KYC state on a live deployment (or vice versa).
     if (typeof body?.environment === 'string' && body.environment !== getDiditEnv()) {
-      logger.warn('[KYC] Ignoring webhook from mismatched Didit environment', {
+      logger.error('[KYC] Ignoring webhook from mismatched Didit environment', {
         received: body.environment,
         expected: getDiditEnv(),
       });

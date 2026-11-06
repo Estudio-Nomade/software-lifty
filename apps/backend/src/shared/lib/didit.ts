@@ -13,7 +13,11 @@ export type DiditEnv = 'sandbox' | 'live';
 
 /** Which Didit application the configured credentials belong to. Defaults to live. */
 export function getDiditEnv(): DiditEnv {
-  return process.env.DIDIT_ENV === 'sandbox' ? 'sandbox' : 'live';
+  const raw = process.env.DIDIT_ENV;
+  if (!raw || raw === 'live') return 'live';
+  if (raw === 'sandbox') return 'sandbox';
+  // A typo must not silently fall back to live (it would drop every webhook).
+  throw new Error(`Invalid DIDIT_ENV "${raw}": expected "sandbox" or "live"`);
 }
 
 function getApiUrl(): string {
@@ -147,6 +151,8 @@ export function canonicalize(value: unknown): string {
 }
 
 function safeHexEqual(expectedHex: string, providedHex: string): boolean {
+  // Buffer.from(x, 'hex') silently stops at the first invalid pair; be strict.
+  if (!/^[0-9a-f]+$/i.test(providedHex) || providedHex.length % 2 !== 0) return false;
   const expected = Buffer.from(expectedHex, 'hex');
   const provided = Buffer.from(providedHex, 'hex');
   if (expected.length === 0 || expected.length !== provided.length) return false;
@@ -164,8 +170,10 @@ export class WebhookSecretMissingError extends Error {
  * Verifies a Didit webhook. Tries X-Signature-V2 (canonical JSON, middleware
  * safe) first, then X-Signature (raw body). X-Signature-Simple is deprecated
  * and does not authenticate the payload, so it is intentionally not accepted.
- * Throws WebhookSecretMissingError when no secret is configured (except in the
- * test env, which keeps the legacy "any non-empty, non-invalid" shortcut).
+ * Throws WebhookSecretMissingError when no secret is configured. The only
+ * exception is the test shortcut, which requires BOTH NODE_ENV=test and the
+ * explicit DIDIT_ALLOW_UNSIGNED_WEBHOOKS=1 flag, so a stray NODE_ENV=test in a
+ * deploy can never disable signature checks.
  */
 export function verifyWebhookSignature(input: {
   rawBody: string;
@@ -176,7 +184,7 @@ export function verifyWebhookSignature(input: {
   const secret = process.env.DIDIT_WEBHOOK_SECRET;
 
   if (!secret) {
-    if (process.env.NODE_ENV === 'test') {
+    if (process.env.NODE_ENV === 'test' && process.env.DIDIT_ALLOW_UNSIGNED_WEBHOOKS === '1') {
       const sig =
         headers.get('X-Signature-V2') ||
         headers.get('X-Signature') ||

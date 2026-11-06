@@ -1,4 +1,5 @@
 process.env.NODE_ENV = 'test';
+process.env.DIDIT_ALLOW_UNSIGNED_WEBHOOKS = '1';
 // bun auto-loads .env; the legacy-signature tests need the secret unset.
 delete process.env.DIDIT_WEBHOOK_SECRET;
 delete process.env.DIDIT_ENV;
@@ -8,7 +9,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { eq } from 'drizzle-orm';
 import { createHmac } from 'node:crypto';
 import { createApp } from '../../index';
-import { canonicalize, createSession, verifyWebhookSignature } from '../../shared/lib/didit';
+import { canonicalize, createSession, getDiditEnv, verifyWebhookSignature } from '../../shared/lib/didit';
 import { getDb, resetDb } from '../../shared/db/client';
 import { driverDocuments, drivers, users, vehicles } from '../../shared/db/schema';
 import { createTestAuthPlugin, createTestToken } from '../../shared/testing/utils';
@@ -646,5 +647,30 @@ describe('Didit createSession sandbox_scenario', () => {
     }
     expect(bodies[0].sandbox_scenario).toBeUndefined();
     expect(bodies[1].sandbox_scenario).toBe('approve');
+  });
+});
+
+
+describe('Didit hardening', () => {
+  test('rejects hex signature with trailing garbage', () => {
+    process.env.DIDIT_WEBHOOK_SECRET = 'k';
+    const b = { a: 1 };
+    const good = createHmac('sha256', 'k').update(canonicalize(b)).digest('hex');
+    const headers = new Headers({ 'X-Signature-V2': `${good}zz` });
+    expect(verifyWebhookSignature({ rawBody: '{"a":1}', parsedBody: b, headers })).toBe(false);
+    delete process.env.DIDIT_WEBHOOK_SECRET;
+  });
+
+  test('unsigned shortcut needs the explicit flag; otherwise secret-missing throws', () => {
+    delete process.env.DIDIT_ALLOW_UNSIGNED_WEBHOOKS;
+    const headers = new Headers({ 'X-Signature-V2': 'anything' });
+    expect(() => verifyWebhookSignature({ rawBody: '{}', parsedBody: {}, headers })).toThrow();
+    process.env.DIDIT_ALLOW_UNSIGNED_WEBHOOKS = '1';
+  });
+
+  test('invalid DIDIT_ENV throws instead of falling back to live', () => {
+    process.env.DIDIT_ENV = 'production';
+    expect(() => getDiditEnv()).toThrow(/Invalid DIDIT_ENV/);
+    delete process.env.DIDIT_ENV;
   });
 });

@@ -4,6 +4,7 @@
  * Run: bun test src/all-endpoints.test.ts
  */
 process.env.NODE_ENV = 'test';
+process.env.DIDIT_ALLOW_UNSIGNED_WEBHOOKS = '1';
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://lifty:lifty@localhost:5433/lifty_test';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
