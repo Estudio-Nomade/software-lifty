@@ -15,6 +15,7 @@
     "db:migrate": "bun run scripts/migrate.ts",
     "db:migrate:web-push": "bun run scripts/apply-web-push-migration.ts",
     "db:seed": "bun run scripts/seed.ts",
+    "db:seed-service-markets": "bun run scripts/seed-service-markets.ts",
     "backup": "bun run scripts/backup.ts"
   },
   "dependencies": {
