@@ -209,10 +209,13 @@ export const OnboardingStep1Screen: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      const version = await ensureActiveServiceMarkets();
-      if (!cancelled) setMarketsVersion(version);
-    })();
+    // force: early mount may have failed pre-token; do not trust TTL from a failed hydrate.
+    // ensure never rejects (swallows network/401); .catch is belt-and-suspenders.
+    void ensureActiveServiceMarkets({ force: true })
+      .then((version) => {
+        if (!cancelled) setMarketsVersion(version);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -447,7 +450,11 @@ export const OnboardingStep1Screen: React.FC = () => {
   };
 
   const handleSelectPlace = (place: PlaceSuggestion) => {
+    // Apply pin immediately (sync UX); hydrate in background then re-eval zone via marketsVersion.
     applyResolvedAddress(place);
+    void ensureActiveServiceMarkets({ force: true })
+      .then((version) => setMarketsVersion(version))
+      .catch(() => undefined);
   };
 
   const handleClearAddress = () => {
@@ -469,6 +476,11 @@ export const OnboardingStep1Screen: React.FC = () => {
     setSubmitError('');
     setError('address', undefined);
     try {
+      // Parallel: force multi-hub hydrate while GPS runs (Tandil etc.).
+      const hydrateP = ensureActiveServiceMarkets({ force: true }).catch(() =>
+        getServiceMarketsVersion(),
+      );
+
       await getCurrentPosition();
       const { lat, lng, locationError: geoErr } = useLocationStore.getState();
       if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -497,6 +509,9 @@ export const OnboardingStep1Screen: React.FC = () => {
         lat: Number(data?.lat ?? lat),
         lng: Number(data?.lng ?? lng),
       };
+      // Await hydrate before pin so zone preview uses fresh hubs (no false waitlist flash).
+      const version = await hydrateP;
+      setMarketsVersion(version);
       applyResolvedAddress(place);
     } catch (err: unknown) {
       const msg =

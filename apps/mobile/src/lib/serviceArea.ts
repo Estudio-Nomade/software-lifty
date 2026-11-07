@@ -178,7 +178,8 @@ export function bindActiveServiceMarketsFetcher(fn: FetchActiveMarkets | null): 
  * Fetch GET /service-markets/active and hydrate module cache.
  * - Success with items → set those markets
  * - Success empty → legacy VD (setActiveServiceMarkets([]))
- * - Failure → keep previous markets (or legacy boot); still advance lastFetchedAt for TTL backoff
+ * - Failure → keep previous markets (or legacy boot); do NOT advance lastFetchedAt
+ *   (early 401 before session must not lock 5 min on LEGACY_VD-only)
  * Returns marketsVersion after hydrate (or current if skipped).
  */
 export async function ensureActiveServiceMarkets(options?: {
@@ -191,6 +192,7 @@ export async function ensureActiveServiceMarkets(options?: {
   if (inFlight) return inFlight;
 
   inFlight = (async () => {
+    let ok = false;
     try {
       if (!fetchActiveMarketsImpl) {
         const { fetchActiveServiceMarketsPayload } = await import('./serviceMarketsApi');
@@ -199,6 +201,7 @@ export async function ensureActiveServiceMarkets(options?: {
       const data = await fetchActiveMarketsImpl();
       // Always apply successful body — empty list → legacy VD via setActiveServiceMarkets([]).
       setActiveServiceMarkets(parseActiveMarketsPayload(data));
+      ok = true;
       if (__DEV__) {
         const slugs = getActiveServiceMarkets()
           .map((m) => m.slug)
@@ -218,8 +221,8 @@ export async function ensureActiveServiceMarkets(options?: {
         );
       }
     } finally {
-      // Advance on success and failure so TTL backs off repeated failing requests.
-      lastFetchedAt = Date.now();
+      // TTL only on success so a failed mount does not block Usar ubicación / retry.
+      if (ok) lastFetchedAt = Date.now();
       inFlight = null;
     }
     return marketsVersion;

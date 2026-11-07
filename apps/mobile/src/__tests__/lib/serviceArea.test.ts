@@ -137,7 +137,7 @@ describe('serviceArea (driver address preview)', () => {
     ]);
   });
 
-  it('failed fetch advances backoff so the next call skips network within TTL', async () => {
+  it('failed fetch does not lock non-force retry (Usar ubicación recovery)', async () => {
     let calls = 0;
     bindActiveServiceMarketsFetcher(async () => {
       calls += 1;
@@ -146,6 +146,86 @@ describe('serviceArea (driver address preview)', () => {
 
     await ensureActiveServiceMarkets({ force: true });
     await ensureActiveServiceMarkets();
+    expect(calls).toBe(2);
+  });
+
+  it('fail then force success with tandil payload → Tandil inside (locate path)', async () => {
+    resetServiceMarketsToLegacy();
+    expect(isInsidePickupArea(TANDIL.lat, TANDIL.lng)).toBe(false);
+
+    let calls = 0;
+    bindActiveServiceMarketsFetcher(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('401');
+      return {
+        items: [
+          {
+            id: LEGACY_VD_MARKET.id,
+            slug: LEGACY_VD_MARKET.slug,
+            name: LEGACY_VD_MARKET.name,
+            province: LEGACY_VD_MARKET.province,
+            hub_lat: LEGACY_VD_MARKET.hub_lat,
+            hub_lng: LEGACY_VD_MARKET.hub_lng,
+            pickup_radius_km: LEGACY_VD_MARKET.pickup_radius_km,
+            dropoff_radius_km: LEGACY_VD_MARKET.dropoff_radius_km,
+            match_radius_km: LEGACY_VD_MARKET.match_radius_km,
+            geo_bias_radius_km: LEGACY_VD_MARKET.geo_bias_radius_km,
+          },
+          {
+            id: 'api-tandil',
+            slug: 'tandil',
+            name: 'Tandil',
+            province: 'Buenos Aires',
+            hub_lat: TANDIL.lat,
+            hub_lng: TANDIL.lng,
+            pickup_radius_km: 8,
+            dropoff_radius_km: 50,
+            match_radius_km: 8,
+            geo_bias_radius_km: 20,
+          },
+        ],
+      };
+    });
+
+    await ensureActiveServiceMarkets({ force: true });
+    expect(isInsidePickupArea(TANDIL.lat, TANDIL.lng)).toBe(false);
+
+    await ensureActiveServiceMarkets({ force: true });
+    expect(calls).toBe(2);
+    expect(isInsidePickupArea(TANDIL.lat, TANDIL.lng)).toBe(true);
+    // 9 de Julio 658, Tandil ≈ 0.44 km from hub
+    expect(isInsidePickupArea(-37.32515, -59.13572)).toBe(true);
+    expect(isInsidePickupArea(CABA.lat, CABA.lng)).toBe(false);
+  });
+
+  it('successful fetch still TTL-skips non-force within window', async () => {
+    let calls = 0;
+    bindActiveServiceMarketsFetcher(async () => {
+      calls += 1;
+      return {
+        items: [
+          {
+            id: 'api-tandil',
+            slug: 'tandil',
+            name: 'Tandil',
+            province: 'Buenos Aires',
+            hub_lat: TANDIL.lat,
+            hub_lng: TANDIL.lng,
+            pickup_radius_km: 8,
+            dropoff_radius_km: 50,
+            match_radius_km: 8,
+            geo_bias_radius_km: 20,
+          },
+        ],
+      };
+    });
+
+    await ensureActiveServiceMarkets({ force: true });
+    await ensureActiveServiceMarkets();
     expect(calls).toBe(1);
+    expect(isInsidePickupArea(TANDIL.lat, TANDIL.lng)).toBe(true);
+
+    await ensureActiveServiceMarkets({ force: true });
+    expect(calls).toBe(2);
   });
 });
