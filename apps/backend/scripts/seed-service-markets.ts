@@ -15,6 +15,22 @@ const DEV_DB_URL = 'postgresql://lifty:lifty@localhost:5433/lifty';
 const connectionString = process.env.DATABASE_URL?.trim() || DEV_DB_URL;
 
 const SEED_SQL = `
+-- Legal district required for municipality_status=operational (matchDistrict + pickup).
+INSERT INTO districts (name, province, status, terms_and_conditions, privacy_policy)
+SELECT
+  'Tandil',
+  'Buenos Aires',
+  'active',
+  '<h2>Términos y Condiciones — Tandil</h2><p>Al operar como conductor en Tandil, aceptás cumplir con las normativas municipales de transporte y las tarifas Lifty.</p>',
+  '<h2>Política de Privacidad — Tandil</h2><p>Datos de conductor según política general Lifty y legislación argentina.</p>'
+WHERE NOT EXISTS (
+  SELECT 1 FROM districts WHERE name = 'Tandil' AND province = 'Buenos Aires'
+);
+
+UPDATE districts
+SET status = 'active'
+WHERE name = 'Tandil' AND province = 'Buenos Aires' AND status IS DISTINCT FROM 'active';
+
 INSERT INTO service_markets (
   slug, name, province, status,
   hub_lat, hub_lng,

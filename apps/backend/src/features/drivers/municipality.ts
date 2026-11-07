@@ -1,4 +1,4 @@
-import { isInsidePickupArea } from '../../shared/lib/service-area';
+import { findPickupMarket, isInsidePickupArea } from '../../shared/lib/service-area';
 
 export type MunicipalityStatus = 'unset' | 'operational' | 'waitlisted';
 
@@ -95,9 +95,32 @@ export function matchDistrict(
 }
 
 /**
+ * Prefer Photon city/province match; if missing, fall back to the active pickup
+ * market's name/province (multi-city: Tandil pin → district Tandil even when
+ * reverse-geocode city is empty/noisy).
+ */
+export function resolveDistrictForAddress(
+  city: string | null,
+  province: string | null,
+  candidates: DistrictMatchCandidate[],
+  lat: number | null,
+  lng: number | null,
+): DistrictMatchCandidate | null {
+  const byName = matchDistrict(city, province, candidates);
+  if (byName) return byName;
+
+  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+  const market = findPickupMarket(lat, lng);
+  if (!market) return null;
+  return matchDistrict(market.name, market.province, candidates);
+}
+
+/**
  * Operational only when BOTH:
- * 1) coords resolve inside pickup area (≤8 km VD hub) — anti-spoof hard gate
- * 2) city/province matches an active district (label / intended_district)
+ * 1) coords resolve inside pickup of some active service market — anti-spoof hard gate
+ * 2) city/province (or pickup market name) matches an active district (label / intended_district)
  *
  * Name match alone never grants operational (e.g. “… Villa Dolores” + far pin).
  */

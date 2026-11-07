@@ -31,8 +31,17 @@ Restart backend so in-memory geo cache reloads (`[service-markets] cache reloade
 
 ```bash
 docker exec -i lifty-dev-pg psql -U lifty -d lifty -c \
-  "SELECT slug, status, hub_lat, hub_lng FROM service_markets ORDER BY 1;"
+  "SELECT slug, status, hub_lat, hub_lng, default_district_id FROM service_markets ORDER BY 1;"
+docker exec -i lifty-dev-pg psql -U lifty -d lifty -c \
+  "SELECT name, province, status FROM districts WHERE name = 'Tandil';"
 ```
+
+**Also required for Continuar / `municipality_status=operational`:** district row **Tandil / Buenos Aires**
+linked as `service_markets.default_district_id`. Seed creates it (migration
+`0060_tandil_district_service_market` / `20261107120000_…`). Markets alone are not enough —
+`buildMunicipalityResult` needs district match + inside pickup. Without the district, the
+app shows the same copy **«Todavía no operamos acá»** on Continuar (Alert) even if the
+inline banner is off.
 
 ## Cloud (wabdd / Railway API)
 
