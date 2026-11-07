@@ -102,8 +102,8 @@ function SessionRestore() {
             console.log('[SessionRestore] /drivers/me/status ERROR:', statusErr?.message);
           }
 
-          // Multi-hub pickup preview (Tandil etc.) — soft fail keeps legacy VD.
-          void ensureActiveServiceMarkets().catch(() => undefined);
+          // Multi-hub pickup preview (Tandil etc.) — force after session; soft fail keeps legacy VD.
+          void ensureActiveServiceMarkets({ force: true }).catch(() => undefined);
         } catch (err: any) {
           console.log('[SessionRestore] /auth/me ERROR:', err?.message);
         } finally {

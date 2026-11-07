@@ -210,7 +210,8 @@ export const OnboardingStep1Screen: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const version = await ensureActiveServiceMarkets();
+      // force: early mount may have failed pre-token; do not trust TTL from a failed hydrate.
+      const version = await ensureActiveServiceMarkets({ force: true });
       if (!cancelled) setMarketsVersion(version);
     })();
     return () => {
@@ -447,7 +448,11 @@ export const OnboardingStep1Screen: React.FC = () => {
   };
 
   const handleSelectPlace = (place: PlaceSuggestion) => {
-    applyResolvedAddress(place);
+    void (async () => {
+      const version = await ensureActiveServiceMarkets({ force: true });
+      setMarketsVersion(version);
+      applyResolvedAddress(place);
+    })();
   };
 
   const handleClearAddress = () => {
@@ -469,6 +474,10 @@ export const OnboardingStep1Screen: React.FC = () => {
     setSubmitError('');
     setError('address', undefined);
     try {
+      // Refresh multi-hub cache before zone preview (Tandil etc.) — force past failed TTL.
+      const version = await ensureActiveServiceMarkets({ force: true });
+      setMarketsVersion(version);
+
       await getCurrentPosition();
       const { lat, lng, locationError: geoErr } = useLocationStore.getState();
       if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
