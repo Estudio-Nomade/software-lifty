@@ -182,6 +182,8 @@ export const OnboardingStep1Screen: React.FC = () => {
   const addressFieldRef = useRef<ComponentRef<typeof View>>(null);
   const scrollOffsetY = useRef(0);
   const keyboardHeightRef = useRef(0);
+  /** Auth token — hydrate must re-run when session appears (mount often races pre-token). */
+  const authToken = useAuthStore((s) => s.token);
 
   const gpsLat = useLocationStore((s) => s.lat);
   const gpsLng = useLocationStore((s) => s.lng);
@@ -209,7 +211,7 @@ export const OnboardingStep1Screen: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    // force: early mount may have failed pre-token; do not trust TTL from a failed hydrate.
+    // Re-hydrate whenever token appears/changes. Pre-token 401 must not stick LEGACY_VD.
     // ensure never rejects (swallows network/401); .catch is belt-and-suspenders.
     void ensureActiveServiceMarkets({ force: true })
       .then((version) => {
@@ -219,7 +221,7 @@ export const OnboardingStep1Screen: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authToken]);
 
   useEffect(() => {
     if (profileLoaded.current) return;
@@ -450,11 +452,17 @@ export const OnboardingStep1Screen: React.FC = () => {
   };
 
   const handleSelectPlace = (place: PlaceSuggestion) => {
-    // Apply pin immediately (sync UX); hydrate in background then re-eval zone via marketsVersion.
-    applyResolvedAddress(place);
-    void ensureActiveServiceMarkets({ force: true })
-      .then((version) => setMarketsVersion(version))
-      .catch(() => undefined);
+    // Await multi-hub hydrate BEFORE pin so Tandil (etc.) is not painted as outside
+    // on LEGACY_VD-only while a background fetch is still in flight / failed.
+    void (async () => {
+      try {
+        const version = await ensureActiveServiceMarkets({ force: true });
+        setMarketsVersion(version);
+      } catch {
+        // ensure swallows errors; belt-and-suspenders
+      }
+      applyResolvedAddress(place);
+    })();
   };
 
   const handleClearAddress = () => {

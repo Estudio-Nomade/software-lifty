@@ -174,59 +174,78 @@ export function bindActiveServiceMarketsFetcher(fn: FetchActiveMarkets | null): 
   fetchActiveMarketsImpl = fn;
 }
 
+function cacheIsFresh(now = Date.now()): boolean {
+  return lastFetchedAt > 0 && now - lastFetchedAt < CACHE_TTL_MS;
+}
+
 /**
  * Fetch GET /service-markets/active and hydrate module cache.
  * - Success with items → set those markets
  * - Success empty → legacy VD (setActiveServiceMarkets([]))
  * - Failure → keep previous markets (or legacy boot); do NOT advance lastFetchedAt
  *   (early 401 before session must not lock 5 min on LEGACY_VD-only)
+ * - Concurrent callers await the in-flight request, then **retry** if that flight
+ *   failed (lastFetchedAt still 0). Joining a pre-token 401 must not strand
+ *   Usar ubicación / suggestion pick on LEGACY_VD-only.
  * Returns marketsVersion after hydrate (or current if skipped).
  */
 export async function ensureActiveServiceMarkets(options?: {
   force?: boolean;
 }): Promise<number> {
   const force = options?.force === true;
-  if (!force && lastFetchedAt > 0 && Date.now() - lastFetchedAt < CACHE_TTL_MS) {
-    return marketsVersion;
-  }
-  if (inFlight) return inFlight;
 
-  inFlight = (async () => {
-    let ok = false;
-    try {
-      if (!fetchActiveMarketsImpl) {
-        const { fetchActiveServiceMarketsPayload } = await import('./serviceMarketsApi');
-        fetchActiveMarketsImpl = fetchActiveServiceMarketsPayload;
-      }
-      const data = await fetchActiveMarketsImpl();
-      // Always apply successful body — empty list → legacy VD via setActiveServiceMarkets([]).
-      setActiveServiceMarkets(parseActiveMarketsPayload(data));
-      ok = true;
-      if (__DEV__) {
-        const slugs = getActiveServiceMarkets()
-          .map((m) => m.slug)
-          .join(',');
-        console.log(`[serviceMarkets] active: ${slugs || '(none)'}`);
-      }
-    } catch (err) {
-      // Offline / 401 — keep last good or legacy boot; do not wipe markets.
-      if (__DEV__) {
-        const status =
-          err && typeof err === 'object' && 'response' in err
-            ? (err as { response?: { status?: number } }).response?.status
-            : undefined;
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn(
-          `[serviceMarkets] hydrate failed${status != null ? ` status=${status}` : ''}: ${message}`,
-        );
-      }
-    } finally {
-      // TTL only on success so a failed mount does not block Usar ubicación / retry.
-      if (ok) lastFetchedAt = Date.now();
-      inFlight = null;
+  for (;;) {
+    const joinedFlight = inFlight;
+    if (joinedFlight) {
+      await joinedFlight;
     }
-    return marketsVersion;
-  })();
 
-  return inFlight;
+    if (cacheIsFresh()) {
+      // non-force: TTL hit. force: only skip if we just joined a successful peer flight
+      // (avoids double-fetch under concurrency). Idle force still refetches.
+      if (!force || joinedFlight) return marketsVersion;
+    }
+
+    // Another caller may have started a fetch while we awaited / decided.
+    if (inFlight) continue;
+
+    inFlight = (async () => {
+      let ok = false;
+      try {
+        if (!fetchActiveMarketsImpl) {
+          const { fetchActiveServiceMarketsPayload } = await import('./serviceMarketsApi');
+          fetchActiveMarketsImpl = fetchActiveServiceMarketsPayload;
+        }
+        const data = await fetchActiveMarketsImpl();
+        // Always apply successful body — empty list → legacy VD via setActiveServiceMarkets([]).
+        setActiveServiceMarkets(parseActiveMarketsPayload(data));
+        ok = true;
+        if (__DEV__) {
+          const slugs = getActiveServiceMarkets()
+            .map((m) => m.slug)
+            .join(',');
+          console.log(`[serviceMarkets] active: ${slugs || '(none)'}`);
+        }
+      } catch (err) {
+        // Offline / 401 — keep last good or legacy boot; do not wipe markets.
+        if (__DEV__) {
+          const status =
+            err && typeof err === 'object' && 'response' in err
+              ? (err as { response?: { status?: number } }).response?.status
+              : undefined;
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(
+            `[serviceMarkets] hydrate failed${status != null ? ` status=${status}` : ''}: ${message}`,
+          );
+        }
+      } finally {
+        // TTL only on success so a failed mount does not block Usar ubicación / retry.
+        if (ok) lastFetchedAt = Date.now();
+        inFlight = null;
+      }
+      return marketsVersion;
+    })();
+
+    return inFlight;
+  }
 }
