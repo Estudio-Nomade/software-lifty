@@ -184,9 +184,9 @@ function cacheIsFresh(now = Date.now()): boolean {
  * - Success empty → legacy VD (setActiveServiceMarkets([]))
  * - Failure → keep previous markets (or legacy boot); do NOT advance lastFetchedAt
  *   (early 401 before session must not lock 5 min on LEGACY_VD-only)
- * - Concurrent callers await the in-flight request, then **retry** if that flight
- *   failed (lastFetchedAt still 0). Joining a pre-token 401 must not strand
- *   Usar ubicación / suggestion pick on LEGACY_VD-only.
+ * - Concurrent callers await the in-flight request, then start **at most one**
+ *   own fetch if that flight failed (lastFetchedAt still 0). Never spin forever
+ *   on persistent 401/offline — one join + one attempt max per call.
  * Returns marketsVersion after hydrate (or current if skipped).
  */
 export async function ensureActiveServiceMarkets(options?: {
@@ -194,58 +194,61 @@ export async function ensureActiveServiceMarkets(options?: {
 }): Promise<number> {
   const force = options?.force === true;
 
-  for (;;) {
-    const joinedFlight = inFlight;
-    if (joinedFlight) {
-      await joinedFlight;
-    }
-
-    if (cacheIsFresh()) {
-      // non-force: TTL hit. force: only skip if we just joined a successful peer flight
-      // (avoids double-fetch under concurrency). Idle force still refetches.
-      if (!force || joinedFlight) return marketsVersion;
-    }
-
-    // Another caller may have started a fetch while we awaited / decided.
-    if (inFlight) continue;
-
-    inFlight = (async () => {
-      let ok = false;
-      try {
-        if (!fetchActiveMarketsImpl) {
-          const { fetchActiveServiceMarketsPayload } = await import('./serviceMarketsApi');
-          fetchActiveMarketsImpl = fetchActiveServiceMarketsPayload;
-        }
-        const data = await fetchActiveMarketsImpl();
-        // Always apply successful body — empty list → legacy VD via setActiveServiceMarkets([]).
-        setActiveServiceMarkets(parseActiveMarketsPayload(data));
-        ok = true;
-        if (__DEV__) {
-          const slugs = getActiveServiceMarkets()
-            .map((m) => m.slug)
-            .join(',');
-          console.log(`[serviceMarkets] active: ${slugs || '(none)'}`);
-        }
-      } catch (err) {
-        // Offline / 401 — keep last good or legacy boot; do not wipe markets.
-        if (__DEV__) {
-          const status =
-            err && typeof err === 'object' && 'response' in err
-              ? (err as { response?: { status?: number } }).response?.status
-              : undefined;
-          const message = err instanceof Error ? err.message : String(err);
-          console.warn(
-            `[serviceMarkets] hydrate failed${status != null ? ` status=${status}` : ''}: ${message}`,
-          );
-        }
-      } finally {
-        // TTL only on success so a failed mount does not block Usar ubicación / retry.
-        if (ok) lastFetchedAt = Date.now();
-        inFlight = null;
-      }
-      return marketsVersion;
-    })();
-
-    return inFlight;
+  // 1) Join any peer flight (may be the pre-token 401).
+  const joinedFlight = inFlight;
+  if (joinedFlight) {
+    await joinedFlight;
   }
+
+  // 2) Cache hit: non-force always; force only if we just joined a successful peer
+  //    (avoid double-fetch under concurrency). Idle force still refetches once.
+  if (cacheIsFresh()) {
+    if (!force || joinedFlight) return marketsVersion;
+  }
+
+  // 3) Peer may have started while we awaited — join once more, then stop.
+  if (inFlight) {
+    await inFlight;
+    return marketsVersion;
+  }
+
+  // 4) Own attempt (at most one network start per call). No for(;;) retry loop.
+  inFlight = (async () => {
+    let ok = false;
+    try {
+      if (!fetchActiveMarketsImpl) {
+        const { fetchActiveServiceMarketsPayload } = await import('./serviceMarketsApi');
+        fetchActiveMarketsImpl = fetchActiveServiceMarketsPayload;
+      }
+      const data = await fetchActiveMarketsImpl();
+      // Always apply successful body — empty list → legacy VD via setActiveServiceMarkets([]).
+      setActiveServiceMarkets(parseActiveMarketsPayload(data));
+      ok = true;
+      if (__DEV__) {
+        const slugs = getActiveServiceMarkets()
+          .map((m) => m.slug)
+          .join(',');
+        console.log(`[serviceMarkets] active: ${slugs || '(none)'}`);
+      }
+    } catch (err) {
+      // Offline / 401 — keep last good or legacy boot; do not wipe markets.
+      if (__DEV__) {
+        const status =
+          err && typeof err === 'object' && 'response' in err
+            ? (err as { response?: { status?: number } }).response?.status
+            : undefined;
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(
+          `[serviceMarkets] hydrate failed${status != null ? ` status=${status}` : ''}: ${message}`,
+        );
+      }
+    } finally {
+      // TTL only on success so a failed mount does not block Usar ubicación / retry.
+      if (ok) lastFetchedAt = Date.now();
+      inFlight = null;
+    }
+    return marketsVersion;
+  })();
+
+  return inFlight;
 }

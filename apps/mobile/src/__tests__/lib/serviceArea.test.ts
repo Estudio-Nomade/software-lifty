@@ -287,4 +287,19 @@ describe('serviceArea (driver address preview)', () => {
     expect(isInsidePickupArea(TANDIL.lat, TANDIL.lng)).toBe(true);
     expect(isInsidePickupArea(-37.32515, -59.13572)).toBe(true);
   });
+
+  it('persistent offline does not spin unbounded retries in one call', async () => {
+    let calls = 0;
+    bindActiveServiceMarketsFetcher(async () => {
+      calls += 1;
+      throw new Error('offline forever');
+    });
+
+    await ensureActiveServiceMarkets({ force: true });
+    // One join-or-start attempt only — not an infinite for(;;) storm.
+    expect(calls).toBe(1);
+
+    await ensureActiveServiceMarkets({ force: true });
+    expect(calls).toBe(2);
+  });
 });
