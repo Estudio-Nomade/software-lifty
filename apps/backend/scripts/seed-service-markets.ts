@@ -1,9 +1,12 @@
 /**
  * Idempotent service_markets seed (VD + Tandil).
- * Drizzle marks 0055 applied once — if the lab volume only has VD, re-run this.
+ * Inserts missing rows only — never overwrites status/hub/radii (admin SoT).
+ * Drizzle marks 0055 applied once; lab volumes that only got VD need this.
  *
  *   bun run db:seed-service-markets
  *   DATABASE_URL=... bun run db:seed-service-markets
+ *
+ * If a market exists as draft/paused, activate via admin API — not this script.
  */
 import { join } from 'node:path';
 import { Pool } from 'pg';
@@ -30,34 +33,24 @@ INSERT INTO service_markets (
     8, 50, 8, 20,
     'America/Argentina/Buenos_Aires'
   )
-ON CONFLICT (slug) DO UPDATE SET
-  status = 'active',
-  name = EXCLUDED.name,
-  province = EXCLUDED.province,
-  hub_lat = EXCLUDED.hub_lat,
-  hub_lng = EXCLUDED.hub_lng,
-  pickup_radius_km = EXCLUDED.pickup_radius_km,
-  dropoff_radius_km = EXCLUDED.dropoff_radius_km,
-  match_radius_km = EXCLUDED.match_radius_km,
-  geo_bias_radius_km = EXCLUDED.geo_bias_radius_km,
-  timezone = EXCLUDED.timezone,
-  updated_at = now();
+ON CONFLICT (slug) DO NOTHING;
 
+-- Link default district only when unset (do not clobber admin choice).
 UPDATE service_markets m
 SET default_district_id = d.id
 FROM districts d
 WHERE m.slug = 'villa-dolores'
+  AND m.default_district_id IS NULL
   AND d.name = 'Villa Dolores'
-  AND d.province = 'Córdoba'
-  AND (m.default_district_id IS DISTINCT FROM d.id);
+  AND d.province = 'Córdoba';
 
 UPDATE service_markets m
 SET default_district_id = d.id
 FROM districts d
 WHERE m.slug = 'tandil'
+  AND m.default_district_id IS NULL
   AND d.name = 'Tandil'
-  AND d.province = 'Buenos Aires'
-  AND (m.default_district_id IS DISTINCT FROM d.id);
+  AND d.province = 'Buenos Aires';
 
 INSERT INTO service_market_aliases (market_id, alias, alias_normalized)
 SELECT m.id, a.alias, a.alias_normalized
@@ -93,7 +86,7 @@ async function main() {
       `SELECT slug, status FROM service_markets ORDER BY slug`,
     );
     console.log(
-      `✅ service_markets seed OK (${rows.length}):`,
+      `✅ service_markets seed OK (${rows.length}, insert-only):`,
       rows.map((r) => `${r.slug}=${r.status}`).join(', '),
     );
   } catch (err) {

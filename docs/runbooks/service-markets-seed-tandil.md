@@ -37,7 +37,9 @@ docker exec -i lifty-dev-pg psql -U lifty -d lifty -c \
 ## Cloud (wabdd / Railway API)
 
 If Expo Go uses Railway (`EXPO_PUBLIC_API_URL=…railway…`), seed **that** project's DB
-(SQL Editor or session pooler), not only docker local:
+(SQL Editor or session pooler), not only docker local.
+
+**Insert-only** — never overwrite hub/radii/status if the row already exists (admin is SoT).
 
 ```sql
 INSERT INTO service_markets (
@@ -51,14 +53,7 @@ INSERT INTO service_markets (
   8, 50, 8, 20,
   'America/Argentina/Buenos_Aires'
 )
-ON CONFLICT (slug) DO UPDATE SET
-  status = 'active',
-  hub_lat = EXCLUDED.hub_lat,
-  hub_lng = EXCLUDED.hub_lng,
-  pickup_radius_km = EXCLUDED.pickup_radius_km,
-  dropoff_radius_km = EXCLUDED.dropoff_radius_km,
-  match_radius_km = EXCLUDED.match_radius_km,
-  updated_at = now();
+ON CONFLICT (slug) DO NOTHING;
 
 INSERT INTO service_market_aliases (market_id, alias, alias_normalized)
 SELECT m.id, v.alias, v.norm
@@ -72,12 +67,13 @@ WHERE m.slug = 'tandil'
 ON CONFLICT DO NOTHING;
 ```
 
-Or: `DATABASE_URL=<pooler> bun run db:seed-service-markets` from `apps/backend`.
+Or: `DATABASE_URL=<pooler> bun run db:seed-service-markets` from `apps/backend`
+(same insert-only semantics).
 
 Redeploy / restart API so `reloadServiceMarketsCache()` runs (boot).
 
 If row exists as `draft`/`paused`: admin `POST /api/admin/service-markets/:id/activate`
-or `UPDATE service_markets SET status='active' WHERE slug='tandil'`.
+or explicit `UPDATE service_markets SET status='active' WHERE slug='tandil'` — **not** the seed.
 
 ## Smoke Expo Go
 
