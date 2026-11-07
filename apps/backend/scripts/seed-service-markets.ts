@@ -15,6 +15,44 @@ const DEV_DB_URL = 'postgresql://lifty:lifty@localhost:5433/lifty';
 const connectionString = process.env.DATABASE_URL?.trim() || DEV_DB_URL;
 
 const SEED_SQL = `
+-- Legal district required for municipality_status=operational (matchDistrict + pickup).
+-- TyC/privacy copy MUST match 0060_tandil_district_service_market.sql (order-independent).
+INSERT INTO districts (name, province, status, terms_and_conditions, privacy_policy)
+SELECT
+  'Tandil',
+  'Buenos Aires',
+  'active',
+  $terms$
+<h2>Términos y Condiciones — Tandil</h2>
+<p>Al operar como conductor en Tandil, aceptás cumplir con las normativas municipales de transporte, mantener tu vehículo en condiciones óptimas, y respetar las tarifas establecidas por la plataforma Lifty. El incumplimiento de estas condiciones puede resultar en la suspensión de tu cuenta.</p>
+$terms$,
+  $privacy$
+<h2>Política de Privacidad — Tandil</h2>
+<p>Lifty trata tus datos de conductor conforme a la legislación argentina vigente y a la política general de la plataforma. Los datos de domicilio y documentación se usan solo para habilitación operativa y cumplimiento local.</p>
+$privacy$
+WHERE NOT EXISTS (
+  SELECT 1 FROM districts WHERE name = 'Tandil' AND province = 'Buenos Aires'
+);
+
+UPDATE districts
+SET
+  status = 'active',
+  terms_and_conditions = COALESCE(
+    NULLIF(BTRIM(terms_and_conditions), ''),
+    $terms$
+<h2>Términos y Condiciones — Tandil</h2>
+<p>Al operar como conductor en Tandil, aceptás cumplir con las normativas municipales de transporte, mantener tu vehículo en condiciones óptimas, y respetar las tarifas establecidas por la plataforma Lifty. El incumplimiento de estas condiciones puede resultar en la suspensión de tu cuenta.</p>
+$terms$
+  ),
+  privacy_policy = COALESCE(
+    NULLIF(BTRIM(privacy_policy), ''),
+    $privacy$
+<h2>Política de Privacidad — Tandil</h2>
+<p>Lifty trata tus datos de conductor conforme a la legislación argentina vigente y a la política general de la plataforma. Los datos de domicilio y documentación se usan solo para habilitación operativa y cumplimiento local.</p>
+$privacy$
+  )
+WHERE name = 'Tandil' AND province = 'Buenos Aires';
+
 INSERT INTO service_markets (
   slug, name, province, status,
   hub_lat, hub_lng,

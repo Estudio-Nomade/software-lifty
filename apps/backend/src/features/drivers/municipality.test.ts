@@ -13,7 +13,13 @@ import {
   matchDistrict,
   normalizePlaceName,
   parseLocalityFromFormatted,
+  resolveDistrictForAddress,
 } from './municipality';
+import {
+  LEGACY_VD_MARKET,
+  setActiveServiceMarkets,
+  type ServiceMarketGeo,
+} from '../../shared/lib/service-area';
 
 let app: ReturnType<typeof createApp>;
 
@@ -221,6 +227,100 @@ describe('municipality match helpers', () => {
     );
     expect(op.municipality_status).toBe('operational');
     expect(op.intended_district_id).toBe('sp');
+  });
+
+  test('resolveDistrictForAddress: Tandil pin falls back to market name when city empty', () => {
+    const tandilMarket: ServiceMarketGeo = {
+      id: 'm-tandil',
+      slug: 'tandil',
+      name: 'Tandil',
+      province: 'Buenos Aires',
+      status: 'active',
+      hub_lat: -37.3217,
+      hub_lng: -59.1332,
+      pickup_radius_km: 8,
+      dropoff_radius_km: 50,
+      match_radius_km: 8,
+      geo_bias_radius_km: 20,
+    };
+    setActiveServiceMarkets([LEGACY_VD_MARKET, tandilMarket]);
+
+    const candidates = [
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+      { id: 'td', name: 'Tandil', province: 'Buenos Aires', status: 'active' },
+    ];
+
+    // Photon miss: city null — still resolve via pickup market name.
+    const match = resolveDistrictForAddress(null, null, candidates, -37.32515, -59.13572);
+    expect(match?.id).toBe('td');
+
+    const op = buildMunicipalityResult(
+      '9 de Julio 658, Tandil, Buenos Aires',
+      { lat: -37.32515, lng: -59.13572, city: null, province: null },
+      match,
+    );
+    expect(op.municipality_status).toBe('operational');
+    expect(op.intended_district_id).toBe('td');
+    expect(op.intended_district_name).toBe('Tandil');
+  });
+
+  test('resolveDistrictForAddress: Tandil city name match without market fallback', () => {
+    const candidates = [
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+      { id: 'td', name: 'Tandil', province: 'Buenos Aires', status: 'active' },
+    ];
+    const match = resolveDistrictForAddress('Tandil', 'Buenos Aires', candidates, null, null);
+    expect(match?.id).toBe('td');
+  });
+
+  test('resolveDistrictForAddress: no Tandil district → null even inside hub', () => {
+    const tandilMarket: ServiceMarketGeo = {
+      id: 'm-tandil',
+      slug: 'tandil',
+      name: 'Tandil',
+      province: 'Buenos Aires',
+      status: 'active',
+      hub_lat: -37.3217,
+      hub_lng: -59.1332,
+      pickup_radius_km: 8,
+      dropoff_radius_km: 50,
+      match_radius_km: 8,
+      geo_bias_radius_km: 20,
+    };
+    setActiveServiceMarkets([LEGACY_VD_MARKET, tandilMarket]);
+    const candidates = [
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+    ];
+    expect(resolveDistrictForAddress('Tandil', 'Buenos Aires', candidates, -37.3217, -59.1332)).toBeNull();
+  });
+
+  test('resolveDistrictForAddress: market fallback requires province (no cross-province name-only)', () => {
+    const tandilMarket: ServiceMarketGeo = {
+      id: 'm-tandil',
+      slug: 'tandil',
+      name: 'Tandil',
+      province: 'Buenos Aires',
+      status: 'active',
+      hub_lat: -37.3217,
+      hub_lng: -59.1332,
+      pickup_radius_km: 8,
+      dropoff_radius_km: 50,
+      match_radius_km: 8,
+      geo_bias_radius_km: 20,
+    };
+    setActiveServiceMarkets([LEGACY_VD_MARKET, tandilMarket]);
+
+    // Same name, wrong province — must not resolve via market fallback.
+    const wrongProvinceOnly = [
+      { id: 'td-cba', name: 'Tandil', province: 'Córdoba', status: 'active' },
+    ];
+    expect(
+      resolveDistrictForAddress(null, null, wrongProvinceOnly, -37.32515, -59.13572),
+    ).toBeNull();
+
+    expect(
+      matchDistrict('Tandil', 'Buenos Aires', wrongProvinceOnly, { requireProvince: true }),
+    ).toBeNull();
   });
 });
 

@@ -65,8 +65,8 @@ import { upsertLocation } from '../location/service';
 import {
   type MunicipalityResolveResult,
   buildMunicipalityResult,
-  matchDistrict,
   parseLocalityFromFormatted,
+  resolveDistrictForAddress,
 } from './municipality';
 
 const VALID_DOC_TYPES: readonly string[] = CANONICAL_VALID_DOC_TYPES;
@@ -2383,9 +2383,10 @@ export const driversService = {
       .from(districts)
       .where(eq(districts.status, 'active'));
 
-    // District match only labels intended_district after coords pass pickup gate
-    // inside buildMunicipalityResult.
-    const match = matchDistrict(city, province, activeDistricts);
+    // District match labels intended_district after coords pass pickup gate inside
+    // buildMunicipalityResult. Multi-city: if Photon city misses, fall back to the
+    // active pickup market name (Tandil hub → district Tandil).
+    const match = resolveDistrictForAddress(city, province, activeDistricts, lat, lng);
     return buildMunicipalityResult(addressLine, { lat, lng, city, province }, match);
   },
 
