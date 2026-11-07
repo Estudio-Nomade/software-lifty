@@ -228,4 +228,78 @@ describe('serviceArea (driver address preview)', () => {
     await ensureActiveServiceMarkets({ force: true });
     expect(calls).toBe(2);
   });
+
+  it('concurrent force during failing inFlight retries after failure (no stuck LEGACY_VD)', async () => {
+    resetServiceMarketsToLegacy();
+    expect(isInsidePickupArea(TANDIL.lat, TANDIL.lng)).toBe(false);
+
+    let calls = 0;
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    bindActiveServiceMarketsFetcher(async () => {
+      calls += 1;
+      if (calls === 1) {
+        await firstGate;
+        throw new Error('401 pre-token');
+      }
+      return {
+        items: [
+          {
+            id: LEGACY_VD_MARKET.id,
+            slug: LEGACY_VD_MARKET.slug,
+            name: LEGACY_VD_MARKET.name,
+            province: LEGACY_VD_MARKET.province,
+            hub_lat: LEGACY_VD_MARKET.hub_lat,
+            hub_lng: LEGACY_VD_MARKET.hub_lng,
+            pickup_radius_km: LEGACY_VD_MARKET.pickup_radius_km,
+            dropoff_radius_km: LEGACY_VD_MARKET.dropoff_radius_km,
+            match_radius_km: LEGACY_VD_MARKET.match_radius_km,
+            geo_bias_radius_km: LEGACY_VD_MARKET.geo_bias_radius_km,
+          },
+          {
+            id: 'api-tandil',
+            slug: 'tandil',
+            name: 'Tandil',
+            province: 'Buenos Aires',
+            hub_lat: TANDIL.lat,
+            hub_lng: TANDIL.lng,
+            pickup_radius_km: 8,
+            dropoff_radius_km: 50,
+            match_radius_km: 8,
+            geo_bias_radius_km: 20,
+          },
+        ],
+      };
+    });
+
+    // Mount hydrate starts without token (will 401).
+    const mountP = ensureActiveServiceMarkets({ force: true });
+    // Usar ubicación / pick joins while first is still in flight — must NOT stick to 401.
+    const locateP = ensureActiveServiceMarkets({ force: true });
+    releaseFirst();
+    await mountP;
+    await locateP;
+
+    expect(calls).toBeGreaterThanOrEqual(2);
+    expect(isInsidePickupArea(TANDIL.lat, TANDIL.lng)).toBe(true);
+    expect(isInsidePickupArea(-37.32515, -59.13572)).toBe(true);
+  });
+
+  it('persistent offline does not spin unbounded retries in one call', async () => {
+    let calls = 0;
+    bindActiveServiceMarketsFetcher(async () => {
+      calls += 1;
+      throw new Error('offline forever');
+    });
+
+    await ensureActiveServiceMarkets({ force: true });
+    // One join-or-start attempt only — not an infinite for(;;) storm.
+    expect(calls).toBe(1);
+
+    await ensureActiveServiceMarkets({ force: true });
+    expect(calls).toBe(2);
+  });
 });

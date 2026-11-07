@@ -182,6 +182,10 @@ export const OnboardingStep1Screen: React.FC = () => {
   const addressFieldRef = useRef<ComponentRef<typeof View>>(null);
   const scrollOffsetY = useRef(0);
   const keyboardHeightRef = useRef(0);
+  /** Bumps on each place pick / clear / locate so stale hydrate completions don't overwrite. */
+  const addressPinGenRef = useRef(0);
+  /** Auth token — hydrate must re-run when session appears (mount often races pre-token). */
+  const authToken = useAuthStore((s) => s.token);
 
   const gpsLat = useLocationStore((s) => s.lat);
   const gpsLng = useLocationStore((s) => s.lng);
@@ -209,7 +213,7 @@ export const OnboardingStep1Screen: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    // force: early mount may have failed pre-token; do not trust TTL from a failed hydrate.
+    // Re-hydrate whenever token appears/changes. Pre-token 401 must not stick LEGACY_VD.
     // ensure never rejects (swallows network/401); .catch is belt-and-suspenders.
     void ensureActiveServiceMarkets({ force: true })
       .then((version) => {
@@ -219,7 +223,7 @@ export const OnboardingStep1Screen: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authToken]);
 
   useEffect(() => {
     if (profileLoaded.current) return;
@@ -450,14 +454,20 @@ export const OnboardingStep1Screen: React.FC = () => {
   };
 
   const handleSelectPlace = (place: PlaceSuggestion) => {
-    // Apply pin immediately (sync UX); hydrate in background then re-eval zone via marketsVersion.
+    // Apply pin sync (no stale overwrite if user picks again / clears while hydrate runs).
+    const gen = ++addressPinGenRef.current;
     applyResolvedAddress(place);
+    // Force multi-hub hydrate; zone re-evals via marketsVersion when gen still current.
     void ensureActiveServiceMarkets({ force: true })
-      .then((version) => setMarketsVersion(version))
+      .then((version) => {
+        if (gen !== addressPinGenRef.current) return;
+        setMarketsVersion(version);
+      })
       .catch(() => undefined);
   };
 
   const handleClearAddress = () => {
+    addressPinGenRef.current += 1;
     setAddressLine('');
     setAddressSelection(undefined);
     setSelectedPlace(null);
@@ -472,6 +482,7 @@ export const OnboardingStep1Screen: React.FC = () => {
 
   /** GPS → reverse geocode → pin with lat/lng for backend municipality gate. */
   const handleUseMyLocation = async () => {
+    const gen = ++addressPinGenRef.current;
     setLocating(true);
     setSubmitError('');
     setError('address', undefined);
@@ -482,6 +493,7 @@ export const OnboardingStep1Screen: React.FC = () => {
       );
 
       await getCurrentPosition();
+      if (gen !== addressPinGenRef.current) return;
       const { lat, lng, locationError: geoErr } = useLocationStore.getState();
       if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
         setError(
@@ -497,6 +509,7 @@ export const OnboardingStep1Screen: React.FC = () => {
         lng?: number;
         city?: string | null;
       }>('/maps/geocode', { params: { lat, lng } });
+      if (gen !== addressPinGenRef.current) return;
 
       const label =
         (data?.formatted_address && String(data.formatted_address).trim()) ||
@@ -511,16 +524,18 @@ export const OnboardingStep1Screen: React.FC = () => {
       };
       // Await hydrate before pin so zone preview uses fresh hubs (no false waitlist flash).
       const version = await hydrateP;
+      if (gen !== addressPinGenRef.current) return;
       setMarketsVersion(version);
       applyResolvedAddress(place);
     } catch (err: unknown) {
+      if (gen !== addressPinGenRef.current) return;
       const msg =
         err && typeof err === 'object' && 'message' in err
           ? String((err as { message?: string }).message)
           : 'No pudimos ubicar tu posición.';
       setError('address', msg || 'No pudimos ubicar tu posición.');
     } finally {
-      setLocating(false);
+      if (gen === addressPinGenRef.current) setLocating(false);
     }
   };
 

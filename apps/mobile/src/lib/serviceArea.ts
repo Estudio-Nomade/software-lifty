@@ -174,23 +174,45 @@ export function bindActiveServiceMarketsFetcher(fn: FetchActiveMarkets | null): 
   fetchActiveMarketsImpl = fn;
 }
 
+function cacheIsFresh(now = Date.now()): boolean {
+  return lastFetchedAt > 0 && now - lastFetchedAt < CACHE_TTL_MS;
+}
+
 /**
  * Fetch GET /service-markets/active and hydrate module cache.
  * - Success with items → set those markets
  * - Success empty → legacy VD (setActiveServiceMarkets([]))
  * - Failure → keep previous markets (or legacy boot); do NOT advance lastFetchedAt
  *   (early 401 before session must not lock 5 min on LEGACY_VD-only)
+ * - Concurrent callers await the in-flight request, then start **at most one**
+ *   own fetch if that flight failed (lastFetchedAt still 0). Never spin forever
+ *   on persistent 401/offline — one join + one attempt max per call.
  * Returns marketsVersion after hydrate (or current if skipped).
  */
 export async function ensureActiveServiceMarkets(options?: {
   force?: boolean;
 }): Promise<number> {
   const force = options?.force === true;
-  if (!force && lastFetchedAt > 0 && Date.now() - lastFetchedAt < CACHE_TTL_MS) {
+
+  // 1) Join any peer flight (may be the pre-token 401).
+  const joinedFlight = inFlight;
+  if (joinedFlight) {
+    await joinedFlight;
+  }
+
+  // 2) Cache hit: non-force always; force only if we just joined a successful peer
+  //    (avoid double-fetch under concurrency). Idle force still refetches once.
+  if (cacheIsFresh()) {
+    if (!force || joinedFlight) return marketsVersion;
+  }
+
+  // 3) Peer may have started while we awaited — join once more, then stop.
+  if (inFlight) {
+    await inFlight;
     return marketsVersion;
   }
-  if (inFlight) return inFlight;
 
+  // 4) Own attempt (at most one network start per call). No for(;;) retry loop.
   inFlight = (async () => {
     let ok = false;
     try {
