@@ -209,11 +209,13 @@ export const OnboardingStep1Screen: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      // force: early mount may have failed pre-token; do not trust TTL from a failed hydrate.
-      const version = await ensureActiveServiceMarkets({ force: true });
-      if (!cancelled) setMarketsVersion(version);
-    })();
+    // force: early mount may have failed pre-token; do not trust TTL from a failed hydrate.
+    // ensure never rejects (swallows network/401); .catch is belt-and-suspenders.
+    void ensureActiveServiceMarkets({ force: true })
+      .then((version) => {
+        if (!cancelled) setMarketsVersion(version);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -448,11 +450,11 @@ export const OnboardingStep1Screen: React.FC = () => {
   };
 
   const handleSelectPlace = (place: PlaceSuggestion) => {
-    void (async () => {
-      const version = await ensureActiveServiceMarkets({ force: true });
-      setMarketsVersion(version);
-      applyResolvedAddress(place);
-    })();
+    // Apply pin immediately (sync UX); hydrate in background then re-eval zone via marketsVersion.
+    applyResolvedAddress(place);
+    void ensureActiveServiceMarkets({ force: true })
+      .then((version) => setMarketsVersion(version))
+      .catch(() => undefined);
   };
 
   const handleClearAddress = () => {
@@ -474,9 +476,10 @@ export const OnboardingStep1Screen: React.FC = () => {
     setSubmitError('');
     setError('address', undefined);
     try {
-      // Refresh multi-hub cache before zone preview (Tandil etc.) — force past failed TTL.
-      const version = await ensureActiveServiceMarkets({ force: true });
-      setMarketsVersion(version);
+      // Parallel: force multi-hub hydrate while GPS runs (Tandil etc.).
+      const hydrateP = ensureActiveServiceMarkets({ force: true }).catch(() =>
+        getServiceMarketsVersion(),
+      );
 
       await getCurrentPosition();
       const { lat, lng, locationError: geoErr } = useLocationStore.getState();
@@ -506,6 +509,9 @@ export const OnboardingStep1Screen: React.FC = () => {
         lat: Number(data?.lat ?? lat),
         lng: Number(data?.lng ?? lng),
       };
+      // Await hydrate before pin so zone preview uses fresh hubs (no false waitlist flash).
+      const version = await hydrateP;
+      setMarketsVersion(version);
       applyResolvedAddress(place);
     } catch (err: unknown) {
       const msg =
