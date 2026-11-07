@@ -293,6 +293,35 @@ describe('municipality match helpers', () => {
     ];
     expect(resolveDistrictForAddress('Tandil', 'Buenos Aires', candidates, -37.3217, -59.1332)).toBeNull();
   });
+
+  test('resolveDistrictForAddress: market fallback requires province (no cross-province name-only)', () => {
+    const tandilMarket: ServiceMarketGeo = {
+      id: 'm-tandil',
+      slug: 'tandil',
+      name: 'Tandil',
+      province: 'Buenos Aires',
+      status: 'active',
+      hub_lat: -37.3217,
+      hub_lng: -59.1332,
+      pickup_radius_km: 8,
+      dropoff_radius_km: 50,
+      match_radius_km: 8,
+      geo_bias_radius_km: 20,
+    };
+    setActiveServiceMarkets([LEGACY_VD_MARKET, tandilMarket]);
+
+    // Same name, wrong province — must not resolve via market fallback.
+    const wrongProvinceOnly = [
+      { id: 'td-cba', name: 'Tandil', province: 'Córdoba', status: 'active' },
+    ];
+    expect(
+      resolveDistrictForAddress(null, null, wrongProvinceOnly, -37.32515, -59.13572),
+    ).toBeNull();
+
+    expect(
+      matchDistrict('Tandil', 'Buenos Aires', wrongProvinceOnly, { requireProvince: true }),
+    ).toBeNull();
+  });
 });
 
 describe('Driver address municipality eligibility', () => {

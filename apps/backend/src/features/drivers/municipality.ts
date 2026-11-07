@@ -59,20 +59,24 @@ function applyAlias(normalized: string): string {
 
 /**
  * Match resolved city/province against active districts.
- * Prefers name + province when both present; falls back to name-only unique match.
+ * Prefers name + province when both present; falls back to name-only unique match
+ * unless requireProvince is set (market-name fallback must not cross provinces).
  */
 export function matchDistrict(
   city: string | null,
   province: string | null,
   candidates: DistrictMatchCandidate[],
+  options?: { requireProvince?: boolean },
 ): DistrictMatchCandidate | null {
   const active = candidates.filter((d) => d.status === 'active');
   if (active.length === 0) return null;
 
   const cityNorm = city ? applyAlias(normalizePlaceName(city)) : '';
   const provinceNorm = province ? normalizePlaceName(province) : '';
+  const requireProvince = options?.requireProvince === true;
 
   if (!cityNorm) return null;
+  if (requireProvince && !provinceNorm) return null;
 
   const nameMatches = active.filter((d) => {
     const nameNorm = applyAlias(normalizePlaceName(d.name));
@@ -86,8 +90,8 @@ export function matchDistrict(
       const p = normalizePlaceName(d.province);
       return p === provinceNorm || p.includes(provinceNorm) || provinceNorm.includes(p);
     });
-    if (withProvince.length === 1) return withProvince[0];
-    if (withProvince.length > 1) return withProvince[0];
+    if (withProvince.length >= 1) return withProvince[0];
+    if (requireProvince) return null;
   }
 
   if (nameMatches.length === 1) return nameMatches[0];
@@ -97,7 +101,7 @@ export function matchDistrict(
 /**
  * Prefer Photon city/province match; if missing, fall back to the active pickup
  * market's name/province (multi-city: Tandil pin → district Tandil even when
- * reverse-geocode city is empty/noisy).
+ * reverse-geocode city is empty/noisy). Market fallback always requires province.
  */
 export function resolveDistrictForAddress(
   city: string | null,
@@ -114,7 +118,7 @@ export function resolveDistrictForAddress(
   }
   const market = findPickupMarket(lat, lng);
   if (!market) return null;
-  return matchDistrict(market.name, market.province, candidates);
+  return matchDistrict(market.name, market.province, candidates, { requireProvince: true });
 }
 
 /**
