@@ -199,8 +199,24 @@ export async function ensureActiveServiceMarkets(options?: {
       const data = await fetchActiveMarketsImpl();
       // Always apply successful body — empty list → legacy VD via setActiveServiceMarkets([]).
       setActiveServiceMarkets(parseActiveMarketsPayload(data));
-    } catch {
+      if (__DEV__) {
+        const slugs = getActiveServiceMarkets()
+          .map((m) => m.slug)
+          .join(',');
+        console.log(`[serviceMarkets] active: ${slugs || '(none)'}`);
+      }
+    } catch (err) {
       // Offline / 401 — keep last good or legacy boot; do not wipe markets.
+      if (__DEV__) {
+        const status =
+          err && typeof err === 'object' && 'response' in err
+            ? (err as { response?: { status?: number } }).response?.status
+            : undefined;
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(
+          `[serviceMarkets] hydrate failed${status != null ? ` status=${status}` : ''}: ${message}`,
+        );
+      }
     } finally {
       // Advance on success and failure so TTL backs off repeated failing requests.
       lastFetchedAt = Date.now();

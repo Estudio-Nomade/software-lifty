@@ -34,3 +34,16 @@ try {
 } finally {
   await pool.end();
 }
+
+// 3. Idempotent service_markets seed (VD + Tandil). Migration 0055 only runs once;
+//    lab volumes that applied an older/partial 0055 stay VD-only without this.
+const seed = Bun.spawnSync(['bun', 'run', 'scripts/seed-service-markets.ts'], {
+  cwd: BACKEND_DIR,
+  env: { ...process.env, DATABASE_URL: DEV_DB_URL },
+  stdout: 'inherit',
+  stderr: 'inherit',
+});
+if (seed.exitCode !== 0) {
+  console.error('❌ Failed to seed service_markets');
+  process.exit(seed.exitCode ?? 1);
+}

@@ -94,6 +94,49 @@ describe('serviceArea (driver address preview)', () => {
     expect(isInsidePickupArea(SERVICE_AREA_HUB.lat, SERVICE_AREA_HUB.lng)).toBe(true);
   });
 
+  it('ensure with VD+Tandil payload makes Tandil inside (ops mirror path)', async () => {
+    resetServiceMarketsToLegacy();
+    expect(isInsidePickupArea(TANDIL.lat, TANDIL.lng)).toBe(false);
+
+    bindActiveServiceMarketsFetcher(async () => ({
+      items: [
+        {
+          id: LEGACY_VD_MARKET.id,
+          slug: LEGACY_VD_MARKET.slug,
+          name: LEGACY_VD_MARKET.name,
+          province: LEGACY_VD_MARKET.province,
+          hub_lat: LEGACY_VD_MARKET.hub_lat,
+          hub_lng: LEGACY_VD_MARKET.hub_lng,
+          pickup_radius_km: LEGACY_VD_MARKET.pickup_radius_km,
+          dropoff_radius_km: LEGACY_VD_MARKET.dropoff_radius_km,
+          match_radius_km: LEGACY_VD_MARKET.match_radius_km,
+          geo_bias_radius_km: LEGACY_VD_MARKET.geo_bias_radius_km,
+        },
+        {
+          id: 'api-tandil',
+          slug: 'tandil',
+          name: 'Tandil',
+          province: 'Buenos Aires',
+          hub_lat: TANDIL.lat,
+          hub_lng: TANDIL.lng,
+          pickup_radius_km: 8,
+          dropoff_radius_km: 50,
+          match_radius_km: 8,
+          geo_bias_radius_km: 20,
+        },
+      ],
+    }));
+    await ensureActiveServiceMarkets({ force: true });
+
+    expect(isInsidePickupArea(TANDIL.lat, TANDIL.lng)).toBe(true);
+    expect(isInsidePickupArea(SERVICE_AREA_HUB.lat, SERVICE_AREA_HUB.lng)).toBe(true);
+    expect(isInsidePickupArea(CABA.lat, CABA.lng)).toBe(false);
+    expect(getActiveServiceMarkets().map((m) => m.slug).sort()).toEqual([
+      'tandil',
+      'villa-dolores',
+    ]);
+  });
+
   it('failed fetch advances backoff so the next call skips network within TTL', async () => {
     let calls = 0;
     bindActiveServiceMarketsFetcher(async () => {
