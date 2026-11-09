@@ -46,6 +46,10 @@ services:
       PORT: "3000"
       # Prefer compose Redis; override REDIS_URL in .env only if using managed Redis.
       REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379
+      # Supabase Root 2021 CA: `pg` verifica TLS (sslmode=require) y el pooler usa CA propia.
+      NODE_EXTRA_CA_CERTS: /certs/supabase-ca.crt
+    volumes:
+      - ./certs/supabase-ca.crt:/certs/supabase-ca.crt:ro
     depends_on:
       redis:
         condition: service_healthy

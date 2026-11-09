@@ -120,6 +120,31 @@ git pull
 
 Build usa el monorepo root + `bun.lock` de la raíz (no hace falta `bun install` en el host).
 
+## 6b. TLS hacia Supabase (CA propia)
+
+El backend usa `pg`, que con `sslmode=require` **verifica** el certificado. El pooler de
+Supabase usa su propia CA, así que sin ella falla con `SELF_SIGNED_CERT_IN_CHAIN`.
+
+- `deploy/lightsail/certs/supabase-ca.crt` es la *Supabase Root 2021 CA* (pública, vence 2031).
+- `docker-compose.yml` la monta en `/certs/supabase-ca.crt` y setea `NODE_EXTRA_CA_CERTS`.
+- Dejá `?sslmode=require` en `DATABASE_URL`. No uses `no-verify` ni quites `sslmode`.
+
+## 6c. Gestionar envs en el server (`scripts/vps-env.sh`)
+
+Edita `deploy/lightsail/.env` por SSH sin mostrar valores y recrea la api para recargarlo
+(`docker compose restart` **no** relee `env_file`).
+
+```bash
+scripts/vps-env.sh list                # claves y si tienen valor
+scripts/vps-env.sh set KEY             # pide el valor oculto, guarda y aplica
+scripts/vps-env.sh unset KEY
+scripts/vps-env.sh push                # mergea apps/backend/.env (no pisa NODE_ENV/PORT/API_URL/REDIS_*)
+scripts/vps-env.sh edit                # nano en el server y aplica al salir
+scripts/vps-env.sh rollback            # restaura el backup anterior (se guardan 10)
+```
+
+Variables: `VPS_HOST` (default `lifty-vps`, alias en `~/.ssh/config`), `VPS_DIR`, `NO_APPLY=1`.
+
 ## 7. Troubleshooting
 
 | Síntoma | Qué mirar |
