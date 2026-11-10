@@ -145,6 +145,34 @@ scripts/vps-env.sh rollback            # restaura el backup anterior (se guardan
 
 Variables: `VPS_HOST` (default `lifty-vps`, alias en `~/.ssh/config`), `VPS_DIR`, `NO_APPLY=1`.
 
+## 6d. CD automático (GitHub Actions)
+
+`.github/workflows/deploy.yml` despliega solo cuando el CI de `main` pasa (o a mano:
+Actions → *Deploy VPS* → *Run workflow*). Entra por SSH con una clave de CI que en el
+server está restringida a ejecutar **solo** `ci-deploy.sh`:
+
+```text
+# ~lifty/.ssh/authorized_keys
+restrict,command="/opt/lifty/deploy/lightsail/ci-deploy.sh" ssh-ed25519 AAAA... lifty-ci
+```
+
+`ci-deploy.sh <sha>`: lock anti-concurrencia, solo acepta SHAs de `origin/main`, salta el
+rebuild si no cambió backend/deploy, corre `deploy.sh --proxy` y, si falla, vuelve al commit
+anterior. Log en `~lifty/lifty-deploy.log`.
+
+Secrets del repo: `VPS_SSH_KEY` (privada), `VPS_KNOWN_HOSTS` (salida de
+`ssh-keyscan -t ed25519 <ip>`), `VPS_HOST`, `VPS_USER`.
+
+Rotar la clave de CI:
+
+```bash
+ssh-keygen -t ed25519 -N "" -C lifty-ci -f /tmp/lifty-ci
+# server: reemplazar la línea `lifty-ci` en ~/.ssh/authorized_keys (conservar restrict,command=...)
+gh secret set VPS_SSH_KEY < /tmp/lifty-ci && shred -u /tmp/lifty-ci /tmp/lifty-ci.pub
+```
+
+**No** corre migraciones: `supabase db push` sigue siendo manual.
+
 ## 7. Troubleshooting
 
 | Síntoma | Qué mirar |

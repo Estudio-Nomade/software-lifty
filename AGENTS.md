@@ -1,6 +1,6 @@
 # Lifty — Monorepo
 
-**IMPORTANT — PROJECT STATUS**: Lifty is in **active development**. There is NO production deployment, NO MVP, NO staging environment. No CD pipeline exists. All infrastructure is local/dev-only. Do NOT attempt to deploy or configure production services. The backend runs on `localhost`, the mobile app uses Expo Go in development mode. This status applies until explicitly changed in this file.
+**IMPORTANT — PROJECT STATUS**: Lifty is in **active development**. There is NO production deployment, NO MVP, NO staging environment. The only CD is a **dev-only VPS** for the backend (`https://api.liftyviajes.com`, auto-deployed from `main` by `.github/workflows/deploy.yml`; see `deploy/lightsail/README.md`). Do NOT configure other production services or run deploys by hand unless asked. Locally the backend still runs on `localhost` and the mobile apps use Expo Go in development mode. This status applies until explicitly changed in this file.
 
 ## Stack
 - **Monorepo**: Bun Workspaces + Turborepo
@@ -129,8 +129,14 @@ software-lifty/
 - **test**: Backend tests with PostgreSQL + Redis services (depends on lint + typecheck passing first)
 - **Turbo cache**: Cached between runs via `actions/cache`
 
+### CD (backend → dev VPS)
+- **Trigger**: `Deploy VPS` workflow runs when `CI` succeeds on `main` (or manually via `workflow_dispatch`).
+- **Mechanism**: SSH with a dedicated key restricted by `command="…/ci-deploy.sh"`; the server fetches and deploys the exact SHA that passed CI, skips rebuild when backend/deploy files did not change, and rolls back to the previous commit if the deploy fails.
+- **Secrets** (repo): `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`, `VPS_HOST`, `VPS_USER`.
+- **Not automated**: DB migrations (run `supabase db push` manually), server `.env` changes (`scripts/vps-env.sh`), mobile builds.
+
 ### What we DON'T have (by design — no production yet)
-- No CD pipeline (no Docker registry, no EAS builds, no deployment)
+- No Docker registry, no EAS builds in CI
 - No staging/production environments
 - No versioned releases
 - No changelog automation
