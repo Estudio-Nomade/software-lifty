@@ -495,18 +495,19 @@ export const OnboardingStep1Screen: React.FC = () => {
     let callLat: number | null = null;
     let callLng: number | null = null;
     try {
-      // Close OAuth→Paso1 race: store.token may lag live Supabase session.
+      // Close OAuth→Paso1 race: always reconcile store Bearer vs live Supabase session
+      // (stale/blocked store token is as bad as missing token).
       try {
         const store = useAuthStore.getState();
-        if (!store.token) {
-          const { data } = await supabase.auth.getSession();
-          const live = data.session;
-          const token = resolveApiAccessToken({
-            storeToken: store.token,
-            storeUserId: store.driverId,
-            liveSession: live,
-          });
-          if (token && live?.user?.id) {
+        const { data } = await supabase.auth.getSession();
+        const live = data.session;
+        const token = resolveApiAccessToken({
+          storeToken: store.token,
+          storeUserId: store.driverId,
+          liveSession: live,
+        });
+        if (token && live?.user?.id) {
+          if (token !== store.token || live.user.id !== store.driverId) {
             store.setSession(token, live.user.id);
           }
         }

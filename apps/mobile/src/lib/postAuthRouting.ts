@@ -7,9 +7,30 @@ import { type ScreenName, routePathForScreen } from './screenRoutes';
 /** Network / CORS / timeout — do not invent pending onboarding. */
 export function isTransientStatusFailure(err: unknown): boolean {
   if (err instanceof ApiError) {
-    return err.code === 'NETWORK_ERROR' || err.status === 0;
+    return err.code === 'NETWORK_ERROR' || err.code === 'TIMEOUT_ERROR' || err.status === 0;
   }
   return false;
+}
+
+/**
+ * Auth gate on /drivers/me/status — leave status null (Welcome recovery / retry).
+ * Do not invent pending → Paso1 with a dead Bearer.
+ */
+export function isAuthStatusFailure(err: unknown): boolean {
+  if (err instanceof ApiError) {
+    return (
+      err.status === 401 ||
+      err.code === 'TOKEN_REQUIRED' ||
+      err.code === 'TOKEN_EXPIRED' ||
+      err.code === 'UNAUTHORIZED'
+    );
+  }
+  return false;
+}
+
+/** Failures where status must stay unresolved (network or auth). */
+export function shouldLeaveDriverStatusUnresolved(err: unknown): boolean {
+  return isTransientStatusFailure(err) || isAuthStatusFailure(err);
 }
 
 type DriverStatusValue = DriverStatus['status'] | null;
@@ -131,9 +152,9 @@ export async function resolvePostAuthRoute(): Promise<PostAuthRoute> {
 
     return routeForDriverStatus(driverData);
   } catch (err) {
-    // CORS / offline / API down: leave status null so welcome can recover.
-    // Do not invent pending → OnboardingStep1 (that screen then fails too).
-    if (isTransientStatusFailure(err)) {
+    // CORS / offline / API down / 401: leave status null so welcome can recover.
+    // Do not invent pending → OnboardingStep1 (maps then fail with opaque auth).
+    if (shouldLeaveDriverStatusUnresolved(err)) {
       throw err;
     }
     // Non-network failure after auth (e.g. empty profile) — onboarding entry.
