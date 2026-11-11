@@ -145,3 +145,73 @@ export function mapNetworkCodeToApiError(
     meta: { timestamp: new Date().toISOString() },
   };
 }
+
+const OPAQUE_SERVER_RE = /inesperado del servidor|internal server error/i;
+
+/**
+ * UI-safe message from ApiError / unknown throws.
+ * Never surfaces INTERNAL_ERROR / «Error inesperado del servidor» / bare Unauthorized.
+ */
+export function userFacingApiMessage(
+  err: unknown,
+  opts?: {
+    fallback?: string;
+    /** Defaults copy when opaque server / missing message. */
+    context?: 'location' | 'save' | 'generic';
+  },
+): string {
+  const fallback =
+    opts?.fallback ??
+    (opts?.context === 'location'
+      ? 'No pudimos completar la ubicación. Revisá el GPS o elegí una sugerencia de la lista.'
+      : opts?.context === 'save'
+        ? 'No pudimos guardar los datos. Revisá la conexión e intentá de nuevo.'
+        : 'Algo salió mal. Intentá de nuevo.');
+
+  const code =
+    err && typeof err === 'object' && 'code' in err
+      ? String((err as { code?: unknown }).code ?? '')
+      : '';
+  const status =
+    err && typeof err === 'object' && 'status' in err
+      ? Number((err as { status?: unknown }).status)
+      : Number.NaN;
+  const raw =
+    err instanceof Error
+      ? err.message
+      : err && typeof err === 'object' && 'message' in err
+        ? String((err as { message?: unknown }).message ?? '')
+        : typeof err === 'string'
+          ? err
+          : '';
+
+  if (
+    code === 'TOKEN_EXPIRED' ||
+    (status === 401 && /expir/i.test(raw)) ||
+    /sesión expiró|sesion expiro/i.test(raw)
+  ) {
+    return 'Tu sesión expiró. Volvé a iniciar sesión.';
+  }
+  if (
+    code === 'TOKEN_REQUIRED' ||
+    status === 401 ||
+    raw === 'Unauthorized' ||
+    /iniciar sesión|iniciar sesion/i.test(raw)
+  ) {
+    // Prefer existing Spanish session copy when already mapped.
+    if (raw && !OPAQUE_SERVER_RE.test(raw) && raw !== 'Unauthorized') {
+      return raw;
+    }
+    return 'Necesitás iniciar sesión para continuar.';
+  }
+  if (code === 'NETWORK_ERROR' || code === 'TIMEOUT_ERROR' || status === 0) {
+    return raw && !OPAQUE_SERVER_RE.test(raw)
+      ? raw
+      : 'No pudimos hablar con el servidor. Revisá tu conexión.';
+  }
+  if (code === 'INTERNAL_ERROR' || OPAQUE_SERVER_RE.test(raw)) {
+    return fallback;
+  }
+  if (raw.trim()) return raw;
+  return fallback;
+}

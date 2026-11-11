@@ -1,4 +1,4 @@
-import { mapNetworkCodeToApiError, mapResponseDataToApiError } from '../../api/mapAxiosError';
+import { mapNetworkCodeToApiError, mapResponseDataToApiError, userFacingApiMessage } from '../../api/mapAxiosError';
 
 describe('mapResponseDataToApiError', () => {
   it('keeps Lifty envelope untouched for non-auth errors', () => {
@@ -117,5 +117,32 @@ describe('mapNetworkCodeToApiError', () => {
     const mapped = mapNetworkCodeToApiError('ECONNABORTED');
     expect(mapped.error.code).toBe('TIMEOUT_ERROR');
     expect(mapped.error.message).not.toMatch(/inesperado del servidor/i);
+  });
+});
+
+describe('userFacingApiMessage', () => {
+  it('never paints opaque server error on save context', () => {
+    const err = { code: 'INTERNAL_ERROR', message: 'Error inesperado del servidor.', status: 500 };
+    expect(userFacingApiMessage(err, { context: 'save' })).not.toMatch(/inesperado del servidor/i);
+    expect(userFacingApiMessage(err, { context: 'save' })).toMatch(/guardar|conexión|conexion/i);
+  });
+
+  it('maps TOKEN_REQUIRED to session copy', () => {
+    const err = { code: 'TOKEN_REQUIRED', message: 'Unauthorized', status: 401 };
+    expect(userFacingApiMessage(err)).toMatch(/iniciar sesión/i);
+  });
+
+  it('keeps ADDRESS_UNRESOLVABLE backend copy', () => {
+    const err = {
+      code: 'ADDRESS_UNRESOLVABLE',
+      message: 'No pudimos ubicar ese domicilio. Probá con calle, altura y localidad.',
+      status: 400,
+    };
+    expect(userFacingApiMessage(err, { context: 'save' })).toContain('domicilio');
+  });
+
+  it('maps location INTERNAL_ERROR to GPS fallback', () => {
+    const err = { code: 'INTERNAL_ERROR', message: 'Error inesperado del servidor.', status: 500 };
+    expect(userFacingApiMessage(err, { context: 'location' })).toMatch(/GPS|ubicación|ubicacion/i);
   });
 });

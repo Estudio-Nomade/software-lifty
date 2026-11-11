@@ -19,6 +19,7 @@ import {
   View,
 } from 'react-native';
 import { apiClient } from '../api/client';
+import { userFacingApiMessage } from '../api/mapAxiosError';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Navbar } from '../components/Navbar';
@@ -583,24 +584,20 @@ export const OnboardingStep1Screen: React.FC = () => {
     } catch (err: unknown) {
       if (gen !== addressPinGenRef.current) return;
       if (__DEV__) {
-        console.warn('[UseMyLocation] outer error', err);
+        const code =
+          err && typeof err === 'object' && 'code' in err
+            ? String((err as { code?: string }).code)
+            : undefined;
+        console.warn('[UseMyLocation] outer error', { code, err });
       }
-      // Never paint INTERNAL_ERROR / "inesperado del servidor" on this CTA — GPS
-      // path is local; auth/network noise belongs in soft-fail or session copy.
-      const code =
-        err && typeof err === 'object' && 'code' in err
-          ? String((err as { code?: string }).code)
-          : '';
-      const raw =
-        err && typeof err === 'object' && 'message' in err
-          ? String((err as { message?: string }).message ?? '')
-          : '';
-      const isOpaqueServer =
-        code === 'INTERNAL_ERROR' || /inesperado del servidor/i.test(raw) || raw === 'Unauthorized';
-      const msg = isOpaqueServer
-        ? 'No pudimos completar la ubicación. Revisá el GPS o elegí una sugerencia de la lista.'
-        : raw || 'No pudimos ubicar tu posición.';
-      setError('address', msg);
+      // Never paint INTERNAL_ERROR / "inesperado del servidor" on this CTA.
+      setError(
+        'address',
+        userFacingApiMessage(err, {
+          context: 'location',
+          fallback: 'No pudimos ubicar tu posición.',
+        }),
+      );
     } finally {
       if (gen === addressPinGenRef.current) setLocating(false);
     }
@@ -701,8 +698,26 @@ export const OnboardingStep1Screen: React.FC = () => {
       } else {
         navigation.replace('KYCVerify');
       }
-    } catch (err: any) {
-      setSubmitError(err?.message ?? 'Error al guardar los datos');
+    } catch (err: unknown) {
+      // Continuar is PUT /drivers/me (+ municipality). Guest/401 or opaque 500
+      // must not show «Error inesperado del servidor» in the submit banner.
+      if (__DEV__) {
+        const code =
+          err && typeof err === 'object' && 'code' in err
+            ? String((err as { code?: string }).code)
+            : undefined;
+        const status =
+          err && typeof err === 'object' && 'status' in err
+            ? Number((err as { status?: number }).status)
+            : undefined;
+        console.warn('[OnboardingStep1] Continuar error', { code, status, err });
+      }
+      setSubmitError(
+        userFacingApiMessage(err, {
+          context: 'save',
+          fallback: 'No pudimos guardar los datos. Revisá la conexión e intentá de nuevo.',
+        }),
+      );
     } finally {
       setLoading(false);
     }
