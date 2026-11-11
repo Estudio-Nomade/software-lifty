@@ -16,6 +16,7 @@ import { passengerTripRoutes } from './features/passenger-trips/routes';
 import { passengersRoutes } from './features/passengers/routes';
 import { paymentMethodsRoutes } from './features/payment-methods/routes';
 import { ratingsRoutes } from './features/ratings/routes';
+import { startServiceMarketsReload } from './features/service-markets/reload-scheduler';
 import {
   serviceMarketsAdminRoutes,
   serviceMarketsPublicRoutes,
@@ -270,6 +271,9 @@ if (process.env.NODE_ENV !== 'test') {
       message: (err as Error).message,
     });
   });
+  // Re-read active markets periodically: recovers from a failed boot load and
+  // picks up admin changes made by other processes.
+  const stopServiceMarketsReload = startServiceMarketsReload();
 
   startStaleDriverCleanup();
 
@@ -285,6 +289,7 @@ if (process.env.NODE_ENV !== 'test') {
   process.on('SIGINT', async () => {
     logger.info('Shutting down...');
     clearInterval(offerExpirer);
+    stopServiceMarketsReload();
     stopStaleDriverCleanup();
     await app.stop();
     resetDb();
@@ -295,6 +300,7 @@ if (process.env.NODE_ENV !== 'test') {
   process.on('SIGTERM', async () => {
     logger.info('Shutting down...');
     clearInterval(offerExpirer);
+    stopServiceMarketsReload();
     stopStaleDriverCleanup();
     await app.stop();
     resetDb();

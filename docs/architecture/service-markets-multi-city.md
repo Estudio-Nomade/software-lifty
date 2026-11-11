@@ -43,7 +43,14 @@ localities (P2)     →  Parajes/barrios del mercado (aliases, label, maps_to_di
 | `timezone` | default `America/Argentina/Cordoba` |
 
 ### `service_market_aliases`
-Aliases normalizados para match de ciudad en onboarding (`vd`, `v dolores`, `tandil centro`, …).
+Aliases normalizados de un mercado (`vd`, `v dolores`, `tandil centro`, …).
+
+> **Estado actual: informativo.** La API admin los escribe (`replaceAliases`) y los devuelve en
+> sus respuestas, pero **ningún código los lee para decidir si un conductor queda `operational`**.
+> El match de ciudad en onboarding (`apps/backend/src/features/drivers/municipality.ts`) usa una
+> lista fija `ALIASES` en código (Villa Dolores, Villa Sarmiento, San Pedro). Agregar un alias acá
+> **no** cambia ese resultado. Hacer que el matching lea esta tabla es trabajo pendiente; mientras
+> tanto, decidir con el panel admin a la vista si se implementa o se elimina la tabla.
 
 ### Localities (slice 2 — no en migración 1)
 Parajes tipo Piedra Pintada / Sauce Arriba: `role=core|dropoff_only`, coords aprox, `maps_to_district_id`.
@@ -71,7 +78,7 @@ Fallback de boot/tests: si DB vacía o cache fría, market legacy VD (mismas coo
 1. Admin → **Mercados** → Nuevo
 2. Nombre, provincia, pin del hub (mapa), radios
 3. (Opcional) crear/linkear `district` con TyC
-4. Aliases de nombre
+4. (Opcional) Aliases de nombre — hoy informativos, no afectan el matching (ver `service_market_aliases`)
 5. Guardar como `draft` → smoke en staging
 6. **Activar** → invalida cache BE → pax/driver ya operan ahí
 7. Pausar = deja de matchear / pedir / operational nuevo (cuentas ya adentro: política P2)
