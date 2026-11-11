@@ -104,7 +104,11 @@ describe('KYC', () => {
     const { status, data } = await request('GET', `/api/kyc/session/${driverId}`);
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test("GET /session/id for different user's driver returns error", async () => {

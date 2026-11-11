@@ -503,24 +503,32 @@ export const OnboardingStep1Screen: React.FC = () => {
         return;
       }
 
-      const { data } = await apiClient.get<{
-        formatted_address?: string;
-        lat?: number;
-        lng?: number;
-        city?: string | null;
-      }>('/maps/geocode', { params: { lat, lng } });
+      let label = `Ubicación actual (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+      let pinLat = lat;
+      let pinLng = lng;
+      try {
+        const { data } = await apiClient.get<{
+          formatted_address?: string;
+          lat?: number;
+          lng?: number;
+          city?: string | null;
+        }>('/maps/geocode', { params: { lat, lng } });
+        label =
+          (data?.formatted_address && String(data.formatted_address).trim()) ||
+          [data?.city, 'Córdoba'].filter(Boolean).join(', ') ||
+          label;
+        pinLat = Number(data?.lat ?? lat);
+        pinLng = Number(data?.lng ?? lng);
+      } catch {
+        // GPS pin is enough for municipality gate; reverse-geocode is best-effort.
+      }
       if (gen !== addressPinGenRef.current) return;
-
-      const label =
-        (data?.formatted_address && String(data.formatted_address).trim()) ||
-        [data?.city, 'Córdoba'].filter(Boolean).join(', ') ||
-        `Ubicación actual (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
 
       const place: PlaceSuggestion = {
         description: label,
         place_id: `gps:${lat.toFixed(6)},${lng.toFixed(6)}`,
-        lat: Number(data?.lat ?? lat),
-        lng: Number(data?.lng ?? lng),
+        lat: pinLat,
+        lng: pinLng,
       };
       // Await hydrate before pin so zone preview uses fresh hubs (no false waitlist flash).
       const version = await hydrateP;

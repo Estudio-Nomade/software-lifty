@@ -125,7 +125,11 @@ describe('SOS', () => {
     const { status, data } = await request('POST', '/api/sos', { type: '911' });
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('POST /sos with invalid type returns error', async () => {
@@ -226,7 +230,11 @@ describe('SOS', () => {
     });
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('POST /sos allows passenger without driver profile', async () => {

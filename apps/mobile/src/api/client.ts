@@ -4,7 +4,8 @@ import type { z } from 'zod';
 import { getCurrentOAuthAttempt, isOAuthLocalSignOutInFlight } from '../lib/oauthSessionRecovery';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
-import { ApiError, apiErrorSchema } from './types';
+import { mapNetworkCodeToApiError, mapResponseDataToApiError } from './mapAxiosError';
+import { ApiError } from './types';
 
 function getApiUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -139,20 +140,14 @@ apiClient.interceptors.response.use(
       }
     }
 
-    if (error.response?.data) {
-      const parsed = apiErrorSchema.safeParse(error.response.data);
-      if (parsed.success) {
-        return Promise.reject(new ApiError(parsed.data));
-      }
+    if (error.response?.data !== undefined && error.response?.data !== null) {
       return Promise.reject(
-        new ApiError({
-          error: {
-            code: 'INTERNAL_ERROR',
-            message: 'Error inesperado del servidor.',
-            status: error.response.status,
-          },
-          meta: { timestamp: new Date().toISOString() },
-        }),
+        new ApiError(
+          mapResponseDataToApiError(error.response.data, error.response.status ?? 500, {
+            apiUrl: API_URL,
+            isDev: __DEV__,
+          }),
+        ),
       );
     }
 
@@ -161,25 +156,13 @@ apiClient.interceptors.response.use(
       error.code === 'ERR_TIMEOUT' ||
       error.code === 'ERR_CANCELED'
     ) {
-      const errorMap: Record<string, string> = {
-        ERR_NETWORK:
-          'No pudimos hablar con el servidor de Lifty. Revisá conexión o API (en browser: red/CORS).',
-        ERR_TIMEOUT: 'Tiempo de espera agotado. El servidor no responde.',
-        ERR_CANCELED: 'Solicitud cancelada.',
-      };
-      let message = errorMap[error.code] ?? 'Sin conexion. Verifica tu internet.';
-      if (__DEV__ && error.code === 'ERR_NETWORK') {
-        message = `${message} URL: ${API_URL}`;
-      }
       return Promise.reject(
-        new ApiError({
-          error: {
-            code: 'NETWORK_ERROR',
-            message,
-            status: 0,
-          },
-          meta: { timestamp: new Date().toISOString() },
-        }),
+        new ApiError(
+          mapNetworkCodeToApiError(error.code, {
+            apiUrl: API_URL,
+            isDev: __DEV__,
+          }),
+        ),
       );
     }
 

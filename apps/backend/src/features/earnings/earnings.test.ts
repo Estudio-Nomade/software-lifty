@@ -409,14 +409,26 @@ describe('Earnings + Stats + TVF', () => {
   test('All endpoints require auth (401)', async () => {
     const { status: s1, data: d1 } = await request('GET', '/api/earnings/summary');
     expect(s1).toBe(401);
-    expect(d1.error).toBe('Unauthorized');
+    expect(d1.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
 
     const { status: s2, data: d2 } = await request('GET', '/api/earnings/history');
     expect(s2).toBe(401);
-    expect(d2.error).toBe('Unauthorized');
+    expect(d2.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
 
     const { status: s3, data: d3 } = await request('GET', '/api/drivers/me/stats');
     expect(s3).toBe(401);
-    expect(d3.error).toBe('Unauthorized');
+    expect(d3.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 });

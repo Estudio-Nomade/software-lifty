@@ -41,22 +41,28 @@ describe('requireAuth macro', () => {
   test('401 TOKEN_REQUIRED when no authorization header', async () => {
     const { status, data } = await makeRequest();
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
-    expect(data.code).toBe('TOKEN_REQUIRED');
+    expect(data.error).toEqual({
+      code: 'TOKEN_REQUIRED',
+      message: 'Se requiere iniciar sesión.',
+      status: 401,
+    });
+    expect(data.meta?.timestamp).toBeString();
   });
 
   test('401 TOKEN_REQUIRED with malformed token', async () => {
     const { status, data } = await makeRequest({ Authorization: 'Bearer not.a.real.jwt' });
     expect(status).toBe(401);
-    expect(data.code).toBe('TOKEN_REQUIRED');
+    expect(data.error.code).toBe('TOKEN_REQUIRED');
+    expect(data.error.status).toBe(401);
+    expect(data.meta?.timestamp).toBeString();
   });
 
   test('401 TOKEN_REQUIRED with non-existent user token', async () => {
     const { status, data } = await makeRequest({ Authorization: 'Bearer non-existent-user' });
     expect(status).toBe(401);
-    expect(data.code).toBe('TOKEN_REQUIRED');
+    expect(data.error.code).toBe('TOKEN_REQUIRED');
+    expect(data.error.status).toBe(401);
   });
-
   test('200 with narrowed user for a valid token', async () => {
     const [user] = await db
       .insert(users)

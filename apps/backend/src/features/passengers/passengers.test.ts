@@ -115,7 +115,11 @@ describe('Passenger Profile', () => {
     const { status, data } = await request('GET', '/api/passenger/profile');
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('PUT /profile updates full_name and phone', async () => {
@@ -185,7 +189,11 @@ describe('Passenger Profile', () => {
     });
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('GET /profile auto-creates passenger_profiles when missing', async () => {

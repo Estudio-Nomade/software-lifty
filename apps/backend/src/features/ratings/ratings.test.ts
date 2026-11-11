@@ -140,7 +140,11 @@ describe('Ratings', () => {
     const { status, data } = await request('POST', '/api/ratings/trips/some-id', { rating: 3 });
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('POST rate non-existent trip returns error', async () => {

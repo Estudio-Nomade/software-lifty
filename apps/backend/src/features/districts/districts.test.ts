@@ -173,6 +173,10 @@ describe('Districts', () => {
     const { status, data } = await request('GET', '/api/districts');
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 });

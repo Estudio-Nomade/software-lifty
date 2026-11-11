@@ -92,7 +92,11 @@ describe('Maps Proxy', () => {
     const { status, data } = await request('GET', '/api/maps/places/autocomplete?input=Avellaneda');
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('geocode with coords returns address', async () => {
@@ -280,7 +284,11 @@ describe('Maps Proxy', () => {
     });
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 });
 
@@ -369,7 +377,11 @@ describe('Heatmap', () => {
     );
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('heatmap with invalid grid_size returns 400', async () => {

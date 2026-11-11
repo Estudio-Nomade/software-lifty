@@ -18,9 +18,17 @@ const proc = Bun.spawnSync(
 
 if (proc.exitCode !== 0) {
   console.error('❌ Failed to start dev infrastructure (docker compose)');
+  console.error('   API will not listen on :3001 until Postgres (:5433) + Redis (:6380) are up.');
+  console.error('   Common causes:');
+  console.error('   • Docker daemon not running');
+  console.error(
+    '   • DNS/pull de Docker Hub falló (auth.docker.io / registry-1.docker.io) — fijá DNS del host o:',
+  );
+  console.error('     docker compose -f docker-compose.dev.yml pull && docker compose -f docker-compose.dev.yml up -d --wait');
+  console.error('   • Si las imágenes ya están locales: docker compose -f docker-compose.dev.yml up -d --wait');
+  console.error('   Then: curl -sS http://127.0.0.1:3001/health  (after bun run dev:backend)');
   process.exit(proc.exitCode ?? 1);
 }
-
 // 2. Bring the dev DB up to date with the Drizzle migrations. Idempotent and
 //    fast when nothing changed. Without this, a fresh or stale `lifty-pgdata`
 //    volume drifts from the schema and the backend fails at startup with
