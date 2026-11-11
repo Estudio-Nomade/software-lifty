@@ -151,6 +151,21 @@ describe('userFacingApiMessage', () => {
     const err = { code: 'INTERNAL_ERROR', message: 'Error inesperado del servidor.', status: 500 };
     expect(userFacingApiMessage(err, { context: 'location' })).toMatch(/GPS|ubicación|ubicacion/i);
   });
+
+  it('maps places context fallback without claiming calles on opaque server', () => {
+    const err = { code: 'INTERNAL_ERROR', message: 'Error inesperado del servidor.', status: 500 };
+    expect(userFacingApiMessage(err, { context: 'places' })).toMatch(
+      /calles|lugares|ubicación|ubicacion/i,
+    );
+    expect(userFacingApiMessage(err, { context: 'places' })).not.toMatch(/inesperado del servidor/i);
+  });
+
+  it('maps places 401 to session, never calles search copy', () => {
+    const err = { code: 'TOKEN_REQUIRED', message: 'Se requiere iniciar sesión.', status: 401 };
+    const msg = userFacingApiMessage(err, { context: 'places' });
+    expect(msg).toMatch(/iniciar sesión|iniciar sesion/i);
+    expect(msg).not.toMatch(/calles ni lugares/i);
+  });
 });
 
 describe('isAuthRefreshFailure / rejectErrorAfterRefreshFailure', () => {

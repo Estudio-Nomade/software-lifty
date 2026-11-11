@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
+import { userFacingApiMessage } from '../api/mapAxiosError';
 import { getDefaultPlaceBias } from '../lib/serviceArea';
 
 export type PlaceSuggestion = {
@@ -129,7 +130,13 @@ export function usePlaceAutocomplete(
           if (isStale()) return;
           if (isAbortError(err, controller.signal)) return;
           setSuggestions([]);
-          setError('No pudimos buscar calles ni lugares. Probá de nuevo o usá tu ubicación.');
+          // 401/TOKEN_* → sesión; network/timeout → conexión; never lie "calles" on auth.
+          setError(
+            userFacingApiMessage(err, {
+              context: 'places',
+              fallback: 'No pudimos buscar calles ni lugares. Probá de nuevo o usá tu ubicación.',
+            }),
+          );
         } finally {
           if (!isStale()) setLoading(false);
         }

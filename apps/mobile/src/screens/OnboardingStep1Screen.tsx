@@ -38,12 +38,14 @@ import {
 } from '../lib/driverProfilePhoto';
 import { exitOnboardingToWelcome } from '../lib/exitOnboardingToWelcome';
 import { getCurrentPosition } from '../lib/location';
+import { resolveApiAccessToken } from '../lib/oauthSessionRecovery';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
 import {
   ensureActiveServiceMarkets,
   getServiceMarketsVersion,
   isInsidePickupArea,
 } from '../lib/serviceArea';
+import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { useLocationStore } from '../store/locationStore';
 import { theme } from '../theme';
@@ -227,7 +229,8 @@ export const OnboardingStep1Screen: React.FC = () => {
   }, [authToken]);
 
   useEffect(() => {
-    if (profileLoaded.current) return;
+    // Wait for Bearer (OAuth/email lag). Pre-token 401 must not stick empty forever.
+    if (!authToken || profileLoaded.current) return;
     let cancelled = false;
 
     (async () => {
@@ -269,7 +272,7 @@ export const OnboardingStep1Screen: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authToken]);
 
   const addressFocusedRef = useRef(false);
   const scrollAddressIntoViewRef = useRef<() => void>(() => {});
@@ -488,6 +491,25 @@ export const OnboardingStep1Screen: React.FC = () => {
     setSubmitError('');
     setError('address', undefined);
     try {
+      // Close OAuth→Paso1 race: store.token may lag live Supabase session.
+      try {
+        const store = useAuthStore.getState();
+        if (!store.token) {
+          const { data } = await supabase.auth.getSession();
+          const live = data.session;
+          const token = resolveApiAccessToken({
+            storeToken: store.token,
+            storeUserId: store.driverId,
+            liveSession: live,
+          });
+          if (token && live?.user?.id) {
+            store.setSession(token, live.user.id);
+          }
+        }
+      } catch {
+        // interceptor may still hydrate on the geocode request
+      }
+
       // Parallel: force multi-hub hydrate while GPS runs (Tandil etc.).
       const hydrateP = ensureActiveServiceMarkets({ force: true }).catch(() =>
         getServiceMarketsVersion(),
@@ -589,6 +611,22 @@ export const OnboardingStep1Screen: React.FC = () => {
             ? String((err as { code?: string }).code)
             : undefined;
         console.warn('[UseMyLocation] outer error', { code, err });
+      }
+      // If GPS already resolved coords, pin anyway (soft outer failure).
+      const { lat: salvageLat, lng: salvageLng } = useLocationStore.getState();
+      if (
+        salvageLat != null &&
+        salvageLng != null &&
+        Number.isFinite(salvageLat) &&
+        Number.isFinite(salvageLng)
+      ) {
+        applyResolvedAddress({
+          description: `Ubicación actual (${salvageLat.toFixed(5)}, ${salvageLng.toFixed(5)})`,
+          place_id: `gps:${salvageLat.toFixed(6)},${salvageLng.toFixed(6)}`,
+          lat: salvageLat,
+          lng: salvageLng,
+        });
+        return;
       }
       // Never paint INTERNAL_ERROR / "inesperado del servidor" on this CTA.
       setError(
