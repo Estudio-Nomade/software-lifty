@@ -1,6 +1,6 @@
 # Lifty — Monorepo
 
-**IMPORTANT — PROJECT STATUS**: Lifty is in **active development**. There is NO production deployment, NO MVP, NO staging environment. The only CD is a **dev-only VPS** for the backend (`https://api.liftyviajes.com`, auto-deployed from `main` by `.github/workflows/deploy.yml`; see `deploy/lightsail/README.md`). Do NOT configure other production services or run deploys by hand unless asked. Locally the backend still runs on `localhost` and the mobile apps use Expo Go in development mode. This status applies until explicitly changed in this file.
+**IMPORTANT — PROJECT STATUS**: Lifty is in **active development**. There is NO production deployment, NO MVP, NO staging environment. The only CD is a **dev-only VPS** for the backend (`https://api.liftyviajes.com`, auto-deployed from `main` by `.github/workflows/deploy.yml`; see `deploy/lightsail/README.md`). **Railway is no longer used** (backend moved to the VPS; do not reference or deploy to Railway). Do NOT configure other production services or run deploys by hand unless asked. Locally the backend still runs on `localhost` and the mobile apps use Expo Go in development mode. This status applies until explicitly changed in this file.
 
 ## Stack
 - **Monorepo**: Bun Workspaces + Turborepo
@@ -54,7 +54,7 @@ bun run format         # biome format all
 bun run check          # lint + typecheck
 bun run clean          # turbo clean
 
-# EAS Android preview (APK → Railway backend)
+# EAS Android preview (APK → backend en el VPS, api.liftyviajes.com)
 bun run eas:login                      # una vez (cuenta martiyaquinta)
 bun run eas:env:push                   # sube Supabase desde cada apps/*/ .env
 bun run eas:build:android:preview      # conductor + pasajero APK
@@ -65,7 +65,7 @@ bun run eas:build:android:preview:passenger
 
 > **EAS monorepo**: cada app tiene su `app.json` + `eas.json` + `projectId`.
 > No hay `eas.json` en la raíz. Preview inyecta
-> `EXPO_PUBLIC_API_URL=https://liftybackend-production.up.railway.app/api`.
+> `EXPO_PUBLIC_API_URL=https://api.liftyviajes.com/api`.
 
 > `bun run dev` usa `scripts/dev-all.ts` (orquestador dedicado), **no** `turbo dev`.
 > Turbo antepone `pkg:task:` a cada línea y pipea el stdout sin TTY, lo que rompe

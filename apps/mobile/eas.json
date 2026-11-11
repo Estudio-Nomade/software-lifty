@@ -19,7 +19,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://liftybackend-production.up.railway.app/api"
+        "EXPO_PUBLIC_API_URL": "https://api.liftyviajes.com/api"
       }
     },
     "production": {
@@ -29,7 +29,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://liftybackend-production.up.railway.app/api"
+        "EXPO_PUBLIC_API_URL": "https://api.liftyviajes.com/api"
       }
     }
   },
