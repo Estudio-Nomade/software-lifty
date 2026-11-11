@@ -507,20 +507,60 @@ export const OnboardingStep1Screen: React.FC = () => {
       let pinLat = lat;
       let pinLng = lng;
       try {
-        const { data } = await apiClient.get<{
-          formatted_address?: string;
-          lat?: number;
-          lng?: number;
-          city?: string | null;
-        }>('/maps/geocode', { params: { lat, lng } });
+        const { data: body } = await apiClient.get<
+          | {
+              formatted_address?: string;
+              lat?: number;
+              lng?: number;
+              city?: string | null;
+              province?: string | null;
+            }
+          | {
+              data?: {
+                formatted_address?: string;
+                lat?: number;
+                lng?: number;
+                city?: string | null;
+                province?: string | null;
+              };
+            }
+        >('/maps/geocode', { params: { lat, lng } });
+        // Support flat maps payload or accidental { data } envelope.
+        const data =
+          body &&
+          typeof body === 'object' &&
+          'data' in body &&
+          body.data &&
+          typeof body.data === 'object'
+            ? body.data
+            : body;
+        const formatted =
+          data && typeof data === 'object' && 'formatted_address' in data
+            ? data.formatted_address
+            : undefined;
+        const city = data && typeof data === 'object' && 'city' in data ? data.city : undefined;
+        const province =
+          data && typeof data === 'object' && 'province' in data ? data.province : undefined;
         label =
-          (data?.formatted_address && String(data.formatted_address).trim()) ||
-          [data?.city, 'Córdoba'].filter(Boolean).join(', ') ||
+          (formatted && String(formatted).trim()) ||
+          [city, province].filter(Boolean).join(', ') ||
           label;
-        pinLat = Number(data?.lat ?? lat);
-        pinLng = Number(data?.lng ?? lng);
-      } catch {
+        if (data && typeof data === 'object') {
+          const d = data as { lat?: number; lng?: number };
+          if (typeof d.lat === 'number' && Number.isFinite(d.lat)) pinLat = d.lat;
+          if (typeof d.lng === 'number' && Number.isFinite(d.lng)) pinLng = d.lng;
+        }
+      } catch (geoErrCatch: unknown) {
         // GPS pin is enough for municipality gate; reverse-geocode is best-effort.
+        if (__DEV__) {
+          const code =
+            geoErrCatch && typeof geoErrCatch === 'object' && 'code' in geoErrCatch
+              ? String((geoErrCatch as { code?: string }).code)
+              : undefined;
+          const message =
+            geoErrCatch instanceof Error ? geoErrCatch.message : String(geoErrCatch ?? '');
+          console.warn('[UseMyLocation] geocode soft-fail', { code, message });
+        }
       }
       if (gen !== addressPinGenRef.current) return;
 
@@ -531,17 +571,36 @@ export const OnboardingStep1Screen: React.FC = () => {
         lng: pinLng,
       };
       // Await hydrate before pin so zone preview uses fresh hubs (no false waitlist flash).
-      const version = await hydrateP;
+      try {
+        const version = await hydrateP;
+        if (gen !== addressPinGenRef.current) return;
+        setMarketsVersion(version);
+      } catch {
+        // zone preview can stay on last/legacy hubs
+      }
       if (gen !== addressPinGenRef.current) return;
-      setMarketsVersion(version);
       applyResolvedAddress(place);
     } catch (err: unknown) {
       if (gen !== addressPinGenRef.current) return;
-      const msg =
+      if (__DEV__) {
+        console.warn('[UseMyLocation] outer error', err);
+      }
+      // Never paint INTERNAL_ERROR / "inesperado del servidor" on this CTA — GPS
+      // path is local; auth/network noise belongs in soft-fail or session copy.
+      const code =
+        err && typeof err === 'object' && 'code' in err
+          ? String((err as { code?: string }).code)
+          : '';
+      const raw =
         err && typeof err === 'object' && 'message' in err
-          ? String((err as { message?: string }).message)
-          : 'No pudimos ubicar tu posición.';
-      setError('address', msg || 'No pudimos ubicar tu posición.');
+          ? String((err as { message?: string }).message ?? '')
+          : '';
+      const isOpaqueServer =
+        code === 'INTERNAL_ERROR' || /inesperado del servidor/i.test(raw) || raw === 'Unauthorized';
+      const msg = isOpaqueServer
+        ? 'No pudimos completar la ubicación. Revisá el GPS o elegí una sugerencia de la lista.'
+        : raw || 'No pudimos ubicar tu posición.';
+      setError('address', msg);
     } finally {
       if (gen === addressPinGenRef.current) setLocating(false);
     }
