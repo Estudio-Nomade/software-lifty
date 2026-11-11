@@ -31,7 +31,7 @@ export function mapResponseDataToApiError(
         : typeof (raw.error as { message?: unknown } | undefined)?.message === 'string'
           ? (raw.error as { message: string }).message
           : null;
-    const message =
+    let message =
       (typeof raw.message === 'string' && raw.message) ||
       messageFromError ||
       (status === 401
@@ -39,6 +39,13 @@ export function mapResponseDataToApiError(
         : status === 0
           ? NETWORK_MESSAGES.ERR_NETWORK
           : 'Error inesperado del servidor.');
+    if (status === 401) {
+      if (code === 'TOKEN_EXPIRED' || message.toLowerCase().includes('expired')) {
+        message = 'Tu sesión expiró. Volvé a iniciar sesión.';
+      } else if (code === 'TOKEN_REQUIRED' || message === 'Unauthorized') {
+        message = 'Necesitás iniciar sesión para continuar.';
+      }
+    }
     const body: ApiErrorBody = {
       error: {
         code: status === 401 && code === 'INTERNAL_ERROR' ? 'TOKEN_REQUIRED' : code,

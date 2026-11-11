@@ -30,7 +30,7 @@ describe('mapResponseDataToApiError', () => {
       401,
     );
     expect(mapped.error.code).toBe('TOKEN_EXPIRED');
-    expect(mapped.error.message).toBe('Token expired, please refresh');
+    expect(mapped.error.message).toMatch(/expiró|sesión/i);
   });
 
   it('does not claim server error for empty non-object body with 401', () => {
