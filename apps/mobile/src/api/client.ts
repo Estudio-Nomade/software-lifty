@@ -197,6 +197,8 @@ apiClient.interceptors.response.use(
     if (
       error.code === 'ERR_NETWORK' ||
       error.code === 'ERR_TIMEOUT' ||
+      error.code === 'ECONNABORTED' ||
+      error.code === 'ETIMEDOUT' ||
       error.code === 'ERR_CANCELED'
     ) {
       return Promise.reject(
