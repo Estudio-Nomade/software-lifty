@@ -1,5 +1,5 @@
 import type { ApiErrorBody } from './types';
-import { apiErrorSchema } from './types';
+import { ApiError, apiErrorSchema } from './types';
 
 const NETWORK_MESSAGES: Record<string, string> = {
   ERR_NETWORK:
@@ -144,6 +144,96 @@ export function mapNetworkCodeToApiError(
     },
     meta: { timestamp: new Date().toISOString() },
   };
+}
+
+/**
+ * Auth refresh failed in a way that means the session is dead (not transport).
+ */
+export function isAuthRefreshFailure(failure: unknown): boolean {
+  if (failure == null) return true;
+  if (typeof failure !== 'object') {
+    const text = String(failure).toLowerCase();
+    return /session|refresh|jwt|token|expired|unauthorized|invalid/i.test(text);
+  }
+  const err = failure as {
+    message?: unknown;
+    status?: unknown;
+    code?: unknown;
+    statusCode?: unknown;
+  };
+  const status = Number(err.status ?? err.statusCode);
+  if (status === 401 || status === 403) return true;
+  if (status === 0 || status >= 500) return false;
+  const code = String(err.code ?? '');
+  if (
+    code === 'ERR_NETWORK' ||
+    code === 'ERR_TIMEOUT' ||
+    code === 'ECONNABORTED' ||
+    code === 'ETIMEDOUT' ||
+    code === 'NETWORK_ERROR' ||
+    code === 'TIMEOUT_ERROR'
+  ) {
+    return false;
+  }
+  const msg = String(err.message ?? '').toLowerCase();
+  if (/network|fetch failed|failed to fetch|timeout|econnaborted|offline|socket/i.test(msg)) {
+    return false;
+  }
+  // Default: Supabase AuthError / missing refresh token → session dead.
+  return true;
+}
+
+type RefreshMapOpts = { apiUrl?: string; isDev?: boolean };
+
+/**
+ * Single mapped reject after refreshSession fails.
+ * Auth death → session ApiError from the original 401; transport → network/timeout (no fake 401).
+ */
+export function rejectErrorAfterRefreshFailure(
+  refreshFailure: unknown,
+  original: { response?: { data?: unknown; status?: number } | null },
+  opts?: RefreshMapOpts,
+): ApiError {
+  const sessionExpired = new ApiError(
+    mapResponseDataToApiError(
+      original.response?.data ?? { error: 'Unauthorized', code: 'TOKEN_EXPIRED' },
+      original.response?.status ?? 401,
+      opts,
+    ),
+  );
+
+  if (isAuthRefreshFailure(refreshFailure)) {
+    return sessionExpired;
+  }
+
+  if (refreshFailure instanceof ApiError) {
+    return refreshFailure;
+  }
+
+  const code =
+    refreshFailure && typeof refreshFailure === 'object' && 'code' in refreshFailure
+      ? String((refreshFailure as { code?: unknown }).code ?? '')
+      : '';
+  if (
+    code === 'ERR_NETWORK' ||
+    code === 'ERR_TIMEOUT' ||
+    code === 'ECONNABORTED' ||
+    code === 'ETIMEDOUT' ||
+    code === 'ERR_CANCELED'
+  ) {
+    return new ApiError(mapNetworkCodeToApiError(code, opts));
+  }
+
+  const msg =
+    refreshFailure instanceof Error
+      ? refreshFailure.message
+      : refreshFailure && typeof refreshFailure === 'object' && 'message' in refreshFailure
+        ? String((refreshFailure as { message?: unknown }).message ?? '')
+        : '';
+  if (/timeout|aborted/i.test(msg)) {
+    return new ApiError(mapNetworkCodeToApiError('ERR_TIMEOUT', opts));
+  }
+  return new ApiError(mapNetworkCodeToApiError('ERR_NETWORK', opts));
 }
 
 const OPAQUE_SERVER_RE = /inesperado del servidor|internal server error/i;

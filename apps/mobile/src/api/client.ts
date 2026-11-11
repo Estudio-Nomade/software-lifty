@@ -8,7 +8,12 @@ import {
 } from '../lib/oauthSessionRecovery';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
-import { mapNetworkCodeToApiError, mapResponseDataToApiError } from './mapAxiosError';
+import {
+  isAuthRefreshFailure,
+  mapNetworkCodeToApiError,
+  mapResponseDataToApiError,
+  rejectErrorAfterRefreshFailure,
+} from './mapAxiosError';
 import { ApiError } from './types';
 
 function getApiUrl(): string {
@@ -82,17 +87,22 @@ const processQueue = (error: unknown, token: string | null) => {
   failedQueue = [];
 };
 
-// Live Supabase session preferred (parity with passenger). Store-only Bearer
-// left onboarding geocode without Authorization when session existed but
-// authStore.token lagged → 401 TOKEN_REQUIRED.
+type LiveSession = Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'];
+
+// Prefer store Bearer on the hot path. Only hit supabase.auth.getSession when the
+// store has no token (lag after login) or an OAuth handoff is in flight (blocked
+// pre-OAuth JWT must not win over a fresh live session).
 apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const store = useAuthStore.getState();
-  let liveSession = null as Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'];
-  try {
-    const { data } = await supabase.auth.getSession();
-    liveSession = data.session;
-  } catch {
-    liveSession = null;
+  let liveSession: LiveSession = null;
+  const needsLiveSession = !store.token || !!getCurrentOAuthAttempt();
+  if (needsLiveSession) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      liveSession = data.session;
+    } catch {
+      liveSession = null;
+    }
   }
 
   const token = resolveApiAccessToken({
@@ -153,31 +163,22 @@ apiClient.interceptors.response.use(
         processQueue(null, newToken);
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return apiClient(originalRequest);
-      } catch {
-        processQueue(
-          new ApiError(
-            mapResponseDataToApiError(
-              error.response?.data ?? { error: 'Unauthorized', code: 'TOKEN_EXPIRED' },
-              error.response?.status ?? 401,
-              { apiUrl: API_URL, isDev: __DEV__ },
-            ),
-          ),
-          null,
-        );
-        if (getCurrentOAuthAttempt() || isOAuthLocalSignOutInFlight()) {
-          useAuthStore.getState().clearAuthState();
-        } else {
-          useAuthStore.getState().clearAuth();
+      } catch (refreshFailure: unknown) {
+        const rejectWith = rejectErrorAfterRefreshFailure(refreshFailure, error, {
+          apiUrl: API_URL,
+          isDev: __DEV__,
+        });
+        processQueue(rejectWith, null);
+        // Only wipe local session when refresh failed as auth death — not on
+        // transient network/timeout during refreshSession.
+        if (isAuthRefreshFailure(refreshFailure)) {
+          if (getCurrentOAuthAttempt() || isOAuthLocalSignOutInFlight()) {
+            useAuthStore.getState().clearAuthState();
+          } else {
+            useAuthStore.getState().clearAuth();
+          }
         }
-        return Promise.reject(
-          new ApiError(
-            mapResponseDataToApiError(
-              error.response?.data ?? { error: 'Unauthorized', code: 'TOKEN_EXPIRED' },
-              error.response?.status ?? 401,
-              { apiUrl: API_URL, isDev: __DEV__ },
-            ),
-          ),
-        );
+        return Promise.reject(rejectWith);
       } finally {
         isRefreshing = false;
       }

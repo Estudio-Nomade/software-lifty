@@ -1,4 +1,10 @@
-import { mapNetworkCodeToApiError, mapResponseDataToApiError, userFacingApiMessage } from '../../api/mapAxiosError';
+import {
+  isAuthRefreshFailure,
+  mapNetworkCodeToApiError,
+  mapResponseDataToApiError,
+  rejectErrorAfterRefreshFailure,
+  userFacingApiMessage,
+} from '../../api/mapAxiosError';
 
 describe('mapResponseDataToApiError', () => {
   it('keeps Lifty envelope untouched for non-auth errors', () => {
@@ -144,5 +150,51 @@ describe('userFacingApiMessage', () => {
   it('maps location INTERNAL_ERROR to GPS fallback', () => {
     const err = { code: 'INTERNAL_ERROR', message: 'Error inesperado del servidor.', status: 500 };
     expect(userFacingApiMessage(err, { context: 'location' })).toMatch(/GPS|ubicación|ubicacion/i);
+  });
+});
+
+describe('isAuthRefreshFailure / rejectErrorAfterRefreshFailure', () => {
+  const original401 = {
+    response: {
+      status: 401,
+      data: {
+        error: { code: 'TOKEN_REQUIRED', message: 'Se requiere iniciar sesión.', status: 401 },
+        meta: { timestamp: '2026-01-01T00:00:00.000Z' },
+      },
+    },
+  };
+
+  it('treats missing refresh token as auth death', () => {
+    expect(isAuthRefreshFailure({ message: 'Invalid Refresh Token', status: 400 })).toBe(true);
+    expect(isAuthRefreshFailure(new Error('Refresh failed'))).toBe(true);
+  });
+
+  it('treats network/timeout refresh failures as transport', () => {
+    expect(isAuthRefreshFailure({ message: 'Failed to fetch' })).toBe(false);
+    expect(isAuthRefreshFailure({ code: 'ERR_NETWORK' })).toBe(false);
+    expect(isAuthRefreshFailure({ code: 'ECONNABORTED', message: 'timeout' })).toBe(false);
+  });
+
+  it('maps auth refresh death once to session ApiError (not opaque server)', () => {
+    const mapped = rejectErrorAfterRefreshFailure(
+      { message: 'Invalid Refresh Token: Refresh Token Not Found', status: 400 },
+      original401,
+      { apiUrl: 'https://api.liftyviajes.com/api', isDev: false },
+    );
+    expect(mapped.status).toBe(401);
+    expect(mapped.code).toMatch(/TOKEN_/);
+    expect(mapped.message).not.toMatch(/inesperado del servidor/i);
+  });
+
+  it('preserves transport nature when refreshSession fails on network', () => {
+    const mapped = rejectErrorAfterRefreshFailure(
+      { message: 'Failed to fetch', name: 'AuthRetryableFetchError' },
+      original401,
+      { apiUrl: 'https://api.liftyviajes.com/api', isDev: true },
+    );
+    expect(mapped.status).toBe(0);
+    expect(mapped.code).toBe('NETWORK_ERROR');
+    expect(mapped.message).not.toMatch(/iniciar sesión/i);
+    expect(mapped.message).not.toMatch(/inesperado del servidor/i);
   });
 });
