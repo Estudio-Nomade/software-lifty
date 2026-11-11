@@ -345,7 +345,11 @@ describe('Location WebSocket', () => {
       lng: 0,
     });
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test(

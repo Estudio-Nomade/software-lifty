@@ -78,7 +78,11 @@ describe('Notifications', () => {
     });
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('POST /token keeps a second device token', async () => {
@@ -136,7 +140,11 @@ describe('Notifications', () => {
     const { status, data } = await request('DELETE', '/api/notifications/token');
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('DELETE /token when no token exists returns success', async () => {

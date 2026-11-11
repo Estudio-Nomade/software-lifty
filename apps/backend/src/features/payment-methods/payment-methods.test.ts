@@ -92,7 +92,11 @@ describe('Payment Methods', () => {
     });
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('GET returns payment methods list', async () => {
@@ -194,7 +198,11 @@ describe('Payment Methods', () => {
     const { status, data } = await request('GET', '/api/drivers/me/payment-methods');
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('DELETE without auth returns 401', async () => {
@@ -204,6 +212,10 @@ describe('Payment Methods', () => {
     );
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 });

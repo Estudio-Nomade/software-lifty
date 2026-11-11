@@ -236,7 +236,11 @@ describe('Driver Profile', () => {
     const { status, data } = await request('GET', '/api/drivers/me');
 
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('GET /me without driver row returns onboarding status', async () => {
@@ -443,7 +447,11 @@ describe('Driver Profile', () => {
   test('PUT /me/online without auth returns 401', async () => {
     const { status, data } = await request('PUT', '/api/drivers/me/online', { is_online: true });
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('PUT /me/online without driver row returns error', async () => {
@@ -490,7 +498,11 @@ describe('Driver Profile', () => {
   test('PUT /me/heartbeat without auth returns 401', async () => {
     const { status, data } = await request('PUT', '/api/drivers/me/heartbeat', {});
     expect(status).toBe(401);
-    expect(data.error).toBe('Unauthorized');
+    expect(data.error).toMatchObject({
+      code: expect.stringMatching(/TOKEN_|UNAUTHORIZED/),
+      message: expect.any(String),
+      status: 401,
+    });
   });
 
   test('PUT /me/heartbeat without driver row returns error', async () => {
