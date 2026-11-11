@@ -1,10 +1,19 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
 import type { z } from 'zod';
-import { getCurrentOAuthAttempt, isOAuthLocalSignOutInFlight } from '../lib/oauthSessionRecovery';
+import {
+  getCurrentOAuthAttempt,
+  isOAuthLocalSignOutInFlight,
+  resolveApiAccessToken,
+} from '../lib/oauthSessionRecovery';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
-import { mapNetworkCodeToApiError, mapResponseDataToApiError } from './mapAxiosError';
+import {
+  isAuthRefreshFailure,
+  mapNetworkCodeToApiError,
+  mapResponseDataToApiError,
+  rejectErrorAfterRefreshFailure,
+} from './mapAxiosError';
 import { ApiError } from './types';
 
 function getApiUrl(): string {
@@ -78,10 +87,37 @@ const processQueue = (error: unknown, token: string | null) => {
   failedQueue = [];
 };
 
-apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = useAuthStore.getState().token;
+type LiveSession = Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'];
+
+// Prefer store Bearer on the hot path. Only hit supabase.auth.getSession when the
+// store has no token (lag after login) or an OAuth handoff is in flight (blocked
+// pre-OAuth JWT must not win over a fresh live session).
+apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  const store = useAuthStore.getState();
+  let liveSession: LiveSession = null;
+  const needsLiveSession = !store.token || !!getCurrentOAuthAttempt();
+  if (needsLiveSession) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      liveSession = data.session;
+    } catch {
+      liveSession = null;
+    }
+  }
+
+  const token = resolveApiAccessToken({
+    storeToken: store.token,
+    storeUserId: store.driverId,
+    liveSession,
+  });
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+    if (token !== store.token && liveSession?.user?.id) {
+      store.setSession(token, liveSession.user.id);
+    }
+  } else {
+    config.headers.Authorization = undefined;
   }
   return config;
 });
@@ -127,14 +163,22 @@ apiClient.interceptors.response.use(
         processQueue(null, newToken);
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return apiClient(originalRequest);
-      } catch (refreshError) {
-        processQueue(refreshError, null);
-        if (getCurrentOAuthAttempt() || isOAuthLocalSignOutInFlight()) {
-          useAuthStore.getState().clearAuthState();
-        } else {
-          useAuthStore.getState().clearAuth();
+      } catch (refreshFailure: unknown) {
+        const rejectWith = rejectErrorAfterRefreshFailure(refreshFailure, error, {
+          apiUrl: API_URL,
+          isDev: __DEV__,
+        });
+        processQueue(rejectWith, null);
+        // Only wipe local session when refresh failed as auth death — not on
+        // transient network/timeout during refreshSession.
+        if (isAuthRefreshFailure(refreshFailure)) {
+          if (getCurrentOAuthAttempt() || isOAuthLocalSignOutInFlight()) {
+            useAuthStore.getState().clearAuthState();
+          } else {
+            useAuthStore.getState().clearAuth();
+          }
         }
-        return Promise.reject(refreshError);
+        return Promise.reject(rejectWith);
       } finally {
         isRefreshing = false;
       }
@@ -154,6 +198,8 @@ apiClient.interceptors.response.use(
     if (
       error.code === 'ERR_NETWORK' ||
       error.code === 'ERR_TIMEOUT' ||
+      error.code === 'ECONNABORTED' ||
+      error.code === 'ETIMEDOUT' ||
       error.code === 'ERR_CANCELED'
     ) {
       return Promise.reject(

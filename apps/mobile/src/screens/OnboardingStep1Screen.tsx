@@ -19,6 +19,7 @@ import {
   View,
 } from 'react-native';
 import { apiClient } from '../api/client';
+import { userFacingApiMessage } from '../api/mapAxiosError';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Navbar } from '../components/Navbar';
@@ -507,20 +508,60 @@ export const OnboardingStep1Screen: React.FC = () => {
       let pinLat = lat;
       let pinLng = lng;
       try {
-        const { data } = await apiClient.get<{
-          formatted_address?: string;
-          lat?: number;
-          lng?: number;
-          city?: string | null;
-        }>('/maps/geocode', { params: { lat, lng } });
+        const { data: body } = await apiClient.get<
+          | {
+              formatted_address?: string;
+              lat?: number;
+              lng?: number;
+              city?: string | null;
+              province?: string | null;
+            }
+          | {
+              data?: {
+                formatted_address?: string;
+                lat?: number;
+                lng?: number;
+                city?: string | null;
+                province?: string | null;
+              };
+            }
+        >('/maps/geocode', { params: { lat, lng } });
+        // Support flat maps payload or accidental { data } envelope.
+        const data =
+          body &&
+          typeof body === 'object' &&
+          'data' in body &&
+          body.data &&
+          typeof body.data === 'object'
+            ? body.data
+            : body;
+        const formatted =
+          data && typeof data === 'object' && 'formatted_address' in data
+            ? data.formatted_address
+            : undefined;
+        const city = data && typeof data === 'object' && 'city' in data ? data.city : undefined;
+        const province =
+          data && typeof data === 'object' && 'province' in data ? data.province : undefined;
         label =
-          (data?.formatted_address && String(data.formatted_address).trim()) ||
-          [data?.city, 'Córdoba'].filter(Boolean).join(', ') ||
+          (formatted && String(formatted).trim()) ||
+          [city, province].filter(Boolean).join(', ') ||
           label;
-        pinLat = Number(data?.lat ?? lat);
-        pinLng = Number(data?.lng ?? lng);
-      } catch {
+        if (data && typeof data === 'object') {
+          const d = data as { lat?: number; lng?: number };
+          if (typeof d.lat === 'number' && Number.isFinite(d.lat)) pinLat = d.lat;
+          if (typeof d.lng === 'number' && Number.isFinite(d.lng)) pinLng = d.lng;
+        }
+      } catch (geoErrCatch: unknown) {
         // GPS pin is enough for municipality gate; reverse-geocode is best-effort.
+        if (__DEV__) {
+          const code =
+            geoErrCatch && typeof geoErrCatch === 'object' && 'code' in geoErrCatch
+              ? String((geoErrCatch as { code?: string }).code)
+              : undefined;
+          const message =
+            geoErrCatch instanceof Error ? geoErrCatch.message : String(geoErrCatch ?? '');
+          console.warn('[UseMyLocation] geocode soft-fail', { code, message });
+        }
       }
       if (gen !== addressPinGenRef.current) return;
 
@@ -531,17 +572,32 @@ export const OnboardingStep1Screen: React.FC = () => {
         lng: pinLng,
       };
       // Await hydrate before pin so zone preview uses fresh hubs (no false waitlist flash).
-      const version = await hydrateP;
+      try {
+        const version = await hydrateP;
+        if (gen !== addressPinGenRef.current) return;
+        setMarketsVersion(version);
+      } catch {
+        // zone preview can stay on last/legacy hubs
+      }
       if (gen !== addressPinGenRef.current) return;
-      setMarketsVersion(version);
       applyResolvedAddress(place);
     } catch (err: unknown) {
       if (gen !== addressPinGenRef.current) return;
-      const msg =
-        err && typeof err === 'object' && 'message' in err
-          ? String((err as { message?: string }).message)
-          : 'No pudimos ubicar tu posición.';
-      setError('address', msg || 'No pudimos ubicar tu posición.');
+      if (__DEV__) {
+        const code =
+          err && typeof err === 'object' && 'code' in err
+            ? String((err as { code?: string }).code)
+            : undefined;
+        console.warn('[UseMyLocation] outer error', { code, err });
+      }
+      // Never paint INTERNAL_ERROR / "inesperado del servidor" on this CTA.
+      setError(
+        'address',
+        userFacingApiMessage(err, {
+          context: 'location',
+          fallback: 'No pudimos ubicar tu posición.',
+        }),
+      );
     } finally {
       if (gen === addressPinGenRef.current) setLocating(false);
     }
@@ -642,8 +698,26 @@ export const OnboardingStep1Screen: React.FC = () => {
       } else {
         navigation.replace('KYCVerify');
       }
-    } catch (err: any) {
-      setSubmitError(err?.message ?? 'Error al guardar los datos');
+    } catch (err: unknown) {
+      // Continuar is PUT /drivers/me (+ municipality). Guest/401 or opaque 500
+      // must not show «Error inesperado del servidor» in the submit banner.
+      if (__DEV__) {
+        const code =
+          err && typeof err === 'object' && 'code' in err
+            ? String((err as { code?: string }).code)
+            : undefined;
+        const status =
+          err && typeof err === 'object' && 'status' in err
+            ? Number((err as { status?: number }).status)
+            : undefined;
+        console.warn('[OnboardingStep1] Continuar error', { code, status, err });
+      }
+      setSubmitError(
+        userFacingApiMessage(err, {
+          context: 'save',
+          fallback: 'No pudimos guardar los datos. Revisá la conexión e intentá de nuevo.',
+        }),
+      );
     } finally {
       setLoading(false);
     }
