@@ -2,6 +2,7 @@ import { act, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import { Text } from 'react-native';
 import { apiClient } from '../../api/client';
+import { ApiError } from '../../api/types';
 import {
   normalizeAutocompletePayload,
   usePlaceAutocomplete,
@@ -104,7 +105,17 @@ describe('usePlaceAutocomplete', () => {
   });
 
   it('surfaces network failures as error, not silent empty suggestions', async () => {
-    mockGet.mockRejectedValue(new Error('network down'));
+    mockGet.mockRejectedValue(
+      new ApiError({
+        error: {
+          code: 'NETWORK_ERROR',
+          message:
+            'No pudimos hablar con el servidor de Lifty. Revisá conexión o API (en browser: red/CORS).',
+          status: 0,
+        },
+        meta: { timestamp: '2026-11-11T00:00:00.000Z' },
+      }),
+    );
     const { getByTestId } = await render(
       <HookProbe query="Dique" onResult={() => undefined} />,
     );
@@ -114,7 +125,37 @@ describe('usePlaceAutocomplete', () => {
       await Promise.resolve();
     });
     await waitFor(() => {
-      expect(getByTestId('probe').props.children).toMatch(/^idle:0:No pudimos buscar/);
+      const label = String(getByTestId('probe').props.children);
+      expect(label).toMatch(/^idle:0:/);
+      expect(label.length).toBeGreaterThan('idle:0:'.length);
+      expect(label).toMatch(/servidor|conexión|conexion|red/i);
+    });
+  });
+
+  it('maps 401 TOKEN_REQUIRED to session copy, not generic calles message', async () => {
+    mockGet.mockRejectedValue(
+      new ApiError({
+        error: {
+          code: 'TOKEN_REQUIRED',
+          message: 'Se requiere iniciar sesión.',
+          status: 401,
+        },
+        meta: { timestamp: '2026-11-11T00:00:00.000Z' },
+      }),
+    );
+    const { getByTestId } = await render(
+      <HookProbe query="San" onResult={() => undefined} />,
+    );
+
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      const label = String(getByTestId('probe').props.children);
+      expect(label).toMatch(/^idle:0:/);
+      expect(label).toMatch(/iniciar sesión|iniciar sesion/i);
+      expect(label).not.toMatch(/calles ni lugares/i);
     });
   });
 

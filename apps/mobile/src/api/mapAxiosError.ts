@@ -247,7 +247,7 @@ export function userFacingApiMessage(
   opts?: {
     fallback?: string;
     /** Defaults copy when opaque server / missing message. */
-    context?: 'location' | 'save' | 'generic';
+    context?: 'location' | 'save' | 'places' | 'generic';
   },
 ): string {
   const fallback =
@@ -256,7 +256,9 @@ export function userFacingApiMessage(
       ? 'No pudimos completar la ubicación. Revisá el GPS o elegí una sugerencia de la lista.'
       : opts?.context === 'save'
         ? 'No pudimos guardar los datos. Revisá la conexión e intentá de nuevo.'
-        : 'Algo salió mal. Intentá de nuevo.');
+        : opts?.context === 'places'
+          ? 'No pudimos buscar calles ni lugares. Probá de nuevo o usá tu ubicación.'
+          : 'Algo salió mal. Intentá de nuevo.');
 
   const code =
     err && typeof err === 'object' && 'code' in err
