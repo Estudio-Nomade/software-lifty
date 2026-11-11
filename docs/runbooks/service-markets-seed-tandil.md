@@ -64,6 +64,7 @@ INSERT INTO service_markets (
 )
 ON CONFLICT (slug) DO NOTHING;
 
+-- Nota: los aliases hoy son informativos; no participan del matching de municipio (ver docs/architecture/service-markets-multi-city.md).
 INSERT INTO service_market_aliases (market_id, alias, alias_normalized)
 SELECT m.id, v.alias, v.norm
 FROM service_markets m
