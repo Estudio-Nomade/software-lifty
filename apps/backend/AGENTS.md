@@ -131,3 +131,10 @@ Heartbeat also force-offlines if stickers become overdue/revoked while online.
 Env: `TRANSIT_BRIDGE_SECRET` (backend `.env` only — never mobile / `VITE_*`).
 
 Contract: `specs/spec-admin-panel-stickers-gate/transit-bridge.md`
+
+## Mercados de servicio (`service_markets`)
+
+- El backend mantiene un cache en memoria (`activeMarkets` en `src/shared/lib/service-area.ts`). Si la carga falla, queda el mercado legacy (Villa Dolores).
+- Se carga al arrancar y se **recarga cada 5 minutos** (`src/features/service-markets/reload-scheduler.ts`, mismo TTL que la app móvil). Un fallo en el boot o un cambio hecho por otro proceso se recupera solo, sin reiniciar. `reloadServiceMarketsCache()` devuelve `-1` si falla y conserva el cache anterior.
+- `service_market_aliases` es **informativa**: no afecta el matching. `municipality.ts` usa una lista fija `ALIASES`. No "arreglar" los alias en la DB esperando cambiar el matching.
+- En tests no usar `mock.module` (contamina la suite): usar `spyOn` (ver `reload-scheduler.test.ts`).
