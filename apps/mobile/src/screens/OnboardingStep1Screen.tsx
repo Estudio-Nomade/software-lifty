@@ -490,6 +490,10 @@ export const OnboardingStep1Screen: React.FC = () => {
     setLocating(true);
     setSubmitError('');
     setError('address', undefined);
+    // Only coords accepted after getCurrentPosition in THIS tap — never re-read the
+    // global location store in the outer catch (stale pin from another screen/attempt).
+    let callLat: number | null = null;
+    let callLng: number | null = null;
     try {
       // Close OAuth→Paso1 race: store.token may lag live Supabase session.
       try {
@@ -525,6 +529,8 @@ export const OnboardingStep1Screen: React.FC = () => {
         );
         return;
       }
+      callLat = lat;
+      callLng = lng;
 
       let label = `Ubicación actual (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
       let pinLat = lat;
@@ -612,19 +618,18 @@ export const OnboardingStep1Screen: React.FC = () => {
             : undefined;
         console.warn('[UseMyLocation] outer error', { code, err });
       }
-      // If GPS already resolved coords, pin anyway (soft outer failure).
-      const { lat: salvageLat, lng: salvageLng } = useLocationStore.getState();
+      // Soft outer failure: pin only coords proven in THIS tap (callLat/Lng), not store leftovers.
       if (
-        salvageLat != null &&
-        salvageLng != null &&
-        Number.isFinite(salvageLat) &&
-        Number.isFinite(salvageLng)
+        callLat != null &&
+        callLng != null &&
+        Number.isFinite(callLat) &&
+        Number.isFinite(callLng)
       ) {
         applyResolvedAddress({
-          description: `Ubicación actual (${salvageLat.toFixed(5)}, ${salvageLng.toFixed(5)})`,
-          place_id: `gps:${salvageLat.toFixed(6)},${salvageLng.toFixed(6)}`,
-          lat: salvageLat,
-          lng: salvageLng,
+          description: `Ubicación actual (${callLat.toFixed(5)}, ${callLng.toFixed(5)})`,
+          place_id: `gps:${callLat.toFixed(6)},${callLng.toFixed(6)}`,
+          lat: callLat,
+          lng: callLng,
         });
         return;
       }
