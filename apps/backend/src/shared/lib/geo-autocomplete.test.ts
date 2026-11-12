@@ -7,12 +7,14 @@ import {
   applyHousenumberSynthesis,
   autocomplete,
   autocompleteCacheKey,
+  fetchPhoton,
   formatPhotonAddress,
   isBiasNearVillaDolores,
   nominatimReverseToResult,
   normalizeAutocompleteQuery,
   parseGeoDefaultCoord,
   rankPhotonPlaceFeatures,
+  resetPhotonCircuit,
 } from './geo';
 import {
   encode as olcEncode,
@@ -470,6 +472,19 @@ describe('geo.autocomplete Photon path', () => {
       top.place_id.startsWith('catalog:') ||
         (top.lat > -32.1 && top.lat < -31.8 && top.lng > -65.4 && top.lng < -64.9),
     ).toBe(true);
+  });
+});
+
+describe('fetchPhoton circuit', () => {
+  test('skips Photon after a failure instead of re-paying the timeout', async () => {
+    resetPhotonCircuit();
+    const fetchSpy = spyOn(globalThis, 'fetch').mockRejectedValue(new Error('timed out'));
+    const url = new URL('https://photon.example/api/?q=x');
+    await expect(fetchPhoton(url, 10)).rejects.toThrow('timed out');
+    await expect(fetchPhoton(url, 10)).rejects.toThrow('Photon skipped');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    fetchSpy.mockRestore();
+    resetPhotonCircuit();
   });
 });
 

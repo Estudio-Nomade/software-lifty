@@ -408,16 +408,33 @@ interface PhotonFeature {
   };
 }
 
-async function fetchPhoton(
+// Public Photon sometimes accepts TLS then hangs; after one failure skip it for a while
+// so every request goes straight to the Nominatim fallbacks instead of re-paying the timeout.
+const PHOTON_COOLDOWN_MS = 60_000;
+let photonDownUntil = 0;
+
+/** Exported for unit tests — do not use as public API. */
+export function resetPhotonCircuit(): void {
+  photonDownUntil = 0;
+}
+
+/** Exported for unit tests — do not use as public API. */
+export async function fetchPhoton(
   url: URL,
   timeoutMs: number = GEO_TIMEOUT_MS,
 ): Promise<{ features?: PhotonFeature[] }> {
-  const res = await fetch(url.toString(), {
-    headers: { 'User-Agent': GEO_USER_AGENT },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!res.ok) throw new Error(`Photon API error: ${res.status}`);
-  return (await res.json()) as { features?: PhotonFeature[] };
+  if (Date.now() < photonDownUntil) throw new Error('Photon skipped (recent failure)');
+  try {
+    const res = await fetch(url.toString(), {
+      headers: { 'User-Agent': GEO_USER_AGENT },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) throw new Error(`Photon API error: ${res.status}`);
+    return (await res.json()) as { features?: PhotonFeature[] };
+  } catch (err) {
+    photonDownUntil = Date.now() + PHOTON_COOLDOWN_MS;
+    throw err;
+  }
 }
 
 type NominatimHit = {
