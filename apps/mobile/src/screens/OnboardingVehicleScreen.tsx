@@ -230,6 +230,24 @@ export const OnboardingVehicleScreen: React.FC = () => {
         licenseCategory,
       )
     ) {
+      // Surface every missing/invalid field instead of a silently dead button.
+      setErrors({
+        vehiclePlate: vehiclePlate.trim()
+          ? validatePlate(vehiclePlate, vehicleType)
+          : validateRequired(vehiclePlate),
+        vehicleBrand: validateRequired(vehicleBrand),
+        vehicleModel: validateRequired(vehicleModel),
+        vehicleColor: validateRequired(vehicleColor),
+        vehicleYear: vehicleYear.trim() ? validateYear(vehicleYear) : validateRequired(vehicleYear),
+        engineCc:
+          vehicleType === 'Moto'
+            ? engineCc.trim()
+              ? validateVehicleEngineCc(engineCc, 'Moto')
+              : validateRequired(engineCc)
+            : undefined,
+        licenseCategory: licenseCategory ? undefined : 'Elegí la categoría de tu licencia',
+      });
+      setSubmitError('Completá los campos marcados en rojo para continuar.');
       return;
     }
     if (!licenseCategory) {
@@ -515,20 +533,7 @@ export const OnboardingVehicleScreen: React.FC = () => {
         <Button
           title="Continuar"
           onPress={handleContinue}
-          disabled={
-            loadingProfile ||
-            !licenseCategory ||
-            !isFormValid(
-              vehiclePlate,
-              vehicleBrand,
-              vehicleModel,
-              vehicleColor,
-              vehicleYear,
-              vehicleType,
-              engineCc,
-              licenseCategory,
-            )
-          }
+          disabled={loadingProfile}
           loading={loading || loadingProfile}
           variant="cta"
           style={styles.button}

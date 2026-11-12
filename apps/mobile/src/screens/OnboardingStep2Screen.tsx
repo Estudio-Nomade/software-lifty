@@ -36,6 +36,7 @@ import {
   clearSideForReplaceUi,
   emptyHydratedDocs,
   hydrateDocsFromApi,
+  sideSatisfied,
 } from '../lib/onboardingDocsHydrate';
 import { STEP_ROUTE } from '../lib/postAuthRouting';
 import { resolveReviewGate } from '../lib/reviewGate';
@@ -185,9 +186,6 @@ export const OnboardingStep2Screen: React.FC = () => {
       cancelled = true;
     };
   }, []);
-
-  const allUploaded = allDocsSatisfied(docs);
-  const coverageReady = !isMoto || insuranceCoverage != null;
 
   const setSideError = useCallback((docType: DocType, side: DocSide, error: string) => {
     setDocs((prev) => ({
@@ -505,8 +503,21 @@ export const OnboardingStep2Screen: React.FC = () => {
   );
 
   const handleVerify = useCallback(async () => {
-    if (isMoto && !insuranceCoverage) {
-      setCoverageError(MOTO_INSURANCE_COVERAGE_REQUIRED_MSG);
+    const missingCoverage = isMoto && !insuranceCoverage;
+    if (missingCoverage) setCoverageError(MOTO_INSURANCE_COVERAGE_REQUIRED_MSG);
+    if (!allDocsSatisfied(docs)) {
+      for (const docType of Object.keys(DOC_SIDES) as DocType[]) {
+        for (const side of DOC_SIDES[docType]) {
+          const state = docs[docType][side];
+          if (!sideSatisfied(state) && !state.uploading && !state.error) {
+            setSideError(docType, side, 'Falta subir este archivo.');
+          }
+        }
+      }
+      setVerifyError('Faltan documentos por subir. Revisá los marcados en rojo.');
+      return;
+    }
+    if (missingCoverage) {
       setVerifyError(MOTO_INSURANCE_COVERAGE_REQUIRED_MSG);
       return;
     }
@@ -530,7 +541,7 @@ export const OnboardingStep2Screen: React.FC = () => {
     } finally {
       setVerifying(false);
     }
-  }, [insuranceCoverage, isMoto, navigation]);
+  }, [docs, insuranceCoverage, isMoto, navigation, setSideError]);
 
   return (
     <View style={styles.container}>
@@ -768,7 +779,7 @@ export const OnboardingStep2Screen: React.FC = () => {
           title={verifying ? 'Verificando…' : 'Enviar documentos'}
           onPress={handleVerify}
           style={styles.button}
-          disabled={!allUploaded || !coverageReady || verifying || hydrating || savingCoverage}
+          disabled={verifying || hydrating || savingCoverage}
           variant="cta"
         />
       </ScrollView>
