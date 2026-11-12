@@ -16,7 +16,7 @@ import {
   isDriverStatusUnresolved,
   welcomeEntryMode,
 } from '../lib/driverStatusGate';
-import { handoffScreenFromStore, routeForDriverStatus } from '../lib/postAuthRouting';
+import { handoffScreenRespectingTerms, routeForDriverStatus } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -31,6 +31,7 @@ export const WelcomeScreen: React.FC = () => {
   const sessionRestored = useAuthStore((s) => s.sessionRestored);
   const driverStatus = useAuthStore((s) => s.driverStatus);
   const onboardingStep = useAuthStore((s) => s.onboardingStep);
+  const termsAccepted = useAuthStore((s) => s.termsAccepted);
   const [retrying, setRetrying] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
@@ -98,7 +99,9 @@ export const WelcomeScreen: React.FC = () => {
         return { ok: false as const, blocked: true };
       }
       if (route.screen) {
-        navigation.replace(route.screen);
+        // Same TyC gate as resolvePostGoogleOAuthPath / AuthRedirectWatcher.
+        const next = useAuthStore.getState().termsAccepted ? route.screen : 'Terms';
+        navigation.replace(next);
       }
       return { ok: true as const };
     },
@@ -167,7 +170,7 @@ export const WelcomeScreen: React.FC = () => {
     if (handoffAttempted.current) return;
     handoffAttempted.current = true;
 
-    const screen = handoffScreenFromStore(driverStatus, onboardingStep);
+    const screen = handoffScreenRespectingTerms(driverStatus, onboardingStep, termsAccepted);
     if (screen) {
       console.log('[Welcome] handoff replace →', screen);
       navigation.replace(screen);
@@ -178,7 +181,7 @@ export const WelcomeScreen: React.FC = () => {
       setHandoffTimedOut(true);
     }, HANDOFF_TIMEOUT_MS);
     return () => clearTimeout(id);
-  }, [mode, driverStatus, onboardingStep, navigation]);
+  }, [mode, driverStatus, onboardingStep, termsAccepted, navigation]);
 
   const handleRetryStatus = useCallback(async () => {
     if (retrying) return;

@@ -120,6 +120,22 @@ export function handoffScreenFromStore(
   }).screen;
 }
 
+/**
+ * Same status→screen map as handoffScreenFromStore, plus product TyC gate.
+ * Must match resolvePostGoogleOAuthPath: !termsAccepted → Terms before Paso1/etc.
+ * Empty string still means blocked (no Terms hop for suspended empty screen).
+ */
+export function handoffScreenRespectingTerms(
+  driverStatus: DriverStatusValue,
+  onboardingStep: string | null,
+  termsAccepted: boolean,
+): ScreenName | '' {
+  const screen = handoffScreenFromStore(driverStatus, onboardingStep);
+  if (!screen) return '';
+  if (!termsAccepted) return 'Terms';
+  return screen;
+}
+
 export interface PostAuthRoute {
   /** Target screen name (empty string when the account is blocked). */
   screen: ScreenName | '';

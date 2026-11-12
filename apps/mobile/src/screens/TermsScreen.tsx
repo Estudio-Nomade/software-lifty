@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import type React from 'react';
 import { useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
+import { userFacingApiMessage } from '../api/mapAxiosError';
 import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
@@ -17,7 +18,7 @@ import {
   TERMS_FULL_LABEL,
   TERMS_URL,
 } from '../legal/legalUrls';
-import { isTransientStatusFailure, resolvePostAuthRoute } from '../lib/postAuthRouting';
+import { resolvePostAuthRoute } from '../lib/postAuthRouting';
 import { isTermsReadMode } from '../lib/termsReadMode';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
@@ -59,11 +60,13 @@ export const TermsScreen: React.FC = () => {
         navigation.replace(route.screen);
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al verificar tu cuenta';
-      setError(message);
-      if (isTransientStatusFailure(err)) {
-        useAuthStore.getState().clearAuthState();
-      }
+      // Keep session — network/401 on status must not bounce guest mid-TyC.
+      // User can retry ACEPTAR; Welcome recovery owns real dead-session UX.
+      setError(
+        userFacingApiMessage(err, {
+          fallback: 'No pudimos verificar tu cuenta. Revisá conexión e intentá de nuevo.',
+        }),
+      );
     } finally {
       setLoading(false);
     }
