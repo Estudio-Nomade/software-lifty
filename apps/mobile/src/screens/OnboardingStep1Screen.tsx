@@ -506,8 +506,10 @@ export const OnboardingStep1Screen: React.FC = () => {
           storeUserId: store.driverId,
           liveSession: live,
         });
+        // resolveApiAccessToken prefers live when present; write store whenever
+        // token/user/auth lag (stale null store, wrong driverId, or not authed flag).
         if (token && live?.user?.id) {
-          if (token !== store.token || live.user.id !== store.driverId) {
+          if (token !== store.token || live.user.id !== store.driverId || !store.isAuthenticated) {
             store.setSession(token, live.user.id);
           }
         }

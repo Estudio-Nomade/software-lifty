@@ -28,6 +28,7 @@ export const WelcomeScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { loading, signOut } = useAuth();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const driverId = useAuthStore((s) => s.driverId);
   const sessionRestored = useAuthStore((s) => s.sessionRestored);
   const driverStatus = useAuthStore((s) => s.driverStatus);
   const onboardingStep = useAuthStore((s) => s.onboardingStep);
@@ -40,6 +41,8 @@ export const WelcomeScreen: React.FC = () => {
   const [autoHydrateDone, setAutoHydrateDone] = useState(false);
   const autoHydrateInFlight = useRef(false);
   const handoffAttempted = useRef(false);
+  /** Session identity last used for auto-hydrate (re-run on re-login / account switch). */
+  const hydrateIdentityRef = useRef<string | null>(null);
 
   const unresolved = isDriverStatusUnresolved(isAuthenticated, driverStatus, onboardingStep);
   const statusHydrating = unresolved && !autoHydrateDone;
@@ -79,44 +82,51 @@ export const WelcomeScreen: React.FC = () => {
     autoHydrateDone,
   ]);
 
-  const applyStatusAndNavigate = useCallback(
-    async (opts?: { silent?: boolean }) => {
-      const { data: body } = await apiClient.get('/drivers/me/status');
-      const payload = body?.data ?? body;
-      const parsed = driverStatusSchema.safeParse(payload);
-      const driverData = parsed.success ? parsed.data : (payload as DriverStatus);
-      const route = routeForDriverStatus(driverData);
-      if (driverData.status) {
-        useAuthStore.getState().setDriverStatus(driverData.status);
-      }
-      if (driverData.step != null) {
-        useAuthStore.getState().setOnboardingStep(driverData.step);
-      } else if (route.status) {
-        useAuthStore.getState().setDriverStatus(route.status);
-      }
-      if (route.blockedMessage) {
-        if (!opts?.silent) setRecoveryError(route.blockedMessage);
-        return { ok: false as const, blocked: true };
-      }
-      if (route.screen) {
-        // Same TyC gate as resolvePostGoogleOAuthPath / AuthRedirectWatcher.
-        const next = useAuthStore.getState().termsAccepted ? route.screen : 'Terms';
-        navigation.replace(next);
-      }
-      return { ok: true as const };
-    },
-    [navigation],
-  );
+  const applyStatusAndNavigate = useCallback(async () => {
+    const { data: body } = await apiClient.get('/drivers/me/status');
+    const payload = body?.data ?? body;
+    const parsed = driverStatusSchema.safeParse(payload);
+    const driverData = parsed.success ? parsed.data : (payload as DriverStatus);
+    const route = routeForDriverStatus(driverData);
+    if (driverData.status) {
+      useAuthStore.getState().setDriverStatus(driverData.status);
+    }
+    if (driverData.step != null) {
+      useAuthStore.getState().setOnboardingStep(driverData.step);
+    } else if (route.status) {
+      useAuthStore.getState().setDriverStatus(route.status);
+    }
+    if (route.blockedMessage) {
+      setRecoveryError(route.blockedMessage);
+      return { ok: false as const, blocked: true };
+    }
+    if (route.screen) {
+      // Same TyC gate as resolvePostGoogleOAuthPath / AuthRedirectWatcher.
+      const next = useAuthStore.getState().termsAccepted ? route.screen : 'Terms';
+      navigation.replace(next);
+    }
+    return { ok: true as const };
+  }, [navigation]);
 
   // Post-Google / cold restore race: auth true, status still null → hydrate once
   // before recovery UI (avoids false «No pudimos cargar tu cuenta»).
   useEffect(() => {
     if (!sessionRestored || loading) return;
     if (!isAuthenticated) {
+      hydrateIdentityRef.current = null;
       setAutoHydrateDone(false);
       autoHydrateInFlight.current = false;
       return;
     }
+
+    // Fresh sign-in or account switch on the same Welcome mount → allow another auto GET.
+    const identity = driverId ?? 'authed';
+    if (hydrateIdentityRef.current !== identity) {
+      hydrateIdentityRef.current = identity;
+      setAutoHydrateDone(false);
+      autoHydrateInFlight.current = false;
+    }
+
     if (!unresolved) {
       setAutoHydrateDone(true);
       return;
@@ -128,8 +138,8 @@ export const WelcomeScreen: React.FC = () => {
     (async () => {
       try {
         if (__DEV__) console.log('[Welcome] auto status hydrate start');
-        await applyStatusAndNavigate({ silent: true });
-        if (__DEV__) console.log('[Welcome] auto status hydrate ok');
+        const result = await applyStatusAndNavigate();
+        if (__DEV__) console.log('[Welcome] auto status hydrate ok', result);
       } catch (err: unknown) {
         if (__DEV__) {
           console.log('[Welcome] auto status hydrate fail', err);
@@ -154,6 +164,7 @@ export const WelcomeScreen: React.FC = () => {
     sessionRestored,
     loading,
     isAuthenticated,
+    driverId,
     unresolved,
     autoHydrateDone,
     applyStatusAndNavigate,
