@@ -265,6 +265,24 @@ describe('resolveApiAccessToken', () => {
     });
     expect(token).toBe('tok-a');
   });
+
+  it('returns live token when store is empty (Paso1 Bearer reconcile)', () => {
+    const token = resolveApiAccessToken({
+      storeToken: null,
+      storeUserId: null,
+      liveSession: stubSession('tok-live', 'user-live'),
+    });
+    expect(token).toBe('tok-live');
+  });
+
+  it('returns live token when store holds a different stale JWT', () => {
+    const token = resolveApiAccessToken({
+      storeToken: 'tok-stale',
+      storeUserId: 'user-a',
+      liveSession: stubSession('tok-fresh', 'user-a'),
+    });
+    expect(token).toBe('tok-fresh');
+  });
 });
 
 describe('resolveSessionAfterBrowserDismiss', () => {

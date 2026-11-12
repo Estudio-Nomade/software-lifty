@@ -71,6 +71,19 @@ describe('welcomeEntryMode', () => {
     ).toBe('recovery');
   });
 
+  it('stays loading while status is hydrating (post-Google race, no false recovery)', () => {
+    expect(
+      welcomeEntryMode({
+        authLoading: false,
+        sessionRestored: true,
+        isAuthenticated: true,
+        driverStatus: null,
+        onboardingStep: null,
+        statusHydrating: true,
+      }),
+    ).toBe('loading');
+  });
+
   it('hands off when authenticated with known route state', () => {
     expect(
       welcomeEntryMode({

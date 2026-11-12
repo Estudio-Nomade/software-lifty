@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, StatusBar, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
+import { userFacingApiMessage } from '../api/mapAxiosError';
 import type { DriverStatus } from '../api/types';
 import { driverStatusSchema } from '../api/types';
 import { BrandSplash } from '../components/BrandSplash';
@@ -10,8 +11,12 @@ import { Button } from '../components/Button';
 import { Text } from '../components/ui/Text';
 import { useAuth } from '../context/AuthContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import { HANDOFF_TIMEOUT_MS, welcomeEntryMode } from '../lib/driverStatusGate';
-import { handoffScreenFromStore, routeForDriverStatus } from '../lib/postAuthRouting';
+import {
+  HANDOFF_TIMEOUT_MS,
+  isDriverStatusUnresolved,
+  welcomeEntryMode,
+} from '../lib/driverStatusGate';
+import { handoffScreenRespectingTerms, routeForDriverStatus } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -23,14 +28,24 @@ export const WelcomeScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { loading, signOut } = useAuth();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const driverId = useAuthStore((s) => s.driverId);
   const sessionRestored = useAuthStore((s) => s.sessionRestored);
   const driverStatus = useAuthStore((s) => s.driverStatus);
   const onboardingStep = useAuthStore((s) => s.onboardingStep);
+  const termsAccepted = useAuthStore((s) => s.termsAccepted);
   const [retrying, setRetrying] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [handoffTimedOut, setHandoffTimedOut] = useState(false);
+  /** One auto GET /status after auth+unresolved before painting recovery. */
+  const [autoHydrateDone, setAutoHydrateDone] = useState(false);
+  const autoHydrateInFlight = useRef(false);
   const handoffAttempted = useRef(false);
+  /** Session identity last used for auto-hydrate (re-run on re-login / account switch). */
+  const hydrateIdentityRef = useRef<string | null>(null);
+
+  const unresolved = isDriverStatusUnresolved(isAuthenticated, driverStatus, onboardingStep);
+  const statusHydrating = unresolved && !autoHydrateDone;
 
   const mode = welcomeEntryMode({
     authLoading: loading,
@@ -39,6 +54,7 @@ export const WelcomeScreen: React.FC = () => {
     driverStatus,
     onboardingStep,
     handoffTimedOut,
+    statusHydrating,
   });
 
   useEffect(() => {
@@ -51,6 +67,8 @@ export const WelcomeScreen: React.FC = () => {
       driverStatus,
       onboardingStep,
       handoffTimedOut,
+      statusHydrating,
+      autoHydrateDone,
     });
   }, [
     mode,
@@ -60,6 +78,96 @@ export const WelcomeScreen: React.FC = () => {
     driverStatus,
     onboardingStep,
     handoffTimedOut,
+    statusHydrating,
+    autoHydrateDone,
+  ]);
+
+  const applyStatusAndNavigate = useCallback(async () => {
+    const { data: body } = await apiClient.get('/drivers/me/status');
+    const payload = body?.data ?? body;
+    const parsed = driverStatusSchema.safeParse(payload);
+    const driverData = parsed.success ? parsed.data : (payload as DriverStatus);
+    const route = routeForDriverStatus(driverData);
+    if (driverData.status) {
+      useAuthStore.getState().setDriverStatus(driverData.status);
+    }
+    if (driverData.step != null) {
+      useAuthStore.getState().setOnboardingStep(driverData.step);
+    } else if (route.status) {
+      useAuthStore.getState().setDriverStatus(route.status);
+    }
+    if (route.blockedMessage) {
+      setRecoveryError(route.blockedMessage);
+      return { ok: false as const, blocked: true };
+    }
+    if (route.screen) {
+      // Same TyC gate as resolvePostGoogleOAuthPath / AuthRedirectWatcher.
+      const next = useAuthStore.getState().termsAccepted ? route.screen : 'Terms';
+      navigation.replace(next);
+    }
+    return { ok: true as const };
+  }, [navigation]);
+
+  // Post-Google / cold restore race: auth true, status still null → hydrate once
+  // before recovery UI (avoids false «No pudimos cargar tu cuenta»).
+  useEffect(() => {
+    if (!sessionRestored || loading) return;
+    if (!isAuthenticated) {
+      hydrateIdentityRef.current = null;
+      setAutoHydrateDone(false);
+      autoHydrateInFlight.current = false;
+      return;
+    }
+
+    // Fresh sign-in or account switch on the same Welcome mount → allow another auto GET.
+    const identity = driverId ?? 'authed';
+    if (hydrateIdentityRef.current !== identity) {
+      hydrateIdentityRef.current = identity;
+      setAutoHydrateDone(false);
+      autoHydrateInFlight.current = false;
+    }
+
+    if (!unresolved) {
+      setAutoHydrateDone(true);
+      return;
+    }
+    if (autoHydrateDone || autoHydrateInFlight.current) return;
+
+    autoHydrateInFlight.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (__DEV__) console.log('[Welcome] auto status hydrate start');
+        const result = await applyStatusAndNavigate();
+        if (__DEV__) console.log('[Welcome] auto status hydrate ok', result);
+      } catch (err: unknown) {
+        if (__DEV__) {
+          console.log('[Welcome] auto status hydrate fail', err);
+        }
+        if (!cancelled) {
+          setRecoveryError(
+            userFacingApiMessage(err, {
+              fallback: 'No pudimos hablar con el servidor de Lifty. Revisá conexión.',
+            }),
+          );
+        }
+      } finally {
+        autoHydrateInFlight.current = false;
+        if (!cancelled) setAutoHydrateDone(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    sessionRestored,
+    loading,
+    isAuthenticated,
+    driverId,
+    unresolved,
+    autoHydrateDone,
+    applyStatusAndNavigate,
   ]);
 
   // Self-navigate out of handoff so we don't depend solely on AuthRedirectWatcher
@@ -73,7 +181,7 @@ export const WelcomeScreen: React.FC = () => {
     if (handoffAttempted.current) return;
     handoffAttempted.current = true;
 
-    const screen = handoffScreenFromStore(driverStatus, onboardingStep);
+    const screen = handoffScreenRespectingTerms(driverStatus, onboardingStep, termsAccepted);
     if (screen) {
       console.log('[Welcome] handoff replace →', screen);
       navigation.replace(screen);
@@ -84,43 +192,25 @@ export const WelcomeScreen: React.FC = () => {
       setHandoffTimedOut(true);
     }, HANDOFF_TIMEOUT_MS);
     return () => clearTimeout(id);
-  }, [mode, driverStatus, onboardingStep, navigation]);
+  }, [mode, driverStatus, onboardingStep, termsAccepted, navigation]);
 
   const handleRetryStatus = useCallback(async () => {
     if (retrying) return;
     setRetrying(true);
     setRecoveryError(null);
     try {
-      const { data: body } = await apiClient.get('/drivers/me/status');
-      const payload = body?.data ?? body;
-      const parsed = driverStatusSchema.safeParse(payload);
-      const driverData = parsed.success ? parsed.data : (payload as DriverStatus);
-      const route = routeForDriverStatus(driverData);
-      if (driverData.status) {
-        useAuthStore.getState().setDriverStatus(driverData.status);
-      }
-      if (driverData.step != null) {
-        useAuthStore.getState().setOnboardingStep(driverData.step);
-      } else if (route.status) {
-        useAuthStore.getState().setDriverStatus(route.status);
-      }
-      if (route.blockedMessage) {
-        setRecoveryError(route.blockedMessage);
-        return;
-      }
-      if (route.screen) {
-        navigation.replace(route.screen);
-      }
+      const result = await applyStatusAndNavigate();
+      if (result && 'blocked' in result && result.blocked) return;
     } catch (err: unknown) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : 'No pudimos hablar con el servidor de Lifty. Revisá conexión.';
-      setRecoveryError(message);
+      setRecoveryError(
+        userFacingApiMessage(err, {
+          fallback: 'No pudimos hablar con el servidor de Lifty. Revisá conexión.',
+        }),
+      );
     } finally {
       setRetrying(false);
     }
-  }, [navigation, retrying]);
+  }, [applyStatusAndNavigate, retrying]);
 
   const handleSignOut = useCallback(async () => {
     if (signingOut) return;
@@ -138,6 +228,7 @@ export const WelcomeScreen: React.FC = () => {
   // Boot / session restore: brand only (no Crear cuenta) for guests.
   // Authed (loading or handoff): plain bg — root OAuthBrandBridge owns the single
   // BrandSplash so Google success never flashes L+tagline twice.
+  // statusHydrating also maps to loading → plain bridge while auto GET /status runs.
   if (mode === 'loading' || mode === 'handoff') {
     if (isAuthenticated) {
       return <View style={styles.plainBridge} />;

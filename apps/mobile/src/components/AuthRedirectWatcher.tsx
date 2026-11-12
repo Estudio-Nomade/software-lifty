@@ -8,7 +8,7 @@ import {
 } from '../lib/authRouteGate';
 import { isDriverStatusUnresolved } from '../lib/driverStatusGate';
 import { hasActiveTrip } from '../lib/isLiveTrip';
-import { handoffScreenFromStore } from '../lib/postAuthRouting';
+import { handoffScreenRespectingTerms } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { useTripStore } from '../store/tripStore';
 
@@ -25,6 +25,7 @@ export function AuthRedirectWatcher() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const onboardingStep = useAuthStore((s) => s.onboardingStep);
   const driverStatus = useAuthStore((s) => s.driverStatus);
+  const termsAccepted = useAuthStore((s) => s.termsAccepted);
   const sessionRestored = useAuthStore((s) => s.sessionRestored);
   const resetRedirect = useAuthStore((s) => s.resetRedirect);
   const router = useRouter();
@@ -80,7 +81,10 @@ export function AuthRedirectWatcher() {
       return;
     if (isDriverStatusUnresolved(isAuthenticated, driverStatus, onboardingStep)) return;
 
-    const screen = handoffScreenFromStore(driverStatus, onboardingStep) || 'OnboardingStep1';
+    // Same TyC rule as resolvePostGoogleOAuthPath — never skip /terms to Paso1.
+    const screen =
+      handoffScreenRespectingTerms(driverStatus, onboardingStep, termsAccepted) ||
+      (termsAccepted ? 'OnboardingStep1' : 'Terms');
     if (!screen) return;
 
     console.log('[AuthRedirectWatcher] handoff replace →', screen);
@@ -91,6 +95,7 @@ export function AuthRedirectWatcher() {
     segments,
     onboardingStep,
     driverStatus,
+    termsAccepted,
     replace,
     needsRedirect,
     navReady,

@@ -1,8 +1,12 @@
 import { ApiError } from '../../api/types';
 import {
   STEP_ROUTE,
+  handoffScreenFromStore,
+  handoffScreenRespectingTerms,
+  isAuthStatusFailure,
   isTransientStatusFailure,
   routeForDriverStatus,
+  shouldLeaveDriverStatusUnresolved,
 } from '../../lib/postAuthRouting';
 import { SCREEN_TO_ROUTE, routePathForScreen } from '../../lib/screenRoutes';
 
@@ -131,6 +135,18 @@ describe('isTransientStatusFailure', () => {
         }),
       ),
     ).toBe(true);
+    expect(
+      isTransientStatusFailure(
+        new ApiError({
+          error: {
+            code: 'TIMEOUT_ERROR',
+            message: 'timeout',
+            status: 0,
+          },
+          meta: { timestamp: new Date().toISOString() },
+        }),
+      ),
+    ).toBe(true);
   });
 
   it('does not treat validation / business errors as transient', () => {
@@ -147,6 +163,85 @@ describe('isTransientStatusFailure', () => {
       ),
     ).toBe(false);
     expect(isTransientStatusFailure(new Error('boom'))).toBe(false);
+  });
+
+  it('does not treat 401 as network-transient (sign-out paths stay gated)', () => {
+    expect(
+      isTransientStatusFailure(
+        new ApiError({
+          error: {
+            code: 'TOKEN_REQUIRED',
+            message: 'Se requiere iniciar sesión.',
+            status: 401,
+          },
+          meta: { timestamp: new Date().toISOString() },
+        }),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('isAuthStatusFailure / shouldLeaveDriverStatusUnresolved', () => {
+  it('flags TOKEN_* / 401 as auth status failure', () => {
+    const err = new ApiError({
+      error: {
+        code: 'TOKEN_REQUIRED',
+        message: 'Se requiere iniciar sesión.',
+        status: 401,
+      },
+      meta: { timestamp: new Date().toISOString() },
+    });
+    expect(isAuthStatusFailure(err)).toBe(true);
+    expect(shouldLeaveDriverStatusUnresolved(err)).toBe(true);
+  });
+
+  it('leaves status unresolved for network too', () => {
+    const err = new ApiError({
+      error: {
+        code: 'NETWORK_ERROR',
+        message: 'Sin conexion.',
+        status: 0,
+      },
+      meta: { timestamp: new Date().toISOString() },
+    });
+    expect(shouldLeaveDriverStatusUnresolved(err)).toBe(true);
+  });
+
+  it('does not leave unresolved for plain validation errors', () => {
+    const err = new ApiError({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'bad',
+        status: 400,
+      },
+      meta: { timestamp: new Date().toISOString() },
+    });
+    expect(isAuthStatusFailure(err)).toBe(false);
+    expect(shouldLeaveDriverStatusUnresolved(err)).toBe(false);
+  });
+});
+
+describe('handoffScreenRespectingTerms (TyC gate = resolvePostGoogleOAuthPath)', () => {
+  it('sends to Terms when status known but terms not accepted', () => {
+    expect(handoffScreenRespectingTerms('pending', 'profile', false)).toBe('Terms');
+    expect(handoffScreenFromStore('pending', 'profile')).toBe('OnboardingStep1');
+  });
+
+  it('sends to Paso1 when terms already accepted', () => {
+    expect(handoffScreenRespectingTerms('pending', 'profile', true)).toBe('OnboardingStep1');
+  });
+
+  it('keeps empty screen for suspended (blocked) even if terms missing', () => {
+    expect(handoffScreenRespectingTerms('suspended', null, false)).toBe('');
+  });
+
+  it('still gates rejected reupload behind Terms until accepted', () => {
+    expect(handoffScreenRespectingTerms('rejected', 'documents', false)).toBe('Terms');
+    expect(handoffScreenRespectingTerms('rejected', 'documents', true)).toBe('OnboardingStep2');
+  });
+
+  it('maps Terms path like OAuth hop', () => {
+    expect(routePathForScreen('Terms')).toBe('/terms');
   });
 });
 

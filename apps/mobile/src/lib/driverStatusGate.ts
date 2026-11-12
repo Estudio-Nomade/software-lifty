@@ -23,12 +23,19 @@ export function welcomeEntryMode(input: {
   onboardingStep: string | null;
   /** When true, handoff waited too long without leaving Welcome → recovery UI. */
   handoffTimedOut?: boolean;
+  /**
+   * Auth OK but status/step still hydrating (post-Google race).
+   * Prefer plain bridge over instant «No pudimos cargar tu cuenta».
+   */
+  statusHydrating?: boolean;
 }): WelcomeEntryMode {
   if (input.authLoading || !input.sessionRestored) return 'loading';
 
   if (!input.isAuthenticated) return 'guest';
 
   if (isDriverStatusUnresolved(true, input.driverStatus, input.onboardingStep)) {
+    // Auto-fetch in flight: stay on loading/plain bridge, not recovery flash.
+    if (input.statusHydrating) return 'loading';
     return 'recovery';
   }
 
