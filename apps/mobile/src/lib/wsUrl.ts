@@ -6,7 +6,7 @@ export function getWsUrl(): string {
   let base: string;
 
   if (envUrl) {
-    base = envUrl.replace('/api', '').replace(/^http/, 'ws');
+    base = envUrl.replace(/\/api\/?$/, '').replace(/^http/, 'ws');
   } else {
     const port = process.env.EXPO_PUBLIC_API_PORT ?? '3001';
 
