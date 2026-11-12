@@ -661,12 +661,26 @@ export const OnboardingStep1Screen: React.FC = () => {
         !!selectedPlace,
       )
     ) {
+      const missing: string[] = [];
       if (!isDriverProfilePhotoPresent(photoUri)) {
         setError('photo', DRIVER_PROFILE_PHOTO_REQUIRED_MSG);
+        missing.push('foto de perfil');
       }
-      if (!selectedPlace) {
+      if (!firstName.trim() || validateName(firstName)) {
+        setError('firstName', validateName(firstName) ?? 'Requerido');
+        missing.push('nombre');
+      }
+      if (!lastName.trim() || validateName(lastName)) {
+        setError('lastName', validateName(lastName) ?? 'Requerido');
+        missing.push('apellido');
+      }
+      if (phoneDigits.length < MIN_PHONE_DIGITS) missing.push('teléfono');
+      if (!selectedPlace || addressLine.trim().length < MIN_ADDRESS_CHARS) {
         setError('address', ADDRESS_PICK_REQUIRED_MSG);
+        missing.push('domicilio');
       }
+      if (!termsAccepted) missing.push('aceptar los términos y condiciones');
+      setSubmitError(`Para continuar falta: ${missing.join(', ')}.`);
       return;
     }
     setLoading(true);
@@ -768,16 +782,6 @@ export const OnboardingStep1Screen: React.FC = () => {
       setLoading(false);
     }
   };
-
-  const formOk = isFormValid(
-    firstName,
-    lastName,
-    phoneDigits,
-    addressLine,
-    termsAccepted,
-    photoUri,
-    !!selectedPlace,
-  );
 
   const formBody = (
     <>
@@ -1027,7 +1031,7 @@ export const OnboardingStep1Screen: React.FC = () => {
         <Button
           title="Continuar"
           onPress={handleContinue}
-          disabled={!formOk}
+          disabled={loading}
           loading={loading}
           variant="cta"
           style={styles.button}
