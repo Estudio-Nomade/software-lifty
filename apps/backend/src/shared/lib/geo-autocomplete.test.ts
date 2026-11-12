@@ -9,6 +9,7 @@ import {
   autocompleteCacheKey,
   formatPhotonAddress,
   isBiasNearVillaDolores,
+  nominatimReverseToResult,
   normalizeAutocompleteQuery,
   parseGeoDefaultCoord,
   rankPhotonPlaceFeatures,
@@ -469,5 +470,28 @@ describe('geo.autocomplete Photon path', () => {
       top.place_id.startsWith('catalog:') ||
         (top.lat > -32.1 && top.lat < -31.8 && top.lng > -65.4 && top.lng < -64.9),
     ).toBe(true);
+  });
+});
+
+describe('nominatimReverseToResult', () => {
+  test('builds street + city + province from Nominatim address', () => {
+    const r = nominatimReverseToResult(
+      {
+        address: { road: 'Avenida Colón', house_number: '1050', city: 'Tandil', state: 'Buenos Aires' },
+      },
+      -37.32,
+      -59.13,
+    );
+    expect(r).toEqual({
+      lat: -37.32,
+      lng: -59.13,
+      formatted_address: 'Avenida Colón 1050, Tandil, Buenos Aires',
+      city: 'Tandil',
+      province: 'Buenos Aires',
+    });
+  });
+
+  test('returns null when there is no usable address', () => {
+    expect(nominatimReverseToResult({ address: {} }, 0, 0)).toBeNull();
   });
 });

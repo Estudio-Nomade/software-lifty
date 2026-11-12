@@ -430,6 +430,38 @@ type NominatimHit = {
   address?: Record<string, string | undefined>;
 };
 
+/** Exported for unit tests — maps a Nominatim /reverse hit to a geocode result. */
+export function nominatimReverseToResult(
+  hit: NominatimHit,
+  lat: number,
+  lng: number,
+): GeocodeResult | null {
+  const addr = hit.address ?? {};
+  const street = addr.road || addr.pedestrian || addr.residential || addr.street || '';
+  const city = addr.city || addr.town || addr.village || addr.municipality || null;
+  const province = addr.state || null;
+  const formatted = [[street, addr.house_number].filter(Boolean).join(' '), city, province]
+    .filter(Boolean)
+    .join(', ');
+  if (!formatted) return null;
+  return { lat, lng, formatted_address: formatted, city, province };
+}
+
+/** Reverse geocode fallback when Photon is down (OSM Nominatim). */
+async function nominatimReverse(lat: number, lng: number): Promise<GeocodeResult | null> {
+  const url = new URL('https://nominatim.openstreetmap.org/reverse');
+  url.searchParams.set('lat', String(lat));
+  url.searchParams.set('lon', String(lng));
+  url.searchParams.set('format', 'jsonv2');
+  url.searchParams.set('addressdetails', '1');
+  const res = await fetch(url.toString(), {
+    headers: { 'User-Agent': GEO_USER_AGENT, Accept: 'application/json' },
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new Error(`Nominatim error: ${res.status}`);
+  return nominatimReverseToResult((await res.json()) as NominatimHit, lat, lng);
+}
+
 /** Last-resort street search when Photon is down/empty (OSM Nominatim). */
 async function nominatimStreetFallback(
   query: string,
@@ -823,7 +855,8 @@ export async function geocode(params: {
       throw new Error('No geocoding input');
     }
 
-    const data = await fetchPhoton(url);
+    // Reverse is a single cheap lookup: fail fast so the Nominatim fallback answers in time.
+    const data = await fetchPhoton(url, forwardQuery ? GEO_TIMEOUT_MS : 3000);
     let feature = data.features?.[0];
     if (forwardQuery && data.features && data.features.length > 0) {
       const biasLat = params.bias_lat ?? GEO_DEFAULT_LAT;
@@ -845,6 +878,12 @@ export async function geocode(params: {
   } catch (err) {
     logger.error('[geo] geocode failed:', (err as Error).message);
     if (params.lat !== undefined && params.lng !== undefined) {
+      try {
+        const hit = await nominatimReverse(params.lat, params.lng);
+        if (hit) return hit;
+      } catch (fallbackErr) {
+        logger.error('[geo] nominatim reverse failed:', (fallbackErr as Error).message);
+      }
       return {
         lat: params.lat,
         lng: params.lng,
