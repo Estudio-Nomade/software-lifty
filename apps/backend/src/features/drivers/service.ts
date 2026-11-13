@@ -435,12 +435,11 @@ export async function ensureDriverEnteredReview(driverId: string): Promise<boole
     fromRejected || driver.admin_reviewed_at != null || !!driver.admin_review_notes?.trim();
 
   const pendingDocs = await db
-    .select({ id: driverDocuments.id })
+    .select({ id: driverDocuments.id, doc_type: driverDocuments.doc_type })
     .from(driverDocuments)
     .where(
       and(eq(driverDocuments.driver_id, driverId), eq(driverDocuments.status, 'pending_review')),
-    )
-    .limit(1);
+    );
 
   await db
     .update(drivers)
@@ -469,7 +468,11 @@ export async function ensureDriverEnteredReview(driverId: string): Promise<boole
   });
 
   if (isResubmit) {
-    void notifyAdminsDriverDocsResubmitted(driverId, { fromStatus: driver.status });
+    const pendingTypes = [...new Set(pendingDocs.map((d) => d.doc_type))];
+    void notifyAdminsDriverDocsResubmitted(driverId, {
+      fromStatus: driver.status,
+      ...(pendingTypes.length > 0 ? { docTypes: pendingTypes } : {}),
+    });
   } else {
     void notifyAdminNewDriver(driverId);
   }
