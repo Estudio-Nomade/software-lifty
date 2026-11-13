@@ -154,16 +154,29 @@ export async function resolveApprovalTokenForReviewCycle(driverId: string): Prom
   return token;
 }
 
-function docsResubmitDebounceKey(driverId: string): string {
-  return `docs-resubmit:${driverId}`;
+/** Fingerprint so front vs back are distinct; only identical doc sets debounce. */
+export function docsResubmitDebounceFingerprint(docTypes?: string[]): string {
+  if (!docTypes?.length) return 'all';
+  return [...docTypes]
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .sort()
+    .join(',');
 }
 
-/** Skip duplicate resubmit mails within TTL when Redis is available. */
-async function shouldSkipDuplicateDocsResubmitMail(driverId: string): Promise<boolean> {
+function docsResubmitDebounceKey(driverId: string, docTypes?: string[]): string {
+  return `docs-resubmit:${driverId}:${docsResubmitDebounceFingerprint(docTypes)}`;
+}
+
+/** Skip duplicate resubmit mails (same driver + same docTypes) within TTL when Redis is up. */
+async function shouldSkipDuplicateDocsResubmitMail(
+  driverId: string,
+  docTypes?: string[],
+): Promise<boolean> {
   const redis = getRedis();
   if (!redis) return false;
   try {
-    const key = docsResubmitDebounceKey(driverId);
+    const key = docsResubmitDebounceKey(driverId, docTypes);
     const exists = await redis.get(key);
     return exists != null;
   } catch (err) {
@@ -172,11 +185,15 @@ async function shouldSkipDuplicateDocsResubmitMail(driverId: string): Promise<bo
   }
 }
 
-async function markDocsResubmitMailSent(driverId: string): Promise<void> {
+async function markDocsResubmitMailSent(driverId: string, docTypes?: string[]): Promise<void> {
   const redis = getRedis();
   if (!redis) return;
   try {
-    await redis.setex(docsResubmitDebounceKey(driverId), DOCS_RESUBMIT_DEBOUNCE_TTL_S, '1');
+    await redis.setex(
+      docsResubmitDebounceKey(driverId, docTypes),
+      DOCS_RESUBMIT_DEBOUNCE_TTL_S,
+      '1',
+    );
   } catch (err) {
     logger.warn('[ADMIN-NOTIFY] docs-resubmit debounce write failed', (err as Error).message);
   }
@@ -405,18 +422,18 @@ export async function notifyAdminNewDriver(driverId: string): Promise<void> {
       return;
     }
 
-    const token = await resolveApprovalTokenForReviewCycle(driverId);
-    if (!token) {
-      logger.warn('[ADMIN-NOTIFY] Skipped new-driver email: could not resolve approval token', {
+    const recipients = await collectAdminRecipients();
+
+    if (recipients.size === 0) {
+      logger.warn('[ADMIN-NOTIFY] No admin recipients configured — new-driver email skipped', {
         driverId,
       });
       return;
     }
 
-    const recipients = await collectAdminRecipients();
-
-    if (recipients.size === 0) {
-      logger.warn('[ADMIN-NOTIFY] No admin recipients configured — new-driver email skipped', {
+    const token = await resolveApprovalTokenForReviewCycle(driverId);
+    if (!token) {
+      logger.warn('[ADMIN-NOTIFY] Skipped new-driver email: could not resolve approval token', {
         driverId,
       });
       return;
@@ -509,14 +526,6 @@ export async function notifyAdminsDriverDocsResubmitted(
       return;
     }
 
-    const token = await resolveApprovalTokenForReviewCycle(driverId);
-    if (!token) {
-      logger.warn('[ADMIN-NOTIFY] Skipped docs-resubmit email: could not resolve approval token', {
-        driverId,
-      });
-      return;
-    }
-
     const recipients = await collectAdminRecipients();
     if (recipients.size === 0) {
       logger.warn('[ADMIN-NOTIFY] No admin recipients — docs-resubmit email skipped', {
@@ -525,8 +534,19 @@ export async function notifyAdminsDriverDocsResubmitted(
       return;
     }
 
-    if (await shouldSkipDuplicateDocsResubmitMail(driverId)) {
-      logger.info('[ADMIN-NOTIFY] Docs-resubmit email debounced (recent send)', { driverId });
+    if (await shouldSkipDuplicateDocsResubmitMail(driverId, opts?.docTypes)) {
+      logger.info('[ADMIN-NOTIFY] Docs-resubmit email debounced (recent send)', {
+        driverId,
+        docTypes: opts?.docTypes,
+      });
+      return;
+    }
+
+    const token = await resolveApprovalTokenForReviewCycle(driverId);
+    if (!token) {
+      logger.warn('[ADMIN-NOTIFY] Skipped docs-resubmit email: could not resolve approval token', {
+        driverId,
+      });
       return;
     }
 
@@ -568,7 +588,7 @@ export async function notifyAdminsDriverDocsResubmitted(
     });
 
     if (sent > 0) {
-      await markDocsResubmitMailSent(driverId);
+      await markDocsResubmitMailSent(driverId, opts?.docTypes);
     }
 
     try {
