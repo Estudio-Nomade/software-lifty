@@ -161,10 +161,62 @@ describe('passenger push registration', () => {
 
   it('ensurePushRegistrationIfStale retries when the last attempt failed', async () => {
     mockApiPost.mockRejectedValue(new Error('offline'));
-    await ensurePushRegistrationIfStale(60_000, { retryDelaysMs: [] });
+    await ensurePushRegistrationIfStale(60_000, { retryDelaysMs: [], failureCooldownMs: 0 });
     mockApiPost.mockResolvedValue({ data: {} });
-    await ensurePushRegistrationIfStale(60_000, { retryDelaysMs: [] });
+    await ensurePushRegistrationIfStale(60_000, { retryDelaysMs: [], failureCooldownMs: 0 });
     expect(mockApiPost).toHaveBeenCalledTimes(2);
+  });
+
+  it('coalesces concurrent ensurePushRegistration into one POST', async () => {
+    let resolvePost!: (v: unknown) => void;
+    mockApiPost.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePost = resolve;
+        }),
+    );
+    const a = ensurePushRegistration({ retryDelaysMs: [] });
+    const b = ensurePushRegistration({ retryDelaysMs: [] });
+    // registerForPush is async — wait until the shared POST is pending.
+    await new Promise<void>((resolve, reject) => {
+      const started = Date.now();
+      const tick = () => {
+        if (typeof resolvePost === 'function') {
+          resolve();
+          return;
+        }
+        if (Date.now() - started > 2000) {
+          reject(new Error('api.post never started'));
+          return;
+        }
+        setTimeout(tick, 0);
+      };
+      tick();
+    });
+    resolvePost({ data: {} });
+    await expect(Promise.all([a, b])).resolves.toEqual([
+      'ExponentPushToken[pass]',
+      'ExponentPushToken[pass]',
+    ]);
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips automatic retries during failure cooldown', async () => {
+    mockApiPost.mockRejectedValue(new Error('offline'));
+    await ensurePushRegistration({ retryDelaysMs: [] });
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+    mockApiPost.mockClear();
+    await ensurePushRegistration({ retryDelaysMs: [], failureCooldownMs: 60_000 });
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it('force bypasses failure cooldown (token rotation)', async () => {
+    mockApiPost.mockRejectedValue(new Error('offline'));
+    await ensurePushRegistration({ retryDelaysMs: [] });
+    mockApiPost.mockClear();
+    mockApiPost.mockResolvedValue({ data: {} });
+    await ensurePushRegistration({ retryDelaysMs: [], force: true });
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
   });
 
   it('addPushTokenListener subscribes to device token changes', async () => {

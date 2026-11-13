@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getProfile, registerPassenger, reverseGeocode, updateProfile } from '../api/passenger';
+import { getProfile, registerPassenger, updateProfile } from '../api/passenger';
 import type { PlaceSuggestion } from '../api/types';
 import { AuthFormCard, AuthFormChrome } from '../components/AuthFormChrome';
 import { Button } from '../components/Button';
@@ -33,7 +33,9 @@ import { fetchServiceAreaStatus } from '../lib/serviceAreaStatus';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 import { syncCasaFavoriteFromProfile } from '../store/favoritesStore';
+import { useLocationStore } from '../store/locationStore';
 import { theme } from '../theme';
+import { resolveAddressLabel } from '../utils/resolveAddressLabel';
 
 export function CompleteProfileScreen() {
   const { navigate, replace } = useAppNavigation();
@@ -159,13 +161,19 @@ export function CompleteProfileScreen() {
     try {
       const fix = await requestFreshPosition();
       if (!fix || !Number.isFinite(fix.lat) || !Number.isFinite(fix.lng)) {
-        setError('No se pudo obtener tu ubicación. Probá de nuevo o buscá la dirección.');
+        setError(
+          useLocationStore.getState().locationError ??
+            'No se pudo obtener tu ubicación. Probá de nuevo o buscá la dirección.',
+        );
         return;
       }
-      const geo = await reverseGeocode(fix.lat, fix.lng);
+      // Backend reverse (3s) → client Photon/Nominatim → generic label. Never block on 15s API.
+      const description = await resolveAddressLabel(fix.lat, fix.lng, {
+        accuracy: fix.accuracy,
+      });
       applyResolvedAddress({
         place_id: `gps-${fix.lat},${fix.lng}`,
-        description: geo.formatted_address || `${fix.lat.toFixed(5)}, ${fix.lng.toFixed(5)}`,
+        description,
         lat: fix.lat,
         lng: fix.lng,
       });

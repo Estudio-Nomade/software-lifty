@@ -141,7 +141,7 @@ export async function resolveAddressLabel(
   let best: string | null = null;
 
   try {
-    const rev = await reverseGeocode(lat, lng);
+    const rev = await reverseGeocode(lat, lng, { timeoutMs: REVERSE_CLIENT_TIMEOUT_MS });
     const addr = rev.formatted_address?.trim();
     if (addr && !isRawCoordsLabel(addr)) {
       best = addr;
