@@ -5,7 +5,7 @@ import type { AuthUser } from '../../shared/middleware/auth';
 import { authGuard } from '../../shared/middleware/require-auth';
 import { clearBlock } from '../cancellations/blocks';
 import { cancellationService, getCancellationConfig } from '../cancellations/service';
-import { approveDriver } from './approve';
+import { approveDriver, peekApprovalToken } from './approve';
 import { adminCommissionDebtService } from './commission-debt';
 import { adminDashboardService } from './dashboard';
 import { adminPushService } from './push-service';
@@ -27,23 +27,80 @@ import {
 } from './schema';
 import { adminService } from './service';
 
-export const adminApproveRoute = new Elysia().get('/admin/approve', async ({ query, set }) => {
-  const token = (query as any)?.token;
-  if (!token) {
-    set.status = 400;
-    set.headers['Content-Type'] = 'text/html; charset=utf-8';
-    return '<h1>Error</h1><p>Token requerido.</p>';
+const APPROVE_CARD_CSS =
+  'body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f5f5f5}.card{background:white;padding:40px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:400px}h1{margin:0 0 12px}p{color:#555;margin:0 0 16px}.ok{color:#00C2B3}.err{color:#FF6B6B}button{display:inline-block;padding:12px 24px;background:#00C2B3;color:white;border:none;border-radius:6px;font-weight:bold;font-size:16px;cursor:pointer}';
+
+function approveErrorStatus(err: unknown): number {
+  const code =
+    (err as { statusCode?: number; status?: number }).statusCode ??
+    (err as { status?: number }).status ??
+    500;
+  return typeof code === 'number' && code >= 400 && code < 600 ? code : 500;
+}
+
+function approveErrorHtml(message: string): string {
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Error</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>${APPROVE_CARD_CSS}</style></head><body><div class="card"><h1 class="err">Error</h1><p>${message}</p></div></body></html>`;
+}
+
+function approveSuccessHtml(message: string): string {
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Aprobado</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>${APPROVE_CARD_CSS}</style></head><body><div class="card"><h1 class="ok">Conductor aprobado</h1><p>${message}</p></div></body></html>`;
+}
+
+function approveConfirmHtml(fullName: string, token: string): string {
+  const safeName = fullName
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+  const safeToken = encodeURIComponent(token);
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Confirmar aprobación</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>${APPROVE_CARD_CSS}</style></head><body><div class="card"><h1 class="ok">Confirmar aprobación</h1><p>¿Aprobar documentos de <strong>${safeName}</strong>?</p><form method="POST" action="?token=${safeToken}"><button type="submit">Confirmar aprobación</button></form></div></body></html>`;
+}
+
+function readApproveToken(query: unknown, body?: unknown): string | null {
+  const fromQuery = (query as { token?: string } | null)?.token;
+  if (fromQuery != null && String(fromQuery).trim()) return String(fromQuery).trim();
+  if (body && typeof body === 'object' && 'token' in body) {
+    const t = (body as { token?: unknown }).token;
+    if (t != null && String(t).trim()) return String(t).trim();
   }
-  try {
-    const result = await approveDriver(String(token));
+  return null;
+}
+
+export const adminApproveRoute = new Elysia()
+  .get('/admin/approve', async ({ query, set }) => {
     set.headers['Content-Type'] = 'text/html; charset=utf-8';
-    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Aprobado</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f5f5f5}.card{background:white;padding:40px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:400px}h1{color:#00C2B3;margin:0 0 12px}p{color:#555;margin:0}</style></head><body><div class="card"><h1>Conductor aprobado</h1><p>${result.message}</p></div></body></html>`;
-  } catch (err) {
-    set.status = (err as any)?.status ?? 500;
+    const token = readApproveToken(query);
+    if (!token) {
+      set.status = 400;
+      return approveErrorHtml('Token requerido.');
+    }
+    try {
+      const peek = await peekApprovalToken(token);
+      if (peek.status === 'approved') {
+        set.status = 400;
+        return approveErrorHtml('Este conductor ya fue aprobado');
+      }
+      return approveConfirmHtml(peek.fullName, token);
+    } catch (err) {
+      set.status = approveErrorStatus(err);
+      return approveErrorHtml((err as Error).message);
+    }
+  })
+  .post('/admin/approve', async ({ query, body, set }) => {
     set.headers['Content-Type'] = 'text/html; charset=utf-8';
-    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Error</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f5f5f5}.card{background:white;padding:40px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1);text-align:center;max-width:400px}h1{color:#FF6B6B;margin:0 0 12px}p{color:#555;margin:0}</style></head><body><div class="card"><h1>Error</h1><p>${(err as Error).message}</p></div></body></html>`;
-  }
-});
+    const token = readApproveToken(query, body);
+    if (!token) {
+      set.status = 400;
+      return approveErrorHtml('Token requerido.');
+    }
+    try {
+      const result = await approveDriver(token);
+      return approveSuccessHtml(result.message);
+    } catch (err) {
+      set.status = approveErrorStatus(err);
+      return approveErrorHtml((err as Error).message);
+    }
+  });
 
 function isAdmin(user: AuthUser, set: { status: number }): boolean {
   if (user.role !== 'admin') {

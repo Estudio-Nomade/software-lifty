@@ -11,6 +11,41 @@ import { shouldClearProfessionalGraceTimestamps } from '../../shared/lib/profess
 import { sendPushToUser } from '../../shared/lib/push';
 import { DRIVER_APPROVED_PUSH } from './driver-review-push';
 
+export type ApprovalTokenPeek = {
+  driverId: string;
+  fullName: string;
+  status: string;
+};
+
+/** Validate token without consuming it (GET confirm screen). */
+export async function peekApprovalToken(token: string): Promise<ApprovalTokenPeek> {
+  const [driver] = await db
+    .select({
+      id: drivers.id,
+      status: drivers.status,
+      user_id: drivers.user_id,
+    })
+    .from(drivers)
+    .where(eq(drivers.approval_token, token))
+    .limit(1);
+
+  if (!driver) {
+    throw new NotFoundError('Token de aprobacion invalido o ya usado');
+  }
+
+  const [userRow] = await db
+    .select({ full_name: users.full_name })
+    .from(users)
+    .where(eq(users.id, driver.user_id))
+    .limit(1);
+
+  return {
+    driverId: driver.id,
+    fullName: userRow?.full_name?.trim() || 'Conductor',
+    status: driver.status,
+  };
+}
+
 export async function approveDriver(token: string): Promise<{ message: string }> {
   const [driver] = await db
     .select({

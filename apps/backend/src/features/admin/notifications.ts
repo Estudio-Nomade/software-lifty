@@ -4,6 +4,9 @@ import { driverDocuments, drivers, users, vehicles } from '../../shared/db/schem
 import { docTypeLabel } from '../../shared/lib/documents';
 import { sendEmail } from '../../shared/lib/email';
 import { logger } from '../../shared/lib/logger';
+import { getRedis } from '../../shared/lib/redis';
+
+const DOCS_RESUBMIT_DEBOUNCE_TTL_S = 60;
 
 function sanitize(value: string): string {
   return value
@@ -122,6 +125,61 @@ export async function notifyDriverReviewNotes(
 
 function generateApprovalToken(): string {
   return crypto.randomUUID();
+}
+
+/**
+ * Stable token for one review cycle: reuse while driver is still in review queue;
+ * mint only when null (first mail of cycle or post-consume).
+ */
+export async function resolveApprovalTokenForReviewCycle(driverId: string): Promise<string | null> {
+  const [row] = await db
+    .select({
+      approval_token: drivers.approval_token,
+      status: drivers.status,
+      documents_pending_review: drivers.documents_pending_review,
+    })
+    .from(drivers)
+    .where(eq(drivers.id, driverId))
+    .limit(1);
+
+  if (!row) return null;
+
+  const inReviewQueue = row.status === 'review' || row.documents_pending_review === true;
+  if (row.approval_token && inReviewQueue) {
+    return row.approval_token;
+  }
+
+  const token = generateApprovalToken();
+  await db.update(drivers).set({ approval_token: token }).where(eq(drivers.id, driverId));
+  return token;
+}
+
+function docsResubmitDebounceKey(driverId: string): string {
+  return `docs-resubmit:${driverId}`;
+}
+
+/** Skip duplicate resubmit mails within TTL when Redis is available. */
+async function shouldSkipDuplicateDocsResubmitMail(driverId: string): Promise<boolean> {
+  const redis = getRedis();
+  if (!redis) return false;
+  try {
+    const key = docsResubmitDebounceKey(driverId);
+    const exists = await redis.get(key);
+    return exists != null;
+  } catch (err) {
+    logger.warn('[ADMIN-NOTIFY] docs-resubmit debounce read failed', (err as Error).message);
+    return false;
+  }
+}
+
+async function markDocsResubmitMailSent(driverId: string): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.setex(docsResubmitDebounceKey(driverId), DOCS_RESUBMIT_DEBOUNCE_TTL_S, '1');
+  } catch (err) {
+    logger.warn('[ADMIN-NOTIFY] docs-resubmit debounce write failed', (err as Error).message);
+  }
 }
 
 async function gatherDriverData(driverId: string): Promise<{
@@ -347,8 +405,13 @@ export async function notifyAdminNewDriver(driverId: string): Promise<void> {
       return;
     }
 
-    const token = generateApprovalToken();
-    await db.update(drivers).set({ approval_token: token }).where(eq(drivers.id, driverId));
+    const token = await resolveApprovalTokenForReviewCycle(driverId);
+    if (!token) {
+      logger.warn('[ADMIN-NOTIFY] Skipped new-driver email: could not resolve approval token', {
+        driverId,
+      });
+      return;
+    }
 
     const recipients = await collectAdminRecipients();
 
@@ -446,14 +509,24 @@ export async function notifyAdminsDriverDocsResubmitted(
       return;
     }
 
-    const token = generateApprovalToken();
-    await db.update(drivers).set({ approval_token: token }).where(eq(drivers.id, driverId));
+    const token = await resolveApprovalTokenForReviewCycle(driverId);
+    if (!token) {
+      logger.warn('[ADMIN-NOTIFY] Skipped docs-resubmit email: could not resolve approval token', {
+        driverId,
+      });
+      return;
+    }
 
     const recipients = await collectAdminRecipients();
     if (recipients.size === 0) {
       logger.warn('[ADMIN-NOTIFY] No admin recipients — docs-resubmit email skipped', {
         driverId,
       });
+      return;
+    }
+
+    if (await shouldSkipDuplicateDocsResubmitMail(driverId)) {
+      logger.info('[ADMIN-NOTIFY] Docs-resubmit email debounced (recent send)', { driverId });
       return;
     }
 
@@ -493,6 +566,10 @@ export async function notifyAdminsDriverDocsResubmitted(
       sent,
       total: recipients.size,
     });
+
+    if (sent > 0) {
+      await markDocsResubmitMailSent(driverId);
+    }
 
     try {
       const { sendWebPushToAdmins } = await import('../../shared/lib/web-push');
