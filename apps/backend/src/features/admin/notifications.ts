@@ -1,6 +1,7 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { driverDocuments, drivers, users, vehicles } from '../../shared/db/schema';
+import { docTypeLabel } from '../../shared/lib/documents';
 import { sendEmail } from '../../shared/lib/email';
 import { logger } from '../../shared/lib/logger';
 
@@ -138,6 +139,7 @@ async function gatherDriverData(driverId: string): Promise<{
     color: string;
   } | null;
   documents: Array<{ type: string; front: string | null; back: string | null }>;
+  rawDocuments: Array<{ doc_type: string; file_url: string }>;
 } | null> {
   const [d] = await db
     .select({
@@ -213,7 +215,105 @@ async function gatherDriverData(driverId: string): Promise<{
       front: urls.front,
       back: urls.back,
     })),
+    rawDocuments: rawDocs.map((doc) => ({
+      doc_type: doc.doc_type,
+      file_url: doc.file_url,
+    })),
   };
+}
+
+/** Prefer touched sides; expand license_* so ops always sees the active pair. */
+export function selectDocsForResubmitEmail(
+  rawDocuments: Array<{ doc_type: string; file_url: string }>,
+  docTypes?: string[],
+): Array<{ doc_type: string; file_url: string }> {
+  if (!docTypes?.length) return rawDocuments;
+
+  const touched = new Set(docTypes);
+  const expandBases = new Set<string>();
+  for (const t of docTypes) {
+    if (t.startsWith('license_')) expandBases.add('license');
+    else {
+      const base = t.replace(/_(front|back)$/, '');
+      if (base !== t) expandBases.add(base);
+    }
+  }
+
+  return rawDocuments.filter((doc) => {
+    if (touched.has(doc.doc_type)) return true;
+    const base = doc.doc_type.replace(/_(front|back)$/, '');
+    return expandBases.has(base);
+  });
+}
+
+export function buildResubmitDocsLinksHtml(
+  docs: Array<{ doc_type: string; file_url: string }>,
+): string {
+  if (docs.length === 0) return '';
+  const rows = docs
+    .map((doc) => {
+      const label = sanitize(docTypeLabel(doc.doc_type));
+      const href = doc.file_url?.trim();
+      const link = href ? `<a href="${sanitize(href)}">${label}</a>` : `${label} (sin archivo)`;
+      return `<tr><td style="padding:8px;border:1px solid #ddd"><strong>${label}</strong></td><td style="padding:8px;border:1px solid #ddd">${link}</td></tr>`;
+    })
+    .join('');
+  return rows;
+}
+
+export function docsIncludeLicense(docTypes?: string[]): boolean {
+  return (docTypes ?? []).some((t) => t.startsWith('license_'));
+}
+
+/** Contract helpers for resubmit ops mail (tests + HTML builder). */
+export const DOCS_RESUBMIT_SUBJECT = 'Conductor actualizó documentos — revisar de nuevo';
+export const DOCS_RESUBMIT_APPROVE_CTA = 'Aprobar documento';
+export const LICENSE_RESUBMIT_CONTEXT =
+  'Contexto: re-subida de licencia / carnet profesional (verificar categoría en la imagen).';
+
+export function buildDocsResubmitEmailHtml(input: {
+  fullName: string;
+  phone: string;
+  email: string | null;
+  driverId: string;
+  approveUrl: string;
+  adminDeepLink?: string | null;
+  fromStatus?: string | null;
+  docTypes?: string[];
+  documents: Array<{ doc_type: string; file_url: string }>;
+}): { subject: string; html: string } {
+  const changed =
+    input.docTypes?.length && input.docTypes.length > 0
+      ? input.docTypes.map((t) => sanitize(docTypeLabel(t))).join(', ')
+      : null;
+  const fromStatus = input.fromStatus ? sanitize(input.fromStatus) : null;
+  const docsHtml = buildResubmitDocsLinksHtml(input.documents);
+  const licenseContext = docsIncludeLicense(input.docTypes)
+    ? `<p style="color:#555">${sanitize(LICENSE_RESUBMIT_CONTEXT)}</p>`
+    : '';
+  const adminSecondary =
+    input.adminDeepLink && !input.adminDeepLink.startsWith('/drivers/')
+      ? `<p style="margin-top:16px"><a href="${sanitize(input.adminDeepLink)}" style="color:#888;font-size:13px">Abrir ficha en admin (opcional)</a></p>`
+      : '';
+
+  const html = `<h2>Documentos actualizados</h2>
+<p>El conductor <strong>${sanitize(input.fullName)}</strong> volvió a subir documentación y necesita re-revisión.</p>
+${licenseContext}
+<table style="border-collapse:collapse;width:100%;max-width:600px">
+<tr><td style="padding:8px;border:1px solid #ddd"><strong>Nombre</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(input.fullName)}</td></tr>
+<tr><td style="padding:8px;border:1px solid #ddd"><strong>Telefono</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(input.phone)}</td></tr>
+<tr><td style="padding:8px;border:1px solid #ddd"><strong>Email</strong></td><td style="padding:8px;border:1px solid #ddd">${input.email ? sanitize(input.email) : '—'}</td></tr>
+${changed ? `<tr><td style="padding:8px;border:1px solid #ddd"><strong>Docs tocados</strong></td><td style="padding:8px;border:1px solid #ddd">${changed}</td></tr>` : ''}
+${fromStatus ? `<tr><td style="padding:8px;border:1px solid #ddd"><strong>Estado previo</strong></td><td style="padding:8px;border:1px solid #ddd">${fromStatus}</td></tr>` : ''}
+${docsHtml}
+</table>
+<br/>
+<a href="${sanitize(input.approveUrl)}" style="display:inline-block;padding:12px 24px;background:#00C2B3;color:white;text-decoration:none;border-radius:6px;font-weight:bold">${DOCS_RESUBMIT_APPROVE_CTA}</a>
+${adminSecondary}
+<br/><br/>
+<p style="color:#888;font-size:12px">ID: ${sanitize(input.driverId)}</p>`;
+
+  return { subject: DOCS_RESUBMIT_SUBJECT, html };
 }
 
 /** Empty/whitespace DB strings must not render as blank table cells. */
@@ -346,6 +446,9 @@ export async function notifyAdminsDriverDocsResubmitted(
       return;
     }
 
+    const token = generateApprovalToken();
+    await db.update(drivers).set({ approval_token: token }).where(eq(drivers.id, driverId));
+
     const recipients = await collectAdminRecipients();
     if (recipients.size === 0) {
       logger.warn('[ADMIN-NOTIFY] No admin recipients — docs-resubmit email skipped', {
@@ -354,27 +457,21 @@ export async function notifyAdminsDriverDocsResubmitted(
       return;
     }
 
+    const apiUrl = process.env.API_URL ?? 'http://localhost:3000/api';
+    const approveUrl = `${apiUrl}/admin/approve?token=${token}`;
     const deepLink = adminDriverDeepLink(driverId);
-    const changed =
-      opts?.docTypes?.length && opts.docTypes.length > 0
-        ? opts.docTypes.map((t) => sanitize(t)).join(', ')
-        : null;
-    const fromStatus = opts?.fromStatus ? sanitize(opts.fromStatus) : null;
-
-    const subject = 'Conductor actualizó documentos — revisar de nuevo';
-    const html = `<h2>Documentos actualizados</h2>
-<p>El conductor <strong>${sanitize(data.fullName)}</strong> volvió a subir documentación y necesita re-revisión.</p>
-<table style="border-collapse:collapse;width:100%;max-width:600px">
-<tr><td style="padding:8px;border:1px solid #ddd"><strong>Nombre</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(data.fullName)}</td></tr>
-<tr><td style="padding:8px;border:1px solid #ddd"><strong>Telefono</strong></td><td style="padding:8px;border:1px solid #ddd">${sanitize(data.phone)}</td></tr>
-<tr><td style="padding:8px;border:1px solid #ddd"><strong>Email</strong></td><td style="padding:8px;border:1px solid #ddd">${data.email ? sanitize(data.email) : '—'}</td></tr>
-${changed ? `<tr><td style="padding:8px;border:1px solid #ddd"><strong>Docs tocados</strong></td><td style="padding:8px;border:1px solid #ddd">${changed}</td></tr>` : ''}
-${fromStatus ? `<tr><td style="padding:8px;border:1px solid #ddd"><strong>Estado previo</strong></td><td style="padding:8px;border:1px solid #ddd">${fromStatus}</td></tr>` : ''}
-</table>
-<br/>
-<a href="${deepLink}" style="display:inline-block;padding:12px 24px;background:#00C2B3;color:white;text-decoration:none;border-radius:6px;font-weight:bold">Abrir ficha en admin</a>
-<br/><br/>
-<p style="color:#888;font-size:12px">ID: ${driverId}</p>`;
+    const selectedDocs = selectDocsForResubmitEmail(data.rawDocuments, opts?.docTypes);
+    const { subject, html } = buildDocsResubmitEmailHtml({
+      fullName: data.fullName,
+      phone: data.phone,
+      email: data.email,
+      driverId,
+      approveUrl,
+      adminDeepLink: deepLink,
+      fromStatus: opts?.fromStatus,
+      docTypes: opts?.docTypes,
+      documents: selectedDocs,
+    });
 
     logger.info('[ADMIN-NOTIFY] Sending docs-resubmit email', {
       driverId,

@@ -1,11 +1,13 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
-import { drivers } from '../../shared/db/schema';
+import { drivers, vehicles } from '../../shared/db/schema';
 import { driverDocuments } from '../../shared/db/schema/driver-documents';
 import { users } from '../../shared/db/schema/users';
 import { broadcastDriverAccountUpdated } from '../../shared/lib/broadcast';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { logger } from '../../shared/lib/logger';
+import { isAllowedMotoLicenseCategory } from '../../shared/lib/moto-license-category';
+import { shouldClearProfessionalGraceTimestamps } from '../../shared/lib/professional-license-grace';
 import { sendPushToUser } from '../../shared/lib/push';
 import { DRIVER_APPROVED_PUSH } from './driver-review-push';
 
@@ -15,6 +17,9 @@ export async function approveDriver(token: string): Promise<{ message: string }>
       id: drivers.id,
       user_id: drivers.user_id,
       status: drivers.status,
+      identification_status: drivers.identification_status,
+      license_professional_status: drivers.license_professional_status,
+      license_category: drivers.license_category,
     })
     .from(drivers)
     .where(eq(drivers.approval_token, token))
@@ -30,16 +35,45 @@ export async function approveDriver(token: string): Promise<{ message: string }>
 
   const now = new Date();
 
-  const [current] = await db
-    .select({ identification_status: drivers.identification_status })
-    .from(drivers)
-    .where(eq(drivers.id, driver.id))
-    .limit(1);
-
   const identificationPatch =
-    current?.identification_status === 'issued'
+    driver.identification_status === 'issued'
       ? {}
       : { identification_status: 'pending_pickup' as const };
+
+  const prevProf = driver.license_professional_status;
+  const promoteProfessional = prevProf === 'pending_professional';
+  let professionalPatch: {
+    license_professional_status?: string;
+    license_category?: string;
+    professional_license_grace_started_at?: null;
+    professional_license_due_at?: null;
+  } = {};
+
+  if (promoteProfessional) {
+    const nextProf = 'professional' as const;
+    professionalPatch = {
+      license_professional_status: nextProf,
+      ...(shouldClearProfessionalGraceTimestamps(prevProf, nextProf)
+        ? {
+            professional_license_grace_started_at: null,
+            professional_license_due_at: null,
+          }
+        : {}),
+    };
+
+    const [veh] = await db
+      .select({ vehicle_type: vehicles.vehicle_type })
+      .from(vehicles)
+      .where(eq(vehicles.driver_id, driver.id))
+      .limit(1);
+    const vt = (veh?.vehicle_type ?? '').trim().toLowerCase();
+    const isMoto = vt === 'motorcycle' || vt === 'moto';
+    const catIsMoto = isAllowedMotoLicenseCategory(driver.license_category);
+    // Auto path: stamp professional category. Never overwrite moto A1.x classes.
+    if (!isMoto && !catIsMoto) {
+      professionalPatch.license_category = 'professional';
+    }
+  }
 
   await db
     .update(drivers)
@@ -51,6 +85,7 @@ export async function approveDriver(token: string): Promise<{ message: string }>
       admin_reviewed_at: now,
       documents_pending_review: false,
       ...identificationPatch,
+      ...professionalPatch,
       updated_at: now,
     })
     .where(eq(drivers.id, driver.id));

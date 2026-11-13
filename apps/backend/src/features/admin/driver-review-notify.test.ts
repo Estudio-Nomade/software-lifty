@@ -2,6 +2,13 @@ process.env.NODE_ENV = 'test';
 
 import { describe, expect, test } from 'bun:test';
 import {
+  buildDocsResubmitEmailHtml,
+  DOCS_RESUBMIT_APPROVE_CTA,
+  DOCS_RESUBMIT_SUBJECT,
+  LICENSE_RESUBMIT_CONTEXT,
+  selectDocsForResubmitEmail,
+} from './notifications';
+import {
   DRIVER_APPROVED_PUSH,
   driverRejectedPush,
   driverReviewNotesPush,
@@ -80,7 +87,7 @@ describe('sendPushToUser web filter (contract)', () => {
 
 describe('admin docs resubmit notify copy (contract)', () => {
   test('resubmit subject and push type differ from first-time alta', () => {
-    const resubmitSubject = 'Conductor actualizó documentos — revisar de nuevo';
+    const resubmitSubject = DOCS_RESUBMIT_SUBJECT;
     const newDriverSubjectPrefix = 'Nuevo conductor:';
     expect(resubmitSubject).not.toContain('Nuevo conductor');
     expect(newDriverSubjectPrefix.startsWith('Nuevo conductor')).toBe(true);
@@ -88,5 +95,42 @@ describe('admin docs resubmit notify copy (contract)', () => {
     const resubmitPushType = 'admin:driver_docs_resubmitted';
     const newDriverPushType = 'new_driver_review';
     expect(resubmitPushType).not.toBe(newDriverPushType);
+  });
+
+  test('resubmit HTML includes file links, approve CTA and token URL', () => {
+    const fileUrl = 'https://cdn.example.com/drivers/lic-front.jpg';
+    const approveUrl = 'https://api.liftyviajes.com/api/admin/approve?token=tok-abc-123';
+    const { subject, html } = buildDocsResubmitEmailHtml({
+      fullName: 'Ana Driver',
+      phone: '+549111',
+      email: 'ana@example.com',
+      driverId: 'drv-1',
+      approveUrl,
+      adminDeepLink: null,
+      docTypes: ['license_front'],
+      documents: [
+        { doc_type: 'license_front', file_url: fileUrl },
+        { doc_type: 'license_back', file_url: 'https://cdn.example.com/drivers/lic-back.jpg' },
+      ],
+    });
+
+    expect(subject).toBe(DOCS_RESUBMIT_SUBJECT);
+    expect(html).toContain(fileUrl);
+    expect(html).toContain('https://cdn.example.com/drivers/lic-back.jpg');
+    expect(html).toContain(DOCS_RESUBMIT_APPROVE_CTA);
+    expect(html).toContain('approve?token=tok-abc-123');
+    expect(html).toContain(LICENSE_RESUBMIT_CONTEXT);
+    expect(html).toContain('Licencia (frente)');
+    expect(html).not.toMatch(/>Abrir ficha en admin</);
+  });
+
+  test('selectDocsForResubmitEmail expands license pair when one side touched', () => {
+    const raw = [
+      { doc_type: 'license_front', file_url: 'https://x/f' },
+      { doc_type: 'license_back', file_url: 'https://x/b' },
+      { doc_type: 'insurance_front', file_url: 'https://x/i' },
+    ];
+    const selected = selectDocsForResubmitEmail(raw, ['license_front']);
+    expect(selected.map((d) => d.doc_type).sort()).toEqual(['license_back', 'license_front']);
   });
 });
