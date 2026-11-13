@@ -210,6 +210,17 @@ describe('passenger push registration', () => {
     expect(mockApiPost).not.toHaveBeenCalled();
   });
 
+  it('ensurePushRegistrationIfStale respects failure cooldown (AppState path)', async () => {
+    mockApiPost.mockRejectedValue(new Error('offline'));
+    // First foreground/session wave fails.
+    await ensurePushRegistrationIfStale(60_000, { retryDelaysMs: [] });
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+    mockApiPost.mockClear();
+    // AppState 'active' after location permission dialog must not re-hammer.
+    await ensurePushRegistrationIfStale(60_000, { retryDelaysMs: [], failureCooldownMs: 60_000 });
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
   it('force bypasses failure cooldown (token rotation)', async () => {
     mockApiPost.mockRejectedValue(new Error('offline'));
     await ensurePushRegistration({ retryDelaysMs: [] });
