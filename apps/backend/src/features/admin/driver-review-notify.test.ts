@@ -5,6 +5,7 @@ import {
   buildDocsResubmitEmailHtml,
   DOCS_RESUBMIT_APPROVE_CTA,
   DOCS_RESUBMIT_SUBJECT,
+  docsResubmitDebounceFingerprint,
   LICENSE_RESUBMIT_CONTEXT,
   selectDocsForResubmitEmail,
 } from './notifications';
@@ -132,5 +133,17 @@ describe('admin docs resubmit notify copy (contract)', () => {
     ];
     const selected = selectDocsForResubmitEmail(raw, ['license_front']);
     expect(selected.map((d) => d.doc_type).sort()).toEqual(['license_back', 'license_front']);
+  });
+
+  test('debounce fingerprint distinguishes front vs back (not driver-only)', () => {
+    expect(docsResubmitDebounceFingerprint(['license_front'])).toBe('license_front');
+    expect(docsResubmitDebounceFingerprint(['license_back'])).toBe('license_back');
+    expect(docsResubmitDebounceFingerprint(['license_front'])).not.toBe(
+      docsResubmitDebounceFingerprint(['license_back']),
+    );
+    expect(docsResubmitDebounceFingerprint(['license_back', 'license_front'])).toBe(
+      'license_back,license_front',
+    );
+    expect(docsResubmitDebounceFingerprint(undefined)).toBe('all');
   });
 });
