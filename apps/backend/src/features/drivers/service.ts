@@ -1859,7 +1859,7 @@ export const driversService = {
     return { file_url: fileUrl };
   },
 
-  async listDocuments(user: AuthUser) {
+  async listDocuments(user: AuthUser, opts?: { includeSuperseded?: string | boolean | null }) {
     const [driver] = await db
       .select({ id: drivers.id })
       .from(drivers)
@@ -1868,7 +1868,9 @@ export const driversService = {
 
     if (!driver) return [];
 
-    return db
+    const includeSuperseded = parseReplaceGroupFlag(opts?.includeSuperseded, false);
+
+    const rows = await db
       .select({
         id: driverDocuments.id,
         doc_type: driverDocuments.doc_type,
@@ -1877,14 +1879,54 @@ export const driversService = {
         verified_at: driverDocuments.verified_at,
         expires_at: driverDocuments.expires_at,
         created_at: driverDocuments.created_at,
+        superseded_at: driverDocuments.superseded_at,
         ops_ok: driverDocuments.ops_ok,
         review_comment: driverDocuments.review_comment,
       })
       .from(driverDocuments)
       .where(
-        and(eq(driverDocuments.driver_id, driver.id), ne(driverDocuments.status, 'superseded')),
+        includeSuperseded
+          ? eq(driverDocuments.driver_id, driver.id)
+          : and(eq(driverDocuments.driver_id, driver.id), ne(driverDocuments.status, 'superseded')),
       )
       .orderBy(driverDocuments.created_at);
+
+    if (!includeSuperseded) return rows;
+
+    // Cap superseded to last generation per doc_type (replace_group sets one
+    // superseded_at on the batch). Prefer stamped superseded_at over legacy null.
+    const genTs = (row: {
+      superseded_at: Date | null;
+      created_at: Date;
+    }): number => {
+      const raw = row.superseded_at ?? row.created_at;
+      if (raw instanceof Date) return raw.getTime();
+      return 0;
+    };
+
+    const stampedByType = new Map<string, boolean>();
+    for (const row of rows) {
+      if (row.status === 'superseded' && row.superseded_at) {
+        stampedByType.set(row.doc_type, true);
+      }
+    }
+
+    const latestSupersededAt = new Map<string, number>();
+    for (const row of rows) {
+      if (row.status !== 'superseded') continue;
+      if (stampedByType.get(row.doc_type) && !row.superseded_at) continue;
+      const ts = genTs(row);
+      const prev = latestSupersededAt.get(row.doc_type) ?? 0;
+      if (ts >= prev) latestSupersededAt.set(row.doc_type, ts);
+    }
+
+    return rows.filter((row) => {
+      if (row.status !== 'superseded') return true;
+      if (stampedByType.get(row.doc_type) && !row.superseded_at) return false;
+      const latest = latestSupersededAt.get(row.doc_type);
+      if (latest == null) return false;
+      return genTs(row) === latest;
+    });
   },
 
   // Re-upload of a document the driver already registered. Each upload is a NEW
@@ -1916,21 +1958,6 @@ export const driversService = {
     if (!driver) throw new NotFoundError('Driver profile not found. Complete onboarding first');
 
     const replaceGroup = parseReplaceGroupFlag(opts?.replaceGroup, true);
-
-    // Capture previous active URLs before supersede; delete storage only after
-    // the new row is committed so a failed upload leaves originals recoverable.
-    const previousDocs = replaceGroup
-      ? await db
-          .select({ file_url: driverDocuments.file_url })
-          .from(driverDocuments)
-          .where(
-            and(
-              eq(driverDocuments.driver_id, driver.id),
-              eq(driverDocuments.doc_type, docType),
-              ne(driverDocuments.status, 'superseded'),
-            ),
-          )
-      : [];
 
     if (!replaceGroup) {
       await assertCanAppendDoc(driver.id, docType);
@@ -1974,24 +2001,8 @@ export const driversService = {
       throw err;
     }
 
-    // Safe to drop previous objects only after the new row is live.
-    if (replaceGroup) {
-      for (const previousDoc of previousDocs) {
-        const storagePath = _storage.extractStoragePath(previousDoc.file_url);
-        if (storagePath) {
-          try {
-            await _storage.deleteFile(storagePath);
-          } catch (err) {
-            logger.warn('[DOCS] Failed to delete previous doc from storage', {
-              driverId: driver.id,
-              docType,
-              path: storagePath,
-              error: (err as Error).message,
-            });
-          }
-        }
-      }
-    }
+    // Previous rows stay in storage after supersede so driver/ops can open the
+    // prior version via listDocuments?include_superseded=1. Blob GC is ops-side.
 
     const isSensitive = SENSITIVE_DOC_TYPES.has(docType);
 

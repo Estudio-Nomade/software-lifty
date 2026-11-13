@@ -66,6 +66,11 @@ export const reuploadDocBody = t.Object({
   replace_group: t.Optional(t.Union([t.String(), t.Boolean()])),
 });
 
+/** GET /me/documents?include_superseded=1 → last superseded generation too. */
+export const listDocumentsQuery = t.Object({
+  include_superseded: t.Optional(t.Union([t.String(), t.Boolean()])),
+});
+
 export const setDistrictBody = t.Object({
   district_id: t.String(),
 });

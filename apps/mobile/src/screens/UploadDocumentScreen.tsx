@@ -2,19 +2,31 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type React from 'react';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
+  Linking,
   ScrollView,
   StatusBar,
   StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { z } from 'zod';
+import { getValidated } from '../api/client';
+import { documentSchema } from '../api/types';
 import { Button } from '../components/Button';
 import { Navbar } from '../components/Navbar';
 import { Text } from '../components/ui/Text';
+import {
+  type ReuploadPreviewBySide,
+  type ReuploadPreviewFile,
+  emptyPreviewCopy,
+  partitionReuploadPreview,
+  statusBadgeEs,
+} from '../lib/reuploadDocsPreview';
 import { theme } from '../theme';
 import { compressImage } from '../utils/image';
 import type { DocBase, DocSide } from '../utils/upload';
@@ -65,6 +77,78 @@ function subtitleFor(docType: DocType | undefined, isReupload: boolean): string 
   return 'Subí el documento requerido. Si no entra en una sola foto, podés sumar hasta 5 imágenes.';
 }
 
+function ServerFileRow({
+  file,
+  readOnly,
+}: {
+  file: ReuploadPreviewFile;
+  readOnly?: boolean;
+}) {
+  return (
+    <View style={styles.fileRow}>
+      {file.isPdf ? (
+        <View style={styles.thumbFile}>
+          <Text style={styles.thumbIcon}>📄</Text>
+        </View>
+      ) : (
+        <Image source={{ uri: file.fileUrl }} style={styles.thumb} />
+      )}
+      <View style={styles.serverFileMeta}>
+        <Text style={styles.fileRowName} numberOfLines={2}>
+          {statusBadgeEs(file.status)}
+        </Text>
+        {file.reviewComment ? (
+          <Text style={styles.reviewComment} numberOfLines={2}>
+            {file.reviewComment}
+          </Text>
+        ) : null}
+      </View>
+      <TouchableOpacity
+        onPress={() => {
+          void Linking.openURL(file.fileUrl);
+        }}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={readOnly ? 'Ver versión anterior' : 'Ver archivo'}
+      >
+        <Text style={styles.viewLink}>Ver</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function PreviewSideBlock({
+  title,
+  bySide,
+  sides,
+}: {
+  title: string;
+  bySide: ReuploadPreviewBySide;
+  sides: DocSide[];
+}) {
+  const total = sides.reduce((n, s) => n + bySide[s].length, 0);
+  if (total === 0) return null;
+  return (
+    <View style={styles.serverSection}>
+      <Text style={styles.serverSectionTitle}>{title}</Text>
+      {sides.map((side) => {
+        const files = bySide[side];
+        if (!files.length) return null;
+        return (
+          <View key={`${title}-${side}`} style={styles.serverSideBlock}>
+            {sides.length > 1 ? (
+              <Text style={styles.serverSideLabel}>{SIDE_LABELS[side]}</Text>
+            ) : null}
+            {files.map((file) => (
+              <ServerFileRow key={file.id} file={file} readOnly={title.includes('anterior')} />
+            ))}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 export const UploadDocumentScreen: React.FC = () => {
   const { docType, docLabel, mode } = useLocalSearchParams<{
     docType: DocType;
@@ -81,10 +165,56 @@ export const UploadDocumentScreen: React.FC = () => {
     back: [],
   });
   const [uploading, setUploading] = useState(false);
+  const [loadingServer, setLoadingServer] = useState(isReupload);
+  const [serverCurrent, setServerCurrent] = useState<ReuploadPreviewBySide>({
+    front: [],
+    back: [],
+  });
+  const [serverPrevious, setServerPrevious] = useState<ReuploadPreviewBySide>({
+    front: [],
+    back: [],
+  });
+  const [hasServerCurrent, setHasServerCurrent] = useState(false);
+  const [hasServerPrevious, setHasServerPrevious] = useState(false);
+  const [serverLoadFailed, setServerLoadFailed] = useState(false);
+
   const requiredSides = docType ? DOC_SIDES[docType] : [];
   const bothSelected = requiredSides.every((side) => selectedFiles[side].length > 0);
 
   const title = docLabel || 'Subir documento';
+
+  const loadServerDocs = useCallback(async () => {
+    if (!isReupload || !docType) {
+      setLoadingServer(false);
+      return;
+    }
+    setLoadingServer(true);
+    setServerLoadFailed(false);
+    try {
+      const docs = await getValidated(
+        '/drivers/me/documents?include_superseded=1',
+        z.array(documentSchema),
+      );
+      const partitioned = partitionReuploadPreview(docs, docType);
+      setServerCurrent(partitioned.current);
+      setServerPrevious(partitioned.previous);
+      setHasServerCurrent(partitioned.hasCurrent);
+      setHasServerPrevious(partitioned.hasPrevious);
+      setServerLoadFailed(false);
+    } catch {
+      setServerCurrent({ front: [], back: [] });
+      setServerPrevious({ front: [], back: [] });
+      setHasServerCurrent(false);
+      setHasServerPrevious(false);
+      setServerLoadFailed(true);
+    } finally {
+      setLoadingServer(false);
+    }
+  }, [docType, isReupload]);
+
+  useEffect(() => {
+    void loadServerDocs();
+  }, [loadServerDocs]);
 
   const pushFiles = (side: DocSide, incoming: SelectedFile[]) => {
     setSelectedFiles((prev) => {
@@ -279,11 +409,50 @@ export const UploadDocumentScreen: React.FC = () => {
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitleFor(docType, isReupload)}</Text>
 
+        {isReupload && loadingServer ? (
+          <ActivityIndicator color={theme.colors.turquoise} style={styles.loader} />
+        ) : null}
+
+        {isReupload && !loadingServer && serverLoadFailed ? (
+          <View style={styles.loadErrorBox}>
+            <Text style={styles.loadErrorText}>
+              No pudimos cargar el documento actual. Podés reintentar o subir fotos nuevas.
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                void loadServerDocs();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Reintentar carga de documentos"
+            >
+              <Text style={styles.loadErrorRetry}>Reintentar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {isReupload && !loadingServer && !serverLoadFailed ? (
+          <>
+            <PreviewSideBlock title="En Lifty ahora" bySide={serverCurrent} sides={requiredSides} />
+            {hasServerPrevious ? (
+              <PreviewSideBlock
+                title="Versión anterior"
+                bySide={serverPrevious}
+                sides={requiredSides}
+              />
+            ) : null}
+          </>
+        ) : null}
+
         {requiredSides.map((side) => {
           const files = selectedFiles[side];
           const label = sideLabelFor(docType, side, requiredSides);
           const showSideTitle = requiredSides.length > 1 || allowsPdfDoc(docType) || true;
           const canAddMore = files.length < MAX_FILES_PER_DOC_SIDE;
+          const emptyCopy = emptyPreviewCopy({
+            hasServerCurrent: isReupload && hasServerCurrent && serverCurrent[side].length > 0,
+            hasLocalFiles: files.length > 0,
+            loadFailed: isReupload && serverLoadFailed,
+          });
           return (
             <View key={side} style={styles.sideSection}>
               {showSideTitle ? <Text style={styles.sideTitle}>{label}</Text> : null}
@@ -291,7 +460,7 @@ export const UploadDocumentScreen: React.FC = () => {
               {files.length === 0 ? (
                 <View style={styles.preview}>
                   <Text style={styles.previewIcon}>📄</Text>
-                  <Text style={styles.previewText}>Todavia no subiste nada</Text>
+                  <Text style={styles.previewText}>{emptyCopy}</Text>
                 </View>
               ) : (
                 <View style={styles.fileList}>
@@ -393,6 +562,59 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
   },
+  loader: {
+    marginVertical: theme.spacing.sm,
+  },
+  loadErrorBox: {
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  loadErrorText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.deepBlue,
+  },
+  loadErrorRetry: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.turquoise,
+  },
+  serverSection: {
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
+    gap: theme.spacing.sm,
+  },
+  serverSectionTitle: {
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.deepBlue,
+  },
+  serverSideBlock: {
+    gap: theme.spacing.sm,
+  },
+  serverSideLabel: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.mediumGray,
+  },
+  serverFileMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  reviewComment: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.mediumGray,
+  },
+  viewLink: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.turquoise,
+    fontWeight: theme.fontWeight.semibold,
+  },
   sideSection: {
     width: '100%',
     maxWidth: 480,
@@ -422,6 +644,8 @@ const styles = StyleSheet.create({
   previewText: {
     fontSize: theme.fontSize.sm,
     color: theme.colors.mediumGray,
+    textAlign: 'center',
+    paddingHorizontal: theme.spacing.md,
   },
   fileList: {
     width: '100%',

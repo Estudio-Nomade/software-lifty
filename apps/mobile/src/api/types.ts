@@ -233,6 +233,7 @@ export const documentSchema = z.object({
   verified_at: z.string().nullable().optional(),
   expires_at: z.string().nullable().optional(),
   created_at: z.string(),
+  superseded_at: z.string().nullable().optional(),
   ops_ok: z.boolean().optional(),
   review_comment: z.string().nullable().optional(),
 });
