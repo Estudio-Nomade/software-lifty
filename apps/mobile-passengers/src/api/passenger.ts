@@ -261,14 +261,25 @@ export async function geocodeAddress(
   return data;
 }
 
-/** Reverse geocode (coords → street name). Uses backend Photon proxy — works on web. */
+/**
+ * Reverse geocode (coords → street name). Uses backend Photon proxy — works on web.
+ * Keep timeout tight: Complete Profile / Origen must fall through to client Photon
+ * instead of spinning on a dead API for the full 15s axios default.
+ */
+export const REVERSE_GEOCODE_TIMEOUT_MS = 3_000;
+
 export async function reverseGeocode(
   lat: number,
   lng: number,
+  options?: { timeoutMs?: number; signal?: AbortSignal },
 ): Promise<{ lat: number; lng: number; formatted_address: string }> {
   const { data } = await api.get<{ lat: number; lng: number; formatted_address: string }>(
     '/maps/geocode',
-    { params: { lat, lng } },
+    {
+      params: { lat, lng },
+      timeout: options?.timeoutMs ?? REVERSE_GEOCODE_TIMEOUT_MS,
+      signal: options?.signal,
+    },
   );
   return data;
 }

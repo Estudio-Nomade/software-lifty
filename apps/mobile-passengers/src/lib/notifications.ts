@@ -121,47 +121,86 @@ let registeredPushToken: string | null = null;
 const DEFAULT_RETRY_DELAYS_MS = [2000, 8000];
 /** Last time the backend confirmed our token (0 = never / last attempt failed). */
 let lastRegisteredAt = 0;
+/** Last time we started a registration attempt (success or fail). */
+let lastAttemptAt = 0;
+/** Single-flight: concurrent AppState/token listeners share one in-flight run. */
+let inFlightRegistration: Promise<string | null> | null = null;
+
+/**
+ * After a full failure, do not re-POST on every AppState 'active' (location permission
+ * dialogs flip active repeatedly and used to spam 15s axios timeouts forever).
+ */
+export const PUSH_FAILURE_COOLDOWN_MS = 60_000;
 
 export function resetPushRegistrationStateForTests(): void {
   registeredPushToken = null;
   lastRegisteredAt = 0;
+  lastAttemptAt = 0;
+  inFlightRegistration = null;
 }
 
-type RegistrationOptions = { retryDelaysMs?: number[] };
+type RegistrationOptions = {
+  retryDelaysMs?: number[];
+  /** Bypass failure cooldown (e.g. OS rotated the device push token). */
+  force?: boolean;
+  failureCooldownMs?: number;
+};
 
 /**
  * Permission → Expo token → POST /notifications/token tagged as the passenger app.
  * A failed POST is retried (default 2s, 8s) instead of being lost until the next launch.
+ * Concurrent callers await the same in-flight promise; after total failure a cooldown
+ * blocks automatic retries so Complete Profile GPS is not starved by push spam.
  */
 export async function ensurePushRegistration(
   options: RegistrationOptions = {},
 ): Promise<string | null> {
-  const token = await registerForPush();
-  if (!token) return null;
-  const delays = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
+  if (inFlightRegistration) return inFlightRegistration;
 
-  for (let attempt = 0; attempt <= delays.length; attempt++) {
-    try {
-      await api.post('/notifications/token', {
-        token,
-        platform: Platform.OS,
-        // Backend scopes tokens per app so passenger pushes never reach the driver app.
-        app: 'passenger',
-      });
-      registeredPushToken = token;
-      lastRegisteredAt = Date.now();
-      return token;
-    } catch (err) {
-      if (__DEV__) {
-        console.warn('[push] POST /notifications/token failed', err);
-      }
-      if (attempt < delays.length) {
-        await new Promise<void>((resolve) => setTimeout(resolve, delays[attempt]));
-      }
+  const force = options.force === true;
+  const cooldownMs = options.failureCooldownMs ?? PUSH_FAILURE_COOLDOWN_MS;
+  if (!force && !lastRegisteredAt && lastAttemptAt > 0) {
+    const since = Date.now() - lastAttemptAt;
+    if (since < cooldownMs) {
+      return registeredPushToken;
     }
   }
-  lastRegisteredAt = 0;
-  return token;
+
+  inFlightRegistration = (async () => {
+    lastAttemptAt = Date.now();
+    try {
+      const token = await registerForPush();
+      if (!token) return null;
+      const delays = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
+
+      for (let attempt = 0; attempt <= delays.length; attempt++) {
+        try {
+          await api.post('/notifications/token', {
+            token,
+            platform: Platform.OS,
+            // Backend scopes tokens per app so passenger pushes never reach the driver app.
+            app: 'passenger',
+          });
+          registeredPushToken = token;
+          lastRegisteredAt = Date.now();
+          return token;
+        } catch (err) {
+          if (__DEV__) {
+            console.warn('[push] POST /notifications/token failed', err);
+          }
+          if (attempt < delays.length) {
+            await new Promise<void>((resolve) => setTimeout(resolve, delays[attempt]));
+          }
+        }
+      }
+      lastRegisteredAt = 0;
+      return token;
+    } finally {
+      inFlightRegistration = null;
+    }
+  })();
+
+  return inFlightRegistration;
 }
 
 /** Foreground hook: re-register only if the last successful registration is old/failed. */
@@ -170,6 +209,7 @@ export async function ensurePushRegistrationIfStale(
   options: RegistrationOptions = {},
 ): Promise<void> {
   if (lastRegisteredAt && Date.now() - lastRegisteredAt < maxAgeMs) return;
+  // Failure cooldown lives inside ensurePushRegistration (unless force).
   await ensurePushRegistration(options);
 }
 

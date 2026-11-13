@@ -356,9 +356,9 @@ function NotificationSetup() {
       if (state === 'active') void ensurePushRegistrationIfStale();
     });
 
-    // Device token rotated by the OS → register the new Expo token.
+    // Device token rotated by the OS → register the new Expo token (bypass failure cooldown).
     void addPushTokenListener(() => {
-      void ensurePushRegistration();
+      void ensurePushRegistration({ force: true });
     }).then((sub) => {
       if (cancelled) sub?.remove();
       else tokenSub = sub;
