@@ -6,6 +6,7 @@ import {
   commissionReceiptBody,
   driverIdParams,
   heartbeatBody,
+  listDocumentsQuery,
   messageIdParams,
   reuploadDocBody,
   setDistrictBody,
@@ -106,8 +107,16 @@ export const driversRoutes = new Elysia({ prefix: '/drivers' })
   )
   .get(
     '/me/documents',
-    ({ user, set }) => safeCall(() => driversService.listDocuments(user), set),
+    ({ user, query, set }) =>
+      safeCall(
+        () =>
+          driversService.listDocuments(user, {
+            includeSuperseded: query.include_superseded,
+          }),
+        set,
+      ),
     {
+      query: listDocumentsQuery,
       requireAuth: true,
     },
   )

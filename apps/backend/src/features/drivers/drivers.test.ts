@@ -2008,14 +2008,16 @@ describe('reuploadDocument storage flow', () => {
   const phone = '+5492615555555';
   const password = 'testPass123';
 
-  test('deletes previous file from storage and uploads new one', async () => {
+  test('keeps previous file in storage after reupload (history for driver/ops)', async () => {
     const { token, driverId } = await fullOnboarding(phone, password);
     const db = getDb();
+    const oldUrl =
+      'https://example.supabase.co/storage/v1/object/public/driver-documents/drivers/old-license.png';
 
     await db.insert(driverDocuments).values({
       driver_id: driverId,
       doc_type: 'license_front',
-      file_url: 'https://example.supabase.co/storage/v1/object/public/driver-documents/drivers/old-license.png',
+      file_url: oldUrl,
       status: 'approved',
     });
 
@@ -2026,7 +2028,7 @@ describe('reuploadDocument storage flow', () => {
     expect(status).toBe(200);
     expect(data.status).toBe('pending_review');
 
-    expect(testStorage.deleted).toContain('drivers/old-license.png');
+    expect(testStorage.deleted).not.toContain('drivers/old-license.png');
     expect(testStorage.uploaded.size).toBe(1);
 
     const docs = await db
@@ -2038,8 +2040,29 @@ describe('reuploadDocument storage flow', () => {
     const superseded = docs.filter((d) => d.status === 'superseded');
     const pending = docs.filter((d) => d.status === 'pending_review');
     expect(superseded.length).toBe(1);
+    expect(superseded[0].file_url).toBe(oldUrl);
     expect(pending.length).toBe(1);
     expect(pending[0].file_url).toBe(data.file_url);
+
+    const { data: listedDefault } = await request(
+      'GET',
+      '/api/drivers/me/documents',
+      undefined,
+      token,
+    );
+    expect(
+      listedDefault.every((d: { status: string }) => d.status !== 'superseded'),
+    ).toBe(true);
+
+    const { data: listedWithPrev } = await request(
+      'GET',
+      '/api/drivers/me/documents?include_superseded=1',
+      undefined,
+      token,
+    );
+    const prev = listedWithPrev.filter((d: { status: string }) => d.status === 'superseded');
+    expect(prev.length).toBe(1);
+    expect(prev[0].file_url).toBe(oldUrl);
   });
 
   test('does not delete previous storage when reupload upload fails', async () => {

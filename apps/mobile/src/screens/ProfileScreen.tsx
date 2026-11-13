@@ -37,6 +37,7 @@ import {
 } from '../lib/driverProfilePhoto';
 import { refreshMessagesUnread } from '../lib/messagesUnread';
 import { DRIVER_ACCOUNT_REFRESH_EVENT } from '../lib/platformRealtime';
+import { type LicenseDocRowIcon, licenseDocRowPresentation } from '../lib/profileLicenseDocRow';
 import { getTabBarReserve } from '../lib/tabBarLayout';
 import { useMessagesUnreadStore } from '../store/messagesUnreadStore';
 import { theme } from '../theme';
@@ -179,6 +180,31 @@ function docsStatusIcon(docs: DriverDocument[]): React.JSX.Element {
     return <Ionicons name="time-outline" size={18} color={theme.colors.amber} />;
   }
   return <Ionicons name="time-outline" size={18} color={theme.colors.amber} />;
+}
+
+function licenseRowIcon(
+  icon: LicenseDocRowIcon,
+  tone: 'default' | 'danger' | 'amber',
+): React.JSX.Element {
+  const color =
+    tone === 'danger'
+      ? theme.colors.dangerRed
+      : tone === 'amber'
+        ? theme.colors.amber
+        : icon === 'check'
+          ? theme.colors.turquoise
+          : theme.colors.mediumGray;
+  const name =
+    icon === 'alert'
+      ? 'alert-circle-outline'
+      : icon === 'close'
+        ? 'close-circle-outline'
+        : icon === 'check'
+          ? 'checkmark-circle-outline'
+          : icon === 'add'
+            ? 'add-circle-outline'
+            : 'time-outline';
+  return <Ionicons name={name} size={18} color={color} />;
 }
 
 function cancelTone(pct: number): string {
@@ -514,53 +540,47 @@ export const ProfileScreen: React.FC = () => {
               </Text>
             </View>
           )}
-          {profile && professionalLicenseStatusCopy(profile) ? (
-            <View style={styles.docRow}>
-              <Ionicons
-                name={
-                  profile.professional_license_phase === 'overdue'
-                    ? 'alert-circle-outline'
-                    : 'time-outline'
-                }
-                size={18}
-                color={
-                  profile.professional_license_phase === 'overdue'
-                    ? theme.colors.dangerRed
-                    : theme.colors.amber
-                }
-              />
-              <View style={styles.docInfo}>
-                <Text style={styles.docName}>Carnet profesional</Text>
-                <Text
-                  style={[
-                    styles.docStatus,
-                    profile.professional_license_phase === 'overdue'
-                      ? { color: theme.colors.dangerRed }
-                      : null,
-                  ]}
-                >
-                  {professionalLicenseStatusCopy(profile)}
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() =>
-                  navigation.navigate('UploadDocument', {
-                    docType: 'drivers_license',
-                    docLabel: 'Licencia de conducir',
-                    mode: 'reupload',
-                  })
-                }
-                accessibilityRole="button"
-                accessibilityLabel="Subir carnet profesional"
-              >
-                <Text style={styles.docAction}>Subir</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
           {MANAGEABLE_DOCS.map((managed) => {
             const docsFor = documents.filter(
               (d) => DOC_TYPE_TO_UPLOAD[d.doc_type] === managed.docType,
             );
+            if (managed.docType === 'drivers_license') {
+              const proCopy = profile ? professionalLicenseStatusCopy(profile) : null;
+              const row = licenseDocRowPresentation({
+                docsFor,
+                professionalCopy: proCopy,
+                professionalPhase: profile?.professional_license_phase ?? null,
+              });
+              return (
+                <View key={managed.docType} style={styles.docRow}>
+                  {licenseRowIcon(row.icon, row.statusTone)}
+                  <View style={styles.docInfo}>
+                    <Text style={styles.docName}>{row.label}</Text>
+                    <Text
+                      style={[
+                        styles.docStatus,
+                        row.statusTone === 'danger' ? { color: theme.colors.dangerRed } : null,
+                      ]}
+                    >
+                      {row.status}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() =>
+                      navigation.navigate('UploadDocument', {
+                        docType: managed.docType,
+                        docLabel: row.label,
+                        mode: 'reupload',
+                      })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`${row.cta} ${row.label}`}
+                  >
+                    <Text style={styles.docAction}>{row.cta}</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            }
             return (
               <View key={managed.docType} style={styles.docRow}>
                 {docsStatusIcon(docsFor)}
