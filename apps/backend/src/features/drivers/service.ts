@@ -1893,21 +1893,39 @@ export const driversService = {
 
     if (!includeSuperseded) return rows;
 
-    // Cap superseded to the last generation per doc_type (same superseded_at batch).
+    // Cap superseded to last generation per doc_type (replace_group sets one
+    // superseded_at on the batch). Prefer stamped superseded_at over legacy null.
+    const genTs = (row: {
+      superseded_at: Date | null;
+      created_at: Date;
+    }): number => {
+      const raw = row.superseded_at ?? row.created_at;
+      if (raw instanceof Date) return raw.getTime();
+      return 0;
+    };
+
+    const stampedByType = new Map<string, boolean>();
+    for (const row of rows) {
+      if (row.status === 'superseded' && row.superseded_at) {
+        stampedByType.set(row.doc_type, true);
+      }
+    }
+
     const latestSupersededAt = new Map<string, number>();
     for (const row of rows) {
       if (row.status !== 'superseded') continue;
-      const ts = (row.superseded_at ?? row.created_at)?.getTime?.() ?? 0;
+      if (stampedByType.get(row.doc_type) && !row.superseded_at) continue;
+      const ts = genTs(row);
       const prev = latestSupersededAt.get(row.doc_type) ?? 0;
       if (ts >= prev) latestSupersededAt.set(row.doc_type, ts);
     }
 
     return rows.filter((row) => {
       if (row.status !== 'superseded') return true;
+      if (stampedByType.get(row.doc_type) && !row.superseded_at) return false;
       const latest = latestSupersededAt.get(row.doc_type);
       if (latest == null) return false;
-      const ts = (row.superseded_at ?? row.created_at)?.getTime?.() ?? 0;
-      return ts === latest;
+      return genTs(row) === latest;
     });
   },
 

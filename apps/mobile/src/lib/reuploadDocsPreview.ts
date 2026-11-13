@@ -57,9 +57,24 @@ function toPreview(row: DriverDocument, side: DocSide): ReuploadPreviewFile {
   };
 }
 
+/** Epoch ms — same rule as BE listDocuments last-gen cap. */
+export function generationTimestampMs(row: {
+  superseded_at?: string | Date | null;
+  created_at: string | Date;
+}): number {
+  const raw = row.superseded_at ?? row.created_at;
+  if (raw instanceof Date) return raw.getTime();
+  if (typeof raw === 'string') {
+    const n = Date.parse(raw);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
 /**
  * Split GET /drivers/me/documents (optionally with superseded) into current +
  * last superseded generation for one mobile doc base.
+ * Cap uses epoch ms (not string compare) so ISO/Date stay aligned with BE.
  */
 export function partitionReuploadPreview(
   documents: DriverDocument[],
@@ -85,19 +100,25 @@ export function partitionReuploadPreview(
     current[mapped.side].push(toPreview(row, mapped.side));
   }
 
-  // Last generation per backend doc_type (replace_group batch shares superseded_at).
-  const latestAtByType = new Map<string, string>();
+  // Prefer superseded_at batches; ignore null-superseded legacy when any stamped row exists.
+  const stampedByType = new Map<string, boolean>();
   for (const row of superseded) {
-    const at = row.superseded_at ?? row.created_at;
-    const prev = latestAtByType.get(row.doc_type);
-    if (!prev || at > prev) latestAtByType.set(row.doc_type, at);
+    if (row.superseded_at) stampedByType.set(row.doc_type, true);
+  }
+
+  const latestAtByType = new Map<string, number>();
+  for (const row of superseded) {
+    if (stampedByType.get(row.doc_type) && !row.superseded_at) continue;
+    const at = generationTimestampMs(row);
+    const prev = latestAtByType.get(row.doc_type) ?? 0;
+    if (at >= prev) latestAtByType.set(row.doc_type, at);
   }
 
   for (const row of superseded) {
+    if (stampedByType.get(row.doc_type) && !row.superseded_at) continue;
     const latest = latestAtByType.get(row.doc_type);
-    if (!latest) continue;
-    const at = row.superseded_at ?? row.created_at;
-    if (at !== latest) continue;
+    if (latest == null) continue;
+    if (generationTimestampMs(row) !== latest) continue;
     const mapped = BACKEND_TO_MOBILE[row.doc_type]!;
     previous[mapped.side].push(toPreview(row, mapped.side));
   }
@@ -111,8 +132,12 @@ export function partitionReuploadPreview(
 export function emptyPreviewCopy(opts: {
   hasServerCurrent: boolean;
   hasLocalFiles: boolean;
+  loadFailed?: boolean;
 }): string {
   if (opts.hasLocalFiles) return '';
+  if (opts.loadFailed) {
+    return 'No pudimos cargar el documento actual. Reintentá o elegí fotos nuevas.';
+  }
   if (opts.hasServerCurrent) {
     return 'Elegí fotos nuevas para reemplazar el documento actual';
   }

@@ -1,6 +1,7 @@
 import type { DriverDocument } from '../../api/types';
 import {
   emptyPreviewCopy,
+  generationTimestampMs,
   partitionReuploadPreview,
   statusBadgeEs,
 } from '../../lib/reuploadDocsPreview';
@@ -127,6 +128,23 @@ describe('emptyPreviewCopy', () => {
     expect(emptyPreviewCopy({ hasServerCurrent: false, hasLocalFiles: false })).toMatch(
       /Todavia no subiste/i,
     );
+  });
+
+  it('does not claim nothing uploaded when server load failed', () => {
+    const copy = emptyPreviewCopy({
+      hasServerCurrent: false,
+      hasLocalFiles: false,
+      loadFailed: true,
+    });
+    expect(copy).toMatch(/No pudimos cargar|Reintentá/i);
+    expect(copy).not.toMatch(/Todavia no subiste/i);
+  });
+});
+
+describe('generationTimestampMs', () => {
+  it('parses ISO strings to epoch ms (aligned with BE Date.getTime)', () => {
+    const iso = '2026-02-01T12:00:00.000Z';
+    expect(generationTimestampMs({ created_at: iso, superseded_at: iso })).toBe(Date.parse(iso));
   });
 });
 

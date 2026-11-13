@@ -176,6 +176,7 @@ export const UploadDocumentScreen: React.FC = () => {
   });
   const [hasServerCurrent, setHasServerCurrent] = useState(false);
   const [hasServerPrevious, setHasServerPrevious] = useState(false);
+  const [serverLoadFailed, setServerLoadFailed] = useState(false);
 
   const requiredSides = docType ? DOC_SIDES[docType] : [];
   const bothSelected = requiredSides.every((side) => selectedFiles[side].length > 0);
@@ -188,6 +189,7 @@ export const UploadDocumentScreen: React.FC = () => {
       return;
     }
     setLoadingServer(true);
+    setServerLoadFailed(false);
     try {
       const docs = await getValidated(
         '/drivers/me/documents?include_superseded=1',
@@ -198,8 +200,13 @@ export const UploadDocumentScreen: React.FC = () => {
       setServerPrevious(partitioned.previous);
       setHasServerCurrent(partitioned.hasCurrent);
       setHasServerPrevious(partitioned.hasPrevious);
+      setServerLoadFailed(false);
     } catch {
-      // Keep empty server state; local picker still works.
+      setServerCurrent({ front: [], back: [] });
+      setServerPrevious({ front: [], back: [] });
+      setHasServerCurrent(false);
+      setHasServerPrevious(false);
+      setServerLoadFailed(true);
     } finally {
       setLoadingServer(false);
     }
@@ -406,7 +413,24 @@ export const UploadDocumentScreen: React.FC = () => {
           <ActivityIndicator color={theme.colors.turquoise} style={styles.loader} />
         ) : null}
 
-        {isReupload && !loadingServer ? (
+        {isReupload && !loadingServer && serverLoadFailed ? (
+          <View style={styles.loadErrorBox}>
+            <Text style={styles.loadErrorText}>
+              No pudimos cargar el documento actual. Podés reintentar o subir fotos nuevas.
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                void loadServerDocs();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Reintentar carga de documentos"
+            >
+              <Text style={styles.loadErrorRetry}>Reintentar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {isReupload && !loadingServer && !serverLoadFailed ? (
           <>
             <PreviewSideBlock title="En Lifty ahora" bySide={serverCurrent} sides={requiredSides} />
             {hasServerPrevious ? (
@@ -427,6 +451,7 @@ export const UploadDocumentScreen: React.FC = () => {
           const emptyCopy = emptyPreviewCopy({
             hasServerCurrent: isReupload && hasServerCurrent && serverCurrent[side].length > 0,
             hasLocalFiles: files.length > 0,
+            loadFailed: isReupload && serverLoadFailed,
           });
           return (
             <View key={side} style={styles.sideSection}>
@@ -539,6 +564,24 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginVertical: theme.spacing.sm,
+  },
+  loadErrorBox: {
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radius.md,
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  loadErrorText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.deepBlue,
+  },
+  loadErrorRetry: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.semibold,
+    color: theme.colors.turquoise,
   },
   serverSection: {
     width: '100%',
