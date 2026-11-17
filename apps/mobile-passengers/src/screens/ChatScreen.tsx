@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import {
   BackHandler,
@@ -20,8 +20,11 @@ import { useTripChat } from '../hooks/useTripChat';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 
+const LIVE_STATUSES = new Set(['accepted', 'en_route', 'waiting', 'in_trip']);
+
 export function ChatScreen() {
-  const { goBack } = useAppNavigation();
+  const { replace } = useAppNavigation();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { tripId: tripIdParam } = useLocalSearchParams<{ tripId?: string }>();
   const trip = useRideStore((s) => s.activeTrip);
@@ -36,14 +39,36 @@ export function ChatScreen() {
   const chatTrip = trip?.id === tripId ? trip : null;
   const { messages, sendMessage } = useTripChat(tripId, 'passenger');
 
-  // Hardware back → trip screen via header; block bare stack pops past chat.
+  // Pop when chat was pushed from trip; else replace into the right trip screen
+  // (cold-start / push deep-link can land chat with empty history).
+  const leaveChat = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    const status = chatTrip?.status ?? trip?.status;
+    if (status === 'completed') {
+      replace('TripComplete');
+      return;
+    }
+    if (status && LIVE_STATUSES.has(status)) {
+      replace('TripInProgress');
+      return;
+    }
+    if ((status === 'pending' || status === 'offered') && tripId) {
+      replace('ConnectingDriver', { tripId });
+      return;
+    }
+    replace('Home');
+  }, [router, replace, chatTrip?.status, trip?.status, tripId]);
+
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      goBack();
+      leaveChat();
       return true;
     });
     return () => sub.remove();
-  }, [goBack]);
+  }, [leaveChat]);
 
   // Push tap may land here before ActiveTripRecovery fills the store.
   useEffect(() => {
@@ -147,7 +172,7 @@ export function ChatScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={goBack} accessibilityLabel="Volver">
+        <TouchableOpacity onPress={leaveChat} accessibilityLabel="Volver">
           <Ionicons name="arrow-back" size={24} color={theme.colors.deepBlue} />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
