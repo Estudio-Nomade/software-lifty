@@ -86,7 +86,7 @@ describe('ProfileScreen', () => {
     });
 
     const url = openUrl.mock.calls[0][0];
-    expect(url.startsWith('https://wa.me/2266515776?text=')).toBe(true);
+    expect(url.startsWith('https://wa.me/5492494519753?text=')).toBe(true);
     expect(decodeURIComponent(url)).toContain('SOS LIFTY');
   });
 

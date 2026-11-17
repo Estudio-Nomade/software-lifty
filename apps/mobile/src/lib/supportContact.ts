@@ -1,5 +1,5 @@
 export const SUPPORT_EMAIL = 'admin@liftyviajes.com';
-export const SUPPORT_WHATSAPP_NUMBER = '2266515776';
+export const SUPPORT_WHATSAPP_NUMBER = '5492494519753';
 
 const SUPPORT_WHATSAPP_TEXT = [
   'Hola, soy conductor de Lifty y necesito ayuda.',

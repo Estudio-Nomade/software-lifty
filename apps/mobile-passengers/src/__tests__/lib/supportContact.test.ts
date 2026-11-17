@@ -8,7 +8,7 @@ describe('supportContact', () => {
   test('buildSupportWhatsAppUrl incluye wa.me y el texto de ayuda', () => {
     const url = buildSupportWhatsAppUrl();
 
-    expect(url).toContain('wa.me/2266515776');
+    expect(url).toContain('wa.me/5492494519753');
     expect(decodeURIComponent(url)).toContain('necesito ayuda');
   });
 
