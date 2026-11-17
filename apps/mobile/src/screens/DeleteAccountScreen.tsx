@@ -1,15 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import type React from 'react';
-import { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { ScrollView, StatusBar, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import { Button } from '../components/Button';
@@ -32,6 +23,18 @@ function hasProvider(
   return ids.some((i) => (i.provider ?? '').toLowerCase() === p);
 }
 
+function mapDeleteError(err: unknown): string {
+  const ax = err as {
+    response?: { status?: number; data?: { error?: { code?: string; message?: string } } };
+    message?: string;
+  };
+  const code = ax.response?.data?.error?.code;
+  if (code === 'ACTIVE_TRIP' || ax.response?.status === 409) {
+    return 'Tenés un viaje en curso. Terminá o cancelá el viaje antes de eliminar la cuenta.';
+  }
+  return ax.response?.data?.error?.message ?? ax.message ?? 'No se pudo eliminar la cuenta';
+}
+
 export function DeleteAccountScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useAppNavigation();
@@ -40,6 +43,9 @@ export function DeleteAccountScreen() {
   const email = session?.user?.email ?? '';
   const canPassword = hasProvider(session, 'email');
   const canGoogle = hasProvider(session, 'google');
+
+  /** Identity that must match after reauth — frozen when entering reauth. */
+  const expectedUserIdRef = useRef<string | null>(session?.user?.id ?? null);
 
   const [step, setStep] = useState<Step>('warn');
   const [password, setPassword] = useState('');
@@ -52,28 +58,44 @@ export function DeleteAccountScreen() {
     return 'Listo';
   }, [step]);
 
-  const handleDelete = async () => {
+  const goReauth = () => {
+    expectedUserIdRef.current = session?.user?.id ?? null;
+    if (!expectedUserIdRef.current) {
+      setError('No hay sesión activa. Volvé a iniciar sesión e intentá de nuevo.');
+      return;
+    }
+    setError(null);
+    setStep('reauth');
+  };
+
+  const assertSameUser = (userId: string | null | undefined) => {
+    const expected = expectedUserIdRef.current;
+    if (!expected || !userId || userId !== expected) {
+      throw new Error(
+        'La cuenta con la que te reautenticaste no coincide. Usá la misma cuenta de Lifty.',
+      );
+    }
+  };
+
+  /**
+   * 1) POST delete (must succeed for "done")
+   * 2) local signOut best-effort (failure still shows success — request already registered)
+   */
+  const submitDeletion = async () => {
     setLoading(true);
     setError(null);
+    let registered = false;
     try {
       await apiClient.post('/account-deletion/request', { confirm: true });
-      await signOut.mutateAsync();
+      registered = true;
       setStep('done');
-    } catch (err: unknown) {
-      const ax = err as {
-        response?: { status?: number; data?: { error?: { code?: string; message?: string } } };
-        message?: string;
-      };
-      const code = ax.response?.data?.error?.code;
-      const msg =
-        ax.response?.data?.error?.message ?? ax.message ?? 'No se pudo eliminar la cuenta';
-      if (code === 'ACTIVE_TRIP' || ax.response?.status === 409) {
-        setError(
-          'Tenés un viaje en curso. Terminá o cancelá el viaje antes de eliminar la cuenta.',
-        );
-      } else {
-        setError(msg);
+      try {
+        await signOut.mutateAsync();
+      } catch {
+        /* request already accepted server-side */
       }
+    } catch (err: unknown) {
+      if (!registered) setError(mapDeleteError(err));
     } finally {
       setLoading(false);
     }
@@ -87,12 +109,13 @@ export function DeleteAccountScreen() {
     setLoading(true);
     setError(null);
     try {
-      const { error: authErr } = await supabase.auth.signInWithPassword({
+      const { data, error: authErr } = await supabase.auth.signInWithPassword({
         email,
         password: password.trim(),
       });
       if (authErr) throw authErr;
-      await handleDelete();
+      assertSameUser(data.user?.id ?? data.session?.user?.id);
+      await submitDeletion();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo verificar la contraseña');
       setLoading(false);
@@ -103,8 +126,9 @@ export function DeleteAccountScreen() {
     setLoading(true);
     setError(null);
     try {
-      await signInWithGoogle();
-      await handleDelete();
+      const next = await signInWithGoogle();
+      assertSameUser(next?.user?.id);
+      await submitDeletion();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'No se pudo verificar con Google');
       setLoading(false);
@@ -137,7 +161,7 @@ export function DeleteAccountScreen() {
             <Button
               title="Continuar"
               variant="danger"
-              onPress={() => setStep('reauth')}
+              onPress={goReauth}
               style={styles.btn}
               textStyle={{ color: theme.colors.dangerRed }}
             />
@@ -186,9 +210,6 @@ export function DeleteAccountScreen() {
               <Text style={styles.body}>
                 No detectamos un método de reautenticación. Escribinos a soporte.
               </Text>
-            ) : null}
-            {loading ? (
-              <ActivityIndicator color={theme.colors.dangerRed} style={{ marginTop: 8 }} />
             ) : null}
           </Card>
         ) : null}
