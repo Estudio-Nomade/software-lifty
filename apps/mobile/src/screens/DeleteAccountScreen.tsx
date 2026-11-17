@@ -53,8 +53,8 @@ export function DeleteAccountScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const subtitle = useMemo(() => {
-    if (step === 'warn') return 'Leé con atención';
-    if (step === 'reauth') return 'Confirmá tu identidad';
+    if (step === 'warn') return 'Leé esto antes de seguir';
+    if (step === 'reauth') return 'Confirmá que sos vos';
     return 'Listo';
   }, [step]);
 
@@ -71,9 +71,7 @@ export function DeleteAccountScreen() {
   const assertSameUser = (userId: string | null | undefined) => {
     const expected = expectedUserIdRef.current;
     if (!expected || !userId || userId !== expected) {
-      throw new Error(
-        'La cuenta con la que te reautenticaste no coincide. Usá la misma cuenta de Lifty.',
-      );
+      throw new Error('Esa no es tu misma cuenta de Lifty. Volvé a intentarlo con la tuya.');
     }
   };
 
@@ -148,15 +146,16 @@ export function DeleteAccountScreen() {
 
         {step === 'warn' ? (
           <Card>
-            <Text style={styles.warnTitle}>Esta acción no es cerrar sesión</Text>
+            <Text style={styles.warnTitle}>Esto borra tu cuenta para siempre</Text>
             <Text style={styles.body}>
-              Vas a pedir borrar tu cuenta de Lifty (conductor y, si tenés, pasajero). Se eliminan
-              datos personales, documentos y tokens. Viajes y montos pueden quedar anonimizados por
-              obligaciones legales o antifraude.
+              No es lo mismo que cerrar sesión. Si seguís, pedimos borrar tu cuenta de Lifty: tu
+              perfil, fotos, documentos y el acceso a la app.
             </Text>
             <Text style={styles.body}>
-              No prometemos borrar backups históricos al instante. Si tenés un viaje activo, primero
-              terminarlo o cancelarlo.
+              Si también usás Lifty como pasajero con la misma cuenta, se borra todo junto.
+            </Text>
+            <Text style={styles.body}>
+              Si tenés un viaje en curso, terminarlo o cancelarlo antes.
             </Text>
             <Button
               title="Continuar"
@@ -171,10 +170,11 @@ export function DeleteAccountScreen() {
 
         {step === 'reauth' ? (
           <Card>
-            <Text style={styles.warnTitle}>Confirmá que sos vos</Text>
+            <Text style={styles.warnTitle}>Para seguir, confirmá que sos vos</Text>
+            <Text style={styles.body}>Así nos aseguramos de que nadie más borre tu cuenta.</Text>
             {canPassword ? (
               <>
-                <Text style={styles.label}>Contraseña ({email})</Text>
+                <Text style={styles.label}>Tu contraseña ({email})</Text>
                 <TextInput
                   style={styles.input}
                   value={password}
@@ -185,7 +185,7 @@ export function DeleteAccountScreen() {
                   placeholderTextColor={theme.colors.mediumGray}
                 />
                 <Button
-                  title={loading ? 'Eliminando…' : 'Verificar y eliminar'}
+                  title={loading ? 'Borrando…' : 'Confirmar y borrar cuenta'}
                   variant="danger"
                   onPress={reauthPassword}
                   disabled={loading}
@@ -197,7 +197,7 @@ export function DeleteAccountScreen() {
             ) : null}
             {canGoogle ? (
               <Button
-                title={loading ? 'Eliminando…' : 'Verificar con Google y eliminar'}
+                title={loading ? 'Borrando…' : 'Confirmar con Google y borrar'}
                 variant="danger"
                 onPress={reauthGoogle}
                 disabled={loading}
@@ -208,7 +208,7 @@ export function DeleteAccountScreen() {
             ) : null}
             {!canPassword && !canGoogle ? (
               <Text style={styles.body}>
-                No detectamos un método de reautenticación. Escribinos a soporte.
+                No pudimos pedir tu confirmación acá. Escribinos a soporte y te ayudamos.
               </Text>
             ) : null}
           </Card>
@@ -217,10 +217,10 @@ export function DeleteAccountScreen() {
         {step === 'done' ? (
           <Card>
             <Ionicons name="checkmark-circle" size={48} color={theme.colors.turquoise} />
-            <Text style={styles.warnTitle}>Solicitud registrada</Text>
+            <Text style={styles.warnTitle}>Listo, ya pedimos el borrado</Text>
             <Text style={styles.body}>
-              Empezamos a eliminar tu cuenta. Vas a recibir un email cuando termine. Ya cerramos la
-              sesión en este dispositivo.
+              Estamos eliminando tu cuenta. Te avisamos por email cuando termine. En este teléfono
+              ya cerramos la sesión.
             </Text>
             <Button title="Volver al inicio" onPress={() => navigation.replace('Welcome')} />
           </Card>
@@ -233,10 +233,7 @@ export function DeleteAccountScreen() {
         ) : null}
 
         {step !== 'done' ? (
-          <Text style={styles.footerNote}>
-            ¿Problemas? Escribinos a admin@liftyviajes.com — no borramos cuentas de lab principales
-            sin OK.
-          </Text>
+          <Text style={styles.footerNote}>¿Problemas? Escribinos a admin@liftyviajes.com</Text>
         ) : null}
       </ScrollView>
     </View>
