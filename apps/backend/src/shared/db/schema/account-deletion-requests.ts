@@ -43,6 +43,7 @@ export const accountDeletionRequests = pgTable(
     index('account_deletion_requests_email_status_idx').on(table.email_normalized, table.status),
     index('account_deletion_requests_user_id_idx').on(table.user_id),
     index('account_deletion_requests_status_requested_idx').on(table.status, table.requested_at),
+    index('account_deletion_requests_verify_token_hash_idx').on(table.verify_token_hash),
     uniqueIndex('account_deletion_requests_idempotency_uidx').on(table.idempotency_key),
   ],
 );

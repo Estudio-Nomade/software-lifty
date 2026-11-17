@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import {
   accountDeletionRequests,
@@ -29,7 +29,14 @@ import { AppError, ConflictError, NotFoundError } from '../../shared/lib/errors'
 import { logger } from '../../shared/lib/logger';
 import { deleteFile, extractStoragePath } from '../../shared/lib/storage';
 import { getSupabaseAdminClient } from '../../shared/lib/supabase-admin';
-import { ACTIVE_TRIP_STATUSES, canStartProcessing, isStaffRole, wipeScopeForRoles } from './policy';
+import {
+  ACTIVE_TRIP_STATUSES,
+  canStartProcessing,
+  isStaffRole,
+  isStaleProcessingLock,
+  processingStaleLockMs,
+  wipeScopeForRoles,
+} from './policy';
 
 export type ProcessDeps = {
   deleteAuthUser?: (authUserId: string) => Promise<void>;
@@ -287,14 +294,24 @@ export async function processAccountDeletion(
     return { request_id: row.id, status: 'completed' };
   }
 
-  if (row.status === 'processing') {
+  if (
+    row.status === 'processing' &&
+    !isStaleProcessingLock(row.status, row.processing_started_at, now)
+  ) {
+    // Fresh lock held by another worker — do not steal.
     return { request_id: row.id, status: 'processing' };
   }
 
-  if (!canStartProcessing(row.status)) {
+  if (
+    !canStartProcessing(row.status, {
+      processingStartedAt: row.processing_started_at,
+      now,
+    })
+  ) {
     throw new ConflictError(`Cannot process request in status=${row.status}`);
   }
 
+  const staleCutoff = new Date(now.getTime() - processingStaleLockMs());
   const locked = await db
     .update(accountDeletionRequests)
     .set({
@@ -306,7 +323,16 @@ export async function processAccountDeletion(
     .where(
       and(
         eq(accountDeletionRequests.id, requestId),
-        inArray(accountDeletionRequests.status, ['requested', 'failed']),
+        or(
+          inArray(accountDeletionRequests.status, ['requested', 'failed']),
+          and(
+            eq(accountDeletionRequests.status, 'processing'),
+            or(
+              isNull(accountDeletionRequests.processing_started_at),
+              lt(accountDeletionRequests.processing_started_at, staleCutoff),
+            ),
+          ),
+        ),
       ),
     )
     .returning();

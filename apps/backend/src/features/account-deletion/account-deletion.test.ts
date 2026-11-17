@@ -20,6 +20,7 @@ import {
   WEB_GENERIC_MESSAGE,
   canStartProcessing,
   isStaffRole,
+  isStaleProcessingLock,
   wipeScopeForRoles,
 } from './policy';
 import { processAccountDeletion } from './process';
@@ -92,11 +93,24 @@ describe('account-deletion policy', () => {
     expect(pax.deletePassengerProfile).toBe(true);
   });
 
-  test('process only from requested|failed', () => {
+  test('process only from requested|failed|stale processing', () => {
     expect(canStartProcessing('requested')).toBe(true);
     expect(canStartProcessing('failed')).toBe(true);
     expect(canStartProcessing('completed')).toBe(false);
     expect(canStartProcessing('pending_verification')).toBe(false);
+    expect(canStartProcessing('processing')).toBe(false);
+
+    const now = new Date('2026-11-17T12:00:00Z');
+    const fresh = new Date(now.getTime() - 60_000);
+    const stale = new Date(now.getTime() - 20 * 60_000);
+    expect(
+      canStartProcessing('processing', { processingStartedAt: fresh, now }),
+    ).toBe(false);
+    expect(
+      canStartProcessing('processing', { processingStartedAt: stale, now }),
+    ).toBe(true);
+    expect(isStaleProcessingLock('processing', stale, now)).toBe(true);
+    expect(isStaleProcessingLock('processing', fresh, now)).toBe(false);
   });
 
   test('token hash is one-way equal', () => {
@@ -340,6 +354,39 @@ describe('account-deletion API', () => {
       },
     });
     expect(second.status).toBe('completed');
+  });
+
+  test('process recovers stale processing lock', async () => {
+    if (!(await tableExists('account_deletion_requests'))) return;
+
+    const db = getDb();
+    const [u] = await db
+      .insert(users)
+      .values({ email: 'stale@example.com', role: 'passenger', full_name: 'S' })
+      .returning();
+    await db.insert(passengerProfiles).values({ user_id: u.id });
+
+    const staleAt = new Date(Date.now() - 20 * 60_000);
+    const [req] = await db
+      .insert(accountDeletionRequests)
+      .values({
+        user_id: u.id,
+        auth_user_id: u.id,
+        email_normalized: 'stale@example.com',
+        email_hash: 'h',
+        source: 'app',
+        status: 'processing',
+        processing_started_at: staleAt,
+        requested_at: staleAt,
+      })
+      .returning();
+
+    const result = await processAccountDeletion(req.id, {
+      deleteAuthUser: async () => {},
+      deleteStoragePath: async () => {},
+      sendCompletionEmail: async () => {},
+    });
+    expect(result.status).toBe('completed');
   });
 
   test('process rejects staff', async () => {

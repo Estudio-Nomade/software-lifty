@@ -72,9 +72,35 @@ export function wipeScopeForRoles(opts: {
   };
 }
 
-/** Monotonic status transitions allowed for process lock. */
-export function canStartProcessing(status: string): boolean {
-  return status === 'requested' || status === 'failed';
+/** Default minutes before a `processing` lock is considered stale and re-entrant. */
+export function processingStaleLockMs(): number {
+  const n = Number(process.env.ACCOUNT_DELETION_STALE_LOCK_MIN);
+  const minutes = Number.isFinite(n) && n > 0 ? n : 15;
+  return minutes * 60_000;
+}
+
+export function isStaleProcessingLock(
+  status: string,
+  processingStartedAt: Date | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (status !== 'processing') return false;
+  if (!processingStartedAt) return true;
+  return now.getTime() - processingStartedAt.getTime() >= processingStaleLockMs();
+}
+
+/**
+ * Monotonic start statuses, plus stale `processing` so a crashed worker can recover.
+ */
+export function canStartProcessing(
+  status: string,
+  opts?: { processingStartedAt?: Date | null; now?: Date },
+): boolean {
+  if (status === 'requested' || status === 'failed') return true;
+  if (status === 'processing' && opts) {
+    return isStaleProcessingLock(status, opts.processingStartedAt, opts.now ?? new Date());
+  }
+  return false;
 }
 
 export function canAcceptVerify(status: string): boolean {

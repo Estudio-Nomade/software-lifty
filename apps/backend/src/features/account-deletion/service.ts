@@ -1,4 +1,3 @@
-import { timingSafeEqual } from 'node:crypto';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { accountDeletionRequests, users } from '../../shared/db/schema';
@@ -86,6 +85,10 @@ async function assertWebEmailRateLimit(emailHash: string): Promise<void> {
     }
   } catch (err) {
     if (err instanceof TooManyRequestsError) throw err;
+    // Fail-open like global IP limiter, but surface the degradation.
+    logger.warn('[account-deletion] email rate limit redis failed — relying on IP limit only', {
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -284,30 +287,18 @@ export const accountDeletionService = {
     const tokenHash = hashToken(token);
     const now = new Date();
 
-    // Find candidate pending rows (recent) and compare hash in constant-ish way
-    const candidates = await db
+    // Direct hash lookup (deterministic SHA-256) — never scan a recent window.
+    const [match] = await db
       .select()
       .from(accountDeletionRequests)
       .where(
         and(
+          eq(accountDeletionRequests.verify_token_hash, tokenHash),
           eq(accountDeletionRequests.status, 'pending_verification'),
           eq(accountDeletionRequests.source, 'web'),
         ),
       )
-      .orderBy(desc(accountDeletionRequests.created_at))
-      .limit(50);
-
-    const match = candidates.find((c) => {
-      if (!c.verify_token_hash) return false;
-      try {
-        const a = Buffer.from(c.verify_token_hash, 'utf8');
-        const b = Buffer.from(tokenHash, 'utf8');
-        if (a.length !== b.length) return false;
-        return timingSafeEqual(a, b);
-      } catch {
-        return false;
-      }
-    });
+      .limit(1);
 
     if (!match) {
       throw new BadRequestError('El enlace no es válido o ya fue usado');
