@@ -68,6 +68,10 @@ export interface Trip {
   driver_lng?: number | null;
   /** Full CBU/alias for passenger transfer — only on passenger trip endpoints. */
   driver_transfer?: DriverTransferDetails | null;
+  /** From cancelation_log when trip was cancelled (history). */
+  cancel_stage?: 'pre_asignacion' | 'en_camino' | 'llegado' | string | null;
+  cancel_reason?: 'user_cancel' | 'auto_timeout' | string | null;
+  cancel_actor?: 'passenger' | 'driver' | 'system' | string | null;
   created_at: string;
   updated_at: string;
 }
