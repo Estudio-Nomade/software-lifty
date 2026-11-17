@@ -661,6 +661,14 @@ export const ProfileScreen: React.FC = () => {
         </Card>
 
         <Button
+          title="Eliminar cuenta"
+          variant="danger"
+          onPress={() => navigation.navigate('DeleteAccount')}
+          style={styles.button}
+          textStyle={{ color: theme.colors.dangerRed, fontWeight: theme.fontWeight.medium }}
+        />
+
+        <Button
           title="Cerrar sesión"
           variant="danger"
           onPress={handleSignOut}
