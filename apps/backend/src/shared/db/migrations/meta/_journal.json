@@ -435,6 +435,20 @@
       "when": 1789500000000,
       "tag": "0060_tandil_district_service_market",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1789600000000,
+      "tag": "0061_account_deletion_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1789700000000,
+      "tag": "0062_account_deletion_verify_token_idx",
+      "breakpoints": true
     }
   ]
 }

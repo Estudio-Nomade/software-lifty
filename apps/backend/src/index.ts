@@ -1,5 +1,9 @@
 import { swagger } from '@elysiajs/swagger';
 import { Elysia } from 'elysia';
+import {
+  accountDeletionInternalRoutes,
+  accountDeletionRoutes,
+} from './features/account-deletion/routes';
 import { fuelPriceRoutes } from './features/admin/fuel-price/routes';
 import { adminApproveRoute, adminRoutes } from './features/admin/routes';
 import { transitOperatorsRoutes } from './features/admin/transit-operators/routes';
@@ -103,6 +107,8 @@ export function createApp(customAuthPlugin?: typeof authPlugin) {
     .group('/api', (app) =>
       app
         .use(authRoutes)
+        .use(accountDeletionRoutes)
+        .use(accountDeletionInternalRoutes)
         .use(adminApproveRoute)
         .use(adminRoutes)
         .use(transitRoutes)
