@@ -651,4 +651,114 @@ describe('Broadcast on location update', () => {
       globalThis.fetch = originalFetch;
     }
   }, { timeout: 15000 });
+
+  test('POST /location/update broadcasts when driver has active trip', async () => {
+    const phone = '+5492615555666';
+    const { token, driverId } = await registerAndCreateDriver(phone, 'testPass123');
+    const db = getDb();
+
+    const [trip] = await db
+      .insert(trips)
+      .values({
+        driver_id: driverId,
+        status: 'in_trip',
+        origin_lat: -32.89,
+        origin_lng: -68.84,
+        dest_lat: -32.9,
+        dest_lng: -68.85,
+        total_fare: 0,
+        platform_fee: 0,
+        driver_earnings: 0,
+      })
+      .returning({ id: trips.id });
+
+    invalidateTripCache(driverId);
+
+    const fetchCalls: any[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = ((url: string, init: any) => {
+      fetchCalls.push({ url, body: JSON.parse(init.body) });
+      return Promise.resolve(new Response(null, { status: 200 }));
+    }) as any;
+
+    try {
+      const { status } = await request(
+        'POST',
+        '/api/location/update',
+        { lat: -32.891, lng: -68.841, heading: 90 },
+        token,
+      );
+      expect(status).toBe(200);
+      await new Promise((r) => setTimeout(r, 200));
+
+      const broadcastCall = fetchCalls.find((c) =>
+        c.url.includes('/realtime/v1/api/broadcast'),
+      );
+      expect(broadcastCall).toBeDefined();
+      const msg = broadcastCall.body.messages[0];
+      expect(msg.topic).toBe(`trip:${trip.id}`);
+      expect(msg.event).toBe('driver:location');
+      expect(msg.payload.lat).toBe(-32.891);
+      expect(msg.payload.lng).toBe(-68.841);
+      expect(msg.payload.heading).toBe(90);
+      expect(msg.payload.driver_id).toBe(driverId);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('PUT /drivers/me/heartbeat broadcasts when driver has active trip', async () => {
+    const phone = '+5492615555777';
+    const { token, driverId } = await registerAndCreateDriver(phone, 'testPass123');
+    const db = getDb();
+
+    const [trip] = await db
+      .insert(trips)
+      .values({
+        driver_id: driverId,
+        status: 'in_trip',
+        origin_lat: -32.89,
+        origin_lng: -68.84,
+        dest_lat: -32.9,
+        dest_lng: -68.85,
+        total_fare: 0,
+        platform_fee: 0,
+        driver_earnings: 0,
+      })
+      .returning({ id: trips.id });
+
+    invalidateTripCache(driverId);
+
+    const fetchCalls: any[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = ((url: string, init: any) => {
+      fetchCalls.push({ url, body: JSON.parse(init.body) });
+      return Promise.resolve(new Response(null, { status: 200 }));
+    }) as any;
+
+    try {
+      const { status } = await request(
+        'PUT',
+        '/api/drivers/me/heartbeat',
+        { lat: -32.892, lng: -68.842, heading: 45 },
+        token,
+      );
+      expect(status).toBe(200);
+      await new Promise((r) => setTimeout(r, 200));
+
+      const broadcastCall = fetchCalls.find((c) =>
+        c.url.includes('/realtime/v1/api/broadcast'),
+      );
+      expect(broadcastCall).toBeDefined();
+      const msg = broadcastCall.body.messages[0];
+      expect(msg.topic).toBe(`trip:${trip.id}`);
+      expect(msg.event).toBe('driver:location');
+      expect(msg.payload.lat).toBe(-32.892);
+      expect(msg.payload.lng).toBe(-68.842);
+      expect(msg.payload.heading).toBe(45);
+      expect(msg.payload.driver_id).toBe(driverId);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

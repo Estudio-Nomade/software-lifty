@@ -2,13 +2,17 @@ import { eq } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 import { db } from '../../shared/db/client';
 import { users } from '../../shared/db/schema';
-import { broadcastTripLocation } from '../../shared/lib/broadcast';
 import { safeCall } from '../../shared/lib/route-utils';
 import { getSupabaseClient } from '../../shared/lib/supabase';
-import { getDriverActiveTrip, invalidateTripCache } from '../../shared/lib/trip-utils';
+import { invalidateTripCache } from '../../shared/lib/trip-utils';
 import { authGuard } from '../../shared/middleware/require-auth';
 import { locationUpdateBody } from './schema';
-import { getDriverIdByUserId, markDriverSeen, upsertLocation } from './service';
+import {
+  getDriverIdByUserId,
+  markDriverSeen,
+  publishDriverLocationIfOnTrip,
+  upsertLocation,
+} from './service';
 
 async function resolveUserIdFromToken(token: string): Promise<string | null> {
   if (process.env.NODE_ENV === 'test') {
@@ -87,16 +91,7 @@ export const locationWsPlugin = new Elysia().ws('/ws/location', {
     }
 
     await upsertLocation(driverId, data.lat, data.lng, data.heading);
-
-    const activeTrip = await getDriverActiveTrip(driverId);
-    if (activeTrip) {
-      broadcastTripLocation(activeTrip.id, {
-        lat: data.lat,
-        lng: data.lng,
-        heading: data.heading,
-        driver_id: driverId,
-      });
-    }
+    await publishDriverLocationIfOnTrip(driverId, data.lat, data.lng, data.heading);
   },
   async close(ws) {
     const driverId = (ws.data as any).driverId as string | undefined;
@@ -119,6 +114,7 @@ export const locationHttpPlugin = new Elysia({ prefix: '/location' }).use(authGu
     return safeCall(async () => {
       const driverId = await getDriverIdByUserId(user.id);
       await upsertLocation(driverId, body.lat, body.lng, body.heading);
+      await publishDriverLocationIfOnTrip(driverId, body.lat, body.lng, body.heading);
       return { message: 'Location updated' };
     }, set);
   },
