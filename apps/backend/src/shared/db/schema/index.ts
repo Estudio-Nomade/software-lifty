@@ -24,3 +24,4 @@ export { driverFeePayouts } from './driver-fee-payouts';
 export { userBlocks } from './user-blocks';
 export { userCancelationMetrics } from './user-cancelation-metrics';
 export { driverTvfMetrics } from './driver-tvf-metrics';
+export { accountDeletionRequests } from './account-deletion-requests';
