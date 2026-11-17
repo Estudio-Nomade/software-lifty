@@ -1,7 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  Alert,
+  BackHandler,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { rateRide, setTripPaymentMethod } from '../api/passenger';
 import type { DriverTransferDetails } from '../api/types';
@@ -125,6 +133,11 @@ export function TripCompleteScreen() {
   const [rated, setRated] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, []);
 
   const handleConfirmPayment = async () => {
     if (!trip?.id || confirmingPayment) return;

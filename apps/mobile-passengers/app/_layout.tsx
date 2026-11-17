@@ -75,6 +75,11 @@ export default function RootLayout() {
                 name="index"
                 options={{ animation: oauthQuiet ? 'none' : 'slide_from_right' }}
               />
+              {/* Active trip: no accidental iOS swipe / stack pop */}
+              <Stack.Screen name="connecting-driver" options={{ gestureEnabled: false }} />
+              <Stack.Screen name="trip-in-progress" options={{ gestureEnabled: false }} />
+              <Stack.Screen name="trip-complete" options={{ gestureEnabled: false }} />
+              <Stack.Screen name="chat" options={{ gestureEnabled: false }} />
             </Stack>
             <AppInitializer />
             <OAuthBrandBridge />
