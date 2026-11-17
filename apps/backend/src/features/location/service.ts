@@ -1,6 +1,8 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import { driverLocations, drivers } from '../../shared/db/schema';
+import { broadcastTripLocation } from '../../shared/lib/broadcast';
+import { getDriverActiveTrip } from '../../shared/lib/trip-utils';
 
 export async function getDriverIdByUserId(userId: string): Promise<string> {
   const [driver] = await db
@@ -35,6 +37,23 @@ export async function upsertLocation(driverId: string, lat: number, lng: number,
         updated_at: new Date(),
       },
     });
+}
+
+/** After a location upsert, push to the passenger if the driver is on a live trip. */
+export async function publishDriverLocationIfOnTrip(
+  driverId: string,
+  lat: number,
+  lng: number,
+  heading?: number | null,
+) {
+  const active = await getDriverActiveTrip(driverId);
+  if (!active) return;
+  broadcastTripLocation(active.id, {
+    lat,
+    lng,
+    heading: heading ?? undefined,
+    driver_id: driverId,
+  });
 }
 
 export async function findNearbyOnlineDrivers(lat: number, lng: number, radiusKm: number) {

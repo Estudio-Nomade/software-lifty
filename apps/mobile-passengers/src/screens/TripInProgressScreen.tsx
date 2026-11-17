@@ -66,7 +66,14 @@ export function TripInProgressScreen() {
         replace('Home');
         return;
       }
-      const merged = { ...(useRideStore.getState().activeTrip ?? {}), ...incoming };
+      const prev = useRideStore.getState().activeTrip;
+      const merged = { ...(prev ?? {}), ...incoming };
+      if (incoming.driver_lat == null && prev?.driver_lat != null) {
+        merged.driver_lat = prev.driver_lat;
+      }
+      if (incoming.driver_lng == null && prev?.driver_lng != null) {
+        merged.driver_lng = prev.driver_lng;
+      }
       setActiveTrip(merged);
       if (status === 'completed') {
         replace('TripComplete');
@@ -95,6 +102,51 @@ export function TripInProgressScreen() {
       setDriverLocation(null);
     }
   }, [activeTrip?.status, activeTrip?.driver_id, setDriverLocation]);
+
+  useEffect(() => {
+    const tripId = activeTrip?.id;
+    const status = activeTrip?.status ?? '';
+    if (!tripId || !LIVE_STATUSES.includes(status) || !activeTrip?.driver_id) return;
+
+    let cancelled = false;
+    const tick = async () => {
+      const t = await getActiveRide().catch(() => null);
+      if (cancelled || !t || t.id !== tripId) return;
+      if (typeof t.driver_lat !== 'number' || typeof t.driver_lng !== 'number') return;
+
+      const store = useRideStore.getState();
+      const prevLoc = store.driverLocation;
+      const sameCoords =
+        prevLoc != null && prevLoc.lat === t.driver_lat && prevLoc.lng === t.driver_lng;
+      if (!sameCoords) {
+        // Poll has no heading — keep realtime heading if present.
+        store.setDriverLocation({
+          lat: t.driver_lat,
+          lng: t.driver_lng,
+          heading: prevLoc?.heading ?? null,
+        });
+      }
+
+      const prev = store.activeTrip;
+      if (
+        prev?.id === tripId &&
+        (prev.driver_lat !== t.driver_lat || prev.driver_lng !== t.driver_lng)
+      ) {
+        store.setActiveTrip({
+          ...prev,
+          driver_lat: t.driver_lat,
+          driver_lng: t.driver_lng,
+        });
+      }
+    };
+
+    void tick();
+    const id = setInterval(tick, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [activeTrip?.id, activeTrip?.status, activeTrip?.driver_id]);
 
   const trip = activeTrip;
 

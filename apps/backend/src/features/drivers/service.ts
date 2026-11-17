@@ -61,7 +61,7 @@ import { geocode } from '../../shared/lib/geo';
 import { isInsidePickupArea } from '../../shared/lib/service-area';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { notifyAdminNewDriver, notifyAdminsDriverDocsResubmitted } from '../admin/notifications';
-import { upsertLocation } from '../location/service';
+import { publishDriverLocationIfOnTrip, upsertLocation } from '../location/service';
 import {
   type MunicipalityResolveResult,
   buildMunicipalityResult,
@@ -1101,6 +1101,7 @@ export const driversService = {
 
     if (body?.lat != null && body?.lng != null) {
       await upsertLocation(driver.id, body.lat, body.lng, body.heading);
+      await publishDriverLocationIfOnTrip(driver.id, body.lat, body.lng, body.heading);
     }
 
     return { ok: true };

@@ -4,13 +4,24 @@ import { TripInProgressScreen } from '../../screens/TripInProgressScreen';
 import { useAuthStore } from '../../store/authStore';
 import { useRideStore } from '../../store/rideStore';
 
+jest.mock('@expo/vector-icons', () => ({
+  Ionicons: () => null,
+}));
+
 jest.mock('../../lib/realtime', () => ({
   subscribeToPassengerChannel: jest.fn(() => () => {}),
   subscribeToDriverLocation: jest.fn(() => () => {}),
 }));
 
 jest.mock('../../hooks/useLocation', () => ({
-  useLocation: () => ({ current: null, permissionGranted: true, locationError: null, refresh: jest.fn() }),
+  useLocation: () => ({
+    current: null,
+    permissionGranted: true,
+    locationError: null,
+    refresh: jest.fn(),
+  }),
+  requestFreshPosition: jest.fn().mockResolvedValue(null),
+  toMapCoordinate: (lat: number, lng: number) => [lng, lat],
 }));
 
 jest.mock('../../hooks/useDriverRoute', () => ({
@@ -30,12 +41,13 @@ jest.mock('../../api/passenger', () => ({
   getActiveRide: jest.fn().mockResolvedValue(null),
   getProfile: jest.fn().mockResolvedValue({}),
   cancelRide: jest.fn().mockResolvedValue(undefined),
+  getCancelPreview: jest.fn().mockResolvedValue({ copy: '¿Confirmas?', can_cancel: true }),
 }));
 
 describe('TripInProgressScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    useRideStore.setState({ activeTrip: null });
+    useRideStore.setState({ activeTrip: null, driverLocation: null });
     useAuthStore.setState({ userId: null });
   });
 
@@ -147,5 +159,183 @@ describe('TripInProgressScreen', () => {
 
     expect(mockReplace).toHaveBeenCalledWith('TripComplete');
     expect(useRideStore.getState().activeTrip?.status).toBe('completed');
+  });
+
+  test('poll updates driverLocation from getActiveRide during in_trip', async () => {
+    jest.useFakeTimers();
+    const { getActiveRide } = require('../../api/passenger');
+    getActiveRide.mockResolvedValue({
+      id: 'trip-poll',
+      passenger_id: 'p-1',
+      status: 'in_trip',
+      origin_lat: -34.6,
+      origin_lng: -58.38,
+      dest_lat: -34.7,
+      dest_lng: -58.4,
+      driver_id: 'driver-1',
+      driver_lat: -34.61,
+      driver_lng: -58.39,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    useRideStore.setState({
+      activeTrip: {
+        id: 'trip-poll',
+        passenger_id: 'p-1',
+        status: 'in_trip',
+        origin_lat: -34.6,
+        origin_lng: -58.38,
+        dest_lat: -34.7,
+        dest_lng: -58.4,
+        driver_id: 'driver-1',
+        driver_lat: -34.6,
+        driver_lng: -58.38,
+        driver_name: 'María López',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      driverLocation: null,
+    });
+
+    await act(async () => {
+      render(<TripInProgressScreen />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(useRideStore.getState().driverLocation).toEqual({
+      lat: -34.61,
+      lng: -58.39,
+      heading: null,
+    });
+
+    getActiveRide.mockResolvedValue({
+      id: 'trip-poll',
+      passenger_id: 'p-1',
+      status: 'in_trip',
+      origin_lat: -34.6,
+      origin_lng: -58.38,
+      dest_lat: -34.7,
+      dest_lng: -58.4,
+      driver_id: 'driver-1',
+      driver_lat: -34.62,
+      driver_lng: -58.4,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    await act(async () => {
+      jest.advanceTimersByTime(4000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(useRideStore.getState().driverLocation).toEqual({
+      lat: -34.62,
+      lng: -58.4,
+      heading: null,
+    });
+
+    jest.useRealTimers();
+  });
+
+  test('poll preserves realtime heading when only coords refresh', async () => {
+    jest.useFakeTimers();
+    const { getActiveRide } = require('../../api/passenger');
+    getActiveRide.mockResolvedValue({
+      id: 'trip-heading',
+      passenger_id: 'p-1',
+      status: 'in_trip',
+      origin_lat: -34.6,
+      origin_lng: -58.38,
+      dest_lat: -34.7,
+      dest_lng: -58.4,
+      driver_id: 'driver-1',
+      driver_lat: -34.61,
+      driver_lng: -58.39,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    useRideStore.setState({
+      activeTrip: {
+        id: 'trip-heading',
+        passenger_id: 'p-1',
+        status: 'in_trip',
+        origin_lat: -34.6,
+        origin_lng: -58.38,
+        dest_lat: -34.7,
+        dest_lng: -58.4,
+        driver_id: 'driver-1',
+        driver_name: 'María López',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      driverLocation: { lat: -34.6, lng: -58.38, heading: 180 },
+    });
+
+    await act(async () => {
+      render(<TripInProgressScreen />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(useRideStore.getState().driverLocation).toEqual({
+      lat: -34.61,
+      lng: -58.39,
+      heading: 180,
+    });
+
+    jest.useRealTimers();
+  });
+
+  test('status merge preserves driver_lat/lng when incoming has null', async () => {
+    useAuthStore.setState({ userId: 'passenger-1' });
+    useRideStore.getState().setActiveTrip({
+      id: 'trip-merge',
+      passenger_id: 'passenger-1',
+      status: 'en_route',
+      origin_lat: -34.6,
+      origin_lng: -58.38,
+      dest_lat: -34.7,
+      dest_lng: -58.4,
+      driver_id: 'driver-1',
+      driver_lat: -34.605,
+      driver_lng: -58.385,
+      driver_name: 'María López',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    useRideStore.getState().setDriverLocation({ lat: -34.605, lng: -58.385, heading: null });
+
+    const { subscribeToPassengerChannel } = require('../../lib/realtime');
+    await render(<TripInProgressScreen />);
+
+    const onTripStatus = subscribeToPassengerChannel.mock.calls[0][1];
+    await act(async () => {
+      await onTripStatus({
+        id: 'trip-merge',
+        status: 'in_trip',
+        driver_lat: null,
+        driver_lng: null,
+      });
+    });
+
+    const trip = useRideStore.getState().activeTrip;
+    expect(trip?.status).toBe('in_trip');
+    expect(trip?.driver_lat).toBe(-34.605);
+    expect(trip?.driver_lng).toBe(-58.385);
+    expect(useRideStore.getState().driverLocation).toEqual({
+      lat: -34.605,
+      lng: -58.385,
+      heading: null,
+    });
   });
 });
