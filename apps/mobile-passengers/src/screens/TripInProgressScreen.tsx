@@ -112,20 +112,31 @@ export function TripInProgressScreen() {
     const tick = async () => {
       const t = await getActiveRide().catch(() => null);
       if (cancelled || !t || t.id !== tripId) return;
-      if (typeof t.driver_lat === 'number' && typeof t.driver_lng === 'number') {
-        useRideStore.getState().setDriverLocation({
+      if (typeof t.driver_lat !== 'number' || typeof t.driver_lng !== 'number') return;
+
+      const store = useRideStore.getState();
+      const prevLoc = store.driverLocation;
+      const sameCoords =
+        prevLoc != null && prevLoc.lat === t.driver_lat && prevLoc.lng === t.driver_lng;
+      if (!sameCoords) {
+        // Poll has no heading — keep realtime heading if present.
+        store.setDriverLocation({
           lat: t.driver_lat,
           lng: t.driver_lng,
-          heading: null,
+          heading: prevLoc?.heading ?? null,
         });
-        const prev = useRideStore.getState().activeTrip;
-        if (prev?.id === tripId) {
-          useRideStore.getState().setActiveTrip({
-            ...prev,
-            driver_lat: t.driver_lat,
-            driver_lng: t.driver_lng,
-          });
-        }
+      }
+
+      const prev = store.activeTrip;
+      if (
+        prev?.id === tripId &&
+        (prev.driver_lat !== t.driver_lat || prev.driver_lng !== t.driver_lng)
+      ) {
+        store.setActiveTrip({
+          ...prev,
+          driver_lat: t.driver_lat,
+          driver_lng: t.driver_lng,
+        });
       }
     };
 

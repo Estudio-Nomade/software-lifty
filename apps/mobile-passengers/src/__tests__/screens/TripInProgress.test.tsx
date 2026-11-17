@@ -243,6 +243,59 @@ describe('TripInProgressScreen', () => {
     jest.useRealTimers();
   });
 
+  test('poll preserves realtime heading when only coords refresh', async () => {
+    jest.useFakeTimers();
+    const { getActiveRide } = require('../../api/passenger');
+    getActiveRide.mockResolvedValue({
+      id: 'trip-heading',
+      passenger_id: 'p-1',
+      status: 'in_trip',
+      origin_lat: -34.6,
+      origin_lng: -58.38,
+      dest_lat: -34.7,
+      dest_lng: -58.4,
+      driver_id: 'driver-1',
+      driver_lat: -34.61,
+      driver_lng: -58.39,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    useRideStore.setState({
+      activeTrip: {
+        id: 'trip-heading',
+        passenger_id: 'p-1',
+        status: 'in_trip',
+        origin_lat: -34.6,
+        origin_lng: -58.38,
+        dest_lat: -34.7,
+        dest_lng: -58.4,
+        driver_id: 'driver-1',
+        driver_name: 'María López',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      driverLocation: { lat: -34.6, lng: -58.38, heading: 180 },
+    });
+
+    await act(async () => {
+      render(<TripInProgressScreen />);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(useRideStore.getState().driverLocation).toEqual({
+      lat: -34.61,
+      lng: -58.39,
+      heading: 180,
+    });
+
+    jest.useRealTimers();
+  });
+
   test('status merge preserves driver_lat/lng when incoming has null', async () => {
     useAuthStore.setState({ userId: 'passenger-1' });
     useRideStore.getState().setActiveTrip({
