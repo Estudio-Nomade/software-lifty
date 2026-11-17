@@ -32,9 +32,26 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   cancelled_early: { label: 'Cancelado', color: theme.colors.dangerRed },
   cancelled_late: { label: 'Cancelado', color: theme.colors.dangerRed },
   rejected: { label: 'Rechazado', color: theme.colors.mediumGray },
-  expired: { label: 'Expirado', color: theme.colors.mediumGray },
+  expired: { label: 'Sin conductor', color: theme.colors.mediumGray },
   rated: { label: 'Completado', color: theme.colors.primary },
 };
+
+function statusMeta(trip: Trip): { label: string; color: string } {
+  if (trip.cancel_stage === 'pre_asignacion') {
+    return { label: 'Búsqueda cancelada', color: theme.colors.mediumGray };
+  }
+  if (trip.status === 'expired' || trip.cancel_reason === 'auto_timeout') {
+    return { label: 'Sin conductor', color: theme.colors.mediumGray };
+  }
+  return STATUS_MAP[trip.status] ?? { label: trip.status, color: theme.colors.mediumGray };
+}
+
+function isPenalizableCancel(trip: Trip): boolean {
+  if (!trip.status.startsWith('cancelled')) return false;
+  if (trip.cancel_stage === 'pre_asignacion') return false;
+  if (trip.cancel_reason === 'auto_timeout') return false;
+  return trip.cancel_stage === 'en_camino' || trip.cancel_stage === 'llegado' || !trip.cancel_stage;
+}
 
 function formatDate(iso: string) {
   const date = new Date(iso);
@@ -55,8 +72,8 @@ function shortAddress(address: string) {
 }
 
 function TripCard({ trip, onSupport }: { trip: Trip; onSupport: () => void }) {
-  const status = STATUS_MAP[trip.status] ?? { label: trip.status, color: theme.colors.mediumGray };
-  const cancelled = trip.status.startsWith('cancelled');
+  const status = statusMeta(trip);
+  const showSupport = isPenalizableCancel(trip);
 
   return (
     <View style={styles.tripCard}>
@@ -88,7 +105,7 @@ function TripCard({ trip, onSupport }: { trip: Trip; onSupport: () => void }) {
         </Text>
         {trip.driver_name && <Text style={styles.driverName}>{trip.driver_name}</Text>}
       </View>
-      {cancelled ? (
+      {showSupport ? (
         <TouchableOpacity onPress={onSupport}>
           <Text style={styles.supportLink}>Contactar soporte</Text>
         </TouchableOpacity>

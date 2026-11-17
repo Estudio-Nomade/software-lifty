@@ -1,6 +1,7 @@
 import { and, desc, eq, getTableColumns, inArray, not, or, sql } from 'drizzle-orm';
 import { db, getDb } from '../../shared/db/client';
 import {
+  cancelationLog,
   driverLocations,
   drivers,
   ratings,
@@ -374,12 +375,16 @@ export const passengerTripService = {
         vehicle_plate: vehicles.plate,
         driver_lat: driverLocations.lat,
         driver_lng: driverLocations.lng,
+        cancel_stage: cancelationLog.stage,
+        cancel_reason: cancelationLog.reason,
+        cancel_actor: cancelationLog.actor,
       })
       .from(trips)
       .leftJoin(drivers, eq(trips.driver_id, drivers.id))
       .leftJoin(users, eq(drivers.user_id, users.id))
       .leftJoin(vehicles, eq(drivers.id, vehicles.driver_id))
       .leftJoin(driverLocations, eq(drivers.id, driverLocations.driver_id))
+      .leftJoin(cancelationLog, eq(cancelationLog.trip_id, trips.id))
       .where(eq(trips.passenger_id, user.id))
       .orderBy(desc(trips.created_at))
       .limit(limit)

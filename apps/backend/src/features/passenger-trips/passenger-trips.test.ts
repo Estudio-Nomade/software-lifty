@@ -489,6 +489,30 @@ describe('Passenger Trips', () => {
     expect(data.length).toBeGreaterThanOrEqual(2);
   });
 
+  test('GET /history after pre_asignacion cancel includes cancel_stage', async () => {
+    const token = await createPassengerToken();
+    const { data: trip } = await createTrip(token);
+
+    const cancel = await request('POST', `/api/passenger/trips/${trip.id}/cancel`, undefined, token);
+    expect(cancel.status).toBe(200);
+    expect(cancel.data.status).toBe('cancelled');
+
+    const { status, data } = await request(
+      'GET',
+      '/api/passenger/trips/history?page=1&limit=10',
+      undefined,
+      token,
+    );
+
+    expect(status).toBe(200);
+    const row = data.find((t: { id: string }) => t.id === trip.id);
+    expect(row).toBeTruthy();
+    expect(row.status).toBe('cancelled');
+    expect(row.cancel_stage).toBe('pre_asignacion');
+    expect(row.cancel_reason).toBe('user_cancel');
+    expect(row.cancel_actor).toBe('passenger');
+  });
+
   test('GET /history returns empty for new passenger', async () => {
     const token = await createPassengerToken();
     const { status, data } = await request('GET', '/api/passenger/trips/history', undefined, token);
