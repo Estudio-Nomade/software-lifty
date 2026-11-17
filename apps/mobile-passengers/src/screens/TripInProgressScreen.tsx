@@ -1,6 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
-import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  BackHandler,
+  Linking,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { cancelRide, getActiveRide, getCancelPreview, getProfile } from '../api/passenger';
 import { Avatar } from '../components/Avatar';
@@ -27,6 +35,11 @@ export function TripInProgressScreen() {
   const reset = useRideStore((s) => s.reset);
   const [recenterKey, setRecenterKey] = useState(0);
   const [passengerAvatar, setPassengerAvatar] = useState<string | null>(null);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     getProfile()

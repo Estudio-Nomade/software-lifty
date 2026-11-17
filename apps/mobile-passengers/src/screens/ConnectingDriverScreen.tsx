@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { cancelRide, getRideDetails, retryRide } from '../api/passenger';
 import { Button } from '../components/Button';
@@ -44,6 +44,11 @@ export function ConnectingDriverScreen() {
   const searchEndedRef = useRef(false);
 
   const showEmpty = timedOut;
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, []);
 
   const goHome = useCallback(() => {
     if (navigatingRef.current) return;

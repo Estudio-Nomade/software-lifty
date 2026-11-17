@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { type ComponentRef, useCallback, useEffect, useRef, useState } from 'react';
 import {
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -34,6 +35,15 @@ export function ChatScreen() {
   const tripId = paramId || trip?.id;
   const chatTrip = trip?.id === tripId ? trip : null;
   const { messages, sendMessage } = useTripChat(tripId, 'passenger');
+
+  // Hardware back → trip screen via header; block bare stack pops past chat.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      goBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [goBack]);
 
   // Push tap may land here before ActiveTripRecovery fills the store.
   useEffect(() => {
