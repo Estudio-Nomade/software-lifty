@@ -27,6 +27,7 @@ const BACK_FALLBACK: Record<string, string> = {
   support: 'Profile',
   terms: 'Profile',
   messages: 'Profile',
+  'delete-account': 'Profile',
   'cancellation-policy': 'Profile',
   'pay-commission-debt': 'Earnings',
 };

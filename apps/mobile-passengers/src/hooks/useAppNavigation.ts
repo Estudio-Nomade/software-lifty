@@ -23,6 +23,7 @@ const SCREEN_TO_ROUTE = {
   TripComplete: '/trip-complete',
   TripHistory: '/trip-history',
   Profile: '/profile',
+  DeleteAccount: '/delete-account',
   PaymentMethod: '/payment-method',
   Support: '/support',
   Chat: '/chat',
@@ -34,6 +35,7 @@ export type ScreenName = keyof typeof SCREEN_TO_ROUTE;
 const BACK_FALLBACK: Record<string, string> = {
   terms: 'Profile',
   support: 'Profile',
+  'delete-account': 'Profile',
 };
 
 export function useAppNavigation() {

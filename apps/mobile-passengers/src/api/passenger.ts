@@ -400,3 +400,16 @@ export async function searchPlaces(
     return [];
   }
 }
+
+export async function requestAccountDeletion(): Promise<{
+  request_id: string;
+  status: string;
+  message?: string;
+}> {
+  const { data } = await api.post<{
+    request_id: string;
+    status: string;
+    message?: string;
+  }>('/account-deletion/request', { confirm: true });
+  return data;
+}

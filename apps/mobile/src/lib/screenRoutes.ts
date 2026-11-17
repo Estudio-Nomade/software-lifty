@@ -37,6 +37,7 @@ export const SCREEN_TO_ROUTE = {
   Earnings: '/earnings',
   PayCommissionDebt: '/pay-commission-debt',
   Profile: '/profile',
+  DeleteAccount: '/delete-account',
   CancellationPolicy: '/cancellation-policy',
   PaymentMethod: '/payment-method',
   SelectProvince: '/select-province',

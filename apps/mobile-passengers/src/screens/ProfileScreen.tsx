@@ -281,6 +281,15 @@ export function ProfileScreen() {
 
         <TouchableOpacity
           style={styles.logoutBtn}
+          onPress={() => navigate('DeleteAccount')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="trash-outline" size={20} color={theme.colors.dangerRed} />
+          <Text style={styles.logoutText}>Eliminar cuenta</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.logoutBtn}
           onPress={handleLogout}
           disabled={loggingOut}
           activeOpacity={0.8}
