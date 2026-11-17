@@ -146,11 +146,17 @@ export function DeleteAccountScreen() {
       >
         {step === 'warn' ? (
           <View style={styles.card}>
-            <Text style={styles.title}>Esta acción no es cerrar sesión</Text>
+            <Text style={styles.title}>¿Querés eliminar tu cuenta?</Text>
             <Text style={styles.body}>
-              Vas a pedir borrar tu cuenta de Lifty. Se eliminan datos personales y tokens. Si
-              también sos conductor en la misma cuenta, se borra toda la identidad. Viajes y montos
-              pueden quedar anonimizados por obligaciones legales.
+              Esta acción inicia el proceso de eliminación de tu cuenta de Lifty y de los datos
+              personales asociados.
+            </Text>
+            <Text style={styles.body}>
+              Algunos registros podrán conservarse cuando exista una obligación legal o una razón
+              legítima de seguridad.
+            </Text>
+            <Text style={styles.body}>
+              Si tenés un viaje en curso, terminarlo o cancelarlo antes.
             </Text>
             <Button variant="danger" onPress={goReauth} style={styles.btn}>
               Continuar

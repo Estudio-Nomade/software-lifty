@@ -146,13 +146,14 @@ export function DeleteAccountScreen() {
 
         {step === 'warn' ? (
           <Card>
-            <Text style={styles.warnTitle}>Esto borra tu cuenta para siempre</Text>
+            <Text style={styles.warnTitle}>¿Querés eliminar tu cuenta?</Text>
             <Text style={styles.body}>
-              No es lo mismo que cerrar sesión. Si seguís, pedimos borrar tu cuenta de Lifty: tu
-              perfil, fotos, documentos y el acceso a la app.
+              Esta acción inicia el proceso de eliminación de tu cuenta de Lifty y de los datos
+              personales asociados.
             </Text>
             <Text style={styles.body}>
-              Si también usás Lifty como pasajero con la misma cuenta, se borra todo junto.
+              Algunos registros podrán conservarse cuando exista una obligación legal o una razón
+              legítima de seguridad.
             </Text>
             <Text style={styles.body}>
               Si tenés un viaje en curso, terminarlo o cancelarlo antes.
