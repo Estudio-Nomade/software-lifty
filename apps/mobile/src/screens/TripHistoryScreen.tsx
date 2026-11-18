@@ -20,6 +20,7 @@ import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
 import { getTabBarReserve } from '../lib/tabBarLayout';
+import { buildCompletionHistoryView } from '../lib/tripCompletionHistory';
 import { theme } from '../theme';
 
 const LIMIT = 20;
@@ -82,6 +83,7 @@ interface TripCardProps {
 const TripCard: React.FC<TripCardProps> = ({ trip }) => {
   const statusInfo = STATUS_MAP[trip.status as TripStatus];
   const cancelInfo = cancelLine(trip);
+  const completion = buildCompletionHistoryView(trip);
 
   return (
     <Card style={styles.tripCard} padding={theme.spacing.md}>
@@ -105,6 +107,39 @@ const TripCard: React.FC<TripCardProps> = ({ trip }) => {
         <Text style={styles.tripPayment}>{paymentLabel(trip.payment_method)}</Text>
       </View>
       {cancelInfo ? <Text style={styles.cancelLine}>{cancelInfo}</Text> : null}
+      {completion ? (
+        <View style={styles.completionSection}>
+          <Text style={styles.completionTitle}>{completion.title}</Text>
+          <View style={styles.completionBody}>
+            {completion.badge ? (
+              <View
+                style={[
+                  styles.completionBadge,
+                  {
+                    backgroundColor:
+                      completion.badge.kind === 'exception'
+                        ? theme.colors.amber
+                        : theme.colors.turquoise,
+                  },
+                ]}
+              >
+                <Text style={styles.completionBadgeText}>{completion.badge.label}</Text>
+              </View>
+            ) : null}
+            {completion.reasonLine ? (
+              <Text style={styles.completionReason}>{completion.reasonLine}</Text>
+            ) : null}
+            {completion.noteLine ? (
+              <Text style={styles.completionNote} numberOfLines={2}>
+                {completion.noteLine}
+              </Text>
+            ) : null}
+            {completion.distanceLine ? (
+              <Text style={styles.completionDistance}>{completion.distanceLine}</Text>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
     </Card>
   );
 };
@@ -288,6 +323,45 @@ const styles = StyleSheet.create({
     color: theme.colors.dangerRed,
     fontWeight: theme.fontWeight.medium,
     marginTop: 2,
+  },
+  completionSection: {
+    marginTop: theme.spacing.xs,
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.lightGray,
+    gap: theme.spacing.xs,
+  },
+  completionTitle: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.mediumGray,
+  },
+  completionBody: {
+    gap: 4,
+  },
+  completionBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 2,
+    borderRadius: theme.radius.sm,
+  },
+  completionBadgeText: {
+    fontSize: theme.fontSize.xs,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.white,
+  },
+  completionReason: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.deepBlue,
+    fontWeight: theme.fontWeight.medium,
+  },
+  completionNote: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.mediumGray,
+  },
+  completionDistance: {
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.mediumGray,
   },
   loadMoreContainer: {
     paddingVertical: theme.spacing.md,

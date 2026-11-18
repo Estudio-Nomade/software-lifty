@@ -16,6 +16,7 @@ import { BottomTabBar } from '../components/BottomTabBar';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
 import { getTabBarReserve } from '../lib/tabBarLayout';
+import { buildCompletionHistoryView } from '../lib/tripCompletionHistory';
 import { theme } from '../theme';
 
 const LIMIT = 20;
@@ -74,6 +75,7 @@ function shortAddress(address: string) {
 function TripCard({ trip, onSupport }: { trip: Trip; onSupport: () => void }) {
   const status = statusMeta(trip);
   const showSupport = isPenalizableCancel(trip);
+  const completion = buildCompletionHistoryView(trip);
 
   return (
     <View style={styles.tripCard}>
@@ -105,6 +107,39 @@ function TripCard({ trip, onSupport }: { trip: Trip; onSupport: () => void }) {
         </Text>
         {trip.driver_name && <Text style={styles.driverName}>{trip.driver_name}</Text>}
       </View>
+      {completion ? (
+        <View style={styles.completionSection}>
+          <Text style={styles.completionTitle}>{completion.title}</Text>
+          <View style={styles.completionBody}>
+            {completion.badge ? (
+              <View
+                style={[
+                  styles.completionBadge,
+                  {
+                    backgroundColor:
+                      completion.badge.kind === 'exception'
+                        ? theme.colors.amber
+                        : theme.colors.primary,
+                  },
+                ]}
+              >
+                <Text style={styles.completionBadgeText}>{completion.badge.label}</Text>
+              </View>
+            ) : null}
+            {completion.reasonLine ? (
+              <Text style={styles.completionReason}>{completion.reasonLine}</Text>
+            ) : null}
+            {completion.noteLine ? (
+              <Text style={styles.completionNote} numberOfLines={2}>
+                {completion.noteLine}
+              </Text>
+            ) : null}
+            {completion.distanceLine ? (
+              <Text style={styles.completionDistance}>{completion.distanceLine}</Text>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
       {showSupport ? (
         <TouchableOpacity onPress={onSupport}>
           <Text style={styles.supportLink}>Contactar soporte</Text>
@@ -324,6 +359,47 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.xs,
     fontFamily: theme.fontFamily.medium,
     color: theme.colors.primary,
+  },
+  completionSection: {
+    marginTop: theme.spacing.xs,
+    paddingTop: theme.spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(13, 43, 69, 0.08)',
+    gap: theme.spacing.xs,
+  },
+  completionTitle: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.mediumGray,
+  },
+  completionBody: {
+    gap: 4,
+  },
+  completionBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 3,
+    borderRadius: theme.radius.sm,
+  },
+  completionBadgeText: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.medium,
+    color: theme.colors.white,
+  },
+  completionReason: {
+    fontSize: theme.fontSize.sm,
+    fontFamily: theme.fontFamily.semibold,
+    color: theme.colors.deepBlue,
+  },
+  completionNote: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
+  },
+  completionDistance: {
+    fontSize: theme.fontSize.xs,
+    fontFamily: theme.fontFamily.regular,
+    color: theme.colors.mediumGray,
   },
   centered: {
     flex: 1,
