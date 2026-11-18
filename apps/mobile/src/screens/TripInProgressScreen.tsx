@@ -22,7 +22,6 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useDynamicRouting } from '../hooks/useDynamicRouting';
 import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
 import { COMPLETE_EXCEPTION_MAX_M, type CompleteExceptionReason } from '../lib/completeException';
-import { haversineDistance } from '../lib/geo';
 import {
   COMPLETE_GPS_ACCURACY_MAX_M,
   getCurrentPosition,
@@ -31,6 +30,7 @@ import {
   stopTracking,
 } from '../lib/location';
 import { mergeTripUpdate } from '../lib/mergeTrip';
+import { formatPinDistanceLabel, metersToDestPin, pinDistanceTone } from '../lib/pinDistance';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { useVehicleStore } from '../store/vehicleStore';
@@ -65,16 +65,6 @@ function apiErrorMessage(err: unknown): string | undefined {
     if (typeof e.message === 'string') return e.message;
   }
   return undefined;
-}
-
-function metersFromDest(
-  lat: number,
-  lng: number,
-  destLat: number | null | undefined,
-  destLng: number | null | undefined,
-): number | null {
-  if (destLat == null || destLng == null) return null;
-  return Math.round(haversineDistance(lat, lng, destLat, destLng) * 1000);
 }
 
 export const TripInProgressScreen: React.FC = () => {
@@ -181,7 +171,7 @@ export const TripInProgressScreen: React.FC = () => {
       return;
     }
 
-    const distanceMeters = metersFromDest(locked.lat, locked.lng, trip?.dest_lat, trip?.dest_lng);
+    const distanceMeters = metersToDestPin(locked.lat, locked.lng, trip?.dest_lat, trip?.dest_lng);
 
     if (code === 'EXCEPTION_REQUIRED' || code === 'EXCEPTION_NOTE_REQUIRED') {
       setCompleteError(null);
@@ -325,6 +315,17 @@ export const TripInProgressScreen: React.FC = () => {
 
   const { instruction } = useManeuverInstructions(steps, locationLat, locationLng);
 
+  const metersToPin = metersToDestPin(locationLat, locationLng, trip?.dest_lat, trip?.dest_lng);
+  const pinTone = metersToPin != null ? pinDistanceTone(metersToPin) : null;
+  const pinDistanceColor =
+    pinTone === 'ok'
+      ? theme.colors.mediumGray
+      : pinTone === 'warn'
+        ? theme.colors.amber
+        : pinTone === 'far'
+          ? theme.colors.dangerRed
+          : theme.colors.mediumGray;
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -417,6 +418,14 @@ export const TripInProgressScreen: React.FC = () => {
         <View style={styles.progressBar}>
           <View style={[styles.progressFill, { width: `${progress}%` }]} />
         </View>
+        {metersToPin != null ? (
+          <Text
+            style={[styles.pinDistance, { color: pinDistanceColor }]}
+            accessibilityLabel={`Distancia al pin ${metersToPin} metros`}
+          >
+            {formatPinDistanceLabel(metersToPin)}
+          </Text>
+        ) : null}
         <Button
           title="FINALIZAR VIAJE"
           onPress={handleCompleteTrip}
@@ -552,6 +561,12 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: theme.colors.turquoise,
+  },
+  pinDistance: {
+    fontSize: theme.fontSize.sm,
+    fontWeight: theme.fontWeight.medium,
+    textAlign: 'center',
+    marginTop: theme.spacing.xs,
   },
   button: {
     width: '100%',
