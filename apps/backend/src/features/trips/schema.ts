@@ -54,6 +54,7 @@ export const cancelTripBody = t.Object({
 export const completeBody = t.Object({
   lat: t.Number(),
   lng: t.Number(),
+  gps_accuracy_m: t.Optional(t.Number()),
 });
 
 export const respondBody = t.Object({

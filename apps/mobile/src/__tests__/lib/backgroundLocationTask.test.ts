@@ -24,6 +24,7 @@ describe('handleBackgroundLocationUpdate', () => {
       lat: null,
       lng: null,
       heading: null,
+      accuracy: null,
       locationError: null,
     });
     useAuthStore.setState({ token: null, isAuthenticated: false });
@@ -68,6 +69,7 @@ describe('handleBackgroundLocationUpdate', () => {
     ]);
 
     expect(useLocationStore.getState().lat).toBeCloseTo(-34.6);
+    expect(useLocationStore.getState().accuracy).toBe(10);
     expect(mockPut).toHaveBeenCalledWith('/drivers/me/heartbeat', {
       lat: -34.6,
       lng: -58.4,

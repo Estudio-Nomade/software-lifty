@@ -13,11 +13,39 @@ export const BG_LOCATION_PERMISSION_MSG =
 export const LOCATION_DENIED_MSG =
   'No pudimos obtener tu ubicación. Activá el GPS o permití el acceso e intentá de nuevo.';
 
-export function applyLocationCoords(lat: number, lng: number, heading?: number | null): boolean {
+/**
+ * Client-side complete gate: block POST when fix accuracy is present and worse
+ * than this (meters). Stricter than BE gpsAccuracyMaxM (~50) so we avoid
+ * burning complete rate-limit on indoor/Expo Go noise. null/unknown does not block.
+ */
+export const COMPLETE_GPS_ACCURACY_MAX_M = 40;
+
+export function normalizeGpsAccuracyM(accuracy: number | null | undefined): number | null {
+  if (accuracy == null || !Number.isFinite(accuracy) || accuracy < 0) return null;
+  return accuracy;
+}
+
+/** True only when accuracy is known and worse than maxM — null/unknown never blocks. */
+export function isGpsAccuracyTooLow(
+  accuracy: number | null | undefined,
+  maxM: number = COMPLETE_GPS_ACCURACY_MAX_M,
+): boolean {
+  const m = normalizeGpsAccuracyM(accuracy);
+  return m != null && m > maxM;
+}
+
+export function applyLocationCoords(
+  lat: number,
+  lng: number,
+  heading?: number | null,
+  accuracy?: number | null,
+): boolean {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
   if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return false;
   if (lat === 0 && lng === 0) return false;
-  useLocationStore.getState().setLocation(lat, lng, heading ?? null);
+  useLocationStore
+    .getState()
+    .setLocation(lat, lng, heading ?? null, normalizeGpsAccuracyM(accuracy));
   useLocationStore.getState().setLocationError(null);
   return true;
 }

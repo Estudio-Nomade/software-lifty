@@ -20,7 +20,13 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useDynamicRouting } from '../hooks/useDynamicRouting';
 import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
 import { haversineDistance } from '../lib/geo';
-import { getCurrentPosition, startTracking, stopTracking } from '../lib/location';
+import {
+  COMPLETE_GPS_ACCURACY_MAX_M,
+  getCurrentPosition,
+  isGpsAccuracyTooLow,
+  startTracking,
+  stopTracking,
+} from '../lib/location';
 import { mergeTripUpdate } from '../lib/mergeTrip';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
@@ -100,7 +106,7 @@ export const TripInProgressScreen: React.FC = () => {
         }),
       ]);
 
-      const { lat, lng } = useLocationStore.getState();
+      const { lat, lng, accuracy } = useLocationStore.getState();
       if (!gotFresh || lat == null || lng == null) {
         setCompleteError({
           title: 'No se pudo finalizar el viaje',
@@ -111,11 +117,24 @@ export const TripInProgressScreen: React.FC = () => {
         return;
       }
 
+      // Known-bad fix: do not POST (avoids rate-limit burn + false TOO_FAR copy).
+      // null accuracy = unknown → allow POST (BE / distance still apply).
+      if (isGpsAccuracyTooLow(accuracy, COMPLETE_GPS_ACCURACY_MAX_M)) {
+        setCompleteError({
+          title: 'GPS impreciso',
+          message: 'Esperá un segundo y volvé a intentar. La señal todavía no es confiable.',
+          tone: 'warning',
+          distanceMeters: null,
+        });
+        return;
+      }
+
       submittedLat = lat;
       submittedLng = lng;
       const response = await apiClient.post(`/trips/${trip.id}/complete`, {
         lat: submittedLat,
         lng: submittedLng,
+        ...(accuracy != null ? { gps_accuracy_m: accuracy } : {}),
       });
       const storeTrip = useTripStore.getState().trip;
       const merged = mergeTripUpdate(storeTrip, response.data);
@@ -149,6 +168,7 @@ export const TripInProgressScreen: React.FC = () => {
         return;
       }
       const code = err?.error?.code;
+      const isGpsAccuracy = code === 'GPS_ACCURACY';
       const isTooFar = code === 'TOO_FAR_FROM_DESTINATION';
       let distanceMeters: number | null = null;
       if (
@@ -161,6 +181,15 @@ export const TripInProgressScreen: React.FC = () => {
         distanceMeters = Math.round(
           haversineDistance(submittedLat, submittedLng, trip.dest_lat, trip.dest_lng) * 1000,
         );
+      }
+      if (isGpsAccuracy) {
+        setCompleteError({
+          title: 'GPS impreciso',
+          message: 'Esperá un segundo y volvé a intentar. La señal todavía no es confiable.',
+          tone: 'warning',
+          distanceMeters: null,
+        });
+        return;
       }
       setCompleteError({
         title: isTooFar ? 'Todavía no llegaste al destino' : 'No se pudo finalizar el viaje',

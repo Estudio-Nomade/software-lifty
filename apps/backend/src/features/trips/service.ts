@@ -815,8 +815,13 @@ export const tripService = {
     return result;
   },
 
-  async completeTrip(user: AuthUser, tripId: string, body: { lat: number; lng: number }) {
+  async completeTrip(
+    user: AuthUser,
+    tripId: string,
+    body: { lat: number; lng: number; gps_accuracy_m?: number },
+  ) {
     const driverId = await getDriverId(user);
+    const config = await getCancellationConfig();
 
     const [trip] = await db
       .select()
@@ -824,6 +829,11 @@ export const tripService = {
       .where(and(eq(trips.id, tripId), eq(trips.driver_id, driverId)))
       .limit(1);
     if (!trip) throw new NotFoundError('Trip not found');
+
+    // Mirror arrived: optional client accuracy; only reject when present and too high.
+    if (body.gps_accuracy_m != null && body.gps_accuracy_m > config.gpsAccuracyMaxM) {
+      throw new AppError('La precisión del GPS no es suficiente', 400, 'GPS_ACCURACY');
+    }
 
     // TODO(dev): remove in production — temporary bypass so the full
     // "in_trip → completed" flow can be tested from any distance.
