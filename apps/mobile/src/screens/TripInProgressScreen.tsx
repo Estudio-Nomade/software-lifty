@@ -20,12 +20,14 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useDynamicRouting } from '../hooks/useDynamicRouting';
 import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
 import { haversineDistance } from '../lib/geo';
-import { startTracking, stopTracking } from '../lib/location';
+import { getCurrentPosition, startTracking, stopTracking } from '../lib/location';
 import { mergeTripUpdate } from '../lib/mergeTrip';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
 import { useVehicleStore } from '../store/vehicleStore';
 import { theme } from '../theme';
+
+const COMPLETE_GPS_TIMEOUT_MS = 15_000;
 
 export const TripInProgressScreen: React.FC = () => {
   const navigation = useAppNavigation();
@@ -87,10 +89,33 @@ export const TripInProgressScreen: React.FC = () => {
   const handleCompleteTrip = async () => {
     if (!trip?.id) return;
     setCompleting(true);
+    setCompleteError(null);
+    let submittedLat: number | null = null;
+    let submittedLng: number | null = null;
     try {
+      const gotFresh = await Promise.race([
+        getCurrentPosition(),
+        new Promise<boolean>((resolve) => {
+          setTimeout(() => resolve(false), COMPLETE_GPS_TIMEOUT_MS);
+        }),
+      ]);
+
+      const { lat, lng } = useLocationStore.getState();
+      if (!gotFresh || lat == null || lng == null) {
+        setCompleteError({
+          title: 'No se pudo finalizar el viaje',
+          message: 'No pudimos obtener tu ubicación. Activá el GPS e intentá de nuevo.',
+          tone: 'error',
+          distanceMeters: null,
+        });
+        return;
+      }
+
+      submittedLat = lat;
+      submittedLng = lng;
       const response = await apiClient.post(`/trips/${trip.id}/complete`, {
-        lat: locationLat,
-        lng: locationLng,
+        lat: submittedLat,
+        lng: submittedLng,
       });
       const storeTrip = useTripStore.getState().trip;
       const merged = mergeTripUpdate(storeTrip, response.data);
@@ -128,13 +153,13 @@ export const TripInProgressScreen: React.FC = () => {
       let distanceMeters: number | null = null;
       if (
         isTooFar &&
-        locationLat != null &&
-        locationLng != null &&
+        submittedLat != null &&
+        submittedLng != null &&
         trip?.dest_lat != null &&
         trip?.dest_lng != null
       ) {
         distanceMeters = Math.round(
-          haversineDistance(locationLat, locationLng, trip.dest_lat, trip.dest_lng) * 1000,
+          haversineDistance(submittedLat, submittedLng, trip.dest_lat, trip.dest_lng) * 1000,
         );
       }
       setCompleteError({

@@ -394,10 +394,10 @@ export async function stopTracking(): Promise<void> {
   });
 }
 
-export async function getCurrentPosition(): Promise<void> {
+/** Returns true only when a fresh fix was applied to the store. */
+export async function getCurrentPosition(): Promise<boolean> {
   if (isWebRuntime()) {
-    await getWebPositionOnce();
-    return;
+    return getWebPositionOnce();
   }
 
   try {
@@ -406,7 +406,7 @@ export async function getCurrentPosition(): Promise<void> {
       useLocationStore
         .getState()
         .setLocationError('Permiso de ubicación denegado. Activálo en Ajustes e intentá de nuevo.');
-      return;
+      return false;
     }
 
     const pos =
@@ -419,13 +419,14 @@ export async function getCurrentPosition(): Promise<void> {
 
     if (!pos) {
       useLocationStore.getState().setLocationError(LOCATION_DENIED_MSG);
-      return;
+      return false;
     }
 
-    applyLocationCoords(pos.coords.latitude, pos.coords.longitude, pos.coords.heading);
+    return applyLocationCoords(pos.coords.latitude, pos.coords.longitude, pos.coords.heading);
   } catch (error) {
     console.error('getCurrentPosition failed:', error);
     useLocationStore.getState().setLocationError(LOCATION_DENIED_MSG);
+    return false;
   }
 }
 
