@@ -31,6 +31,14 @@ import type { AuthUser } from '../../shared/middleware/auth';
 import { notifyArrived } from '../cancellations/notifications';
 import { cancellationService, getCancellationConfig } from '../cancellations/service';
 import { broadcastToPassenger, passengerTripService } from '../passenger-trips/service';
+import {
+  COMPLETE_EXCEPTION_MAX_M,
+  COMPLETE_EXCEPTION_NOTE_MAX,
+  COMPLETE_OK_RADIUS_M,
+  type CompleteExceptionReason,
+  type CompletionType,
+  isCompleteExceptionReason,
+} from './complete-config';
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   pending: ['offered'],
@@ -163,7 +171,12 @@ export async function attachPassengerFields<T extends { passenger_id?: string | 
   };
 }
 
-async function transitionTrip(driverId: string, tripId: string, targetStatus: string) {
+async function transitionTrip(
+  driverId: string,
+  tripId: string,
+  targetStatus: string,
+  extraUpdate?: Record<string, unknown>,
+) {
   return db.transaction(async (tx) => {
     const trip = await findTrip(driverId, tripId, tx);
 
@@ -178,9 +191,14 @@ async function transitionTrip(driverId: string, tripId: string, targetStatus: st
       );
     }
 
+    // Never overwrite completion evidence once set (idempotent / re-entry safe).
+    const safeExtra =
+      actualTarget === 'completed' && trip.completed_at != null ? undefined : extraUpdate;
+
     const updateData: Record<string, any> = {
       status: actualTarget,
       updated_at: new Date(),
+      ...safeExtra,
     };
 
     if (actualTarget === 'waiting') {
@@ -818,7 +836,13 @@ export const tripService = {
   async completeTrip(
     user: AuthUser,
     tripId: string,
-    body: { lat: number; lng: number; gps_accuracy_m?: number },
+    body: {
+      lat: number;
+      lng: number;
+      gps_accuracy_m?: number;
+      exception_reason?: CompleteExceptionReason;
+      exception_note?: string;
+    },
   ) {
     const driverId = await getDriverId(user);
     const config = await getCancellationConfig();
@@ -830,6 +854,10 @@ export const tripService = {
       .limit(1);
     if (!trip) throw new NotFoundError('Trip not found');
 
+    if (!Number.isFinite(body.lat) || !Number.isFinite(body.lng)) {
+      throw new BadRequestError('Latitud y longitud deben ser números finitos');
+    }
+
     // Mirror arrived: optional client accuracy; only reject when present and too high.
     if (body.gps_accuracy_m != null && body.gps_accuracy_m > config.gpsAccuracyMaxM) {
       throw new AppError('La precisión del GPS no es suficiente', 400, 'GPS_ACCURACY');
@@ -839,17 +867,62 @@ export const tripService = {
     // "in_trip → completed" flow can be tested from any distance.
     // Enable locally with BYPASS_DISTANCE_CHECK=true (apps/backend/.env).
     // Hard-gated by NODE_ENV so it can never activate in production.
+    // Bypass skips hard rejects but still persists completion evidence.
     const bypassDistanceCheck =
       process.env.NODE_ENV !== 'production' &&
       (process.env.BYPASS_DISTANCE_CHECK ?? '').toLowerCase() === 'true';
 
-    const distance = haversineDistance(body.lat, body.lng, trip.dest_lat, trip.dest_lng);
-    if (!bypassDistanceCheck && distance > 0.05) {
+    const distanceKm = haversineDistance(body.lat, body.lng, trip.dest_lat, trip.dest_lng);
+    const distanceM = distanceKm * 1000;
+
+    let completionType: CompletionType = 'normal';
+    let exceptionReason: CompleteExceptionReason | null = null;
+    let exceptionNote: string | null = null;
+
+    if (distanceM <= COMPLETE_OK_RADIUS_M) {
+      completionType = 'normal';
+    } else if (distanceM <= COMPLETE_EXCEPTION_MAX_M) {
+      const reason = body.exception_reason;
+      if (!reason || !isCompleteExceptionReason(reason)) {
+        if (!bypassDistanceCheck) {
+          throw new AppError(
+            `Estás a más de ${COMPLETE_OK_RADIUS_M} m del destino. Indicá un motivo de excepción para finalizar.`,
+            400,
+            'EXCEPTION_REQUIRED',
+          );
+        }
+        completionType = 'exception';
+      } else {
+        if (reason === 'other') {
+          const note = body.exception_note?.trim() ?? '';
+          if (!note && !bypassDistanceCheck) {
+            throw new AppError(
+              'Debés indicar una nota cuando el motivo es "Otro"',
+              400,
+              'EXCEPTION_NOTE_REQUIRED',
+            );
+          }
+          exceptionNote = note ? note.slice(0, COMPLETE_EXCEPTION_NOTE_MAX) : null;
+        } else if (body.exception_note?.trim()) {
+          exceptionNote = body.exception_note.trim().slice(0, COMPLETE_EXCEPTION_NOTE_MAX);
+        }
+        completionType = 'exception';
+        exceptionReason = reason;
+      }
+    } else if (!bypassDistanceCheck) {
       throw new AppError(
-        'Debes estar a menos de 50 metros del destino para finalizar el viaje',
+        `Debes estar a menos de ${COMPLETE_EXCEPTION_MAX_M} metros del destino para finalizar el viaje`,
         400,
         'TOO_FAR_FROM_DESTINATION',
       );
+    } else {
+      completionType = 'exception';
+      if (body.exception_reason && isCompleteExceptionReason(body.exception_reason)) {
+        exceptionReason = body.exception_reason;
+        if (body.exception_note?.trim()) {
+          exceptionNote = body.exception_note.trim().slice(0, COMPLETE_EXCEPTION_NOTE_MAX);
+        }
+      }
     }
 
     // Strict reconciliation: the fare is frozen at trip creation from the
@@ -882,7 +955,16 @@ export const tripService = {
       );
     }
 
-    const result = await transitionTrip(driverId, tripId, 'completed');
+    const result = await transitionTrip(driverId, tripId, 'completed', {
+      completed_lat: body.lat,
+      completed_lng: body.lng,
+      completed_distance_m: Math.round(distanceM * 10) / 10,
+      completed_gps_accuracy_m: body.gps_accuracy_m ?? null,
+      completed_at: new Date(),
+      completion_type: completionType,
+      completion_exception_reason: exceptionReason,
+      completion_exception_note: exceptionNote,
+    });
     if (result.passenger_id) {
       broadcastToPassenger(result.passenger_id, result);
     }

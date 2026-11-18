@@ -51,10 +51,19 @@ export const cancelTripBody = t.Object({
   reason: t.Optional(t.Union([t.Literal('driver_cancel'), t.Literal('no_show')])),
 });
 
+export const completeExceptionReason = t.Union([
+  t.Literal('passenger_requested_elsewhere'),
+  t.Literal('destination_inaccessible'),
+  t.Literal('gps_unreliable'),
+  t.Literal('other'),
+]);
+
 export const completeBody = t.Object({
   lat: t.Number(),
   lng: t.Number(),
   gps_accuracy_m: t.Optional(t.Number()),
+  exception_reason: t.Optional(completeExceptionReason),
+  exception_note: t.Optional(t.String({ maxLength: 200 })),
 });
 
 export const respondBody = t.Object({

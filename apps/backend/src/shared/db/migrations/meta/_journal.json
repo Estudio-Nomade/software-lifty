@@ -449,6 +449,13 @@
       "when": 1789700000000,
       "tag": "0062_account_deletion_verify_token_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1789800000000,
+      "tag": "0063_trip_complete_geo_evidence",
+      "breakpoints": true
     }
   ]
 }
