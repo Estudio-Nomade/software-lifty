@@ -517,20 +517,46 @@ export const tripService = {
         ),
       );
 
+    let expiredCount = 0;
+
     for (const trip of staleOffers) {
       try {
-        await db.transaction(async (tx) => {
-          await tx
+        // Conditional update: never clobber accept/reject that won the race after the
+        // pre-select (accept uses FOR UPDATE but commits before this write).
+        const expired = await db.transaction(async (tx) => {
+          const [row] = await tx
             .update(trips)
             .set({ status: 'expired', updated_at: new Date() })
-            .where(eq(trips.id, trip.id));
+            .where(
+              and(
+                eq(trips.id, trip.id),
+                eq(trips.status, 'offered'),
+                sql`${trips.expires_at} IS NOT NULL`,
+                sql`${trips.expires_at} < NOW()`,
+              ),
+            )
+            .returning({
+              id: trips.id,
+              driver_id: trips.driver_id,
+              passenger_id: trips.passenger_id,
+            });
+
+          if (!row) return null;
 
           await recordEvent(trip.id, 'offered', 'expired', tx);
+          return row;
         });
+
+        if (!expired) {
+          logger.info('[expireStaleOffers] Skip — no longer offered', { tripId: trip.id });
+          continue;
+        }
+
+        expiredCount += 1;
         logger.info('[expireStaleOffers] Expired trip', { tripId: trip.id });
 
-        if (trip.passenger_id && trip.driver_id) {
-          await passengerTripService.releaseAndRematch(trip.id, trip.driver_id);
+        if (expired.passenger_id && expired.driver_id) {
+          await passengerTripService.releaseAndRematch(trip.id, expired.driver_id);
         }
       } catch (err) {
         logger.error('[expireStaleOffers] Failed to expire trip', {
@@ -540,7 +566,7 @@ export const tripService = {
       }
     }
 
-    return staleOffers.length;
+    return expiredCount;
   },
 
   async createTrip(user: AuthUser, data: any) {
@@ -693,19 +719,34 @@ export const tripService = {
         return result;
       }
 
-      await tx
+      const [accepted] = await tx
         .update(trips)
         .set({
           status: 'accepted',
           verification_code: verificationCode,
+          // Clear offer TTL so expireStaleOffers cannot race-rewrite this row.
+          expires_at: null,
           assigned_at: trip.assigned_at ?? new Date(),
           updated_at: new Date(),
         })
-        .where(eq(trips.id, tripId));
+        .where(
+          and(
+            eq(trips.id, tripId),
+            eq(trips.driver_id, driverId),
+            inArray(trips.status, ['offered', 'request_received']),
+          ),
+        )
+        .returning();
+
+      if (!accepted) {
+        throw new AppError(
+          `Invalid transition from ${trip.status} to accepted`,
+          400,
+          'BAD_REQUEST',
+        );
+      }
 
       await recordEvent(tripId, trip.status, 'accepted', tx);
-
-      const [accepted] = await tx.select().from(trips).where(eq(trips.id, tripId));
 
       const passengerId = trip.passenger_id;
       if (passengerId) {

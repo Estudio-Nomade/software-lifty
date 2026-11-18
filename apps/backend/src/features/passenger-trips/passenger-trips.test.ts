@@ -805,6 +805,48 @@ describe('Passenger Trips', () => {
     expect(rematched?.driver_id).toBe(second.driverId);
   });
 
+  test('expireStaleOffers does not clobber an already-accepted trip', async () => {
+    const passengerToken = await createPassengerToken();
+    const driver = await createDriverWithLocationAndToken(origin.lat, origin.lng);
+
+    const { data: trip } = await createTrip(passengerToken);
+
+    const db = getDb();
+    let assigned: (typeof trips.$inferSelect) | null = null;
+    for (let i = 0; i < 40; i++) {
+      const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+      if (row?.driver_id) {
+        assigned = row;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(assigned?.driver_id).toBe(driver.driverId);
+    expect(assigned?.status).toBe('offered');
+
+    // Simulate late expirer: TTL already past, but driver accepts first.
+    await db
+      .update(trips)
+      .set({ expires_at: new Date(Date.now() - 1000) })
+      .where(eq(trips.id, trip.id));
+
+    const { status: acceptStatus } = await request(
+      'POST',
+      `/api/trips/${trip.id}/accept`,
+      undefined,
+      driver.token,
+    );
+    expect(acceptStatus).toBe(200);
+
+    const expiredCount = await tripService.expireStaleOffers();
+    expect(expiredCount).toBe(0);
+
+    const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+    expect(row?.status).toBe('accepted');
+    expect(row?.driver_id).toBe(driver.driverId);
+    expect(row?.expires_at).toBeNull();
+  });
+
   test('reject after accept does not rematch', async () => {
     const passengerToken = await createPassengerToken();
     const driver = await createDriverWithLocationAndToken(origin.lat, origin.lng);
