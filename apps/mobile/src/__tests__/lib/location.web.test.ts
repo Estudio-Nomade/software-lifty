@@ -37,6 +37,7 @@ describe('driver location web path', () => {
       lat: null,
       lng: null,
       heading: null,
+      accuracy: null,
       locationError: null,
     });
     // @ts-expect-error test override
@@ -66,7 +67,7 @@ describe('driver location web path', () => {
   it('getCurrentPosition fills store from navigator.geolocation on web', async () => {
     const getCurrentPositionMock = jest.fn((success: (pos: unknown) => void) => {
       success({
-        coords: { latitude: -34.6, longitude: -58.4, heading: 90 },
+        coords: { latitude: -34.6, longitude: -58.4, heading: 90, accuracy: 22 },
       });
     });
     Object.defineProperty(globalThis, 'navigator', {
@@ -86,8 +87,34 @@ describe('driver location web path', () => {
     expect(state.lat).toBeCloseTo(-34.6);
     expect(state.lng).toBeCloseTo(-58.4);
     expect(state.heading).toBe(90);
+    expect(state.accuracy).toBe(22);
     expect(state.locationError).toBeNull();
     expect(getCurrentPositionMock).toHaveBeenCalled();
+  });
+
+  it('getCurrentPosition leaves accuracy null when web omits it', async () => {
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {
+        geolocation: {
+          getCurrentPosition: jest.fn((success: (pos: unknown) => void) => {
+            success({
+              coords: { latitude: -34.6, longitude: -58.4, heading: null },
+            });
+          }),
+          watchPosition: jest.fn(() => 1),
+          clearWatch: jest.fn(),
+        },
+      },
+      configurable: true,
+    });
+    Object.defineProperty(globalThis, 'isSecureContext', {
+      value: true,
+      configurable: true,
+    });
+
+    await getCurrentPosition();
+
+    expect(useLocationStore.getState().accuracy).toBeNull();
   });
 
   it('sets locationError when geolocation is missing on web', async () => {

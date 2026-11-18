@@ -17,8 +17,8 @@ export async function handleBackgroundLocationUpdate(
   if (!token) return;
 
   const latest = locations[locations.length - 1];
-  const { latitude, longitude, heading } = latest.coords;
-  if (!applyLocationCoords(latitude, longitude, heading)) return;
+  const { latitude, longitude, heading, accuracy } = latest.coords;
+  if (!applyLocationCoords(latitude, longitude, heading, accuracy)) return;
 
   try {
     await apiClient.put('/drivers/me/heartbeat', {

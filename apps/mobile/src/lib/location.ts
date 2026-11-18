@@ -17,8 +17,11 @@ export {
   BG_LOCATION_DISTANCE_INTERVAL_M,
   BG_LOCATION_TIME_INTERVAL_MS,
   buildBackgroundLocationOptions,
+  COMPLETE_GPS_ACCURACY_MAX_M,
+  isGpsAccuracyTooLow,
   LOCATION_DENIED_MSG,
   LOCATION_TASK_NAME,
+  normalizeGpsAccuracyM,
   shouldStartBackgroundUpdates,
   type StartTrackingOptions,
 } from './locationCore';
@@ -32,7 +35,12 @@ export function isWebRuntime(): boolean {
   return Platform.OS === 'web';
 }
 
-type GeoCoords = { latitude: number; longitude: number; heading?: number | null };
+type GeoCoords = {
+  latitude: number;
+  longitude: number;
+  heading?: number | null;
+  accuracy?: number | null;
+};
 type GeoPositionLike = { coords: GeoCoords };
 type GeoErrorCallback = (err: { code?: number; message?: string }) => void;
 type GeoSuccessCallback = (pos: GeoPositionLike) => void;
@@ -156,6 +164,7 @@ async function getWebPositionOnce(): Promise<boolean> {
       high.pos.coords.latitude,
       high.pos.coords.longitude,
       high.pos.coords.heading,
+      high.pos.coords.accuracy,
     )
   ) {
     return true;
@@ -173,6 +182,7 @@ async function getWebPositionOnce(): Promise<boolean> {
       balanced.pos.coords.latitude,
       balanced.pos.coords.longitude,
       balanced.pos.coords.heading,
+      balanced.pos.coords.accuracy,
     )
   ) {
     return true;
@@ -197,7 +207,12 @@ function startWebWatch(): void {
   try {
     webWatchId = geo.watchPosition(
       (pos) => {
-        applyLocationCoords(pos.coords.latitude, pos.coords.longitude, pos.coords.heading);
+        applyLocationCoords(
+          pos.coords.latitude,
+          pos.coords.longitude,
+          pos.coords.heading,
+          pos.coords.accuracy,
+        );
       },
       (err) => {
         if (__DEV__) {
@@ -298,7 +313,12 @@ async function startForegroundWatch(): Promise<void> {
       timeInterval: 5000,
     },
     (loc) => {
-      applyLocationCoords(loc.coords.latitude, loc.coords.longitude, loc.coords.heading);
+      applyLocationCoords(
+        loc.coords.latitude,
+        loc.coords.longitude,
+        loc.coords.heading,
+        loc.coords.accuracy,
+      );
     },
   );
 }
@@ -422,7 +442,12 @@ export async function getCurrentPosition(): Promise<boolean> {
       return false;
     }
 
-    return applyLocationCoords(pos.coords.latitude, pos.coords.longitude, pos.coords.heading);
+    return applyLocationCoords(
+      pos.coords.latitude,
+      pos.coords.longitude,
+      pos.coords.heading,
+      pos.coords.accuracy,
+    );
   } catch (error) {
     console.error('getCurrentPosition failed:', error);
     useLocationStore.getState().setLocationError(LOCATION_DENIED_MSG);
