@@ -1763,6 +1763,56 @@ describe('Trip complete geo evidence', () => {
     expect(data.error.code).toBe('TOO_FAR_FROM_DESTINATION');
   });
 
+  test('bypass far still requires allow-listed reason and note for other', async () => {
+    const prev = process.env.BYPASS_DISTANCE_CHECK;
+    process.env.BYPASS_DISTANCE_CHECK = 'true';
+    try {
+      const token = await registerAndGetToken(phone, password);
+      await createDriverRow(token);
+      const trip = await tripInTrip(token);
+
+      const noReason = await request(
+        'POST',
+        `/api/trips/${trip.id}/complete`,
+        { lat: DEST.lat + FAR_OFFSET_DEG, lng: DEST.lng },
+        token,
+      );
+      expect(noReason.status).toBe(400);
+      expect(noReason.data.error.code).toBe('EXCEPTION_REQUIRED');
+
+      const otherNoNote = await request(
+        'POST',
+        `/api/trips/${trip.id}/complete`,
+        {
+          lat: DEST.lat + FAR_OFFSET_DEG,
+          lng: DEST.lng,
+          exception_reason: 'other',
+        },
+        token,
+      );
+      expect(otherNoNote.status).toBe(400);
+      expect(otherNoNote.data.error.code).toBe('EXCEPTION_NOTE_REQUIRED');
+
+      const ok = await request(
+        'POST',
+        `/api/trips/${trip.id}/complete`,
+        {
+          lat: DEST.lat + FAR_OFFSET_DEG,
+          lng: DEST.lng,
+          exception_reason: 'gps_unreliable',
+        },
+        token,
+      );
+      expect(ok.status).toBe(200);
+      expect(ok.data.completion_type).toBe('exception');
+      expect(ok.data.completion_exception_reason).toBe('gps_unreliable');
+      expect(ok.data.completed_distance_m).toBeGreaterThan(400);
+    } finally {
+      if (prev === undefined) process.env.BYPASS_DISTANCE_CHECK = undefined;
+      else process.env.BYPASS_DISTANCE_CHECK = prev;
+    }
+  });
+
   test('GPS_ACCURACY rejects when accuracy too high', async () => {
     const token = await registerAndGetToken(phone, password);
     await createDriverRow(token);

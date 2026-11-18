@@ -863,11 +863,12 @@ export const tripService = {
       throw new AppError('La precisión del GPS no es suficiente', 400, 'GPS_ACCURACY');
     }
 
-    // TODO(dev): remove in production — temporary bypass so the full
-    // "in_trip → completed" flow can be tested from any distance.
-    // Enable locally with BYPASS_DISTANCE_CHECK=true (apps/backend/.env).
-    // Hard-gated by NODE_ENV so it can never activate in production.
-    // Bypass skips hard rejects but still persists completion evidence.
+    // TODO(dev): remove in production — temporary bypass so complete can be
+    // tested beyond COMPLETE_EXCEPTION_MAX_M. Enable with
+    // BYPASS_DISTANCE_CHECK=true (apps/backend/.env). Hard-gated by NODE_ENV.
+    // Bypass only lifts the hard distance cap; allow-list reason (+ note if
+    // other) is still required whenever distance > COMPLETE_OK_RADIUS_M so
+    // persisted evidence never has completion_type=exception without reason.
     const bypassDistanceCheck =
       process.env.NODE_ENV !== 'production' &&
       (process.env.BYPASS_DISTANCE_CHECK ?? '').toLowerCase() === 'true';
@@ -879,50 +880,40 @@ export const tripService = {
     let exceptionReason: CompleteExceptionReason | null = null;
     let exceptionNote: string | null = null;
 
-    if (distanceM <= COMPLETE_OK_RADIUS_M) {
-      completionType = 'normal';
-    } else if (distanceM <= COMPLETE_EXCEPTION_MAX_M) {
+    if (distanceM > COMPLETE_OK_RADIUS_M) {
+      if (distanceM > COMPLETE_EXCEPTION_MAX_M && !bypassDistanceCheck) {
+        throw new AppError(
+          `Debes estar a menos de ${COMPLETE_EXCEPTION_MAX_M} metros del destino para finalizar el viaje`,
+          400,
+          'TOO_FAR_FROM_DESTINATION',
+        );
+      }
+
       const reason = body.exception_reason;
       if (!reason || !isCompleteExceptionReason(reason)) {
-        if (!bypassDistanceCheck) {
+        throw new AppError(
+          `Estás a más de ${COMPLETE_OK_RADIUS_M} m del destino. Indicá un motivo de excepción para finalizar.`,
+          400,
+          'EXCEPTION_REQUIRED',
+        );
+      }
+
+      if (reason === 'other') {
+        const note = body.exception_note?.trim() ?? '';
+        if (!note) {
           throw new AppError(
-            `Estás a más de ${COMPLETE_OK_RADIUS_M} m del destino. Indicá un motivo de excepción para finalizar.`,
+            'Debés indicar una nota cuando el motivo es "Otro"',
             400,
-            'EXCEPTION_REQUIRED',
+            'EXCEPTION_NOTE_REQUIRED',
           );
         }
-        completionType = 'exception';
-      } else {
-        if (reason === 'other') {
-          const note = body.exception_note?.trim() ?? '';
-          if (!note && !bypassDistanceCheck) {
-            throw new AppError(
-              'Debés indicar una nota cuando el motivo es "Otro"',
-              400,
-              'EXCEPTION_NOTE_REQUIRED',
-            );
-          }
-          exceptionNote = note ? note.slice(0, COMPLETE_EXCEPTION_NOTE_MAX) : null;
-        } else if (body.exception_note?.trim()) {
-          exceptionNote = body.exception_note.trim().slice(0, COMPLETE_EXCEPTION_NOTE_MAX);
-        }
-        completionType = 'exception';
-        exceptionReason = reason;
+        exceptionNote = note.slice(0, COMPLETE_EXCEPTION_NOTE_MAX);
+      } else if (body.exception_note?.trim()) {
+        exceptionNote = body.exception_note.trim().slice(0, COMPLETE_EXCEPTION_NOTE_MAX);
       }
-    } else if (!bypassDistanceCheck) {
-      throw new AppError(
-        `Debes estar a menos de ${COMPLETE_EXCEPTION_MAX_M} metros del destino para finalizar el viaje`,
-        400,
-        'TOO_FAR_FROM_DESTINATION',
-      );
-    } else {
+
       completionType = 'exception';
-      if (body.exception_reason && isCompleteExceptionReason(body.exception_reason)) {
-        exceptionReason = body.exception_reason;
-        if (body.exception_note?.trim()) {
-          exceptionNote = body.exception_note.trim().slice(0, COMPLETE_EXCEPTION_NOTE_MAX);
-        }
-      }
+      exceptionReason = reason;
     }
 
     // Strict reconciliation: the fare is frozen at trip creation from the
