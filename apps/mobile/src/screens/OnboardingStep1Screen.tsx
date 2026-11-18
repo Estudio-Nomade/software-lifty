@@ -1013,18 +1013,31 @@ export const OnboardingStep1Screen: React.FC = () => {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.checkboxRow}
-          onPress={() => setTermsAccepted(!termsAccepted)}
-          activeOpacity={0.7}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: termsAccepted }}
-        >
-          <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
-            {termsAccepted ? <Text style={styles.checkmark}>✓</Text> : null}
-          </View>
-          <Text style={styles.checkboxLabel}>Acepto los términos y condiciones</Text>
-        </TouchableOpacity>
+        <View style={styles.checkboxRow}>
+          <TouchableOpacity
+            onPress={() => setTermsAccepted(!termsAccepted)}
+            activeOpacity={0.7}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: termsAccepted }}
+            accessibilityLabel="Acepto los términos y condiciones"
+            hitSlop={8}
+          >
+            <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
+              {termsAccepted ? <Text style={styles.checkmark}>✓</Text> : null}
+            </View>
+          </TouchableOpacity>
+          <Text style={styles.checkboxLabel}>
+            Acepto{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={() => navigation.navigate('Terms', { from: 'profile' })}
+              accessibilityRole="link"
+              accessibilityLabel="Ver términos y condiciones"
+            >
+              los términos y condiciones
+            </Text>
+          </Text>
+        </View>
 
         {submitError !== '' && <Text style={styles.submitError}>{submitError}</Text>}
 
@@ -1337,6 +1350,11 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontFamily: theme.fontFamily.regular,
     color: theme.colors.deepBlue,
+  },
+  termsLink: {
+    color: theme.colors.turquoise,
+    fontFamily: theme.fontFamily.semibold,
+    textDecorationLine: 'underline',
   },
   submitError: {
     fontSize: theme.fontSize.sm,
