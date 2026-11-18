@@ -20,7 +20,7 @@ import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useDynamicRouting } from '../hooks/useDynamicRouting';
 import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
 import { haversineDistance } from '../lib/geo';
-import { startTracking, stopTracking } from '../lib/location';
+import { getCurrentPosition, startTracking, stopTracking } from '../lib/location';
 import { mergeTripUpdate } from '../lib/mergeTrip';
 import { useLocationStore } from '../store/locationStore';
 import { useTripStore } from '../store/tripStore';
@@ -87,11 +87,21 @@ export const TripInProgressScreen: React.FC = () => {
   const handleCompleteTrip = async () => {
     if (!trip?.id) return;
     setCompleting(true);
+    setCompleteError(null);
     try {
-      const response = await apiClient.post(`/trips/${trip.id}/complete`, {
-        lat: locationLat,
-        lng: locationLng,
-      });
+      await getCurrentPosition();
+      const { lat, lng } = useLocationStore.getState();
+      if (lat == null || lng == null) {
+        setCompleteError({
+          title: 'No se pudo finalizar el viaje',
+          message: 'No pudimos obtener tu ubicación. Activá el GPS e intentá de nuevo.',
+          tone: 'error',
+          distanceMeters: null,
+        });
+        return;
+      }
+
+      const response = await apiClient.post(`/trips/${trip.id}/complete`, { lat, lng });
       const storeTrip = useTripStore.getState().trip;
       const merged = mergeTripUpdate(storeTrip, response.data);
       if (merged) {
@@ -125,16 +135,17 @@ export const TripInProgressScreen: React.FC = () => {
       }
       const code = err?.error?.code;
       const isTooFar = code === 'TOO_FAR_FROM_DESTINATION';
+      const { lat: freshLat, lng: freshLng } = useLocationStore.getState();
       let distanceMeters: number | null = null;
       if (
         isTooFar &&
-        locationLat != null &&
-        locationLng != null &&
+        freshLat != null &&
+        freshLng != null &&
         trip?.dest_lat != null &&
         trip?.dest_lng != null
       ) {
         distanceMeters = Math.round(
-          haversineDistance(locationLat, locationLng, trip.dest_lat, trip.dest_lng) * 1000,
+          haversineDistance(freshLat, freshLng, trip.dest_lat, trip.dest_lng) * 1000,
         );
       }
       setCompleteError({
