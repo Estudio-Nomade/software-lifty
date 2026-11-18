@@ -167,6 +167,15 @@ export const tripSchema = z.object({
   cancel_actor: z.string().nullable().optional(),
   counts_for_tvf: z.boolean().nullable().optional(),
   credit_driver: z.boolean().nullable().optional(),
+  /** Pack A geo evidence — null on legacy pre-evidence trips. */
+  completed_lat: z.number().nullable().optional(),
+  completed_lng: z.number().nullable().optional(),
+  completed_distance_m: z.number().nullable().optional(),
+  completed_gps_accuracy_m: z.number().nullable().optional(),
+  completed_at: z.string().nullable().optional(),
+  completion_type: z.enum(['normal', 'exception']).nullable().optional(),
+  completion_exception_reason: z.string().nullable().optional(),
+  completion_exception_note: z.string().nullable().optional(),
 });
 
 export const earningsTripSchema = z.object({

@@ -72,6 +72,15 @@ export interface Trip {
   cancel_stage?: 'pre_asignacion' | 'en_camino' | 'llegado' | string | null;
   cancel_reason?: 'user_cancel' | 'auto_timeout' | string | null;
   cancel_actor?: 'passenger' | 'driver' | 'system' | string | null;
+  /** Pack A geo evidence — null on legacy pre-evidence trips. */
+  completed_lat?: number | null;
+  completed_lng?: number | null;
+  completed_distance_m?: number | null;
+  completed_gps_accuracy_m?: number | null;
+  completed_at?: string | null;
+  completion_type?: 'normal' | 'exception' | null;
+  completion_exception_reason?: string | null;
+  completion_exception_note?: string | null;
   created_at: string;
   updated_at: string;
 }
