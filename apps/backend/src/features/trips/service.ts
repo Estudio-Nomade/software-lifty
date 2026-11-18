@@ -555,8 +555,14 @@ export const tripService = {
         expiredCount += 1;
         logger.info('[expireStaleOffers] Expired trip', { tripId: trip.id });
 
+        // Passenger match always sets driver_id with status=offered (see matchAndBroadcast).
+        // releaseAndRematch also requires driver_id === excludedDriverId — null would no-op.
         if (expired.passenger_id && expired.driver_id) {
           await passengerTripService.releaseAndRematch(trip.id, expired.driver_id);
+        } else if (expired.passenger_id && !expired.driver_id) {
+          logger.warn('[expireStaleOffers] Expired offered trip without driver_id', {
+            tripId: trip.id,
+          });
         }
       } catch (err) {
         logger.error('[expireStaleOffers] Failed to expire trip', {
@@ -739,10 +745,17 @@ export const tripService = {
         .returning();
 
       if (!accepted) {
+        // Defensive: FOR UPDATE + status gate above should make this unreachable.
+        // Re-read so support/logs never show a stale pre-lock status.
+        const [current] = await tx
+          .select({ status: trips.status })
+          .from(trips)
+          .where(eq(trips.id, tripId))
+          .limit(1);
         throw new AppError(
-          `Invalid transition from ${trip.status} to accepted`,
-          400,
-          'BAD_REQUEST',
+          current ? `Invalid transition from ${current.status} to accepted` : 'Trip not found',
+          current ? 400 : 404,
+          current ? 'BAD_REQUEST' : 'NOT_FOUND',
         );
       }
 
