@@ -10,8 +10,10 @@ import {
   View,
 } from 'react-native';
 import { apiClient } from '../api/client';
+import { ApiError } from '../api/types';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { CompleteExceptionModal } from '../components/CompleteExceptionModal';
 import { MapView } from '../components/MapView';
 import { RatingStars } from '../components/RatingStars';
 import { Snackbar, type SnackbarTone } from '../components/feedback/Snackbar';
@@ -19,6 +21,7 @@ import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useDynamicRouting } from '../hooks/useDynamicRouting';
 import { useManeuverInstructions } from '../hooks/useManeuverInstructions';
+import { COMPLETE_EXCEPTION_MAX_M, type CompleteExceptionReason } from '../lib/completeException';
 import { haversineDistance } from '../lib/geo';
 import {
   COMPLETE_GPS_ACCURACY_MAX_M,
@@ -35,6 +38,45 @@ import { theme } from '../theme';
 
 const COMPLETE_GPS_TIMEOUT_MS = 15_000;
 
+type ExceptionSheetState = {
+  open: boolean;
+  lat: number;
+  lng: number;
+  accuracy: number | null;
+  distanceMeters: number | null;
+  noteRequired: boolean;
+};
+
+function apiErrorCode(err: unknown): string | undefined {
+  if (err instanceof ApiError) return err.code;
+  if (err && typeof err === 'object') {
+    const e = err as { code?: unknown; error?: { code?: unknown } };
+    if (typeof e.code === 'string') return e.code;
+    if (typeof e.error?.code === 'string') return e.error.code;
+  }
+  return undefined;
+}
+
+function apiErrorMessage(err: unknown): string | undefined {
+  if (err instanceof Error && err.message) return err.message;
+  if (err && typeof err === 'object') {
+    const e = err as { message?: unknown; error?: { message?: unknown } };
+    if (typeof e.error?.message === 'string') return e.error.message;
+    if (typeof e.message === 'string') return e.message;
+  }
+  return undefined;
+}
+
+function metersFromDest(
+  lat: number,
+  lng: number,
+  destLat: number | null | undefined,
+  destLng: number | null | undefined,
+): number | null {
+  if (destLat == null || destLng == null) return null;
+  return Math.round(haversineDistance(lat, lng, destLat, destLng) * 1000);
+}
+
 export const TripInProgressScreen: React.FC = () => {
   const navigation = useAppNavigation();
   const trip = useTripStore((s) => s.trip);
@@ -44,6 +86,7 @@ export const TripInProgressScreen: React.FC = () => {
   const [completing, setCompleting] = React.useState(false);
   const [recenterKey, setRecenterKey] = useState(0);
   const [isFollowingUser, setIsFollowingUser] = useState(true);
+  const [exceptionSheet, setExceptionSheet] = useState<ExceptionSheetState | null>(null);
   const [completeError, setCompleteError] = useState<{
     title: string;
     message: string;
@@ -92,12 +135,100 @@ export const TripInProgressScreen: React.FC = () => {
     };
   }, [trip?.id, trip?.passenger_name]);
 
+  const navigateTripComplete = (responseData: unknown) => {
+    const storeTrip = useTripStore.getState().trip;
+    const merged = mergeTripUpdate(storeTrip, responseData);
+    if (merged) {
+      useTripStore.getState().setActiveTrip(merged);
+    }
+    const tripData =
+      mergeTripUpdate(null, responseData) ??
+      (responseData as { data?: unknown } | null)?.data ??
+      responseData;
+    const fare = tripData as {
+      total_fare?: number;
+      platform_fee?: number;
+      driver_earnings?: number;
+      tip_amount?: number;
+    } | null;
+    navigation.navigate('TripComplete', {
+      amount: String(fare?.total_fare ?? 2500),
+      commission: String(fare?.platform_fee ?? 500),
+      driverEarnings: String(fare?.driver_earnings ?? 2000),
+      tipAmount: String(fare?.tip_amount ?? 0),
+    });
+  };
+
+  const handleCompleteError = (
+    err: unknown,
+    locked: {
+      lat: number;
+      lng: number;
+      accuracy: number | null;
+    },
+  ) => {
+    const code = apiErrorCode(err);
+    if (code === 'TOKEN_REQUIRED' || code === 'TOKEN_EXPIRED') {
+      Alert.alert('Sesion expirada', 'Tu sesion ha expirado. Inicia sesion nuevamente.', [
+        {
+          text: 'OK',
+          onPress: () => {
+            useTripStore.getState().clearTrip();
+            navigation.replace('Welcome');
+          },
+        },
+      ]);
+      return;
+    }
+
+    const distanceMeters = metersFromDest(locked.lat, locked.lng, trip?.dest_lat, trip?.dest_lng);
+
+    if (code === 'EXCEPTION_REQUIRED' || code === 'EXCEPTION_NOTE_REQUIRED') {
+      setCompleteError(null);
+      setExceptionSheet({
+        open: true,
+        lat: locked.lat,
+        lng: locked.lng,
+        accuracy: locked.accuracy,
+        distanceMeters,
+        noteRequired: code === 'EXCEPTION_NOTE_REQUIRED',
+      });
+      return;
+    }
+
+    if (code === 'GPS_ACCURACY') {
+      setCompleteError({
+        title: 'GPS impreciso',
+        message: 'Esperá un segundo y volvé a intentar. La señal todavía no es confiable.',
+        tone: 'warning',
+        distanceMeters: null,
+      });
+      return;
+    }
+
+    if (code === 'TOO_FAR_FROM_DESTINATION') {
+      setCompleteError({
+        title: 'Necesitás estar más cerca del destino',
+        message: `Acercate al pin del destino para finalizar (máx. ~${COMPLETE_EXCEPTION_MAX_M} m).`,
+        tone: 'warning',
+        distanceMeters,
+      });
+      return;
+    }
+
+    setCompleteError({
+      title: 'No se pudo finalizar el viaje',
+      message: apiErrorMessage(err) || 'No se pudo finalizar el viaje',
+      tone: 'error',
+      distanceMeters: null,
+    });
+  };
+
   const handleCompleteTrip = async () => {
-    if (!trip?.id) return;
+    if (!trip?.id || completing) return;
     setCompleting(true);
     setCompleteError(null);
-    let submittedLat: number | null = null;
-    let submittedLng: number | null = null;
+    let locked: { lat: number; lng: number; accuracy: number | null } | null = null;
     try {
       const gotFresh = await Promise.race([
         getCurrentPosition(),
@@ -129,76 +260,50 @@ export const TripInProgressScreen: React.FC = () => {
         return;
       }
 
-      submittedLat = lat;
-      submittedLng = lng;
+      locked = { lat, lng, accuracy: accuracy ?? null };
       const response = await apiClient.post(`/trips/${trip.id}/complete`, {
-        lat: submittedLat,
-        lng: submittedLng,
-        ...(accuracy != null ? { gps_accuracy_m: accuracy } : {}),
+        lat: locked.lat,
+        lng: locked.lng,
+        ...(locked.accuracy != null ? { gps_accuracy_m: locked.accuracy } : {}),
       });
-      const storeTrip = useTripStore.getState().trip;
-      const merged = mergeTripUpdate(storeTrip, response.data);
-      if (merged) {
-        useTripStore.getState().setActiveTrip(merged);
-      }
-      const tripData = mergeTripUpdate(null, response.data) ?? response.data?.data ?? response.data;
-      navigation.navigate('TripComplete', {
-        amount: String(tripData?.total_fare ?? 2500),
-        commission: String(tripData?.platform_fee ?? 500),
-        driverEarnings: String(tripData?.driver_earnings ?? 2000),
-        tipAmount: String(tripData?.tip_amount ?? 0),
-      });
-    } catch (err: any) {
-      const isTokenExpired =
-        err?.code === 'TOKEN_REQUIRED' ||
-        err?.code === 'TOKEN_EXPIRED' ||
-        err?.error?.code === 'TOKEN_REQUIRED' ||
-        err?.error?.code === 'TOKEN_EXPIRED';
-      if (isTokenExpired) {
-        Alert.alert('Sesion expirada', 'Tu sesion ha expirado. Inicia sesion nuevamente.', [
-          {
-            text: 'OK',
-            onPress: () => {
-              useTripStore.getState().clearTrip();
-              navigation.replace('Welcome');
-            },
-          },
-        ]);
-        setCompleting(false);
-        return;
-      }
-      const code = err?.error?.code;
-      const isGpsAccuracy = code === 'GPS_ACCURACY';
-      const isTooFar = code === 'TOO_FAR_FROM_DESTINATION';
-      let distanceMeters: number | null = null;
-      if (
-        isTooFar &&
-        submittedLat != null &&
-        submittedLng != null &&
-        trip?.dest_lat != null &&
-        trip?.dest_lng != null
-      ) {
-        distanceMeters = Math.round(
-          haversineDistance(submittedLat, submittedLng, trip.dest_lat, trip.dest_lng) * 1000,
-        );
-      }
-      if (isGpsAccuracy) {
+      navigateTripComplete(response.data);
+    } catch (err: unknown) {
+      if (locked) {
+        handleCompleteError(err, locked);
+      } else {
         setCompleteError({
-          title: 'GPS impreciso',
-          message: 'Esperá un segundo y volvé a intentar. La señal todavía no es confiable.',
-          tone: 'warning',
+          title: 'No se pudo finalizar el viaje',
+          message: apiErrorMessage(err) || 'No se pudo finalizar el viaje',
+          tone: 'error',
           distanceMeters: null,
         });
-        return;
       }
-      setCompleteError({
-        title: isTooFar ? 'Todavía no llegaste al destino' : 'No se pudo finalizar el viaje',
-        message: isTooFar
-          ? 'Acercate al pin del destino. Necesitas estar a menos de 50 metros para finalizar.'
-          : err?.error?.message || err?.message || 'No se pudo finalizar el viaje',
-        tone: isTooFar ? 'warning' : 'error',
-        distanceMeters,
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const handleExceptionSubmit = async (reason: CompleteExceptionReason, note?: string) => {
+    if (!trip?.id || !exceptionSheet || completing) return;
+    setCompleting(true);
+    setCompleteError(null);
+    const locked = {
+      lat: exceptionSheet.lat,
+      lng: exceptionSheet.lng,
+      accuracy: exceptionSheet.accuracy,
+    };
+    try {
+      const response = await apiClient.post(`/trips/${trip.id}/complete`, {
+        lat: locked.lat,
+        lng: locked.lng,
+        ...(locked.accuracy != null ? { gps_accuracy_m: locked.accuracy } : {}),
+        exception_reason: reason,
+        ...(reason === 'other' || note ? { exception_note: note } : {}),
       });
+      setExceptionSheet(null);
+      navigateTripComplete(response.data);
+    } catch (err: unknown) {
+      handleCompleteError(err, locked);
     } finally {
       setCompleting(false);
     }
@@ -339,6 +444,18 @@ export const TripInProgressScreen: React.FC = () => {
           <Text style={styles.mapsLink}>Abrir en Maps</Text>
         </TouchableOpacity>
       </View>
+
+      <CompleteExceptionModal
+        visible={exceptionSheet?.open === true}
+        distanceMeters={exceptionSheet?.distanceMeters ?? null}
+        noteRequired={exceptionSheet?.noteRequired ?? false}
+        submitting={completing}
+        onClose={() => {
+          if (completing) return;
+          setExceptionSheet(null);
+        }}
+        onSubmit={handleExceptionSubmit}
+      />
 
       {completeError ? (
         <Snackbar
