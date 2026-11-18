@@ -1591,3 +1591,310 @@ describe('Trip State Machine', () => {
     expect(driver.platform_debt).toBeGreaterThan(0);
   });
 });
+
+describe('Trip complete geo evidence', () => {
+  const phone = '+5492612222222';
+  const password = 'testPass123';
+  const DEST = { lat: -31.88, lng: -65.02 };
+  // ~1 deg lat ≈ 111 km → 0.002° ≈ 222 m (exception band), 0.01° ≈ 1.1 km (hard far)
+  const MID_OFFSET_DEG = 0.002;
+  const FAR_OFFSET_DEG = 0.01;
+
+  async function tripInTrip(token: string) {
+    const { data: trip } = await request(
+      'POST',
+      '/api/trips',
+      {
+        origin_lat: -31.9,
+        origin_lng: -65.0,
+        dest_lat: DEST.lat,
+        dest_lng: DEST.lng,
+        vehicle_type: 'car',
+        distance_km: 5,
+        duration_minutes: 15,
+      },
+      token,
+    );
+    const { data: accepted } = await request('POST', `/api/trips/${trip.id}/accept`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/en-route`, undefined, token);
+    await request('POST', `/api/trips/${trip.id}/arrived`, { lat: -31.9, lng: -65.0 }, token);
+    await request(
+      'POST',
+      `/api/trips/${trip.id}/start`,
+      { verification_code: accepted.verification_code },
+      token,
+    );
+    return trip as { id: string; dest_lat: number; dest_lng: number; dest_address: string | null };
+  }
+
+  test('normal complete within radius persists evidence and leaves dest unchanged', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+    const trip = await tripInTrip(token);
+    const destBefore = { lat: trip.dest_lat, lng: trip.dest_lng, address: trip.dest_address };
+
+    const { status, data } = await request(
+      'POST',
+      `/api/trips/${trip.id}/complete`,
+      { lat: DEST.lat, lng: DEST.lng, gps_accuracy_m: 12 },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.status).toBe('completed');
+    expect(data.completion_type).toBe('normal');
+    expect(data.completed_lat).toBeCloseTo(DEST.lat, 5);
+    expect(data.completed_lng).toBeCloseTo(DEST.lng, 5);
+    expect(data.completed_distance_m).toBeLessThanOrEqual(100);
+    expect(data.completed_gps_accuracy_m).toBe(12);
+    expect(data.completed_at).toBeTruthy();
+    expect(data.completion_exception_reason).toBeNull();
+    expect(data.dest_lat).toBe(destBefore.lat);
+    expect(data.dest_lng).toBe(destBefore.lng);
+
+    const db = getDb();
+    const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+    expect(row.completion_type).toBe('normal');
+    expect(row.dest_lat).toBe(destBefore.lat);
+    expect(row.dest_lng).toBe(destBefore.lng);
+    expect(row.dest_address).toBe(destBefore.address);
+  });
+
+  test('exception complete with reason in mid-band persists exception fields', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+    const trip = await tripInTrip(token);
+    const lat = DEST.lat + MID_OFFSET_DEG;
+
+    const { status, data } = await request(
+      'POST',
+      `/api/trips/${trip.id}/complete`,
+      {
+        lat,
+        lng: DEST.lng,
+        gps_accuracy_m: 20,
+        exception_reason: 'passenger_requested_elsewhere',
+      },
+      token,
+    );
+
+    expect(status).toBe(200);
+    expect(data.status).toBe('completed');
+    expect(data.completion_type).toBe('exception');
+    expect(data.completion_exception_reason).toBe('passenger_requested_elsewhere');
+    expect(data.completed_distance_m).toBeGreaterThan(100);
+    expect(data.completed_distance_m).toBeLessThanOrEqual(400);
+    expect(data.dest_lat).toBe(DEST.lat);
+  });
+
+  test('exception other requires note', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+    const trip = await tripInTrip(token);
+
+    const missing = await request(
+      'POST',
+      `/api/trips/${trip.id}/complete`,
+      {
+        lat: DEST.lat + MID_OFFSET_DEG,
+        lng: DEST.lng,
+        exception_reason: 'other',
+      },
+      token,
+    );
+    expect(missing.status).toBe(400);
+    expect(missing.data.error.code).toBe('EXCEPTION_NOTE_REQUIRED');
+
+    const ok = await request(
+      'POST',
+      `/api/trips/${trip.id}/complete`,
+      {
+        lat: DEST.lat + MID_OFFSET_DEG,
+        lng: DEST.lng,
+        exception_reason: 'other',
+        exception_note: 'Pasajero bajó en la esquina',
+      },
+      token,
+    );
+    expect(ok.status).toBe(200);
+    expect(ok.data.completion_type).toBe('exception');
+    expect(ok.data.completion_exception_reason).toBe('other');
+    expect(ok.data.completion_exception_note).toBe('Pasajero bajó en la esquina');
+  });
+
+  test('mid-band without reason returns EXCEPTION_REQUIRED', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+    const trip = await tripInTrip(token);
+
+    const { status, data } = await request(
+      'POST',
+      `/api/trips/${trip.id}/complete`,
+      { lat: DEST.lat + MID_OFFSET_DEG, lng: DEST.lng },
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('EXCEPTION_REQUIRED');
+
+    const db = getDb();
+    const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+    expect(row.status).toBe('in_trip');
+    expect(row.completed_at).toBeNull();
+  });
+
+  test('hard far beyond cap returns TOO_FAR_FROM_DESTINATION', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+    const trip = await tripInTrip(token);
+
+    const { status, data } = await request(
+      'POST',
+      `/api/trips/${trip.id}/complete`,
+      {
+        lat: DEST.lat + FAR_OFFSET_DEG,
+        lng: DEST.lng,
+        exception_reason: 'gps_unreliable',
+      },
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('TOO_FAR_FROM_DESTINATION');
+  });
+
+  test('bypass far still requires allow-listed reason and note for other', async () => {
+    const prev = process.env.BYPASS_DISTANCE_CHECK;
+    process.env.BYPASS_DISTANCE_CHECK = 'true';
+    try {
+      const token = await registerAndGetToken(phone, password);
+      await createDriverRow(token);
+      const trip = await tripInTrip(token);
+
+      const noReason = await request(
+        'POST',
+        `/api/trips/${trip.id}/complete`,
+        { lat: DEST.lat + FAR_OFFSET_DEG, lng: DEST.lng },
+        token,
+      );
+      expect(noReason.status).toBe(400);
+      expect(noReason.data.error.code).toBe('EXCEPTION_REQUIRED');
+
+      const otherNoNote = await request(
+        'POST',
+        `/api/trips/${trip.id}/complete`,
+        {
+          lat: DEST.lat + FAR_OFFSET_DEG,
+          lng: DEST.lng,
+          exception_reason: 'other',
+        },
+        token,
+      );
+      expect(otherNoNote.status).toBe(400);
+      expect(otherNoNote.data.error.code).toBe('EXCEPTION_NOTE_REQUIRED');
+
+      const ok = await request(
+        'POST',
+        `/api/trips/${trip.id}/complete`,
+        {
+          lat: DEST.lat + FAR_OFFSET_DEG,
+          lng: DEST.lng,
+          exception_reason: 'gps_unreliable',
+        },
+        token,
+      );
+      expect(ok.status).toBe(200);
+      expect(ok.data.completion_type).toBe('exception');
+      expect(ok.data.completion_exception_reason).toBe('gps_unreliable');
+      expect(ok.data.completed_distance_m).toBeGreaterThan(400);
+    } finally {
+      if (prev === undefined) process.env.BYPASS_DISTANCE_CHECK = undefined;
+      else process.env.BYPASS_DISTANCE_CHECK = prev;
+    }
+  });
+
+  test('GPS_ACCURACY rejects when accuracy too high', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+    const trip = await tripInTrip(token);
+
+    const { status, data } = await request(
+      'POST',
+      `/api/trips/${trip.id}/complete`,
+      { lat: DEST.lat, lng: DEST.lng, gps_accuracy_m: 80 },
+      token,
+    );
+
+    expect(status).toBe(400);
+    expect(data.error.code).toBe('GPS_ACCURACY');
+  });
+
+  test('double complete does not overwrite evidence', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+    const trip = await tripInTrip(token);
+
+    const first = await request(
+      'POST',
+      `/api/trips/${trip.id}/complete`,
+      { lat: DEST.lat, lng: DEST.lng, gps_accuracy_m: 8 },
+      token,
+    );
+    expect(first.status).toBe(200);
+    const completedAt = first.data.completed_at;
+
+    const second = await request(
+      'POST',
+      `/api/trips/${trip.id}/complete`,
+      {
+        lat: DEST.lat + MID_OFFSET_DEG,
+        lng: DEST.lng,
+        exception_reason: 'gps_unreliable',
+      },
+      token,
+    );
+    expect(second.status).toBe(400);
+
+    const db = getDb();
+    const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+    expect(row.completion_type).toBe('normal');
+    expect(row.completed_lat).toBeCloseTo(DEST.lat, 5);
+    expect(row.completed_gps_accuracy_m).toBe(8);
+    expect(row.completed_at?.toISOString?.() ?? String(row.completed_at)).toBe(
+      typeof completedAt === 'string' ? completedAt : new Date(completedAt).toISOString(),
+    );
+  });
+
+  test('history returns completed evidence fields', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+    const trip = await tripInTrip(token);
+    await request(
+      'POST',
+      `/api/trips/${trip.id}/complete`,
+      { lat: DEST.lat, lng: DEST.lng, gps_accuracy_m: 15 },
+      token,
+    );
+
+    const { status, data } = await request('GET', '/api/trips/history?page=1&limit=5', undefined, token);
+    expect(status).toBe(200);
+    expect(Array.isArray(data)).toBe(true);
+    const item = data.find((t: { id: string }) => t.id === trip.id);
+    expect(item).toBeTruthy();
+    expect(item.completion_type).toBe('normal');
+    expect(item.completed_at).toBeTruthy();
+    expect(item.completed_distance_m).toBeLessThanOrEqual(100);
+  });
+
+  test('legacy null completion fields remain null until complete', async () => {
+    const token = await registerAndGetToken(phone, password);
+    await createDriverRow(token);
+    const trip = await tripInTrip(token);
+
+    const db = getDb();
+    const [before] = await db.select().from(trips).where(eq(trips.id, trip.id));
+    expect(before.completed_at).toBeNull();
+    expect(before.completion_type).toBeNull();
+    expect(before.completed_lat).toBeNull();
+  });
+});
