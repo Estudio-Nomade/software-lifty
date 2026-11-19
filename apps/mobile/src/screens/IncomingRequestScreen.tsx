@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import type { Trip } from '../api/types';
@@ -9,6 +9,7 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { MapView } from '../components/MapView';
 import { RatingStars } from '../components/RatingStars';
+import { Snackbar } from '../components/feedback/Snackbar';
 import { Text } from '../components/ui/Text';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import {
@@ -17,6 +18,7 @@ import {
   isCancelledTripStatus,
   resolveActiveGoneAction,
 } from '../lib/cancellation';
+import { type AcceptFailure, mapAcceptFailure } from '../lib/mapAcceptFailure';
 import { mergeTripUpdate } from '../lib/mergeTrip';
 import { startOfferRingtone, stopOfferRingtone } from '../lib/offerRingtone';
 import { useLocationStore } from '../store/locationStore';
@@ -44,11 +46,24 @@ export const IncomingRequestScreen: React.FC = () => {
   const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
   /** Bump to re-arm the ringtone effect after a failed accept (same trip/status). */
   const [ringtoneEpoch, setRingtoneEpoch] = useState(0);
+  const [acceptFailure, setAcceptFailure] = useState<AcceptFailure | null>(null);
+  const [retrySnack, setRetrySnack] = useState<{ title: string; message: string } | null>(null);
   const timedOut = useRef(false);
   const acceptingRef = useRef(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lat = useLocationStore((s) => s.lat);
   const lng = useLocationStore((s) => s.lng);
+
+  const dismissTerminalFailure = () => {
+    const failure = acceptFailure;
+    setAcceptFailure(null);
+    useTripStore.getState().clearTrip();
+    if (failure?.navigate === 'Welcome') {
+      navigation.replace('Welcome');
+      return;
+    }
+    navigation.replace('Active');
+  };
 
   const showPassengerCancelled = (payload: Record<string, unknown> | null | undefined) => {
     const id = payload?.id != null ? String(payload.id) : trip?.id;
@@ -61,7 +76,7 @@ export const IncomingRequestScreen: React.FC = () => {
   const handleActiveGone = async (tripId: string | undefined) => {
     if (!tripId) {
       stopOfferRingtone();
-      navigation.goBack();
+      setAcceptFailure(mapAcceptFailure.pollGone());
       return;
     }
     try {
@@ -73,10 +88,10 @@ export const IncomingRequestScreen: React.FC = () => {
         return;
       }
     } catch {
-      /* 404 / network → silent dismiss */
+      /* 404 / network → unavailable notice (not silent) */
     }
     stopOfferRingtone();
-    navigation.goBack();
+    setAcceptFailure(mapAcceptFailure.pollGone());
   };
 
   const handleActiveTrip = (active: Trip | null) => {
@@ -178,6 +193,7 @@ export const IncomingRequestScreen: React.FC = () => {
       accepted ||
       timedOut.current ||
       acceptingRef.current ||
+      acceptFailure ||
       (trip.status !== 'request_received' && trip.status !== 'offered')
     ) {
       return;
@@ -186,10 +202,10 @@ export const IncomingRequestScreen: React.FC = () => {
     return () => {
       stopOfferRingtone();
     };
-  }, [trip?.id, trip?.status, accepted, ringtoneEpoch]);
+  }, [trip?.id, trip?.status, accepted, ringtoneEpoch, acceptFailure]);
 
   useEffect(() => {
-    if (!trip || accepted || timedOut.current || acceptingRef.current) return;
+    if (!trip || accepted || timedOut.current || acceptingRef.current || acceptFailure) return;
     if (seconds <= 0) {
       if (acceptingRef.current || accepted) return;
       timedOut.current = true;
@@ -216,12 +232,12 @@ export const IncomingRequestScreen: React.FC = () => {
   }, [seconds, accepted, trip]);
 
   useEffect(() => {
-    if (!trip?.id || accepted || timedOut.current) return;
+    if (!trip?.id || accepted || timedOut.current || acceptFailure) return;
     pollRef.current = setInterval(async () => {
       try {
         const response = await apiClient.get('/trips/active');
         const active = (response.data?.data ?? response.data) as Trip | null;
-        if (acceptingRef.current || accepted || timedOut.current) return;
+        if (acceptingRef.current || accepted || timedOut.current || acceptFailure) return;
         if (!active || (active.status !== 'request_received' && active.status !== 'offered')) {
           if (pollRef.current) clearInterval(pollRef.current);
           if (active) {
@@ -236,7 +252,7 @@ export const IncomingRequestScreen: React.FC = () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trip?.id, accepted]);
+  }, [trip?.id, accepted, acceptFailure]);
 
   useEffect(() => {
     if (!trip || lat == null || lng == null) return;
@@ -255,8 +271,24 @@ export const IncomingRequestScreen: React.FC = () => {
       .catch(() => {});
   }, [trip, lat, lng]);
 
+  /** Client trip.status can lag; confirm offer still ours before re-arming ringtone. */
+  const confirmOfferStillAlive = async (tripId: string): Promise<boolean> => {
+    try {
+      const response = await apiClient.get('/trips/active');
+      const active = (response.data?.data ?? response.data) as Trip | null;
+      return Boolean(
+        active &&
+          active.id === tripId &&
+          (active.status === 'request_received' || active.status === 'offered'),
+      );
+    } catch {
+      // Still flaky network — keep retryable UI rather than force-dismiss.
+      return true;
+    }
+  };
+
   const handleAccept = async () => {
-    if (!trip || loading || acceptingRef.current) return;
+    if (!trip || loading || acceptingRef.current || acceptFailure) return;
     acceptingRef.current = true;
     stopOfferRingtone();
     setLoading(true);
@@ -268,48 +300,44 @@ export const IncomingRequestScreen: React.FC = () => {
       }
       setAccepted(true);
       navigation.replace('Navigation');
-    } catch (err: any) {
+    } catch (err: unknown) {
       acceptingRef.current = false;
-      if (__DEV__) console.error('[handleAccept] error:', err?.message ?? err);
-      const isTokenExpired =
-        err?.code === 'TOKEN_REQUIRED' || err?.error?.code === 'TOKEN_REQUIRED';
-      if (isTokenExpired) {
-        stopOfferRingtone();
-      } else if (trip.status === 'request_received' || trip.status === 'offered') {
-        // Re-arm the ringtone effect so cleanup stays owned by the effect (not a
-        // detached manual start that can outlive status-driven navigation).
-        setRingtoneEpoch((n) => n + 1);
+      if (__DEV__) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[handleAccept] error:', msg);
       }
-      Alert.alert(
-        'Error',
-        isTokenExpired
-          ? 'Tu sesion expiro. Inicia sesion nuevamente.'
-          : 'No se pudo aceptar el viaje.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              if (isTokenExpired) {
-                useTripStore.getState().clearTrip();
-                navigation.replace('Welcome');
-              }
-            },
-          },
-        ],
-      );
+      const clientOfferAlive = trip.status === 'request_received' || trip.status === 'offered';
+      let failure = mapAcceptFailure(err, { offerStillAlive: clientOfferAlive });
+      if (!failure.terminalOffer) {
+        const stillAlive = clientOfferAlive ? await confirmOfferStillAlive(trip.id) : false;
+        if (!stillAlive) {
+          failure = mapAcceptFailure.pollGone();
+        } else {
+          // Re-arm the ringtone effect so cleanup stays owned by the effect (not a
+          // detached manual start that can outlive status-driven navigation).
+          setRingtoneEpoch((n) => n + 1);
+          setRetrySnack({ title: failure.title, message: failure.body });
+        }
+      }
+      if (failure.terminalOffer) {
+        stopOfferRingtone();
+        setAcceptFailure(failure);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleReject = async () => {
-    if (!trip) return;
+    if (!trip || acceptFailure) return;
     stopOfferRingtone();
     try {
       await apiClient.post(`/trips/${trip.id}/reject`);
     } catch {}
     navigation.navigate('Active');
   };
+
+  const actionsLocked = Boolean(acceptFailure) || loading;
 
   return (
     <View style={styles.container}>
@@ -406,23 +434,45 @@ export const IncomingRequestScreen: React.FC = () => {
 
           {accepted ? (
             <Text style={styles.acceptedText}>Viaje aceptado!</Text>
+          ) : acceptFailure ? (
+            <Card style={styles.failureCard}>
+              <Text style={styles.failureTitle}>{acceptFailure.title}</Text>
+              <Text style={styles.failureBody}>{acceptFailure.body}</Text>
+              <Button
+                title="Entendido"
+                variant="cta"
+                onPress={dismissTerminalFailure}
+                style={styles.button}
+              />
+            </Card>
           ) : (
             <View style={styles.actionsBlock}>
               <Button
                 title="ACEPTAR"
                 variant="cta"
                 onPress={handleAccept}
-                disabled={!trip}
+                disabled={!trip || actionsLocked}
                 loading={loading}
                 style={styles.button}
               />
-              <TouchableOpacity onPress={handleReject} style={styles.rejectButton}>
+              <TouchableOpacity
+                onPress={handleReject}
+                style={styles.rejectButton}
+                disabled={actionsLocked}
+              >
                 <Text style={styles.rejectLink}>Rechazar</Text>
               </TouchableOpacity>
             </View>
           )}
         </ScrollView>
       </View>
+      <Snackbar
+        visible={retrySnack != null}
+        title={retrySnack?.title ?? ''}
+        message={retrySnack?.message ?? ''}
+        tone="error"
+        onDismiss={() => setRetrySnack(null)}
+      />
     </View>
   );
 };
@@ -603,6 +653,25 @@ const styles = StyleSheet.create({
     fontWeight: theme.fontWeight.bold,
     color: theme.colors.turquoise,
     textAlign: 'center',
+  },
+  failureCard: {
+    width: '100%',
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+    gap: theme.spacing.md,
+  },
+  failureTitle: {
+    fontSize: theme.fontSize.lg,
+    fontWeight: theme.fontWeight.bold,
+    color: theme.colors.deepBlue,
+    textAlign: 'center',
+  },
+  failureBody: {
+    fontSize: theme.fontSize.md,
+    fontWeight: theme.fontWeight.medium,
+    color: theme.colors.mediumGray,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   passengerRow: {
     flexDirection: 'row',
