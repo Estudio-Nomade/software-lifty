@@ -232,12 +232,85 @@ async function obtainPushToken(): Promise<PushRegistrationResult> {
 
 /** Token this install last registered; needed to unregister on logout. */
 let registeredPushToken: string | null = null;
+/** Last Expo token we tried to POST (success or fail) — used to detect OS rotation. */
+let lastAttemptedToken: string | null = null;
 /** Last time the backend confirmed our token (0 = never / last attempt failed). */
 let lastRegisteredAt = 0;
+/** Coalesce concurrent ensurePushRegistration callers (session + AppState + token listener). */
+let inFlightRegistration: Promise<PushRegistrationResult> | null = null;
+/** Do not hammer POST /notifications/token after transport/429 failures. */
+let nextPostRetryAt = 0;
+let postFailStreak = 0;
+let lastPostFailure: Extract<PushRegistrationResult, { ok: false }> | null = null;
+
+/** Exponential backoff after post_failed (ms). Caps at 5 min — stops rate-limit storms. */
+const POST_FAIL_BACKOFF_MS = [5_000, 15_000, 30_000, 60_000, 120_000, 300_000] as const;
+
+export type EnsurePushRegistrationOptions = {
+  /**
+   * Bypass the outer “recent success” short-circuit (OS token rotate / GO).
+   * Still no-ops if the Expo token is already registered, and still applies
+   * post_failed backoff for the **same** token. A **new** token clears backoff.
+   */
+  force?: boolean;
+};
 
 export function resetPushRegistrationStateForTests(): void {
   registeredPushToken = null;
+  lastAttemptedToken = null;
   lastRegisteredAt = 0;
+  inFlightRegistration = null;
+  nextPostRetryAt = 0;
+  postFailStreak = 0;
+  lastPostFailure = null;
+}
+
+function postFailureBackoffMs(streak: number): number {
+  const idx = Math.min(Math.max(streak - 1, 0), POST_FAIL_BACKOFF_MS.length - 1);
+  return POST_FAIL_BACKOFF_MS[idx];
+}
+
+function clearPostFailureBackoff(): void {
+  nextPostRetryAt = 0;
+  postFailStreak = 0;
+  lastPostFailure = null;
+}
+
+function markPostSuccess(token: string): void {
+  registeredPushToken = token;
+  lastAttemptedToken = token;
+  lastRegisteredAt = Date.now();
+  clearPostFailureBackoff();
+}
+
+function markPostFailure(
+  err: unknown,
+  attemptedToken: string,
+): Extract<PushRegistrationResult, { ok: false }> {
+  lastRegisteredAt = 0;
+  lastAttemptedToken = attemptedToken;
+  postFailStreak += 1;
+  const wait = postFailureBackoffMs(postFailStreak);
+  nextPostRetryAt = Date.now() + wait;
+  const status =
+    err && typeof err === 'object' && 'status' in err
+      ? Number((err as { status?: unknown }).status)
+      : Number.NaN;
+  const rawMsg =
+    err instanceof Error
+      ? err.message
+      : err && typeof err === 'object' && 'message' in err
+        ? String((err as { message?: unknown }).message ?? '')
+        : '';
+  const rateLimited = status === 429 || /too many requests|rate limit/i.test(rawMsg);
+  const timedOut = /tiempo de espera|timeout|econnaborted/i.test(rawMsg);
+  const message = rateLimited
+    ? 'El servidor limitó los intentos de registro. Esperá un minuto e intentá de nuevo.'
+    : timedOut
+      ? 'Tiempo de espera agotado al registrar notificaciones. Revisá conexión o API.'
+      : 'No se pudo registrar el token de notificaciones. Revisá la conexión.';
+  lastPostFailure = { ok: false, reason: 'post_failed', message };
+  return lastPostFailure;
 }
 
 /**
@@ -256,11 +329,7 @@ export async function unregisterPush(): Promise<void> {
   }
 }
 
-/**
- * Full path: permission → Expo token → POST /notifications/token.
- * Call on session restore and again on GO so deny/error is never silent.
- */
-export async function ensurePushRegistration(): Promise<PushRegistrationResult> {
+async function runPushRegistration(): Promise<PushRegistrationResult> {
   const obtained = await obtainPushToken();
   if (!obtained.ok) return obtained;
 
@@ -273,6 +342,25 @@ export async function ensurePushRegistration(): Promise<PushRegistrationResult> 
     };
   }
 
+  // Already registered this exact Expo token recently → no re-POST (even with force).
+  if (
+    registeredPushToken === obtained.token &&
+    lastRegisteredAt &&
+    Date.now() - lastRegisteredAt < 60_000
+  ) {
+    return { ok: true, token: obtained.token };
+  }
+
+  // OS rotated the device token → drop transport backoff so the new token can POST.
+  if (lastAttemptedToken && obtained.token !== lastAttemptedToken) {
+    clearPostFailureBackoff();
+  }
+
+  // Same token still inside post_failed backoff → return cached failure (no storm).
+  if (nextPostRetryAt && Date.now() < nextPostRetryAt && lastPostFailure) {
+    return lastPostFailure;
+  }
+
   try {
     await apiClient.post('/notifications/token', {
       token: obtained.token,
@@ -281,25 +369,52 @@ export async function ensurePushRegistration(): Promise<PushRegistrationResult> 
       // passenger app of the same account (and vice versa).
       app: 'driver',
     });
-    registeredPushToken = obtained.token;
-    lastRegisteredAt = Date.now();
+    markPostSuccess(obtained.token);
     return obtained;
   } catch (err) {
-    lastRegisteredAt = 0;
     console.warn('[push] POST /notifications/token failed', err);
-    return {
-      ok: false,
-      reason: 'post_failed',
-      message: 'No se pudo registrar el token de notificaciones. Revisá la conexión.',
-    };
+    return markPostFailure(err, obtained.token);
   }
 }
 
-/** Foreground hook: re-register only if the last successful registration is old/failed. */
+/**
+ * Full path: permission → Expo token → POST /notifications/token.
+ * Call on session restore and again on GO so deny/error is never silent.
+ *
+ * Hardening vs lab storm (timeout/429 spam):
+ * - single-flight coalesces concurrent callers
+ * - post_failed applies exponential backoff for the same token
+ * - a new Expo token (OS rotate) clears backoff and POSTs
+ */
+export async function ensurePushRegistration(
+  options?: EnsurePushRegistrationOptions,
+): Promise<PushRegistrationResult> {
+  if (inFlightRegistration) return inFlightRegistration;
+
+  const now = Date.now();
+  if (!options?.force && lastRegisteredAt && now - lastRegisteredAt < 60_000) {
+    if (registeredPushToken) return { ok: true, token: registeredPushToken };
+  }
+
+  const run = runPushRegistration().finally(() => {
+    if (inFlightRegistration === run) inFlightRegistration = null;
+  });
+  inFlightRegistration = run;
+  return run;
+}
+
+/**
+ * Foreground hook: re-register only if success is old and backoff allows.
+ * OS token rotation must use ensurePushRegistration({ force: true }) instead.
+ */
 export async function ensurePushRegistrationIfStale(
   maxAgeMs = 30 * 60_000,
 ): Promise<PushRegistrationResult | null> {
-  if (lastRegisteredAt && Date.now() - lastRegisteredAt < maxAgeMs) return null;
+  const now = Date.now();
+  if (lastRegisteredAt && now - lastRegisteredAt < maxAgeMs) return null;
+  if (nextPostRetryAt && now < nextPostRetryAt) {
+    return lastPostFailure;
+  }
   return ensurePushRegistration();
 }
 

@@ -312,6 +312,55 @@ describe('ensurePushRegistration / registerForPush', () => {
     }
   });
 
+  it('POST timeout copy stays post_failed with wait hint', async () => {
+    mockApiPost.mockRejectedValue(new Error('Tiempo de espera agotado. El servidor no responde.'));
+    const result = await ensurePushRegistration();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('post_failed');
+      expect(result.message).toMatch(/Tiempo de espera agotado/i);
+    }
+  });
+
+  it('single-flight coalesces concurrent ensurePushRegistration calls', async () => {
+    let resolvePost!: (value: unknown) => void;
+    mockApiPost.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePost = resolve;
+        }),
+    );
+    const a = ensurePushRegistration();
+    const b = ensurePushRegistration();
+    // Wait until shared POST is in flight (obtainPushToken has several awaits).
+    await new Promise<void>((resolve, reject) => {
+      const start = Date.now();
+      const tick = () => {
+        if (mockApiPost.mock.calls.length >= 1) {
+          resolve();
+          return;
+        }
+        if (Date.now() - start > 2000) {
+          reject(new Error('POST /notifications/token never started'));
+          return;
+        }
+        setTimeout(tick, 0);
+      };
+      tick();
+    });
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+    resolvePost({ data: {} });
+    await expect(a).resolves.toEqual({ ok: true, token: 'ExponentPushToken[test]' });
+    await expect(b).resolves.toEqual({ ok: true, token: 'ExponentPushToken[test]' });
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips re-POST within 60s after success', async () => {
+    await ensurePushRegistration();
+    await ensurePushRegistration();
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+  });
+
   it('Expo Go Android → unavailable (no hard fail path for GO gate)', async () => {
     mockIsRunningInExpoGo.mockReturnValue(true);
     const result = await ensurePushRegistration();
@@ -367,11 +416,75 @@ describe('foreground re-registration', () => {
     expect(mockApiPost).toHaveBeenCalledTimes(1);
   });
 
-  it('retries when the last attempt failed', async () => {
+  it('does not immediately retry after post_failed (backoff)', async () => {
+    mockApiPost.mockRejectedValue(new Error('offline'));
+    const first = await ensurePushRegistrationIfStale(60_000);
+    const second = await ensurePushRegistrationIfStale(60_000);
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+    expect(first?.ok).toBe(false);
+    expect(second?.ok).toBe(false);
+    if (first && !first.ok && second && !second.ok) {
+      expect(second.reason).toBe('post_failed');
+      expect(second.message).toBe(first.message);
+    }
+  });
+
+  it('force with same token during backoff does not re-POST', async () => {
+    mockApiPost.mockRejectedValue(new Error('offline'));
+    await ensurePushRegistration();
+    mockApiPost.mockClear();
+    mockApiPost.mockResolvedValue({ data: {} });
+    const again = await ensurePushRegistration({ force: true });
+    expect(mockApiPost).not.toHaveBeenCalled();
+    expect(again.ok).toBe(false);
+  });
+
+  it('force posts a rotated Expo token even inside post_failed backoff', async () => {
     mockApiPost.mockRejectedValueOnce(new Error('offline'));
-    await ensurePushRegistrationIfStale(60_000);
-    await ensurePushRegistrationIfStale(60_000);
+    await ensurePushRegistration();
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+
+    mockGetExpoPushTokenAsync.mockResolvedValue({ data: 'ExponentPushToken[rotated]' });
+    mockApiPost.mockResolvedValueOnce({ data: {} });
+    const rotated = await ensurePushRegistration({ force: true });
+    expect(rotated).toEqual({ ok: true, token: 'ExponentPushToken[rotated]' });
     expect(mockApiPost).toHaveBeenCalledTimes(2);
+    expect(mockApiPost).toHaveBeenLastCalledWith('/notifications/token', {
+      token: 'ExponentPushToken[rotated]',
+      platform: 'android',
+      app: 'driver',
+    });
+  });
+
+  it('force posts a rotated token after recent success (bypasses success TTL)', async () => {
+    await ensurePushRegistration();
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+    mockGetExpoPushTokenAsync.mockResolvedValue({ data: 'ExponentPushToken[new]' });
+    const rotated = await ensurePushRegistration({ force: true });
+    expect(rotated).toEqual({ ok: true, token: 'ExponentPushToken[new]' });
+    expect(mockApiPost).toHaveBeenCalledTimes(2);
+  });
+
+  it('force with same already-registered token does not re-POST', async () => {
+    await ensurePushRegistration();
+    mockApiPost.mockClear();
+    const again = await ensurePushRegistration({ force: true });
+    expect(again).toEqual({ ok: true, token: 'ExponentPushToken[test]' });
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it('retries after backoff window elapses', async () => {
+    jest.useFakeTimers({ advanceTimers: true });
+    mockApiPost.mockRejectedValueOnce(new Error('offline'));
+    mockApiPost.mockResolvedValueOnce({ data: {} });
+    await ensurePushRegistrationIfStale(60_000);
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+    // first backoff step = 5s
+    jest.advanceTimersByTime(5_001);
+    const recovered = await ensurePushRegistrationIfStale(60_000);
+    expect(mockApiPost).toHaveBeenCalledTimes(2);
+    expect(recovered?.ok).toBe(true);
+    jest.useRealTimers();
   });
 
   it('addPushTokenListener subscribes to device token changes', async () => {

@@ -268,9 +268,10 @@ function NotificationSetup() {
     });
     let pushCleanedUp = false;
     let tokenSub: { remove: () => void } | null = null;
-    // Device token rotated by the OS → register the new Expo token.
+    // Device token rotated by the OS → force path bypasses success TTL so the new
+    // Expo token is POSTed; same-token + post_failed backoff still apply inside.
     void addPushTokenListener(() => {
-      void ensurePushRegistration();
+      void ensurePushRegistration({ force: true });
     }).then((sub) => {
       if (pushCleanedUp) sub?.remove();
       else tokenSub = sub;
