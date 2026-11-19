@@ -181,7 +181,7 @@ async function obtainPushToken(): Promise<PushRegistrationResult> {
       await Notifications.setNotificationChannelAsync('trip-offers', {
         name: 'Ofertas de viaje',
         importance: Notifications.AndroidImportance.MAX,
-        sound: 'trip-request.wav',
+        sound: 'trip_request.wav',
         vibrationPattern: [0, 400, 200, 400, 200, 400],
         enableVibrate: true,
       });

@@ -19,7 +19,7 @@ jest.mock('expo-audio', () => ({
   setAudioModeAsync: (...args: unknown[]) => mockSetAudioModeAsync(...args),
 }));
 
-jest.mock('../../../assets/sounds/trip-request.wav', () => 42, { virtual: true });
+jest.mock('../../../assets/sounds/trip_request.wav', () => 42, { virtual: true });
 
 import { Platform } from 'react-native';
 import { startOfferRingtone, stopOfferRingtone } from '../../lib/offerRingtone';

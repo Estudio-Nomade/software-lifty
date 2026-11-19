@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 
 // Synthetic royalty-free dual-tone beep (~1.6s), looped while IncomingRequest is open.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const TRIP_REQUEST_SOUND = require('../../assets/sounds/trip-request.wav');
+const TRIP_REQUEST_SOUND = require('../../assets/sounds/trip_request.wav');
 
 let player: AudioPlayer | null = null;
 let generation = 0;

@@ -9,7 +9,8 @@ export interface PushMessage {
   channelId?: string;
   /**
    * Expo push sound. Use `'default'` or a filename registered in the app
-   * (e.g. `trip-request.wav` via expo-notifications sounds plugin).
+   * (e.g. `trip_request.wav` via expo-notifications sounds plugin; Android raw
+   * resource names cannot contain hyphens).
    */
   sound?: string;
   /** iOS app-icon badge (and Android when supported via Expo). */

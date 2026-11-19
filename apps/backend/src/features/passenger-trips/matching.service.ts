@@ -205,7 +205,7 @@ export async function matchAndBroadcast(
     title: 'Nuevo viaje',
     body: `Viaje solicitado de ${assigned.origin_address ?? 'origen'} a ${assigned.dest_address ?? 'destino'} — $${assigned.total_fare ?? 'N/A'}`,
     channelId: 'trip-offers',
-    sound: 'trip-request.wav',
+    sound: 'trip_request.wav',
     ttl: OFFER_PUSH_TTL_SECONDS,
     data: { trip_id: trip.id, type: 'trip:request' },
   })

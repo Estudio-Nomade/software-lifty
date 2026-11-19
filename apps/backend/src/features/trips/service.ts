@@ -356,7 +356,7 @@ export const tripService = {
         title: 'Nuevo viaje',
         body: `Viaje solicitado de ${updated.origin_address ?? 'origen'} a ${updated.dest_address ?? 'destino'} — $${updated.total_fare}`,
         channelId: 'trip-offers',
-        sound: 'trip-request.wav',
+        sound: 'trip_request.wav',
         ttl: OFFER_PUSH_TTL_SECONDS,
         data: { trip_id: tripId, type: 'trip:request' },
       })
@@ -666,7 +666,7 @@ export const tripService = {
       title: 'Nuevo viaje',
       body: `Viaje solicitado de ${trip.origin_address ?? 'origen'} a ${trip.dest_address ?? 'destino'} — $${fare.total}`,
       channelId: 'trip-offers',
-      sound: 'trip-request.wav',
+      sound: 'trip_request.wav',
       ttl: OFFER_PUSH_TTL_SECONDS,
       data: { trip_id: trip.id, type: 'trip:request' },
     })

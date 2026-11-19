@@ -644,7 +644,7 @@ describe('Passenger Trips', () => {
       expect(payload.to).toBe('ExponentPushToken[offer-driver-test]');
       expect(payload.title).toBe('Nuevo viaje');
       expect(payload.channelId).toBe('trip-offers');
-      expect(payload.sound).toBe('trip-request.wav');
+      expect(payload.sound).toBe('trip_request.wav');
       expect(payload.data).toEqual({ type: 'trip:request', trip_id: trip.id });
     } finally {
       fetchSpy.mockRestore();
