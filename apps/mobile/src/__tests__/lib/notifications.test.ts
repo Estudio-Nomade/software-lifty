@@ -429,6 +429,50 @@ describe('foreground re-registration', () => {
     }
   });
 
+  it('force with same token during backoff does not re-POST', async () => {
+    mockApiPost.mockRejectedValue(new Error('offline'));
+    await ensurePushRegistration();
+    mockApiPost.mockClear();
+    mockApiPost.mockResolvedValue({ data: {} });
+    const again = await ensurePushRegistration({ force: true });
+    expect(mockApiPost).not.toHaveBeenCalled();
+    expect(again.ok).toBe(false);
+  });
+
+  it('force posts a rotated Expo token even inside post_failed backoff', async () => {
+    mockApiPost.mockRejectedValueOnce(new Error('offline'));
+    await ensurePushRegistration();
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+
+    mockGetExpoPushTokenAsync.mockResolvedValue({ data: 'ExponentPushToken[rotated]' });
+    mockApiPost.mockResolvedValueOnce({ data: {} });
+    const rotated = await ensurePushRegistration({ force: true });
+    expect(rotated).toEqual({ ok: true, token: 'ExponentPushToken[rotated]' });
+    expect(mockApiPost).toHaveBeenCalledTimes(2);
+    expect(mockApiPost).toHaveBeenLastCalledWith('/notifications/token', {
+      token: 'ExponentPushToken[rotated]',
+      platform: 'android',
+      app: 'driver',
+    });
+  });
+
+  it('force posts a rotated token after recent success (bypasses success TTL)', async () => {
+    await ensurePushRegistration();
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+    mockGetExpoPushTokenAsync.mockResolvedValue({ data: 'ExponentPushToken[new]' });
+    const rotated = await ensurePushRegistration({ force: true });
+    expect(rotated).toEqual({ ok: true, token: 'ExponentPushToken[new]' });
+    expect(mockApiPost).toHaveBeenCalledTimes(2);
+  });
+
+  it('force with same already-registered token does not re-POST', async () => {
+    await ensurePushRegistration();
+    mockApiPost.mockClear();
+    const again = await ensurePushRegistration({ force: true });
+    expect(again).toEqual({ ok: true, token: 'ExponentPushToken[test]' });
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
   it('retries after backoff window elapses', async () => {
     jest.useFakeTimers({ advanceTimers: true });
     mockApiPost.mockRejectedValueOnce(new Error('offline'));
