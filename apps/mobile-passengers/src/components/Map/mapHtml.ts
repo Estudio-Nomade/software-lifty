@@ -109,14 +109,11 @@ export function generateMapHtml(
   }
   .destination-pin {
     position: relative;
-    width: 32px; height: 32px;
+    width: 18px; height: 18px;
     border: 2px solid #FFFFFF;
-    border-radius: 50%;
-    background: #FFFFFF center / cover no-repeat;
+    border-radius: 3px;
+    background: ${colors.primary};
     box-shadow: 0 2px 6px rgba(13, 43, 69, 0.35);
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
   .destination-pin::after {
     content: '';
@@ -127,10 +124,6 @@ export function generateMapHtml(
     border: 6px solid transparent;
     border-top: 10px solid ${colors.primary};
     border-bottom: 0;
-  }
-  .destination-pin ion-icon {
-    font-size: 18px;
-    color: ${colors.primary};
   }
 </style>
 </head>
@@ -236,12 +229,8 @@ export function generateMapHtml(
     newMarkers.forEach(function (mk) {
       var el = document.createElement('div');
       if (mk.icon === 'destination') {
+        // Uber-style square pin — never person/avatar photo on destination.
         el.className = 'destination-pin';
-        if (mk.avatarUrl) {
-          el.style.backgroundImage = "url('" + mk.avatarUrl + "')";
-        } else {
-          el.innerHTML = '<ion-icon name="person"></ion-icon>';
-        }
       } else if (mk.avatarUrl) {
         el.className = 'marker-avatar';
         el.innerHTML = '<img src="' + mk.avatarUrl + '" alt="" />';

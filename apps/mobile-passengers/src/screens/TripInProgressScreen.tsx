@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { cancelRide, getActiveRide, getCancelPreview, getProfile } from '../api/passenger';
+import { cancelRide, getActiveRide, getCancelPreview } from '../api/passenger';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { PassengerMap } from '../components/Map/PassengerMap';
@@ -34,17 +34,10 @@ export function TripInProgressScreen() {
   const setDriverLocation = useRideStore((s) => s.setDriverLocation);
   const reset = useRideStore((s) => s.reset);
   const [recenterKey, setRecenterKey] = useState(0);
-  const [passengerAvatar, setPassengerAvatar] = useState<string | null>(null);
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
     return () => sub.remove();
-  }, []);
-
-  useEffect(() => {
-    getProfile()
-      .then((p) => setPassengerAvatar(p.avatar_url ?? null))
-      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -207,13 +200,23 @@ export function TripInProgressScreen() {
   const routeCoords = useDriverRoute(driverLat, driverLng, routeTargetLat, routeTargetLng);
 
   const markers = [
-    ...(passengerCoord
+    ...(trip?.origin_lat != null && trip?.origin_lng != null
       ? [
           {
-            id: 'my-location',
-            coordinate: passengerCoord,
-            title: 'Tu ubicación',
+            id: 'origin',
+            coordinate: [trip.origin_lng, trip.origin_lat] as [number, number],
             color: theme.colors.deepBlue,
+            title: 'Origen',
+          },
+        ]
+      : []),
+    ...(trip?.dest_lat != null && trip?.dest_lng != null
+      ? [
+          {
+            id: 'destination',
+            coordinate: [trip.dest_lng, trip.dest_lat] as [number, number],
+            title: 'Destino',
+            icon: 'destination' as const,
           },
         ]
       : []),
@@ -226,17 +229,6 @@ export function TripInProgressScreen() {
             ...(trip?.driver_avatar_url
               ? { avatarUrl: trip.driver_avatar_url }
               : { icon: 'car' as const }),
-          },
-        ]
-      : []),
-    ...(trip?.status === 'in_trip' && trip.dest_lat != null && trip.dest_lng != null
-      ? [
-          {
-            id: 'destination',
-            coordinate: [trip.dest_lng, trip.dest_lat] as [number, number],
-            title: 'Destino',
-            icon: 'destination' as const,
-            ...(passengerAvatar ? { avatarUrl: passengerAvatar } : {}),
           },
         ]
       : []),
@@ -273,7 +265,7 @@ export function TripInProgressScreen() {
         <PassengerMap
           centerCoordinate={driverCoord ?? passengerCoord ?? [0, 0]}
           followUserLocation={false}
-          userLocation={passengerCoord}
+          userLocation={null}
           markers={markers}
           routeLine={routeCoords.length > 0 ? routeCoords : undefined}
           recenterKey={recenterKey}

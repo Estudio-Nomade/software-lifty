@@ -33,13 +33,13 @@ jest.mock('../../hooks/useAppNavigation', () => ({
   useAppNavigation: () => ({ navigate: jest.fn(), replace: mockReplace }),
 }));
 
+const mockPassengerMap = jest.fn(() => null);
 jest.mock('../../components/Map/PassengerMap', () => ({
-  PassengerMap: () => null,
+  PassengerMap: (props: unknown) => mockPassengerMap(props),
 }));
 
 jest.mock('../../api/passenger', () => ({
   getActiveRide: jest.fn().mockResolvedValue(null),
-  getProfile: jest.fn().mockResolvedValue({}),
   cancelRide: jest.fn().mockResolvedValue(undefined),
   getCancelPreview: jest.fn().mockResolvedValue({ copy: '¿Confirmas?', can_cancel: true }),
 }));
@@ -49,6 +49,39 @@ describe('TripInProgressScreen', () => {
     jest.clearAllMocks();
     useRideStore.setState({ activeTrip: null, driverLocation: null });
     useAuthStore.setState({ userId: null });
+  });
+
+  test('map markers are origin circle + dest square + driver; no pax avatar or my-location', async () => {
+    useRideStore.getState().setActiveTrip({
+      id: 'trip-markers',
+      passenger_id: 'p-1',
+      status: 'en_route',
+      origin_lat: -34.6,
+      origin_lng: -58.38,
+      dest_lat: -34.7,
+      dest_lng: -58.4,
+      driver_id: 'driver-1',
+      driver_lat: -34.61,
+      driver_lng: -58.39,
+      driver_name: 'María López',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    useRideStore.getState().setDriverLocation({ lat: -34.61, lng: -58.39, heading: null });
+
+    await render(<TripInProgressScreen />);
+
+    expect(mockPassengerMap).toHaveBeenCalled();
+    const props = mockPassengerMap.mock.calls.at(-1)?.[0] as {
+      userLocation: unknown;
+      markers: Array<{ id: string; icon?: string; avatarUrl?: string; color?: string }>;
+    };
+    expect(props.userLocation).toBeNull();
+    expect(props.markers.map((m) => m.id)).toEqual(['origin', 'destination', 'driver']);
+    expect(props.markers.find((m) => m.id === 'origin')?.color).toBeTruthy();
+    expect(props.markers.find((m) => m.id === 'destination')?.icon).toBe('destination');
+    expect(props.markers.find((m) => m.id === 'destination')?.avatarUrl).toBeUndefined();
+    expect(props.markers.some((m) => m.id === 'my-location')).toBe(false);
   });
 
   test('renders real driver name and vehicle from the active trip', async () => {
