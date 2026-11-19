@@ -22,6 +22,8 @@ const OFFER_TIMEOUT_MS = 20_000;
 const DEFAULT_MATCH_RADIUS_KM = 8;
 const DRIVER_LOCATION_FRESHNESS_MS = 5 * 60 * 1000;
 const MATCH_CANDIDATE_CAP = 5;
+/** Cap OSRM wait per candidate so slow matrix cannot delay the first offer. */
+const MATCH_ETA_TIMEOUT_MS = 2_500;
 
 interface NearbyDriver {
   driverId: string;
@@ -35,6 +37,22 @@ interface NearbyDriver {
 
 function etaProxyFromHaversineKm(distanceKm: number): number {
   return Math.max(1, Math.round(distanceKm * 3));
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(label)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
 }
 
 export interface MatchOptions {
@@ -131,7 +149,13 @@ export async function findNearbyDrivers(
   const enriched = await Promise.all(
     byDistance.map(async (d): Promise<NearbyDriver> => {
       try {
-        const matrix = await distanceMatrix(d.lat, d.lng, originLat, originLng);
+        // distanceMatrix rarely rejects (soft-fails inside), but can hang until OSRM
+        // AbortSignal fires — bound match path tighter than GEO_TIMEOUT_MS.
+        const matrix = await withTimeout(
+          distanceMatrix(d.lat, d.lng, originLat, originLng),
+          MATCH_ETA_TIMEOUT_MS,
+          'match eta timeout',
+        );
         return {
           driverId: d.driverId,
           userId: d.userId,
@@ -142,7 +166,7 @@ export async function findNearbyDrivers(
           routeDistanceKm: matrix.distance_km,
         };
       } catch {
-        // Fail soft per row: same proxy as geo.directions catch (haversine × 3 min/km).
+        // Fail soft per row (throw or slow): haversine × 3 min/km, same as geo.directions catch.
         return {
           driverId: d.driverId,
           userId: d.userId,

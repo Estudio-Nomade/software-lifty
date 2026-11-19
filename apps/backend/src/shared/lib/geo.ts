@@ -938,7 +938,7 @@ export async function directions(
     const coords = `${origin_lng},${origin_lat};${dest_lng},${dest_lat}`;
     const url = `${OSRM_URL}/route/v1/driving/${coords}?geometries=polyline&overview=full&alternatives=true&steps=true`;
 
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(GEO_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`OSRM API error: ${res.status}`);
 
     const data = (await res.json()) as {

@@ -1717,4 +1717,30 @@ describe('Passenger Trips', () => {
       matrixSpy.mockRestore();
     }
   });
+
+  test('matching: slow distanceMatrix falls back to proxy within eta deadline', async () => {
+    const token = await createPassengerToken();
+    const onlyId = await createDriverWithLocation(token, origin.lat + 0.001, origin.lng);
+
+    const matrixSpy = spyOn(geo, 'distanceMatrix').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve({ distance_km: 9, duration_minutes: 99 }), 10_000);
+        }),
+    );
+
+    try {
+      const t0 = Date.now();
+      const ranked = await findNearbyDrivers(origin.lat, origin.lng, 8, [], 'auto');
+      const elapsed = Date.now() - t0;
+      expect(ranked.length).toBe(1);
+      expect(ranked[0].driverId).toBe(onlyId);
+      expect(ranked[0].etaMinutes).toBe(Math.max(1, Math.round(ranked[0].distance * 3)));
+      expect(ranked[0].etaMinutes).not.toBe(99);
+      // MATCH_ETA_TIMEOUT_MS = 2500; allow jitter, must not wait full OSRM hang.
+      expect(elapsed).toBeLessThan(5_000);
+    } finally {
+      matrixSpy.mockRestore();
+    }
+  });
 });
