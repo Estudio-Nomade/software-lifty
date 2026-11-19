@@ -11,8 +11,11 @@ import {
 import { getFriendlyAuthError } from '../lib/authErrors';
 import { unregisterPush } from '../lib/notifications';
 import {
+  beginUserLogout,
+  endUserLogout,
   getCurrentOAuthAttempt,
   isOAuthLocalSignOutInFlight,
+  isUserLogoutInFlight,
   resolveSignedOutStoreAction,
 } from '../lib/oauthSessionRecovery';
 import { invalidatePassengerProfileCompleteCache } from '../lib/passengerProfileGate';
@@ -130,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           oauthLocalSignOutInFlight: isOAuthLocalSignOutInFlight(),
           liveSessionExists: Boolean(data.session?.access_token),
           storeHasSession: Boolean(store.token && store.isAuthenticated),
+          userLogoutInFlight: isUserLogoutInFlight(),
         });
         if (__DEV__) {
           console.log('[auth] SIGNED_OUT action', {
@@ -201,9 +205,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     // Unregister while the JWT is still valid so a shared phone stops receiving
     // this account's pushes.
-    resetPostOAuthHandoff();
-    await unregisterPush();
-    await supabase.auth.signOut();
+    beginUserLogout();
+    try {
+      resetPostOAuthHandoff();
+      await unregisterPush();
+      await supabase.auth.signOut();
+      // Defense in depth: don't rely only on SIGNED_OUT listener (keepStore race).
+      useAuthStore.getState().clearAuth();
+    } finally {
+      endUserLogout();
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(

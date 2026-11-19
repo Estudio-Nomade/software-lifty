@@ -2,12 +2,15 @@ import type { Session } from '@supabase/supabase-js';
 import {
   beginOAuthAttempt,
   beginOAuthLocalSignOut,
+  beginUserLogout,
   canFinishAuthCallbackWithSession,
   clearOAuthAttempt,
   decideAuthCallbackFinishErrAction,
+  endUserLogout,
   getCurrentOAuthAttempt,
   isBlockedOAuthUser,
   isOAuthLocalSignOutInFlight,
+  isUserLogoutInFlight,
   markOAuthAttemptSession,
   releaseOAuthBlockedUser,
   resetOAuthAttemptStateForTests,
@@ -376,6 +379,25 @@ describe('resolveSignedOutStoreAction / oauth local sign-out', () => {
         storeHasSession: true,
       }),
     ).toBe('keepStore');
+  });
+
+  it('user logout clears even when store still has session', () => {
+    expect(
+      resolveSignedOutStoreAction({
+        oauthAttemptActive: false,
+        oauthLocalSignOutInFlight: false,
+        liveSessionExists: false,
+        storeHasSession: true,
+        userLogoutInFlight: true,
+      }),
+    ).toBe('clearAuth');
+  });
+
+  it('beginUserLogout marks in-flight until end', () => {
+    beginUserLogout();
+    expect(isUserLogoutInFlight()).toBe(true);
+    endUserLogout();
+    expect(isUserLogoutInFlight()).toBe(true); // grace window
   });
 
   it('beginOAuthLocalSignOut marks in-flight until attempt mark', () => {

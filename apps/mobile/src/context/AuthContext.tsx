@@ -12,8 +12,11 @@ import { apiClient } from '../api/client';
 import { stopTracking } from '../lib/location';
 import { unregisterPush } from '../lib/notifications';
 import {
+  beginUserLogout,
+  endUserLogout,
   getCurrentOAuthAttempt,
   isOAuthLocalSignOutInFlight,
+  isUserLogoutInFlight,
   resolveSignedOutStoreAction,
 } from '../lib/oauthSessionRecovery';
 import { resetPostOAuthHandoff } from '../lib/postOAuthHandoff';
@@ -120,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           oauthLocalSignOutInFlight: isOAuthLocalSignOutInFlight(),
           liveSessionExists: Boolean(data.session?.access_token),
           storeHasSession: Boolean(store.token && store.isAuthenticated),
+          userLogoutInFlight: isUserLogoutInFlight(),
         });
         if (action === 'resync' && data.session) {
           setSession(data.session);
@@ -189,24 +193,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     // Stop bg location/FGS before clearing session so queued OS updates don't keep heartbeating.
-    resetPostOAuthHandoff();
-    const hb = useOnlineStore.getState().heartbeatIntervalRef;
-    if (hb) clearInterval(hb);
-    useOnlineStore.getState().setHeartbeatRef(null);
-    useOnlineStore.getState().setOnline(false);
-    await stopTracking().catch(() => {});
+    beginUserLogout();
+    try {
+      resetPostOAuthHandoff();
+      const hb = useOnlineStore.getState().heartbeatIntervalRef;
+      if (hb) clearInterval(hb);
+      useOnlineStore.getState().setHeartbeatRef(null);
+      useOnlineStore.getState().setOnline(false);
+      await stopTracking().catch(() => {});
 
-    if (useAuthStore.getState().token) {
-      await unregisterPush();
-      try {
-        await apiClient.post('/auth/logout');
-      } catch {
-        /* best-effort: revoking backend tokens must not block local sign-out */
+      if (useAuthStore.getState().token) {
+        await unregisterPush();
+        try {
+          await apiClient.post('/auth/logout');
+        } catch {
+          /* best-effort: revoking backend tokens must not block local sign-out */
+        }
       }
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      await supabase.auth.signOut();
+      // Defense in depth: don't rely only on SIGNED_OUT listener (keepStore race).
+      useAuthStore.getState().clearAuth();
+    } finally {
+      endUserLogout();
     }
-    await queryClient.cancelQueries();
-    queryClient.clear();
-    await supabase.auth.signOut();
   }, []);
 
   const value = useMemo<AuthContextValue>(

@@ -76,6 +76,10 @@ describe('authStore.setSession identity replace', () => {
     useAuthStore.getState().clearAuth();
     expect(useAuthStore.getState().needsRedirect).toBe(true);
 
+    // Double clearAuth must keep Welcome bounce armed.
+    useAuthStore.getState().clearAuth();
+    expect(useAuthStore.getState().needsRedirect).toBe(true);
+
     useAuthStore.getState().resetRedirect();
     useAuthStore.getState().clearAuth();
     expect(useAuthStore.getState().needsRedirect).toBe(false);
