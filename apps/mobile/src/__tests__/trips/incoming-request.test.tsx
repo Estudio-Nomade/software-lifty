@@ -196,6 +196,42 @@ describe('IncomingRequestScreen', () => {
     expect(getByText(/Revisá la conexión/i)).toBeTruthy();
   });
 
+  test('retryable accept with stale client offer → unavailable card, no ringtone re-arm', async () => {
+    let activeCalls = 0;
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/trips/active') {
+        activeCalls += 1;
+        // mount load + optional polls keep offer; reconcile after accept sees gone
+        if (activeCalls === 1) return Promise.resolve({ data: REAL_TRIP });
+        return Promise.resolve({ data: null });
+      }
+      if (url === '/trips/trip-real-1') {
+        return Promise.resolve({
+          data: { ...REAL_TRIP, status: 'accepted', driver_id: 'other' },
+        });
+      }
+      return Promise.resolve({ data: {} });
+    });
+    mockPost.mockRejectedValueOnce(
+      new ApiError({
+        error: { code: 'NETWORK_ERROR', message: 'Network Error', status: 0 },
+        meta: { timestamp: new Date().toISOString() },
+      }),
+    );
+
+    const { getByText, queryByText } = await render(<IncomingRequestScreen />);
+    await waitFor(() => expect(getByText('ACEPTAR')).toBeTruthy());
+    const startsBefore = mockStartOfferRingtone.mock.calls.length;
+
+    await act(async () => {
+      fireEvent.press(getByText('ACEPTAR'));
+    });
+
+    await waitFor(() => expect(getByText('Este viaje ya no está disponible')).toBeTruthy());
+    expect(queryByText(/Revisá la conexión/i)).toBeNull();
+    expect(mockStartOfferRingtone.mock.calls.length).toBe(startsBefore);
+  });
+
   test('failed accept OFFER_EXPIRED shows ES card and no ringtone re-arm', async () => {
     mockPost.mockRejectedValueOnce(
       new ApiError({

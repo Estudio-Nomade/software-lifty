@@ -166,10 +166,7 @@ export function mapAcceptFailure(
     return { ...RETRYABLE, terminalOffer: true, navigate: 'Active' };
   }
 
-  if (code === 'BAD_REQUEST' && looksUnavailable(message)) {
-    return UNAVAILABLE;
-  }
-
+  // BAD_REQUEST "Invalid transition…" / claimed / not found already hit looksUnavailable above
   if (!offerStillAlive) return UNKNOWN_DEAD;
   return UNKNOWN_ALIVE;
 }

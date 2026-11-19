@@ -271,6 +271,22 @@ export const IncomingRequestScreen: React.FC = () => {
       .catch(() => {});
   }, [trip, lat, lng]);
 
+  /** Client trip.status can lag; confirm offer still ours before re-arming ringtone. */
+  const confirmOfferStillAlive = async (tripId: string): Promise<boolean> => {
+    try {
+      const response = await apiClient.get('/trips/active');
+      const active = (response.data?.data ?? response.data) as Trip | null;
+      return Boolean(
+        active &&
+          active.id === tripId &&
+          (active.status === 'request_received' || active.status === 'offered'),
+      );
+    } catch {
+      // Still flaky network — keep retryable UI rather than force-dismiss.
+      return true;
+    }
+  };
+
   const handleAccept = async () => {
     if (!trip || loading || acceptingRef.current || acceptFailure) return;
     acceptingRef.current = true;
@@ -290,18 +306,22 @@ export const IncomingRequestScreen: React.FC = () => {
         const msg = err instanceof Error ? err.message : String(err);
         console.error('[handleAccept] error:', msg);
       }
-      const offerStillAlive = trip.status === 'request_received' || trip.status === 'offered';
-      const failure = mapAcceptFailure(err, { offerStillAlive });
-      if (failure.terminalOffer) {
-        stopOfferRingtone();
-        setAcceptFailure(failure);
-      } else {
-        if (offerStillAlive) {
+      const clientOfferAlive = trip.status === 'request_received' || trip.status === 'offered';
+      let failure = mapAcceptFailure(err, { offerStillAlive: clientOfferAlive });
+      if (!failure.terminalOffer) {
+        const stillAlive = clientOfferAlive ? await confirmOfferStillAlive(trip.id) : false;
+        if (!stillAlive) {
+          failure = mapAcceptFailure.pollGone();
+        } else {
           // Re-arm the ringtone effect so cleanup stays owned by the effect (not a
           // detached manual start that can outlive status-driven navigation).
           setRingtoneEpoch((n) => n + 1);
+          setRetrySnack({ title: failure.title, message: failure.body });
         }
-        setRetrySnack({ title: failure.title, message: failure.body });
+      }
+      if (failure.terminalOffer) {
+        stopOfferRingtone();
+        setAcceptFailure(failure);
       }
     } finally {
       setLoading(false);
