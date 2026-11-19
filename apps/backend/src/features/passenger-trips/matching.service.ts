@@ -9,7 +9,7 @@ import {
   vehicles,
 } from '../../shared/db/schema';
 import { ACTIVE_TRIP_STATUSES, DRIVER_OFFLINE_GRACE_MS } from '../../shared/lib/cleanup';
-import { haversineDistance } from '../../shared/lib/geo';
+import { distanceMatrix, haversineDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { OFFER_PUSH_TTL_SECONDS, sendPushToUserDetailed } from '../../shared/lib/push';
 import { normalizeVehicleClass, vehicleTypesCompatible } from '../../shared/lib/vehicle-class';
@@ -21,13 +21,20 @@ import { attachPassengerFields, broadcastTripRequest } from '../trips/service';
 const OFFER_TIMEOUT_MS = 20_000;
 const DEFAULT_MATCH_RADIUS_KM = 8;
 const DRIVER_LOCATION_FRESHNESS_MS = 5 * 60 * 1000;
+const MATCH_CANDIDATE_CAP = 5;
 
 interface NearbyDriver {
   driverId: string;
   userId: string;
   distance: number;
+  etaMinutes: number;
+  routeDistanceKm?: number;
   fullName: string;
   vehicleType: string;
+}
+
+function etaProxyFromHaversineKm(distanceKm: number): number {
+  return Math.max(1, Math.round(distanceKm * 3));
 }
 
 export interface MatchOptions {
@@ -103,17 +110,70 @@ export async function findNearbyDrivers(
     .innerJoin(vehicles, eq(drivers.id, vehicles.driver_id))
     .where(and(...conditions));
 
-  return rows
-    .map((d) => ({
-      driverId: d.driverId,
-      userId: d.userId,
-      fullName: d.fullName ?? 'Conductor',
-      vehicleType: d.vehicleType,
-      distance: haversineDistance(originLat, originLng, d.lat!, d.lng!),
-    }))
+  const byDistance = rows
+    .map((d) => {
+      const lat = d.lat!;
+      const lng = d.lng!;
+      return {
+        driverId: d.driverId,
+        userId: d.userId,
+        fullName: d.fullName ?? 'Conductor',
+        vehicleType: d.vehicleType,
+        lat,
+        lng,
+        distance: haversineDistance(originLat, originLng, lat, lng),
+      };
+    })
     .filter((d) => d.distance <= radiusKm && vehicleTypesCompatible(requestedClass, d.vehicleType))
     .sort((a, b) => a.distance - b.distance)
-    .slice(0, 5);
+    .slice(0, MATCH_CANDIDATE_CAP);
+
+  const enriched = await Promise.all(
+    byDistance.map(async (d): Promise<NearbyDriver> => {
+      try {
+        const matrix = await distanceMatrix(d.lat, d.lng, originLat, originLng);
+        return {
+          driverId: d.driverId,
+          userId: d.userId,
+          fullName: d.fullName,
+          vehicleType: d.vehicleType,
+          distance: d.distance,
+          etaMinutes: matrix.duration_minutes,
+          routeDistanceKm: matrix.distance_km,
+        };
+      } catch {
+        // Fail soft per row: same proxy as geo.directions catch (haversine × 3 min/km).
+        return {
+          driverId: d.driverId,
+          userId: d.userId,
+          fullName: d.fullName,
+          vehicleType: d.vehicleType,
+          distance: d.distance,
+          etaMinutes: etaProxyFromHaversineKm(d.distance),
+          routeDistanceKm: d.distance,
+        };
+      }
+    }),
+  );
+
+  enriched.sort((a, b) => {
+    if (a.etaMinutes !== b.etaMinutes) return a.etaMinutes - b.etaMinutes;
+    return a.distance - b.distance;
+  });
+
+  if (enriched.length > 0) {
+    logger.info('[findNearbyDrivers] ranked by ETA', {
+      origin: `${originLat.toFixed(4)},${originLng.toFixed(4)}`,
+      ordered: enriched
+        .map(
+          (d) =>
+            `${d.driverId.slice(0, 8)}:${Math.round(d.etaMinutes * 10) / 10}m:${Math.round(d.distance * 100) / 100}km`,
+        )
+        .join(','),
+    });
+  }
+
+  return enriched;
 }
 
 export async function matchAndBroadcast(
@@ -233,6 +293,7 @@ export async function matchAndBroadcast(
     tripId: trip.id,
     driverId: driver.driverId,
     distanceKm: Math.round(driver.distance * 100) / 100,
+    etaMinutes: driver.etaMinutes,
     vehicleType: driver.vehicleType,
     requestedVehicleType: requestedType,
   });
