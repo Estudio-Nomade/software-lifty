@@ -2,11 +2,15 @@ import type { Session } from '@supabase/supabase-js';
 import {
   beginOAuthAttempt,
   beginOAuthLocalSignOut,
+  beginUserLogout,
   canFinishAuthCallbackWithSession,
   clearOAuthAttempt,
+  clearUserLogout,
+  endUserLogout,
   getCurrentOAuthAttempt,
   isBlockedOAuthUser,
   isOAuthLocalSignOutInFlight,
+  isUserLogoutInFlight,
   markOAuthAttemptSession,
   releaseOAuthBlockedUser,
   resetOAuthAttemptStateForTests,
@@ -316,6 +320,30 @@ describe('resolveSignedOutStoreAction / oauth local sign-out', () => {
     ).toBe('keepStore');
   });
 
+  it('user logout clears even when store still has session', () => {
+    expect(
+      resolveSignedOutStoreAction({
+        oauthAttemptActive: false,
+        oauthLocalSignOutInFlight: false,
+        liveSessionExists: false,
+        storeHasSession: true,
+        userLogoutInFlight: true,
+      }),
+    ).toBe('clearAuth');
+  });
+
+  it('live session resyncs even during user-logout grace (quick re-login)', () => {
+    expect(
+      resolveSignedOutStoreAction({
+        oauthAttemptActive: false,
+        oauthLocalSignOutInFlight: false,
+        liveSessionExists: true,
+        storeHasSession: true,
+        userLogoutInFlight: true,
+      }),
+    ).toBe('resync');
+  });
+
   it('real SIGNED_OUT clears with redirect path', () => {
     expect(
       resolveSignedOutStoreAction({
@@ -324,6 +352,21 @@ describe('resolveSignedOutStoreAction / oauth local sign-out', () => {
         liveSessionExists: false,
       }),
     ).toBe('clearAuth');
+  });
+
+  it('beginUserLogout marks in-flight until end', () => {
+    beginUserLogout();
+    expect(isUserLogoutInFlight()).toBe(true);
+    endUserLogout();
+    expect(isUserLogoutInFlight()).toBe(true); // grace window
+  });
+
+  it('clearUserLogout drops grace so re-login is not treated as logout', () => {
+    beginUserLogout();
+    endUserLogout();
+    expect(isUserLogoutInFlight()).toBe(true);
+    clearUserLogout();
+    expect(isUserLogoutInFlight()).toBe(false);
   });
 
   it('beginOAuthLocalSignOut marks in-flight until attempt mark', () => {

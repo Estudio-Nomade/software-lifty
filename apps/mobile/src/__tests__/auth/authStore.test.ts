@@ -36,6 +36,10 @@ describe('authStore.clearAuth', () => {
     expect(useAuthStore.getState().needsRedirect).toBe(true);
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
 
+    // Double clearAuth (listener + explicit signOut) must keep the bounce armed.
+    useAuthStore.getState().clearAuth();
+    expect(useAuthStore.getState().needsRedirect).toBe(true);
+
     useAuthStore.getState().resetRedirect();
     useAuthStore.getState().clearAuth();
 

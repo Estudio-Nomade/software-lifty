@@ -65,7 +65,8 @@ export const useAuthStore = create<AuthState>()(
           token: null,
           driverId: null,
           isAuthenticated: false,
-          needsRedirect: state.isAuthenticated,
+          // Keep pending Welcome bounce if already armed (double clearAuth on logout).
+          needsRedirect: state.isAuthenticated || state.needsRedirect,
           phone: null,
           driverStatus: null,
           onboardingStep: null,

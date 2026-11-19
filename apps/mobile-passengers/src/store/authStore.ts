@@ -109,8 +109,9 @@ export const useAuthStore = create<AuthState>()(
             email: null,
             fullName: null,
             isAuthenticated: false,
-            // Only bounce to Welcome if we were actually logged in (not guest ghost clear).
-            needsRedirect: state.isAuthenticated,
+            // Only bounce to Welcome if we were logged in — keep if already armed
+            // (double clearAuth: listener + explicit signOut).
+            needsRedirect: state.isAuthenticated || state.needsRedirect,
           };
         }),
       clearAuthLocal: () => {

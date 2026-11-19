@@ -52,9 +52,43 @@ export function isOAuthLocalSignOutInFlight(): boolean {
 }
 
 /**
+ * Intentional user logout (Cerrar sesión / delete account).
+ * Distinguishes real sign-out from stale SIGNED_OUT after login race —
+ * both look like "store has session + live null" without this flag.
+ */
+let userLogoutInFlight = false;
+let userLogoutGraceUntil = 0;
+
+const USER_LOGOUT_GRACE_MS = 2_500;
+
+export function beginUserLogout(): void {
+  userLogoutInFlight = true;
+  userLogoutGraceUntil = 0;
+}
+
+export function endUserLogout(): void {
+  userLogoutInFlight = false;
+  userLogoutGraceUntil = Date.now() + USER_LOGOUT_GRACE_MS;
+}
+
+/** Drop logout flag + grace (new session established — never treat as logout). */
+export function clearUserLogout(): void {
+  userLogoutInFlight = false;
+  userLogoutGraceUntil = 0;
+}
+
+export function isUserLogoutInFlight(): boolean {
+  if (userLogoutInFlight) return true;
+  if (userLogoutGraceUntil > 0 && Date.now() < userLogoutGraceUntil) return true;
+  return false;
+}
+
+/**
  * Pure policy for SIGNED_OUT → store action (unit-tested).
  * - oauth prep / attempt / grace → clearAuthLocal (never needsRedirect)
  * - live session already present (stale SIGNED_OUT after new login) → resync
+ * - intentional user logout → clearAuth (Welcome redirect) even if store still has token
+ * - store already has new login, no live, not user logout → keepStore
  * - else → clearAuth (user-facing logout / Welcome)
  */
 export function resolveSignedOutStoreAction(input: {
@@ -63,12 +97,19 @@ export function resolveSignedOutStoreAction(input: {
   liveSessionExists: boolean;
   /** Zustand already holds a session (password/Google setSession raced ahead). */
   storeHasSession?: boolean;
+  /** User tapped Cerrar sesión / explicit signOut path. */
+  userLogoutInFlight?: boolean;
 }): 'clearAuthLocal' | 'clearAuth' | 'resync' | 'keepStore' {
   if (input.oauthAttemptActive || input.oauthLocalSignOutInFlight) {
     return 'clearAuthLocal';
   }
+  // Live session wins over logout grace: quick re-login must not be wiped by late SIGNED_OUT.
   if (input.liveSessionExists) {
     return 'resync';
+  }
+  // Must beat storeHasSession: real logout always still has store token when SIGNED_OUT fires.
+  if (input.userLogoutInFlight) {
+    return 'clearAuth';
   }
   // Stale SIGNED_OUT while store already has the new login — do not wipe.
   if (input.storeHasSession) {
@@ -98,6 +139,7 @@ export function markOAuthAttemptSession(session: Session | null | undefined): vo
   // Success: stop treating further SIGNED_OUT as prep (session is real).
   oauthLocalSignOutInFlight = false;
   oauthLocalSignOutGraceUntil = 0;
+  clearUserLogout();
 }
 
 export function getCurrentOAuthAttempt(): OAuthAttemptState | null {
@@ -253,4 +295,6 @@ export function resetOAuthAttemptStateForTests(): void {
   blockedOAuthUserId = null;
   oauthLocalSignOutInFlight = false;
   oauthLocalSignOutGraceUntil = 0;
+  userLogoutInFlight = false;
+  userLogoutGraceUntil = 0;
 }
