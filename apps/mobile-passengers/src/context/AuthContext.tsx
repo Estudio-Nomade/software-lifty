@@ -12,6 +12,7 @@ import { getFriendlyAuthError } from '../lib/authErrors';
 import { unregisterPush } from '../lib/notifications';
 import {
   beginUserLogout,
+  clearUserLogout,
   endUserLogout,
   getCurrentOAuthAttempt,
   isOAuthLocalSignOutInFlight,
@@ -60,6 +61,7 @@ function googleDisplayName(metadata: Record<string, unknown> | undefined): strin
 function syncStore(session: Session | null) {
   const store = useAuthStore.getState();
   if (session?.access_token) {
+    clearUserLogout();
     const metadata = session.user?.user_metadata as Record<string, unknown> | undefined;
     store.setSession(
       session.access_token,

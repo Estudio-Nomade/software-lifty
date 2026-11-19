@@ -71,6 +71,12 @@ export function endUserLogout(): void {
   userLogoutGraceUntil = Date.now() + USER_LOGOUT_GRACE_MS;
 }
 
+/** Drop logout flag + grace (new session established — never treat as logout). */
+export function clearUserLogout(): void {
+  userLogoutInFlight = false;
+  userLogoutGraceUntil = 0;
+}
+
 export function isUserLogoutInFlight(): boolean {
   if (userLogoutInFlight) return true;
   if (userLogoutGraceUntil > 0 && Date.now() < userLogoutGraceUntil) return true;
@@ -80,8 +86,8 @@ export function isUserLogoutInFlight(): boolean {
 /**
  * Pure policy for SIGNED_OUT → store action (unit-tested).
  * - oauth prep / attempt / grace → clearAuthLocal (never needsRedirect)
- * - intentional user logout → clearAuth (Welcome redirect) even if store still has token
  * - live session already present (stale SIGNED_OUT after new login) → resync
+ * - intentional user logout → clearAuth (Welcome redirect) even if store still has token
  * - store already has new login, no live, not user logout → keepStore
  * - else → clearAuth (user-facing logout / Welcome)
  */
@@ -97,12 +103,13 @@ export function resolveSignedOutStoreAction(input: {
   if (input.oauthAttemptActive || input.oauthLocalSignOutInFlight) {
     return 'clearAuthLocal';
   }
+  // Live session wins over logout grace: quick re-login must not be wiped by late SIGNED_OUT.
+  if (input.liveSessionExists) {
+    return 'resync';
+  }
   // Must beat storeHasSession: real logout always still has store token when SIGNED_OUT fires.
   if (input.userLogoutInFlight) {
     return 'clearAuth';
-  }
-  if (input.liveSessionExists) {
-    return 'resync';
   }
   // Stale SIGNED_OUT while store already has the new login — do not wipe.
   if (input.storeHasSession) {
@@ -132,6 +139,7 @@ export function markOAuthAttemptSession(session: Session | null | undefined): vo
   // Success: stop treating further SIGNED_OUT as prep (session is real).
   oauthLocalSignOutInFlight = false;
   oauthLocalSignOutGraceUntil = 0;
+  clearUserLogout();
 }
 
 export function getCurrentOAuthAttempt(): OAuthAttemptState | null {

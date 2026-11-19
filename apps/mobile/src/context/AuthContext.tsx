@@ -13,6 +13,7 @@ import { stopTracking } from '../lib/location';
 import { unregisterPush } from '../lib/notifications';
 import {
   beginUserLogout,
+  clearUserLogout,
   endUserLogout,
   getCurrentOAuthAttempt,
   isOAuthLocalSignOutInFlight,
@@ -59,6 +60,7 @@ function normalizeEmail(email: string): string {
 function syncStore(session: Session | null) {
   const store = useAuthStore.getState();
   if (session?.access_token) {
+    clearUserLogout();
     store.setSession(session.access_token, session.user?.id ?? null);
   }
 }

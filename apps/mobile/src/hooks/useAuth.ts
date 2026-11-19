@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { stopTracking } from '../lib/location';
+import { unregisterPush } from '../lib/notifications';
 import { beginUserLogout, endUserLogout } from '../lib/oauthSessionRecovery';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
@@ -133,6 +134,7 @@ export function useSignOut() {
         await stopTracking().catch(() => {});
 
         if (token) {
+          await unregisterPush();
           try {
             await apiClient.post('/auth/logout');
           } catch {

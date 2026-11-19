@@ -5,6 +5,7 @@ import {
   beginUserLogout,
   canFinishAuthCallbackWithSession,
   clearOAuthAttempt,
+  clearUserLogout,
   endUserLogout,
   getCurrentOAuthAttempt,
   isBlockedOAuthUser,
@@ -331,6 +332,18 @@ describe('resolveSignedOutStoreAction / oauth local sign-out', () => {
     ).toBe('clearAuth');
   });
 
+  it('live session resyncs even during user-logout grace (quick re-login)', () => {
+    expect(
+      resolveSignedOutStoreAction({
+        oauthAttemptActive: false,
+        oauthLocalSignOutInFlight: false,
+        liveSessionExists: true,
+        storeHasSession: true,
+        userLogoutInFlight: true,
+      }),
+    ).toBe('resync');
+  });
+
   it('real SIGNED_OUT clears with redirect path', () => {
     expect(
       resolveSignedOutStoreAction({
@@ -346,6 +359,14 @@ describe('resolveSignedOutStoreAction / oauth local sign-out', () => {
     expect(isUserLogoutInFlight()).toBe(true);
     endUserLogout();
     expect(isUserLogoutInFlight()).toBe(true); // grace window
+  });
+
+  it('clearUserLogout drops grace so re-login is not treated as logout', () => {
+    beginUserLogout();
+    endUserLogout();
+    expect(isUserLogoutInFlight()).toBe(true);
+    clearUserLogout();
+    expect(isUserLogoutInFlight()).toBe(false);
   });
 
   it('beginOAuthLocalSignOut marks in-flight until attempt mark', () => {
