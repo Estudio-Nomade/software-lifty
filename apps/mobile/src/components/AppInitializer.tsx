@@ -268,9 +268,10 @@ function NotificationSetup() {
     });
     let pushCleanedUp = false;
     let tokenSub: { remove: () => void } | null = null;
-    // Device token rotated by the OS → register the new Expo token.
+    // Device token rotated by the OS → register the new Expo token (stale/backoff path;
+    // never force — avoids POST storms when Expo re-emits the same token).
     void addPushTokenListener(() => {
-      void ensurePushRegistration();
+      void ensurePushRegistrationIfStale();
     }).then((sub) => {
       if (pushCleanedUp) sub?.remove();
       else tokenSub = sub;
