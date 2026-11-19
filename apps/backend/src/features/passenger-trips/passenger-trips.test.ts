@@ -1314,6 +1314,139 @@ describe('Passenger Trips', () => {
     expect(assigned?.status).toBe('offered');
   });
 
+  test('matching: free approved online driver still matches', async () => {
+    const token = await createPassengerToken();
+    const freeId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const { data: trip } = await createTrip(token);
+    const assigned = await pollAssigned(trip.id);
+    expect(assigned?.driver_id).toBe(freeId);
+    expect(assigned?.status).toBe('offered');
+  });
+
+  test('matching: nearby online driver with in_trip is excluded; free farther wins', async () => {
+    const token = await createPassengerToken();
+    const busyId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const freeId = await createDriverWithLocation(token, origin.lat + 0.002, origin.lng);
+    const db = getDb();
+    await db.insert(trips).values({
+      driver_id: busyId,
+      status: 'in_trip',
+      origin_lat: origin.lat,
+      origin_lng: origin.lng,
+      dest_lat: dest.lat,
+      dest_lng: dest.lng,
+      total_fare: 1000,
+      platform_fee: 100,
+      driver_earnings: 900,
+      vehicle_type: 'auto',
+    });
+
+    const { data: trip } = await createTrip(token);
+    const assigned = await pollAssigned(trip.id);
+    expect(assigned?.driver_id).toBe(freeId);
+    expect(assigned?.driver_id).not.toBe(busyId);
+    expect(assigned?.status).toBe('offered');
+  });
+
+  test('matching: driver with offered on another trip is excluded', async () => {
+    const token = await createPassengerToken();
+    const busyId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const freeId = await createDriverWithLocation(token, origin.lat + 0.002, origin.lng);
+    const db = getDb();
+    await db.insert(trips).values({
+      driver_id: busyId,
+      status: 'offered',
+      origin_lat: origin.lat,
+      origin_lng: origin.lng,
+      dest_lat: dest.lat,
+      dest_lng: dest.lng,
+      total_fare: 1000,
+      platform_fee: 100,
+      driver_earnings: 900,
+      vehicle_type: 'auto',
+      expires_at: new Date(Date.now() + 20_000),
+    });
+
+    const { data: trip } = await createTrip(token);
+    const assigned = await pollAssigned(trip.id);
+    expect(assigned?.driver_id).toBe(freeId);
+    expect(assigned?.driver_id).not.toBe(busyId);
+  });
+
+  test('matching: only busy nearby drivers → no match', async () => {
+    const token = await createPassengerToken();
+    const busyId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const db = getDb();
+    await db.insert(trips).values({
+      driver_id: busyId,
+      status: 'en_route',
+      origin_lat: origin.lat,
+      origin_lng: origin.lng,
+      dest_lat: dest.lat,
+      dest_lng: dest.lng,
+      total_fare: 1000,
+      platform_fee: 100,
+      driver_earnings: 900,
+      vehicle_type: 'auto',
+    });
+
+    const { data: trip } = await createTrip(token);
+    await new Promise((r) => setTimeout(r, 300));
+    const row = await pollAssigned(trip.id, 500);
+    expect(row?.driver_id).toBeNull();
+    expect(row?.status).toBe('pending');
+  });
+
+  test('matching: rematch skips busy driver after reject', async () => {
+    const passengerToken = await createPassengerToken();
+    const first = await createDriverWithLocationAndToken(origin.lat, origin.lng);
+    const busyFarther = await createDriverWithLocation(passengerToken, origin.lat + 0.002, origin.lng);
+    const freeFarthest = await createDriverWithLocation(
+      passengerToken,
+      origin.lat + 0.004,
+      origin.lng,
+    );
+    const db = getDb();
+    await db.insert(trips).values({
+      driver_id: busyFarther,
+      status: 'accepted',
+      origin_lat: origin.lat,
+      origin_lng: origin.lng,
+      dest_lat: dest.lat,
+      dest_lng: dest.lng,
+      total_fare: 1000,
+      platform_fee: 100,
+      driver_earnings: 900,
+      vehicle_type: 'auto',
+    });
+
+    const { data: trip } = await createTrip(passengerToken);
+    const assigned = await pollAssigned(trip.id);
+    expect(assigned?.driver_id).toBe(first.driverId);
+
+    const { status: rejectStatus } = await request(
+      'POST',
+      `/api/trips/${trip.id}/reject`,
+      undefined,
+      first.token,
+    );
+    expect(rejectStatus).toBe(200);
+
+    let rematched: (typeof trips.$inferSelect) | null = null;
+    for (let i = 0; i < 40; i++) {
+      const [row] = await db.select().from(trips).where(eq(trips.id, trip.id));
+      if (row?.driver_id === freeFarthest) {
+        rematched = row;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+
+    expect(rematched?.driver_id).toBe(freeFarthest);
+    expect(rematched?.driver_id).not.toBe(busyFarther);
+    expect(rematched?.status).toBe('offered');
+  });
+
   test('matching: never offers a trip to the requester\'s own driver profile (dual role)', async () => {
     const { driverId: selfDriverId, token } = await createDriverWithLocationAndToken(
       origin.lat,
