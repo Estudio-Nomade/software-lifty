@@ -11,12 +11,11 @@ const ADVISORY_LOCK_KEY = 42;
 // disconnects within the window keep the driver eligible for matching + push.
 export const DRIVER_OFFLINE_GRACE_MS = 10 * 60 * 1000;
 
-// Trip statuses that mean a driver is actively on a trip and must never be
-// marked offline by the stale-heartbeat cleanup. Mirrors the state machine in
-// features/trips/service.ts and the client's isLiveTrip() — note the legacy
-// `driver_arrived` / `in_progress` names were removed in favour of the current
-// ones (`offered`, `en_route`, `waiting`, `in_trip`).
-const ACTIVE_TRIP_STATUSES = [
+// Trip statuses that mean a driver is busy (active offer or live trip).
+// Used by stale-heartbeat cleanup (never mark offline) and passenger matching
+// (exclude from findNearbyDrivers). Mirrors trips/service state machine —
+// legacy `driver_arrived` / `in_progress` replaced by offered/en_route/waiting/in_trip.
+export const ACTIVE_TRIP_STATUSES = [
   'offered',
   'request_received',
   'accepted',

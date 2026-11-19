@@ -1,4 +1,4 @@
-import { and, eq, gt, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNotNull, ne, notInArray, or, sql } from 'drizzle-orm';
 import { db } from '../../shared/db/client';
 import {
   driverLocations,
@@ -8,7 +8,7 @@ import {
   users,
   vehicles,
 } from '../../shared/db/schema';
-import { DRIVER_OFFLINE_GRACE_MS } from '../../shared/lib/cleanup';
+import { ACTIVE_TRIP_STATUSES, DRIVER_OFFLINE_GRACE_MS } from '../../shared/lib/cleanup';
 import { haversineDistance } from '../../shared/lib/geo';
 import { logger } from '../../shared/lib/logger';
 import { OFFER_PUSH_TTL_SECONDS, sendPushToUserDetailed } from '../../shared/lib/push';
@@ -69,7 +69,12 @@ export async function findNearbyDrivers(
     conditions.push(ne(drivers.user_id, passengerUserId));
   }
   const blocked = await listBlockedDriverIds();
-  const excluded = [...new Set([...excludeDriverIds, ...blocked])];
+  const busyRows = await db
+    .selectDistinct({ driverId: trips.driver_id })
+    .from(trips)
+    .where(and(isNotNull(trips.driver_id), inArray(trips.status, [...ACTIVE_TRIP_STATUSES])));
+  const busyIds = busyRows.map((r) => r.driverId).filter((id): id is string => !!id);
+  const excluded = [...new Set([...excludeDriverIds, ...blocked, ...busyIds])];
   if (excluded.length > 0) {
     conditions.push(notInArray(drivers.id, excluded));
   }
