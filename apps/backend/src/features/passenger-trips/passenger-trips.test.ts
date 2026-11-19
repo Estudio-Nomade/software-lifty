@@ -25,8 +25,10 @@ import {
   users,
   vehicles,
 } from '../../shared/db/schema';
+import * as geo from '../../shared/lib/geo';
 import { tripService } from '../trips/service';
 import { createTestAuthPlugin, createTestToken } from '../../shared/testing/utils';
+import { findNearbyDrivers } from './matching.service';
 
 let app: any;
 let testId = 0;
@@ -1630,5 +1632,115 @@ describe('Passenger Trips', () => {
     expect(autoRes.data.vehicle_type).toBe('auto');
     // Not asserting inequality (rates can coincide at edge) — only that type stuck.
     expect(assigned?.vehicle_type).not.toBe('auto');
+  });
+
+  test('matching: ranks by ETA not haversine — farther faster route wins offer', async () => {
+    const token = await createPassengerToken();
+    // Closer straight-line (~0 km) but slow route; farther (~0.22 km) but fast ETA.
+    const nearSlowId = await createDriverWithLocation(token, origin.lat, origin.lng);
+    const farFastId = await createDriverWithLocation(token, origin.lat + 0.002, origin.lng);
+
+    const matrixSpy = spyOn(geo, 'distanceMatrix').mockImplementation(
+      async (olat: number, _olng: number, _dlat: number, _dlng: number) => {
+        // near driver sits on origin lat; far is offset
+        const isNear = Math.abs(olat - origin.lat) < 0.0005;
+        if (isNear) {
+          return { distance_km: 1.2, duration_minutes: 12 };
+        }
+        return { distance_km: 1.8, duration_minutes: 4 };
+      },
+    );
+
+    try {
+      const ranked = await findNearbyDrivers(origin.lat, origin.lng, 8, [], 'auto');
+      expect(ranked.length).toBe(2);
+      expect(ranked[0].driverId).toBe(farFastId);
+      expect(ranked[0].etaMinutes).toBe(4);
+      expect(ranked[1].driverId).toBe(nearSlowId);
+      expect(ranked[1].etaMinutes).toBe(12);
+      expect(ranked[0].distance).toBeGreaterThan(ranked[1].distance);
+
+      const { data: trip } = await createTrip(token);
+      const assigned = await pollAssigned(trip.id);
+      expect(assigned?.driver_id).toBe(farFastId);
+      expect(assigned?.status).toBe('offered');
+    } finally {
+      matrixSpy.mockRestore();
+    }
+  });
+
+  test('matching: distanceMatrix throw per row falls back to haversine×3 proxy', async () => {
+    const token = await createPassengerToken();
+    const onlyId = await createDriverWithLocation(token, origin.lat + 0.001, origin.lng);
+
+    // Only assert findNearbyDrivers fail-soft. Do not leave a throwing spy during
+    // trip create — resolveRouteDistance also calls distanceMatrix.
+    const matrixSpy = spyOn(geo, 'distanceMatrix').mockImplementation(async () => {
+      throw new Error('OSRM down');
+    });
+
+    try {
+      const ranked = await findNearbyDrivers(origin.lat, origin.lng, 8, [], 'auto');
+      expect(ranked.length).toBe(1);
+      expect(ranked[0].driverId).toBe(onlyId);
+      expect(ranked[0].etaMinutes).toBe(Math.max(1, Math.round(ranked[0].distance * 3)));
+      expect(Number.isFinite(ranked[0].etaMinutes)).toBe(true);
+    } finally {
+      matrixSpy.mockRestore();
+    }
+  });
+
+  test('matching: ETA rank keeps exclusive serial — single offered driver', async () => {
+    const token = await createPassengerToken();
+    await createDriverWithLocation(token, origin.lat, origin.lng);
+    await createDriverWithLocation(token, origin.lat + 0.002, origin.lng);
+
+    const matrixSpy = spyOn(geo, 'distanceMatrix').mockImplementation(
+      async (olat: number) => {
+        const isNear = Math.abs(olat - origin.lat) < 0.0005;
+        return isNear
+          ? { distance_km: 2, duration_minutes: 15 }
+          : { distance_km: 2.5, duration_minutes: 5 };
+      },
+    );
+
+    try {
+      const { data: trip } = await createTrip(token);
+      const assigned = await pollAssigned(trip.id);
+      expect(assigned?.status).toBe('offered');
+      expect(assigned?.driver_id).toBeTruthy();
+
+      const db = getDb();
+      const offered = await db.select().from(trips).where(eq(trips.status, 'offered'));
+      expect(offered.filter((t) => t.id === trip.id)).toHaveLength(1);
+    } finally {
+      matrixSpy.mockRestore();
+    }
+  });
+
+  test('matching: slow distanceMatrix falls back to proxy within eta deadline', async () => {
+    const token = await createPassengerToken();
+    const onlyId = await createDriverWithLocation(token, origin.lat + 0.001, origin.lng);
+
+    const matrixSpy = spyOn(geo, 'distanceMatrix').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve({ distance_km: 9, duration_minutes: 99 }), 10_000);
+        }),
+    );
+
+    try {
+      const t0 = Date.now();
+      const ranked = await findNearbyDrivers(origin.lat, origin.lng, 8, [], 'auto');
+      const elapsed = Date.now() - t0;
+      expect(ranked.length).toBe(1);
+      expect(ranked[0].driverId).toBe(onlyId);
+      expect(ranked[0].etaMinutes).toBe(Math.max(1, Math.round(ranked[0].distance * 3)));
+      expect(ranked[0].etaMinutes).not.toBe(99);
+      // MATCH_ETA_TIMEOUT_MS = 2500; allow jitter, must not wait full OSRM hang.
+      expect(elapsed).toBeLessThan(5_000);
+    } finally {
+      matrixSpy.mockRestore();
+    }
   });
 });
