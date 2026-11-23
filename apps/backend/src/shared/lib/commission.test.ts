@@ -6,8 +6,11 @@ import { getDb, resetDb } from '../db/client';
 import { commissionPhases, platformConfig } from '../db/schema';
 import {
   DEFAULT_DEBT_CAP_ARS,
+  driverBlurbForRate,
+  driverTitleForPhase,
   getCommissionConfig,
   getCommissionRate,
+  getCommissionScheme,
   getDebtCapArs,
 } from './commission';
 
@@ -128,5 +131,50 @@ describe('getCommissionRate', () => {
     expect(open.phase).toBe('Crecimiento');
     expect(open.phaseDayStart).toBe(121);
     expect(open.phaseDayEnd).toBeNull();
+  });
+});
+
+describe('getCommissionScheme', () => {
+  test('maps stages without exposing day counters and marks current', async () => {
+    const db = getDb();
+    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
+    const scheme = await getCommissionScheme(db, new Date('2026-10-08T12:00:00Z'));
+
+    expect(scheme.current.phase).toBe('Medición');
+    expect(scheme.current.title).toBe('Comisión promocional');
+    expect(scheme.current.rate_pct).toBe(5);
+    expect(scheme.current.blurb).toContain('5%');
+    expect(scheme.stages).toHaveLength(4);
+    expect(scheme.stages.map((s) => s.status)).toEqual([
+      'completed',
+      'current',
+      'upcoming',
+      'upcoming',
+    ]);
+    expect(scheme.stages[0]?.title).toBe('Beneficio de lanzamiento');
+    expect(JSON.stringify(scheme)).not.toContain('current_day');
+    expect(JSON.stringify(scheme)).not.toContain('day_start');
+    expect(scheme.footnote.toLowerCase()).toContain('viaje');
+  });
+
+  test('zero-rate current uses keep-100% blurb', async () => {
+    const db = getDb();
+    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
+    const scheme = await getCommissionScheme(db, new Date('2026-10-01T12:00:00Z'));
+    expect(scheme.current.rate).toBe(0);
+    expect(scheme.current.blurb).toBe('Hoy te quedás con el 100% de tus ganancias.');
+    expect(scheme.stages[0]?.status).toBe('current');
+  });
+});
+
+describe('driver copy helpers', () => {
+  test('title falls back to phase name', () => {
+    expect(driverTitleForPhase('Custom Ops')).toBe('Custom Ops');
+    expect(driverTitleForPhase('Lanzamiento')).toBe('Beneficio de lanzamiento');
+  });
+
+  test('blurb switches at zero rate', () => {
+    expect(driverBlurbForRate(0)).toContain('100%');
+    expect(driverBlurbForRate(0.15)).toContain('15%');
   });
 });

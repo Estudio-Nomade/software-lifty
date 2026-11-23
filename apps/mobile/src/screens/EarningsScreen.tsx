@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiClient } from '../api/client';
 import type { EarningsDaily } from '../api/types';
 import { Card } from '../components/Card';
+import { CommissionSchemeCard } from '../components/CommissionSchemeCard';
 import { Navbar } from '../components/Navbar';
 import { SkeletonCard } from '../components/feedback/SkeletonCard';
 import { Text } from '../components/ui/Text';
@@ -13,9 +14,7 @@ import { useTabBar } from '../context/TabBarContext';
 import { useAppNavigation } from '../hooks/useAppNavigation';
 import { useTabBarScrollVisibility } from '../hooks/useTabBarScrollVisibility';
 import {
-  formatCommissionBanner,
   formatDebtCapLabel,
-  isZeroCommissionPhase,
   normalizePlatformDebt,
   shouldShowPlatformDebt,
 } from '../lib/commission';
@@ -58,9 +57,6 @@ export const EarningsScreen: React.FC = () => {
     tripsRevenueTotal > 0 ? Math.round((retentionTotal / tripsRevenueTotal) * 100) : null;
   const retentionPercent = serverRatePct ?? realizedRetentionPercent;
   const retentionPercentLabel = retentionPercent == null ? '' : ` (${retentionPercent}%)`;
-  const commissionBanner =
-    earnings?.commission != null ? formatCommissionBanner(earnings.commission) : null;
-  const commissionIsZero = isZeroCommissionPhase(earnings?.commission);
 
   const weekRetention = earnings?.week_platform_fee ?? 0;
   const weekFare = earnings?.week_total_fare ?? 0;
@@ -110,6 +106,10 @@ export const EarningsScreen: React.FC = () => {
           </View>
         ) : earnings && earnings.total > 0 ? (
           <>
+            {earnings.commission_scheme ? (
+              <CommissionSchemeCard scheme={earnings.commission_scheme} />
+            ) : null}
+
             <Card style={styles.totalCard} padding={theme.spacing.lg}>
               <Text style={styles.totalLabel}>Ganaste hoy</Text>
               <Text style={styles.totalAmount}>{formatCurrency(earnings.total)}</Text>
@@ -239,18 +239,6 @@ export const EarningsScreen: React.FC = () => {
                   {retentionPercentLabel}
                 </Text>
               </View>
-              {commissionBanner ? (
-                <View style={styles.exemptNotice}>
-                  <Ionicons
-                    name={
-                      commissionIsZero ? 'checkmark-circle-outline' : 'information-circle-outline'
-                    }
-                    size={16}
-                    color={commissionIsZero ? theme.colors.turquoise : theme.colors.mediumGray}
-                  />
-                  <Text style={styles.exemptNoticeText}>{commissionBanner}</Text>
-                </View>
-              ) : null}
               <View style={styles.divider} />
               <Text style={styles.sectionLabel}>Esta semana</Text>
               <View style={styles.row}>
@@ -337,6 +325,10 @@ export const EarningsScreen: React.FC = () => {
           </>
         ) : (
           <>
+            {earnings?.commission_scheme ? (
+              <CommissionSchemeCard scheme={earnings.commission_scheme} />
+            ) : null}
+
             <Card style={styles.totalCard} padding={theme.spacing.lg}>
               <Text style={styles.totalLabel}>Ganaste hoy</Text>
               <Text style={[styles.totalAmount, { color: theme.colors.mediumGray }]}>$0</Text>
@@ -437,18 +429,6 @@ export const EarningsScreen: React.FC = () => {
                   {retentionPercentLabel}
                 </Text>
               </View>
-              {commissionBanner ? (
-                <View style={styles.exemptNotice}>
-                  <Ionicons
-                    name={
-                      commissionIsZero ? 'checkmark-circle-outline' : 'information-circle-outline'
-                    }
-                    size={16}
-                    color={commissionIsZero ? theme.colors.turquoise : theme.colors.mediumGray}
-                  />
-                  <Text style={styles.exemptNoticeText}>{commissionBanner}</Text>
-                </View>
-              ) : null}
               <View style={styles.divider} />
               <Text style={styles.sectionLabel}>Esta semana</Text>
               <View style={styles.row}>
@@ -633,23 +613,6 @@ const styles = StyleSheet.create({
     fontSize: theme.fontSize.sm,
     fontWeight: theme.fontWeight.medium,
     color: theme.colors.turquoise,
-  },
-  exemptNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: theme.spacing.sm,
-    backgroundColor: theme.colors.surfaceMuted,
-    borderRadius: theme.radius.sm,
-    padding: theme.spacing.sm,
-    marginTop: theme.spacing.xs,
-    marginBottom: theme.spacing.xs,
-  },
-  exemptNoticeText: {
-    flex: 1,
-    fontSize: theme.fontSize.xs,
-    color: theme.colors.turquoise,
-    fontWeight: theme.fontWeight.medium,
-    lineHeight: 18,
   },
   errorSection: {
     width: '100%',
