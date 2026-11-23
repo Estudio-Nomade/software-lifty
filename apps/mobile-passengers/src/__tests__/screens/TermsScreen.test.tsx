@@ -71,7 +71,7 @@ describe('TermsScreen', () => {
     expect(getByText(/resumen del borrador de Términos/i)).toBeTruthy();
 
     await act(async () => {
-      fireEvent.press(getByText('Aceptar'));
+      fireEvent.press(getByText('Continuar'));
     });
     expect(mockReplace).not.toHaveBeenCalled();
 
@@ -84,7 +84,7 @@ describe('TermsScreen', () => {
     });
 
     await act(async () => {
-      fireEvent.press(getByText('Aceptar'));
+      fireEvent.press(getByText('Continuar'));
     });
 
     expect(mockPostLegalAccept).not.toHaveBeenCalled();
@@ -111,7 +111,7 @@ describe('TermsScreen', () => {
     });
 
     await act(async () => {
-      fireEvent.press(getByText('Aceptar'));
+      fireEvent.press(getByText('Continuar'));
     });
 
     expect(mockPostLegalAccept).toHaveBeenCalled();
@@ -137,7 +137,7 @@ describe('TermsScreen', () => {
     expect(openUrl).toHaveBeenCalledWith(TERMS_URL);
 
     expect(mockReplace).not.toHaveBeenCalled();
-    expect(getByText('Aceptar')).toBeTruthy();
+    expect(getByText('Continuar')).toBeTruthy();
 
     openUrl.mockRestore();
   });

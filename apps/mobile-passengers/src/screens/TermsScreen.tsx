@@ -124,45 +124,46 @@ export function TermsScreen() {
               <Text style={styles.legalLinkText}>Ver {TERMS_FULL_LABEL}</Text>
             </Pressable>
           </View>
+
+          {!isReadMode ? (
+            <Pressable
+              style={styles.checkboxRow}
+              onPress={() => setHasAgreed((v) => !v)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: hasAgreed }}
+              accessibilityLabel="He leído y acepto los Términos y Condiciones y la Política de Privacidad"
+            >
+              <View style={[styles.checkbox, hasAgreed && styles.checkboxChecked]}>
+                {hasAgreed ? <Text style={styles.checkmark}>✓</Text> : null}
+              </View>
+              <Text style={styles.checkboxLabel}>
+                He leído y acepto los{' '}
+                <Text
+                  style={styles.inlineLink}
+                  onPress={() => {
+                    void openLegalUrl(TERMS_URL);
+                  }}
+                >
+                  Términos y Condiciones
+                </Text>{' '}
+                y la{' '}
+                <Text
+                  style={styles.inlineLink}
+                  onPress={() => {
+                    void openLegalUrl(PRIVACY_POLICY_URL);
+                  }}
+                >
+                  Política de Privacidad
+                </Text>
+                .
+              </Text>
+            </Pressable>
+          ) : null}
         </Card>
       </ScrollView>
 
       <View style={styles.footer}>
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        {!isReadMode ? (
-          <Pressable
-            style={styles.checkboxRow}
-            onPress={() => setHasAgreed((v) => !v)}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: hasAgreed }}
-            accessibilityLabel="He leído y acepto los Términos y Condiciones y la Política de Privacidad"
-          >
-            <View style={[styles.checkbox, hasAgreed && styles.checkboxChecked]}>
-              {hasAgreed ? <Text style={styles.checkmark}>✓</Text> : null}
-            </View>
-            <Text style={styles.checkboxLabel}>
-              He leído y acepto los{' '}
-              <Text
-                style={styles.inlineLink}
-                onPress={() => {
-                  void openLegalUrl(TERMS_URL);
-                }}
-              >
-                Términos y Condiciones
-              </Text>{' '}
-              y la{' '}
-              <Text
-                style={styles.inlineLink}
-                onPress={() => {
-                  void openLegalUrl(PRIVACY_POLICY_URL);
-                }}
-              >
-                Política de Privacidad
-              </Text>
-              .
-            </Text>
-          </Pressable>
-        ) : null}
         <Button
           variant={isReadMode ? 'secondary' : 'primary'}
           onPress={() => {
@@ -171,7 +172,7 @@ export function TermsScreen() {
           loading={!isReadMode && loading}
           disabled={!isReadMode && (!hasAgreed || loading)}
         >
-          {isReadMode ? 'Volver' : 'Aceptar'}
+          {isReadMode ? 'Volver' : 'Continuar'}
         </Button>
       </View>
     </SafeAreaView>
@@ -260,8 +261,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: theme.spacing.sm,
-    marginBottom: theme.spacing.md,
+    marginTop: theme.spacing.lg,
     minHeight: 44,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.lightGray,
+    paddingTop: theme.spacing.md,
   },
   checkbox: {
     width: 24,

@@ -119,10 +119,6 @@ export const TermsScreen: React.FC = () => {
           </Pressable>
         </View>
 
-        <View style={{ height: 48 }} />
-      </ScrollView>
-      <View style={styles.footer}>
-        {error !== null && <Text style={styles.errorText}>{error}</Text>}
         {!isReadMode ? (
           <Pressable
             style={styles.checkboxRow}
@@ -157,8 +153,13 @@ export const TermsScreen: React.FC = () => {
             </Text>
           </Pressable>
         ) : null}
+
+        <View style={{ height: 24 }} />
+      </ScrollView>
+      <View style={styles.footer}>
+        {error !== null && <Text style={styles.errorText}>{error}</Text>}
         <Button
-          title={isReadMode ? 'VOLVER' : loading ? '' : 'ACEPTAR Y CONTINUAR'}
+          title={isReadMode ? 'VOLVER' : loading ? '' : 'Continuar'}
           onPress={handleAccept}
           loading={!isReadMode && loading}
           disabled={!isReadMode && (!hasAgreed || loading)}
@@ -237,9 +238,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
     marginBottom: theme.spacing.md,
     width: '100%',
-    maxWidth: 480,
     minHeight: 44,
   },
   checkbox: {

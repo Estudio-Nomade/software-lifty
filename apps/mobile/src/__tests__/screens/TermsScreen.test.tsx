@@ -47,7 +47,7 @@ describe('TermsScreen', () => {
     const { getByText, getByLabelText } = await render(<TermsScreen />);
 
     await act(async () => {
-      fireEvent.press(getByText('ACEPTAR Y CONTINUAR'));
+      fireEvent.press(getByText('Continuar'));
     });
     expect(mockPostLegalAccept).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
@@ -61,7 +61,7 @@ describe('TermsScreen', () => {
     });
 
     await act(async () => {
-      fireEvent.press(getByText('ACEPTAR Y CONTINUAR'));
+      fireEvent.press(getByText('Continuar'));
     });
 
     expect(mockPostLegalAccept).toHaveBeenCalled();
