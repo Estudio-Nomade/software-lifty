@@ -1,9 +1,11 @@
 import { useRouter, useSegments } from 'expo-router';
 import { useCallback, useMemo, useRef } from 'react';
+import { BACK_FALLBACK } from '../lib/backFallback';
 import { SCREEN_TO_ROUTE, type ScreenName, routePathForScreen } from '../lib/screenRoutes';
 
 export type { ScreenName };
 export { routePathForScreen };
+export { BACK_FALLBACK };
 
 export interface ScreenParams {
   KYCWebView: { url: string };
@@ -15,22 +17,6 @@ export interface ScreenParams {
     tipAmount?: string;
   };
 }
-
-const BACK_FALLBACK: Record<string, string> = {
-  'onboarding-vehicle': 'OnboardingStep1',
-  'onboarding-step2': 'OnboardingVehicle',
-  'kyc-verify': 'OnboardingStep1',
-  'kyc-webview': 'KYCVerify',
-  'waiting-approval': 'OnboardingStep2',
-  'select-district': 'SelectProvince',
-  'district-terms': 'SelectDistrict',
-  support: 'Profile',
-  terms: 'Profile',
-  messages: 'Profile',
-  'delete-account': 'Profile',
-  'cancellation-policy': 'Profile',
-  'pay-commission-debt': 'Earnings',
-};
 
 export function useAppNavigation() {
   const router = useRouter();
