@@ -13,6 +13,6 @@ export const BACK_FALLBACK: Record<string, string> = {
   'delete-account': 'Profile',
   'cancellation-policy': 'Profile',
   'pay-commission-debt': 'Earnings',
-  // Tab Viajes is often stack root (TabBar replace) — back must still exit to home.
+  // Tab Viajes → always Inicio (goBack short-circuits before stack pop; never TyC).
   'trip-history': 'Active',
 };

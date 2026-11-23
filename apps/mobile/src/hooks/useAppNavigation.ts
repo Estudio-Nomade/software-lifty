@@ -51,13 +51,19 @@ export function useAppNavigation() {
   );
 
   const goBack = useCallback(() => {
+    const current = segmentsRef.current;
+    const currentRoute = current[current.length - 1] ?? '';
+    // Tab Viajes: always home — never pop into TyC / random stack under the tab.
+    if (currentRoute === 'trip-history') {
+      replace(BACK_FALLBACK['trip-history'] ?? 'Active');
+      return;
+    }
+
     if (router.canGoBack()) {
       router.back();
       return;
     }
 
-    const current = segmentsRef.current;
-    const currentRoute = current[current.length - 1] ?? '';
     const fallback = BACK_FALLBACK[currentRoute];
     if (fallback) {
       replace(fallback);
