@@ -41,6 +41,7 @@ describe('route lists', () => {
 
   it('includes complete-profile as public post-auth flow', () => {
     expect(PUBLIC_ROUTES).toContain('complete-profile');
+    expect(POST_AUTH_FLOW_ROUTES).toContain('terms');
     expect(POST_AUTH_FLOW_ROUTES).toContain('complete-profile');
     expect(POST_AUTH_FLOW_ROUTES).toContain('location-permissions');
   });

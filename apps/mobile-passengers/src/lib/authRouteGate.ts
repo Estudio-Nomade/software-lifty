@@ -28,7 +28,7 @@ export const DUAL_USE_ROUTES = ['terms'] as const;
  * Post-auth onboarding: authed user stays; screen decides next step.
  * Not dual-use — incomplete users land here; complete users leave via screen/gate.
  */
-export const POST_AUTH_FLOW_ROUTES = ['complete-profile', 'location-permissions'] as const;
+export const POST_AUTH_FLOW_ROUTES = ['terms', 'complete-profile', 'location-permissions'] as const;
 
 const DUAL_USE_SET = new Set<string>(DUAL_USE_ROUTES);
 const POST_AUTH_FLOW_SET = new Set<string>(POST_AUTH_FLOW_ROUTES);

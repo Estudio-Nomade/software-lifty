@@ -94,7 +94,12 @@ export function AuthCallbackScreen() {
     if (isPostOAuthHandoffCompleted()) {
       const target = getLastOAuthHandoffTarget() ?? '/home';
       router.replace(
-        target as '/complete-profile' | '/location-permissions' | '/home' | '/login-credentials',
+        target as
+          | '/terms'
+          | '/complete-profile'
+          | '/location-permissions'
+          | '/home'
+          | '/login-credentials',
       );
       endOAuthBrandBridgeAfterPaint();
       return;
@@ -130,7 +135,12 @@ export function AuthCallbackScreen() {
         console.log('[AuthCallback] finishOk target=', target);
       }
       router.replace(
-        target as '/complete-profile' | '/location-permissions' | '/home' | '/login-credentials',
+        target as
+          | '/terms'
+          | '/complete-profile'
+          | '/location-permissions'
+          | '/home'
+          | '/login-credentials',
       );
     };
 

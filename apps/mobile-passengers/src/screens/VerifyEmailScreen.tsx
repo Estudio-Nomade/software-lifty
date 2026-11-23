@@ -61,7 +61,8 @@ export function VerifyEmailScreen() {
       const { data: sessionData } = await supabase.auth.getSession();
       const uid = sessionData.session?.user?.id ?? null;
       const path = await resolvePassengerPostAuthPath(uid);
-      if (path === '/complete-profile') replace('CompleteProfile');
+      if (path === '/terms') replace('Terms');
+      else if (path === '/complete-profile') replace('CompleteProfile');
       else if (path === '/location-permissions') replace('LocationPermissions');
       else if (path === '/home') replace('Home');
       else replace('Welcome');

@@ -12,6 +12,7 @@ import {
   GENERAL_TERMS_UPDATED_LABEL,
   GENERAL_TERMS_VERSION,
 } from '../legal/generalTermsSummary';
+import { postLegalAccept } from '../legal/legalConsent';
 import {
   PRIVACY_POLICY_LABEL,
   PRIVACY_POLICY_URL,
@@ -36,6 +37,7 @@ export const TermsScreen: React.FC = () => {
   const params = useLocalSearchParams<{ from?: string }>();
   const setTermsAccepted = useAuthStore((s) => s.setTermsAccepted);
   const termsAccepted = useAuthStore((s) => s.termsAccepted);
+  const [hasAgreed, setHasAgreed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -46,25 +48,26 @@ export const TermsScreen: React.FC = () => {
       navigation.goBack();
       return;
     }
+    if (!hasAgreed) return;
 
     setLoading(true);
     setError(null);
     try {
+      await postLegalAccept();
+      setTermsAccepted(true);
       const route = await resolvePostAuthRoute();
       if (route.blockedMessage) {
         setError(route.blockedMessage);
         return;
       }
-      setTermsAccepted(true);
       if (route.screen) {
         navigation.replace(route.screen);
       }
     } catch (err: unknown) {
       // Keep session — network/401 on status must not bounce guest mid-TyC.
-      // User can retry ACEPTAR; Welcome recovery owns real dead-session UX.
       setError(
         userFacingApiMessage(err, {
-          fallback: 'No pudimos verificar tu cuenta. Revisá conexión e intentá de nuevo.',
+          fallback: 'No pudimos registrar tu aceptación. Revisá conexión e intentá de nuevo.',
         }),
       );
     } finally {
@@ -116,15 +119,50 @@ export const TermsScreen: React.FC = () => {
           </Pressable>
         </View>
 
-        <View style={{ height: 48 }} />
+        {!isReadMode ? (
+          <Pressable
+            style={styles.checkboxRow}
+            onPress={() => setHasAgreed((v) => !v)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: hasAgreed }}
+            accessibilityLabel="He leído y acepto los Términos y Condiciones y la Política de Privacidad"
+          >
+            <View style={[styles.checkbox, hasAgreed && styles.checkboxChecked]}>
+              {hasAgreed ? <Text style={styles.checkmark}>✓</Text> : null}
+            </View>
+            <Text style={styles.checkboxLabel}>
+              He leído y acepto los{' '}
+              <Text
+                style={styles.inlineLink}
+                onPress={() => {
+                  void openLegalUrl(TERMS_URL);
+                }}
+              >
+                Términos y Condiciones
+              </Text>{' '}
+              y la{' '}
+              <Text
+                style={styles.inlineLink}
+                onPress={() => {
+                  void openLegalUrl(PRIVACY_POLICY_URL);
+                }}
+              >
+                Política de Privacidad
+              </Text>
+              .
+            </Text>
+          </Pressable>
+        ) : null}
+
+        <View style={{ height: 24 }} />
       </ScrollView>
       <View style={styles.footer}>
         {error !== null && <Text style={styles.errorText}>{error}</Text>}
         <Button
-          title={isReadMode ? 'VOLVER' : loading ? '' : 'ACEPTAR Y CONTINUAR'}
+          title={isReadMode ? 'VOLVER' : loading ? '' : 'Continuar'}
           onPress={handleAccept}
           loading={!isReadMode && loading}
-          disabled={!isReadMode && loading}
+          disabled={!isReadMode && (!hasAgreed || loading)}
           variant={isReadMode ? 'outline' : 'primary'}
           style={styles.button}
         />
@@ -195,6 +233,46 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.lg,
     backgroundColor: theme.colors.surface,
     alignItems: 'center',
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
+    width: '100%',
+    minHeight: 44,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: theme.colors.mediumGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: theme.colors.turquoise,
+    borderColor: theme.colors.turquoise,
+  },
+  checkmark: {
+    color: theme.colors.white,
+    fontSize: 14,
+    fontWeight: theme.fontWeight.bold,
+    lineHeight: 16,
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.deepBlue,
+    lineHeight: 20,
+  },
+  inlineLink: {
+    color: theme.colors.turquoise,
+    fontWeight: theme.fontWeight.semibold,
+    textDecorationLine: 'underline',
   },
   errorText: {
     fontSize: theme.fontSize.sm,

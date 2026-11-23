@@ -11,6 +11,9 @@ interface AuthState {
   sessionRestored: boolean;
   email: string | null;
   fullName: string | null;
+  /** Current TyC+privacy versions accepted (server hydrate + local after POST). */
+  termsAccepted: boolean;
+  setTermsAccepted: (accepted: boolean) => void;
   setSession: (
     token: string | null,
     userId?: string | null,
@@ -63,6 +66,8 @@ export const useAuthStore = create<AuthState>()(
       sessionRestored: false,
       email: null,
       fullName: null,
+      termsAccepted: false,
+      setTermsAccepted: (termsAccepted) => set({ termsAccepted }),
       setSession: (token, userId, email, fullName) =>
         set((state) => {
           if (!token) {
@@ -75,6 +80,7 @@ export const useAuthStore = create<AuthState>()(
               userId: userId !== undefined ? userId : null,
               email: email !== undefined ? email : null,
               fullName: fullName !== undefined ? fullName : null,
+              termsAccepted: false,
               needsRedirect: state.needsRedirect,
             };
           }
@@ -95,6 +101,8 @@ export const useAuthStore = create<AuthState>()(
             userId: nextUserId ?? null,
             email: email !== undefined ? email : identityChanged ? null : state.email,
             fullName: fullName !== undefined ? fullName : identityChanged ? null : state.fullName,
+            // New identity must re-hydrate legal from server.
+            termsAccepted: identityChanged ? false : state.termsAccepted,
             needsRedirect: false,
           };
         }),
@@ -109,6 +117,7 @@ export const useAuthStore = create<AuthState>()(
             email: null,
             fullName: null,
             isAuthenticated: false,
+            termsAccepted: false,
             // Only bounce to Welcome if we were logged in — keep if already armed
             // (double clearAuth: listener + explicit signOut).
             needsRedirect: state.isAuthenticated || state.needsRedirect,
@@ -122,6 +131,7 @@ export const useAuthStore = create<AuthState>()(
           email: null,
           fullName: null,
           isAuthenticated: false,
+          termsAccepted: false,
           needsRedirect: false,
         });
       },
@@ -138,6 +148,7 @@ export const useAuthStore = create<AuthState>()(
         email: state.email,
         fullName: state.fullName,
         isAuthenticated: state.isAuthenticated,
+        termsAccepted: state.termsAccepted,
       }),
       merge: mergePassengerAuthPersist,
     },

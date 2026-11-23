@@ -6,6 +6,7 @@ import {
   NotFoundError,
   ServiceUnavailableError,
   TooManyRequestsError,
+  ValidationError,
 } from '../../shared/lib/errors';
 import { logger } from '../../shared/lib/logger';
 import { getRedis } from '../../shared/lib/redis';
@@ -117,6 +118,9 @@ export const authService = {
         created_at: users.created_at,
         transit_district_id: users.transit_district_id,
         district_name: districts.name,
+        terms_accepted_at: users.terms_accepted_at,
+        terms_version: users.terms_version,
+        privacy_version: users.privacy_version,
       })
       .from(users)
       .leftJoin(districts, eq(users.transit_district_id, districts.id))
@@ -137,6 +141,86 @@ export const authService = {
       created_at: row.created_at?.toISOString() ?? null,
       transit_district_id: row.transit_district_id ?? null,
       district_name: row.district_name ?? null,
+      legal: {
+        terms_version: row.terms_version ?? null,
+        privacy_version: row.privacy_version ?? null,
+        terms_accepted_at: row.terms_accepted_at?.toISOString() ?? null,
+      },
+    };
+  },
+
+  /**
+   * Explicit TyC + privacy accept. Server timestamps; role from DB (not body).
+   * Idempotent when same versions already stored.
+   */
+  async acceptLegal(
+    user: AuthUser,
+    body: { terms_version: string; privacy_version: string; user_type?: string },
+  ) {
+    const termsVersion = body.terms_version?.trim() ?? '';
+    const privacyVersion = body.privacy_version?.trim() ?? '';
+    if (!termsVersion || !privacyVersion) {
+      throw new ValidationError('terms_version y privacy_version son requeridos');
+    }
+
+    const [existing] = await db
+      .select({
+        id: users.id,
+        terms_version: users.terms_version,
+        privacy_version: users.privacy_version,
+        terms_accepted_at: users.terms_accepted_at,
+      })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+
+    if (!existing) throw new NotFoundError('User not found');
+
+    const role = await deriveRole(existing.id);
+    const sameVersions =
+      existing.terms_version === termsVersion && existing.privacy_version === privacyVersion;
+
+    if (sameVersions && existing.terms_accepted_at) {
+      return {
+        terms_accepted_at: existing.terms_accepted_at.toISOString(),
+        terms_version: existing.terms_version as string,
+        privacy_version: existing.privacy_version as string,
+        role,
+      };
+    }
+
+    const acceptedAt = new Date();
+    const [updated] = await db
+      .update(users)
+      .set({
+        terms_accepted_at: acceptedAt,
+        terms_version: termsVersion,
+        privacy_version: privacyVersion,
+        updated_at: acceptedAt,
+      })
+      .where(eq(users.id, user.id))
+      .returning({
+        terms_accepted_at: users.terms_accepted_at,
+        terms_version: users.terms_version,
+        privacy_version: users.privacy_version,
+      });
+
+    if (!updated?.terms_accepted_at) {
+      throw new BadRequestError('No se pudo registrar la aceptación');
+    }
+
+    logger.info('[AUTH] legal-accept', {
+      userId: user.id.split('-')[0],
+      terms_version: termsVersion,
+      privacy_version: privacyVersion,
+      role,
+    });
+
+    return {
+      terms_accepted_at: updated.terms_accepted_at.toISOString(),
+      terms_version: updated.terms_version as string,
+      privacy_version: updated.privacy_version as string,
+      role,
     };
   },
 

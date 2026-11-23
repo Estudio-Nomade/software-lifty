@@ -456,6 +456,13 @@
       "when": 1789800000000,
       "tag": "0063_trip_complete_geo_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1789900000000,
+      "tag": "0064_users_legal_consent",
+      "breakpoints": true
     }
   ]
 }

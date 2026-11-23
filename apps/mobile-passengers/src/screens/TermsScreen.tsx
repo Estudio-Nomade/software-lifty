@@ -10,12 +10,14 @@ import {
   GENERAL_TERMS_UPDATED_LABEL,
   GENERAL_TERMS_VERSION,
 } from '../legal/generalTermsSummary';
+import { postLegalAccept } from '../legal/legalConsent';
 import {
   PRIVACY_POLICY_LABEL,
   PRIVACY_POLICY_URL,
   TERMS_FULL_LABEL,
   TERMS_URL,
 } from '../legal/legalUrls';
+import { resolvePassengerPostAuthPath } from '../lib/postAuthRouting';
 import { useAuthStore } from '../store/authStore';
 import { theme } from '../theme';
 
@@ -31,23 +33,52 @@ export function TermsScreen() {
   const { goBack, replace } = useAppNavigation();
   const params = useLocalSearchParams<{ from?: string }>();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const [accepted, setAccepted] = useState(false);
+  const termsAccepted = useAuthStore((s) => s.termsAccepted);
+  const setTermsAccepted = useAuthStore((s) => s.setTermsAccepted);
+  const [hasAgreed, setHasAgreed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fromProfile = params.from === 'profile';
   const fromRegister = params.from === 'register';
-  const isReadMode = fromProfile || isAuthenticated;
+  // Read mode: profile, or already accepted current versions while authed.
+  const isReadMode = fromProfile || (isAuthenticated && termsAccepted);
 
-  const handleAccept = () => {
-    if (isReadMode || isAuthenticated) {
+  const handleAccept = async () => {
+    if (isReadMode) {
       goBack();
       return;
     }
-    if (accepted) return;
-    setAccepted(true);
-    if (fromRegister) {
-      replace('LoginCredentials');
-    } else {
-      goBack();
+    if (!hasAgreed || loading) return;
+
+    // Unauthenticated register preview: checkbox gates CTA; durable accept is post-login.
+    if (!isAuthenticated) {
+      if (fromRegister) {
+        replace('LoginCredentials');
+      } else {
+        goBack();
+      }
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      await postLegalAccept();
+      setTermsAccepted(true);
+      // skipLegalCheck: avoid race re-hydrate → /terms after a successful POST.
+      const path = await resolvePassengerPostAuthPath(useAuthStore.getState().userId, {
+        skipLegalCheck: true,
+      });
+      if (path === '/complete-profile' || path === '/terms') replace('CompleteProfile');
+      else if (path === '/location-permissions') replace('LocationPermissions');
+      else if (path === '/home') replace('Home');
+      else if (fromRegister) replace('LoginCredentials');
+      else goBack();
+    } catch {
+      setError('No pudimos registrar tu aceptación. Revisá conexión e intentá de nuevo.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -96,16 +127,55 @@ export function TermsScreen() {
               <Text style={styles.legalLinkText}>Ver {TERMS_FULL_LABEL}</Text>
             </Pressable>
           </View>
+
+          {!isReadMode ? (
+            <Pressable
+              style={styles.checkboxRow}
+              onPress={() => setHasAgreed((v) => !v)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: hasAgreed }}
+              accessibilityLabel="He leído y acepto los Términos y Condiciones y la Política de Privacidad"
+            >
+              <View style={[styles.checkbox, hasAgreed && styles.checkboxChecked]}>
+                {hasAgreed ? <Text style={styles.checkmark}>✓</Text> : null}
+              </View>
+              <Text style={styles.checkboxLabel}>
+                He leído y acepto los{' '}
+                <Text
+                  style={styles.inlineLink}
+                  onPress={() => {
+                    void openLegalUrl(TERMS_URL);
+                  }}
+                >
+                  Términos y Condiciones
+                </Text>{' '}
+                y la{' '}
+                <Text
+                  style={styles.inlineLink}
+                  onPress={() => {
+                    void openLegalUrl(PRIVACY_POLICY_URL);
+                  }}
+                >
+                  Política de Privacidad
+                </Text>
+                .
+              </Text>
+            </Pressable>
+          ) : null}
         </Card>
       </ScrollView>
 
       <View style={styles.footer}>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
         <Button
-          variant={isReadMode ? 'secondary' : accepted ? 'secondary' : 'primary'}
-          onPress={handleAccept}
-          loading={!isReadMode && accepted}
+          variant={isReadMode ? 'secondary' : 'primary'}
+          onPress={() => {
+            void handleAccept();
+          }}
+          loading={!isReadMode && loading}
+          disabled={!isReadMode && (!hasAgreed || loading)}
         >
-          {isReadMode ? 'Volver' : accepted ? 'Redirigiendo...' : 'Aceptar'}
+          {isReadMode ? 'Volver' : 'Continuar'}
         </Button>
       </View>
     </SafeAreaView>
@@ -189,5 +259,53 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.white,
     borderTopWidth: 1,
     borderTopColor: theme.colors.lightGray,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
+    minHeight: 44,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.lightGray,
+    paddingTop: theme.spacing.md,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: theme.colors.mediumGray,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  checkmark: {
+    color: theme.colors.white,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.deepBlue,
+    fontFamily: theme.fontFamily.regular,
+    lineHeight: 20,
+  },
+  inlineLink: {
+    color: theme.colors.primary,
+    fontFamily: theme.fontFamily.semibold,
+    textDecorationLine: 'underline',
+  },
+  errorText: {
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.dangerRed,
+    textAlign: 'center',
+    marginBottom: theme.spacing.sm,
   },
 });

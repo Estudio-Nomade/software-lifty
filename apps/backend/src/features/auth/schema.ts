@@ -14,6 +14,19 @@ export const meResponse = t.Object({
   created_at: t.Union([t.String(), t.Null()]),
 });
 
+export const legalAcceptBody = t.Object({
+  terms_version: t.String({ minLength: 1, maxLength: 64 }),
+  privacy_version: t.String({ minLength: 1, maxLength: 64 }),
+  user_type: t.Optional(t.Union([t.Literal('driver'), t.Literal('passenger')])),
+});
+
+export const legalAcceptResponse = t.Object({
+  terms_accepted_at: t.String(),
+  terms_version: t.String(),
+  privacy_version: t.String(),
+  role: t.String(),
+});
+
 export const loginHintBody = t.Object({
   email: t.String({ minLength: 3, maxLength: 320 }),
 });

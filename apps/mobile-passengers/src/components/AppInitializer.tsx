@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import { getActiveRide, registerPassenger } from '../api/passenger';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { hydrateLegalConsentFromMe } from '../legal/legalConsent';
 import { shouldKickAuthedUserToHome } from '../lib/authRouteGate';
 import {
   addNotificationResponseListener,
@@ -203,6 +204,18 @@ function AuthRedirectWatcher() {
     let cancelled = false;
 
     void (async () => {
+      if (!useAuthStore.getState().termsAccepted) {
+        const ok = await hydrateLegalConsentFromMe();
+        if (cancelled) return;
+        // false = known missing; null = network unknown (do not bounce consented users)
+        if (ok === false) {
+          if (current !== 'terms') {
+            router.replace('/terms');
+          }
+          return;
+        }
+      }
+
       let complete = await resolvePassengerProfileComplete(userId);
       // null = unknown (network) — short retries instead of silent forever on auth screens.
       if (complete === null) {

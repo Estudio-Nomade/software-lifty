@@ -7,10 +7,12 @@ import {
   resolvePassengerPostAuthPath,
   resolvePassengerProfileComplete,
 } from '../../lib/postAuthRouting';
+import { useAuthStore } from '../../store/authStore';
 
 const mockGetProfile = jest.fn();
 const mockRegisterPassenger = jest.fn();
 const mockNeedsLocation = jest.fn();
+const mockHydrateLegal = jest.fn();
 
 jest.mock('../../api/passenger', () => ({
   getProfile: (...args: unknown[]) => mockGetProfile(...args),
@@ -21,6 +23,12 @@ jest.mock('../../lib/locationPrompt', () => ({
   needsLocationPermissionPrompt: (...args: unknown[]) => mockNeedsLocation(...args),
 }));
 
+jest.mock('../../legal/legalConsent', () => ({
+  hydrateLegalConsentFromMe: (...args: unknown[]) => mockHydrateLegal(...args),
+  isCurrentLegalAccepted: jest.fn(),
+  postLegalAccept: jest.fn(),
+}));
+
 describe('resolvePassengerPostAuthPath', () => {
   beforeEach(() => {
     invalidatePassengerProfileCompleteCache();
@@ -28,6 +36,9 @@ describe('resolvePassengerPostAuthPath', () => {
     mockRegisterPassenger.mockReset();
     mockNeedsLocation.mockReset();
     mockNeedsLocation.mockResolvedValue(false);
+    mockHydrateLegal.mockReset();
+    mockHydrateLegal.mockResolvedValue(true);
+    useAuthStore.setState({ termsAccepted: true });
   });
 
   it('routes incomplete profile to /complete-profile (no Welcome hop)', async () => {
@@ -74,5 +85,30 @@ describe('resolvePassengerPostAuthPath', () => {
     });
     await expect(resolvePassengerProfileComplete('user-no-home')).resolves.toBe(false);
     await expect(resolvePassengerPostAuthPath('user-no-home')).resolves.toBe('/complete-profile');
+  });
+
+  it('routes to /terms when legal consent missing', async () => {
+    useAuthStore.setState({ termsAccepted: false });
+    mockHydrateLegal.mockResolvedValue(false);
+    await expect(resolvePassengerPostAuthPath('user-legal')).resolves.toBe('/terms');
+  });
+
+  it('does not force /terms when legal hydrate is unknown (network)', async () => {
+    useAuthStore.setState({ termsAccepted: false });
+    mockHydrateLegal.mockResolvedValue(null);
+    writePassengerProfileCompleteCache('user-legal-net', true);
+    mockNeedsLocation.mockResolvedValue(false);
+    await expect(resolvePassengerPostAuthPath('user-legal-net')).resolves.toBe('/home');
+  });
+
+  it('skipLegalCheck bypasses hydrate after accept', async () => {
+    useAuthStore.setState({ termsAccepted: false });
+    mockHydrateLegal.mockResolvedValue(false);
+    writePassengerProfileCompleteCache('user-skip', true);
+    mockNeedsLocation.mockResolvedValue(false);
+    await expect(
+      resolvePassengerPostAuthPath('user-skip', { skipLegalCheck: true }),
+    ).resolves.toBe('/home');
+    expect(mockHydrateLegal).not.toHaveBeenCalled();
   });
 });
