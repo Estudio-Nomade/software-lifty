@@ -1,5 +1,6 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
+import { ApiError } from '../../api/types';
 import { TermsScreen } from '../../screens/TermsScreen';
 import { useAuthStore } from '../../store/authStore';
 
@@ -87,5 +88,36 @@ describe('TermsScreen', () => {
     });
     expect(mockGoBack).toHaveBeenCalled();
     expect(mockPostLegalAccept).not.toHaveBeenCalled();
+  });
+
+  test('maps legal-accept NOT_FOUND to Spanish copy (not raw code)', async () => {
+    mockPostLegalAccept.mockRejectedValue(
+      new ApiError({
+        error: { code: 'NOT_FOUND', message: 'NOT_FOUND', status: 404 },
+        meta: { timestamp: '2026-11-23T00:00:00.000Z' },
+      }),
+    );
+
+    const { getByText, getByLabelText, queryByText } = await render(<TermsScreen />);
+
+    await act(async () => {
+      fireEvent.press(
+        getByLabelText(
+          'He leído y acepto los Términos y Condiciones y la Política de Privacidad',
+        ),
+      );
+    });
+    await act(async () => {
+      fireEvent.press(getByText('Continuar'));
+    });
+
+    expect(queryByText('NOT_FOUND')).toBeNull();
+    expect(
+      getByText(
+        'No pudimos registrar tu aceptación. Probá de nuevo; si sigue, cerrá sesión y volvé a entrar.',
+      ),
+    ).toBeTruthy();
+    expect(useAuthStore.getState().termsAccepted).toBe(false);
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 });

@@ -163,7 +163,7 @@ export const authService = {
       throw new ValidationError('terms_version y privacy_version son requeridos');
     }
 
-    const [existing] = await db
+    let [existing] = await db
       .select({
         id: users.id,
         terms_version: users.terms_version,
@@ -174,7 +174,39 @@ export const authService = {
       .where(eq(users.id, user.id))
       .limit(1);
 
-    if (!existing) throw new NotFoundError('User not found');
+    // Authenticated JWT must never 404 here: ensure row (same race pattern as auth middleware).
+    if (!existing) {
+      const roleSeed =
+        body.user_type === 'passenger' || body.user_type === 'driver'
+          ? body.user_type
+          : user.role === 'passenger' || user.role === 'driver'
+            ? user.role
+            : 'driver';
+      await db
+        .insert(users)
+        .values({
+          id: user.id,
+          email: user.email?.trim() || null,
+          phone: user.phone?.trim() || null,
+          role: roleSeed,
+        })
+        .onConflictDoNothing({ target: users.id });
+
+      [existing] = await db
+        .select({
+          id: users.id,
+          terms_version: users.terms_version,
+          privacy_version: users.privacy_version,
+          terms_accepted_at: users.terms_accepted_at,
+        })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1);
+
+      if (!existing) {
+        throw new BadRequestError('No se pudo registrar la aceptación (perfil incompleto)');
+      }
+    }
 
     const role = await deriveRole(existing.id);
     const sameVersions =
