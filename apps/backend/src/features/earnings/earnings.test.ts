@@ -195,6 +195,13 @@ describe('Earnings + Stats + TVF', () => {
     expect(data.commission.current_day).toBe(1);
     expect(data.commission.phase_day_start).toBe(1);
     expect(data.commission.phase_day_end).toBe(7);
+    expect(data.commission.title).toBe('Beneficio de lanzamiento');
+    expect(data.commission.blurb).toContain('100%');
+    expect(data.commission_scheme).toBeDefined();
+    expect(data.commission_scheme.current.rate_pct).toBe(0);
+    expect(data.commission_scheme.stages.length).toBeGreaterThanOrEqual(1);
+    expect(data.commission_scheme.stages[0].status).toBe('current');
+    expect(JSON.stringify(data.commission_scheme)).not.toContain('current_day');
   });
 
   test('GET /summary returns earnings after completed trip', async () => {

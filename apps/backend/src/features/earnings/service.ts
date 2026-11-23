@@ -2,7 +2,12 @@ import { type SQL, and, count, desc, eq, gte, inArray, lte, sql, sum } from 'dri
 import { db, getDb } from '../../shared/db/client';
 import { getDriverId } from '../../shared/db/queries';
 import { drivers, trips } from '../../shared/db/schema';
-import { getCommissionConfig, getDebtCapArs } from '../../shared/lib/commission';
+import {
+  getCommissionConfig,
+  getCommissionScheme,
+  getDebtCapArs,
+  toRatePct,
+} from '../../shared/lib/commission';
 import { AppError } from '../../shared/lib/errors';
 import type { AuthUser } from '../../shared/middleware/auth';
 
@@ -41,6 +46,7 @@ export const earningsService = {
       getDebtCapArs(dbConn),
       getCommissionConfig(dbConn),
     ]);
+    const commissionScheme = await getCommissionScheme(dbConn, new Date(), commissionCfg);
 
     const todayTrips = await db
       .select({
@@ -85,7 +91,7 @@ export const earningsService = {
         ),
       );
 
-    const ratePct = Math.round(commissionCfg.rate * 10000) / 100;
+    const ratePct = toRatePct(commissionCfg.rate);
 
     return {
       total: cash + transfer,
@@ -107,7 +113,11 @@ export const earningsService = {
         current_day: commissionCfg.currentDay,
         phase_day_start: commissionCfg.phaseDayStart,
         phase_day_end: commissionCfg.phaseDayEnd,
+        title: commissionScheme.current.title,
+        blurb: commissionScheme.current.blurb,
       },
+      // Driver Cobros scheme: stages + copy without day counters.
+      commission_scheme: commissionScheme,
     };
   },
 

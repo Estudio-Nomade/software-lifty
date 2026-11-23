@@ -1,8 +1,10 @@
 import {
   formatCommissionBanner,
+  formatCommissionRateLabel,
   formatCommissionReceiptDate,
   formatCommissionReceiptStatus,
   formatDebtCapLabel,
+  formatStageStatusLabel,
   isSafeHttpUrl,
   isZeroCommissionPhase,
   normalizePlatformDebt,
@@ -48,7 +50,7 @@ describe('formatDebtCapLabel', () => {
 });
 
 describe('formatCommissionBanner', () => {
-  it('describes zero-rate launch window with day bounds', () => {
+  it('describes zero-rate without day counters', () => {
     expect(
       formatCommissionBanner({
         rate: 0,
@@ -57,8 +59,9 @@ describe('formatCommissionBanner', () => {
         current_day: 3,
         phase_day_start: 1,
         phase_day_end: 7,
+        title: 'Beneficio de lanzamiento',
       }),
-    ).toBe('Comisión 0% — Lanzamiento (día 3 de 7)');
+    ).toBe('Comisión 0% — Beneficio de lanzamiento');
   });
 
   it('describes positive global rate without inventing free month', () => {
@@ -70,11 +73,12 @@ describe('formatCommissionBanner', () => {
         current_day: 20,
         phase_day_start: 15,
         phase_day_end: 120,
+        title: 'Comisión estándar',
       }),
-    ).toBe('Comisión actual 10% — Estabilización (día 20 de 120)');
+    ).toBe('Comisión actual 10% — Comisión estándar');
   });
 
-  it('handles open-ended phases', () => {
+  it('falls back to phase name when title missing', () => {
     expect(
       formatCommissionBanner({
         rate: 0.12,
@@ -84,7 +88,17 @@ describe('formatCommissionBanner', () => {
         phase_day_start: 121,
         phase_day_end: null,
       }),
-    ).toBe('Comisión actual 12% — Crecimiento (día 200+)');
+    ).toBe('Comisión actual 12% — Crecimiento');
+  });
+});
+
+describe('formatCommissionRateLabel / formatStageStatusLabel', () => {
+  it('formats rate and stage badges', () => {
+    expect(formatCommissionRateLabel(0)).toBe('0% por viaje');
+    expect(formatCommissionRateLabel(10)).toBe('10% por viaje');
+    expect(formatStageStatusLabel('current')).toBe('ACTUAL');
+    expect(formatStageStatusLabel('upcoming')).toBe('PRÓXIMA');
+    expect(formatStageStatusLabel('completed')).toBe('COMPLETADA');
   });
 });
 

@@ -195,6 +195,30 @@ export const earningsCommissionSchema = z.object({
   current_day: z.number(),
   phase_day_start: z.number(),
   phase_day_end: z.number().nullable(),
+  title: z.string().optional(),
+  blurb: z.string().optional(),
+});
+
+export const commissionSchemeStageSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  rate: z.number(),
+  rate_pct: z.number(),
+  blurb: z.string(),
+  status: z.enum(['completed', 'current', 'upcoming']),
+  order: z.number(),
+});
+
+export const commissionSchemeSchema = z.object({
+  current: z.object({
+    title: z.string(),
+    rate: z.number(),
+    rate_pct: z.number(),
+    blurb: z.string(),
+    phase: z.string(),
+  }),
+  stages: z.array(commissionSchemeStageSchema),
+  footnote: z.string(),
 });
 
 export const earningsDailySchema = z.object({
@@ -212,6 +236,8 @@ export const earningsDailySchema = z.object({
   debt_blocks_online: z.boolean().optional(),
   /** Global commission phase (admin SoT). Not per-driver. */
   commission: earningsCommissionSchema.optional(),
+  /** Progressive scheme for Cobros UI (no day counters). */
+  commission_scheme: commissionSchemeSchema.optional(),
 });
 
 export const paymentMethodSchema = z.object({
