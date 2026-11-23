@@ -434,11 +434,11 @@ describe('Transit API JWT surface', () => {
     expect((data.error as { code: string }).code).toBe('FORBIDDEN');
   });
 
-  test('transit without district binding → 403 on stats', async () => {
+  test('transit without district binding (Lifty ops) → 200 stats all scope', async () => {
     const { token } = await createStaff('transit', { transit_district_id: null });
     const { status, data } = await request('GET', '/api/transit/stats', undefined, token);
-    expect(status).toBe(403);
-    expect((data.error as { code: string }).code).toBe('FORBIDDEN');
+    expect(status).toBe(200);
+    expect(typeof (data as { total_drivers?: number }).total_drivers).toBe('number');
   });
 
   test('admin without district_id sees all; with district_id filters', async () => {
