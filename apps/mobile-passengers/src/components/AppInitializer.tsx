@@ -207,7 +207,8 @@ function AuthRedirectWatcher() {
       if (!useAuthStore.getState().termsAccepted) {
         const ok = await hydrateLegalConsentFromMe();
         if (cancelled) return;
-        if (!ok) {
+        // false = known missing; null = network unknown (do not bounce consented users)
+        if (ok === false) {
           if (current !== 'terms') {
             router.replace('/terms');
           }

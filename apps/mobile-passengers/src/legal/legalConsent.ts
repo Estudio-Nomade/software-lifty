@@ -24,14 +24,17 @@ export async function postLegalAccept(): Promise<void> {
   });
 }
 
-/** Source of truth: GET /auth/me → termsAccepted store. Soft-fail keeps prior flag. */
-export async function hydrateLegalConsentFromMe(): Promise<boolean> {
+/**
+ * Source of truth: GET /auth/me → termsAccepted store.
+ * `true`/`false` = known; `null` = network/unknown (do not force Terms gate).
+ */
+export async function hydrateLegalConsentFromMe(): Promise<boolean | null> {
   try {
     const { data } = await api.get<{ legal?: LegalPayload }>('/auth/me');
     const ok = isCurrentLegalAccepted(data?.legal ?? null);
     useAuthStore.getState().setTermsAccepted(ok);
     return ok;
   } catch {
-    return useAuthStore.getState().termsAccepted;
+    return null;
   }
 }

@@ -64,6 +64,13 @@ export async function resolvePassengerProfileComplete(
   }
 }
 
+export type ResolvePassengerPostAuthOpts = {
+  /** After a successful legal-accept POST — skip me re-check that can race /terms. */
+  skipLegalCheck?: boolean;
+  attempts?: number;
+  delayMs?: number;
+};
+
 /**
  * Single post-auth destination — skip Welcome BrandSplash hop.
  * Never return `/` (guest Welcome) when we have a userId: profile API
@@ -71,11 +78,13 @@ export async function resolvePassengerProfileComplete(
  */
 export async function resolvePassengerPostAuthPath(
   userId: string | null,
+  opts?: ResolvePassengerPostAuthOpts,
 ): Promise<PassengerPostAuthPath> {
-  if (userId) {
+  if (userId && !opts?.skipLegalCheck) {
     if (!useAuthStore.getState().termsAccepted) {
       const ok = await hydrateLegalConsentFromMe();
-      if (!ok) return '/terms';
+      // false = known missing consent; null = network unknown (do not force Terms)
+      if (ok === false) return '/terms';
     }
   }
   const complete = await resolvePassengerProfileComplete(userId);
@@ -92,15 +101,15 @@ export async function resolvePassengerPostAuthPath(
  */
 export async function resolvePassengerPostAuthPathWithRetry(
   userId: string | null,
-  opts?: { attempts?: number; delayMs?: number },
+  opts?: ResolvePassengerPostAuthOpts,
 ): Promise<PassengerPostAuthPath> {
   const attempts = opts?.attempts ?? 3;
   const delayMs = opts?.delayMs ?? 400;
   if (!userId) return '/';
 
-  if (!useAuthStore.getState().termsAccepted) {
+  if (!opts?.skipLegalCheck && !useAuthStore.getState().termsAccepted) {
     const ok = await hydrateLegalConsentFromMe();
-    if (!ok) return '/terms';
+    if (ok === false) return '/terms';
   }
 
   for (let i = 0; i < attempts; i++) {

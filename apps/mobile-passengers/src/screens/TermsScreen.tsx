@@ -66,8 +66,11 @@ export function TermsScreen() {
     try {
       await postLegalAccept();
       setTermsAccepted(true);
-      const path = await resolvePassengerPostAuthPath(useAuthStore.getState().userId);
-      if (path === '/complete-profile') replace('CompleteProfile');
+      // skipLegalCheck: avoid race re-hydrate → /terms after a successful POST.
+      const path = await resolvePassengerPostAuthPath(useAuthStore.getState().userId, {
+        skipLegalCheck: true,
+      });
+      if (path === '/complete-profile' || path === '/terms') replace('CompleteProfile');
       else if (path === '/location-permissions') replace('LocationPermissions');
       else if (path === '/home') replace('Home');
       else if (fromRegister) replace('LoginCredentials');

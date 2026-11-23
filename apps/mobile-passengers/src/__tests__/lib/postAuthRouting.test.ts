@@ -92,4 +92,23 @@ describe('resolvePassengerPostAuthPath', () => {
     mockHydrateLegal.mockResolvedValue(false);
     await expect(resolvePassengerPostAuthPath('user-legal')).resolves.toBe('/terms');
   });
+
+  it('does not force /terms when legal hydrate is unknown (network)', async () => {
+    useAuthStore.setState({ termsAccepted: false });
+    mockHydrateLegal.mockResolvedValue(null);
+    writePassengerProfileCompleteCache('user-legal-net', true);
+    mockNeedsLocation.mockResolvedValue(false);
+    await expect(resolvePassengerPostAuthPath('user-legal-net')).resolves.toBe('/home');
+  });
+
+  it('skipLegalCheck bypasses hydrate after accept', async () => {
+    useAuthStore.setState({ termsAccepted: false });
+    mockHydrateLegal.mockResolvedValue(false);
+    writePassengerProfileCompleteCache('user-skip', true);
+    mockNeedsLocation.mockResolvedValue(false);
+    await expect(
+      resolvePassengerPostAuthPath('user-skip', { skipLegalCheck: true }),
+    ).resolves.toBe('/home');
+    expect(mockHydrateLegal).not.toHaveBeenCalled();
+  });
 });
