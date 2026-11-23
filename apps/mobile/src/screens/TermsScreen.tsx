@@ -65,11 +65,21 @@ export const TermsScreen: React.FC = () => {
       }
     } catch (err: unknown) {
       // Keep session — network/401 on status must not bounce guest mid-TyC.
-      setError(
-        userFacingApiMessage(err, {
-          fallback: 'No pudimos registrar tu aceptación. Revisá conexión e intentá de nuevo.',
-        }),
-      );
+      const code =
+        err && typeof err === 'object' && 'code' in err
+          ? String((err as { code?: unknown }).code ?? '')
+          : '';
+      if (code === 'NOT_FOUND') {
+        setError(
+          'No pudimos registrar tu aceptación. Probá de nuevo; si sigue, cerrá sesión y volvé a entrar.',
+        );
+      } else {
+        setError(
+          userFacingApiMessage(err, {
+            fallback: 'No pudimos registrar tu aceptación. Revisá conexión e intentá de nuevo.',
+          }),
+        );
+      }
     } finally {
       setLoading(false);
     }

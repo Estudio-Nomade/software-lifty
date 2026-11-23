@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm';
 import { createApp } from '../../index';
 import { getDb } from '../../shared/db/client';
 import { users } from '../../shared/db/schema';
+import { createAuthPlugin } from '../../shared/middleware/auth';
 import { createTestToken } from '../../shared/testing/utils';
 
 async function request(
@@ -127,6 +128,45 @@ describe('POST /api/auth/legal-accept + GET /me legal', () => {
     });
     // Elysia body schema or service ValidationError
     expect(accept.status === 400 || accept.status === 422).toBe(true);
+  });
+
+  test('ensures users row when JWT auth has no prior row (no User not found)', async () => {
+    const orphanId = crypto.randomUUID();
+    const email = `orphan-legal-${orphanId.slice(0, 8)}@test.lifty`;
+    const app = createApp(
+      createAuthPlugin(async () => ({
+        id: orphanId,
+        role: 'driver',
+        email,
+        phone: null,
+      })),
+    );
+
+    const accept = await request(app, 'POST', '/api/auth/legal-accept', 'orphan-token', {
+      terms_version: '0.1.1-borrador',
+      privacy_version: '1.0.0',
+    });
+    expect(accept.status).toBe(200);
+    expect(accept.data.terms_version).toBe('0.1.1-borrador');
+    expect(accept.data.privacy_version).toBe('1.0.0');
+    expect(typeof accept.data.terms_accepted_at).toBe('string');
+
+    const [row] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        terms_version: users.terms_version,
+        privacy_version: users.privacy_version,
+        terms_accepted_at: users.terms_accepted_at,
+      })
+      .from(users)
+      .where(eq(users.id, orphanId))
+      .limit(1);
+    expect(row?.id).toBe(orphanId);
+    expect(row?.email).toBe(email);
+    expect(row?.terms_version).toBe('0.1.1-borrador');
+    expect(row?.privacy_version).toBe('1.0.0');
+    expect(row?.terms_accepted_at).toBeTruthy();
   });
 
   afterAll(async () => {
