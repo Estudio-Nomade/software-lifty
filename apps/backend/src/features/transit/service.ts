@@ -177,7 +177,12 @@ async function expandVisibleDistrictIds(boundId: string): Promise<string[]> {
   return [boundId];
 }
 
-/** Resolve list/stats scope: transit forced to binding; admin optional query. */
+/**
+ * Resolve list/stats scope:
+ * - transit + district binding → that municipality (VD hub expands launch cluster)
+ * - transit + null binding → Lifty ops, all municipalities (same as admin unfiltered)
+ * - admin → optional district_id query filter
+ */
 export async function resolveTransitScope(
   actor: AuthUser,
   queryDistrictId?: string | null,
@@ -189,8 +194,13 @@ export async function resolveTransitScope(
       .where(eq(users.id, actor.id))
       .limit(1);
     const bound = row?.transit_district_id ?? null;
+    // null = Lifty transit ops (see every municipality), not an error
     if (!bound) {
-      throw new ForbiddenError('Transit operator has no municipality assigned');
+      if (queryDistrictId) {
+        const visibleDistrictIds = await expandVisibleDistrictIds(queryDistrictId);
+        return { districtId: queryDistrictId, visibleDistrictIds };
+      }
+      return { districtId: null, visibleDistrictIds: null };
     }
     const visibleDistrictIds = await expandVisibleDistrictIds(bound);
     return { districtId: bound, visibleDistrictIds };
