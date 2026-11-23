@@ -550,6 +550,64 @@ describe('Transit API JWT surface', () => {
     expect(issueMc.status).toBe(403);
   });
 
+  test('pending_pickup + intended-only: visible to municipio scope, hidden outside cluster, gone after issue', async () => {
+    const villaId = await ensureDistrict('Villa Dolores');
+    const mcId = await ensureDistrict('Mina Clavero');
+    const { token: vdToken } = await createStaff('transit', { transit_district_id: villaId });
+    const { token: mcToken } = await createStaff('transit', { transit_district_id: mcId });
+
+    const { driverId } = await createApprovedDriver({
+      full_name: 'Pending Intended VD',
+      document_number: '60111111',
+      identification_status: 'pending_pickup',
+      district_id: null,
+      intended_district_id: villaId,
+    });
+
+    const pendingVd = await request(
+      'GET',
+      '/api/transit/drivers?identification_status=pending_pickup',
+      undefined,
+      vdToken,
+    );
+    expect(pendingVd.status).toBe(200);
+    const vdItems = pendingVd.data.items as Array<Record<string, unknown>>;
+    const row = vdItems.find((i) => i.id === driverId);
+    expect(row).toBeTruthy();
+    expect(row!.identification_status).toBe('pending_pickup');
+    expect(row!.full_name).toBe('Pending Intended VD');
+    expect(row!.district_name).toBe('Villa Dolores');
+
+    const pendingMc = await request(
+      'GET',
+      '/api/transit/drivers?identification_status=pending_pickup',
+      undefined,
+      mcToken,
+    );
+    expect(pendingMc.status).toBe(200);
+    const mcItems = pendingMc.data.items as Array<Record<string, unknown>>;
+    expect(mcItems.some((i) => i.id === driverId)).toBe(false);
+
+    const issue = await request(
+      'POST',
+      `/api/transit/drivers/${driverId}/identification/issue`,
+      { external_ref: 'LOTE-VD-INTENDED' },
+      vdToken,
+    );
+    expect(issue.status).toBe(200);
+    expect(issue.data.identification_status).toBe('issued');
+
+    const pendingAfter = await request(
+      'GET',
+      '/api/transit/drivers?identification_status=pending_pickup',
+      undefined,
+      vdToken,
+    );
+    expect(pendingAfter.status).toBe(200);
+    const afterItems = pendingAfter.data.items as Array<Record<string, unknown>>;
+    expect(afterItems.some((i) => i.id === driverId)).toBe(false);
+  });
+
   test('non-home transit binding does not expand to launch cluster', async () => {
     const villaId = await ensureDistrict('Villa Dolores');
     const spId = await ensureDistrict('San Pedro');

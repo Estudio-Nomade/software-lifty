@@ -117,7 +117,11 @@ const selectFields = {
   admin_reviewed_at: drivers.admin_reviewed_at,
   created_at: drivers.created_at,
   district_id: drivers.district_id,
-  district_name: districts.name,
+  // Operational name, else onboarding intended (pending_pickup often has district_id null).
+  district_name: sql<string | null>`coalesce(
+    (select ${districts.name} from ${districts} where ${districts.id} = ${drivers.district_id} limit 1),
+    (select ${districts.name} from ${districts} where ${districts.id} = ${drivers.intended_district_id} limit 1)
+  )`,
   plate: sql<string | null>`(
     SELECT ${vehicles.plate} FROM ${vehicles}
     WHERE ${vehicles.driver_id} = ${drivers.id}
@@ -344,7 +348,6 @@ export const transitService = {
       .select(selectFields)
       .from(drivers)
       .innerJoin(users, eq(drivers.user_id, users.id))
-      .leftJoin(districts, eq(drivers.district_id, districts.id))
       .where(whereClause)
       .orderBy(desc(drivers.created_at))
       .limit(pageSize)
@@ -354,7 +357,6 @@ export const transitService = {
       .select({ count: sql<number>`count(*)::int` })
       .from(drivers)
       .innerJoin(users, eq(drivers.user_id, users.id))
-      .leftJoin(districts, eq(drivers.district_id, districts.id))
       .where(whereClause);
 
     return {
@@ -376,7 +378,6 @@ export const transitService = {
       .select(selectFields)
       .from(drivers)
       .innerJoin(users, eq(drivers.user_id, users.id))
-      .leftJoin(districts, eq(drivers.district_id, districts.id))
       .where(and(...filters))
       .limit(1);
 
