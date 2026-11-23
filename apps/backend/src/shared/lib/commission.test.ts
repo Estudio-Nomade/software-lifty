@@ -165,6 +165,39 @@ describe('getCommissionScheme', () => {
     expect(scheme.current.blurb).toBe('Hoy te quedás con el 100% de tus ganancias.');
     expect(scheme.stages[0]?.status).toBe('current');
   });
+
+  test('completed/upcoming ramp stages use exit/entry rateForPhase not raw base', async () => {
+    const db = getDb();
+    await db.delete(commissionPhases);
+    await db.insert(commissionPhases).values([
+      { name: 'Lanzamiento', day_start: 1, day_end: 7, base_rate: 0 },
+      {
+        name: 'Crecimiento',
+        day_start: 8,
+        day_end: 27,
+        base_rate: 0.1,
+        daily_increment: 0.005,
+        cap_rate: 0.15,
+      },
+      { name: 'Estándar', day_start: 28, day_end: null, base_rate: 0.15 },
+    ]);
+    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
+
+    // Day 30 → Lanzamiento completed, Crecimiento completed, Estándar current
+    const afterRamp = await getCommissionScheme(db, new Date('2026-10-30T12:00:00Z'));
+    expect(afterRamp.stages.map((s) => s.status)).toEqual(['completed', 'completed', 'current']);
+    // Crecimiento exit day 27: 0.10 + (27-8)*0.005 = 0.10 + 0.095 = 0.195 → cap 0.15
+    expect(afterRamp.stages[1]?.rate).toBe(0.15);
+    expect(afterRamp.stages[1]?.rate_pct).toBe(15);
+    expect(afterRamp.stages[2]?.rate).toBe(0.15);
+
+    // Day 10 → Crecimiento current mid-ramp: 0.10 + 2*0.005 = 0.11; Estándar upcoming entry 0.15
+    const mid = await getCommissionScheme(db, new Date('2026-10-10T12:00:00Z'));
+    expect(mid.stages.map((s) => s.status)).toEqual(['completed', 'current', 'upcoming']);
+    expect(mid.current.rate).toBeCloseTo(0.11, 5);
+    expect(mid.stages[1]?.rate).toBeCloseTo(0.11, 5);
+    expect(mid.stages[2]?.rate).toBe(0.15);
+  });
 });
 
 describe('driver copy helpers', () => {

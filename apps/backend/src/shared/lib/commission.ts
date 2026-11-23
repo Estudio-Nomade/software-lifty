@@ -103,17 +103,42 @@ function rateForPhase(
     daily_increment: number | null;
     cap_rate: number | null;
   },
-  currentDay: number,
+  day: number,
 ): number {
   let rate = phase.base_rate;
   if (phase.daily_increment != null) {
-    const extraDays = currentDay - phase.day_start;
+    const extraDays = Math.max(0, day - phase.day_start);
     rate = phase.base_rate + extraDays * phase.daily_increment;
     if (phase.cap_rate != null) {
       rate = Math.min(rate, phase.cap_rate);
     }
   }
   return rate;
+}
+
+/** Display rate for a scheme row: entry / live / exit of the phase window. */
+function displayRateForStage(
+  phase: {
+    name: string;
+    day_start: number;
+    day_end: number | null;
+    base_rate: number;
+    daily_increment: number | null;
+    cap_rate: number | null;
+  },
+  status: CommissionStageStatus,
+  currentDay: number,
+): number {
+  if (status === 'current') {
+    return rateForPhase(phase, currentDay);
+  }
+  if (status === 'completed') {
+    // Last day of the closed window (status requires day_end).
+    const endDay = phase.day_end ?? phase.day_start;
+    return rateForPhase(phase, endDay);
+  }
+  // upcoming: rate on the first day of the phase
+  return rateForPhase(phase, phase.day_start);
 }
 
 export function toRatePct(rate: number): number {
@@ -197,7 +222,7 @@ export async function getCommissionScheme(
 
   const stages: CommissionSchemeStage[] = phases.map((phase, index) => {
     const status = stageStatusForDay(phase, config.currentDay);
-    const rate = status === 'current' ? config.rate : phase.base_rate;
+    const rate = displayRateForStage(phase, status, config.currentDay);
     const ratePct = toRatePct(rate);
     const title = driverTitleForPhase(phase.name);
     return {
