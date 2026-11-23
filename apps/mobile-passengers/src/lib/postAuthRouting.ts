@@ -1,4 +1,6 @@
 import { getProfile, registerPassenger } from '../api/passenger';
+import { hydrateLegalConsentFromMe } from '../legal/legalConsent';
+import { useAuthStore } from '../store/authStore';
 import { needsLocationPermissionPrompt } from './locationPrompt';
 import {
   isPassengerProfileComplete,
@@ -6,7 +8,12 @@ import {
   writePassengerProfileCompleteCache,
 } from './passengerProfileGate';
 
-export type PassengerPostAuthPath = '/complete-profile' | '/location-permissions' | '/home' | '/';
+export type PassengerPostAuthPath =
+  | '/terms'
+  | '/complete-profile'
+  | '/location-permissions'
+  | '/home'
+  | '/';
 
 /**
  * Same gate AuthRedirectWatcher uses: incomplete ficha → CompleteProfile (#480).
@@ -65,6 +72,12 @@ export async function resolvePassengerProfileComplete(
 export async function resolvePassengerPostAuthPath(
   userId: string | null,
 ): Promise<PassengerPostAuthPath> {
+  if (userId) {
+    if (!useAuthStore.getState().termsAccepted) {
+      const ok = await hydrateLegalConsentFromMe();
+      if (!ok) return '/terms';
+    }
+  }
   const complete = await resolvePassengerProfileComplete(userId);
   if (complete === false) return '/complete-profile';
   // Network/unknown: prefer complete-profile over guest CTAs (OAuth bounce fix).
@@ -84,6 +97,11 @@ export async function resolvePassengerPostAuthPathWithRetry(
   const attempts = opts?.attempts ?? 3;
   const delayMs = opts?.delayMs ?? 400;
   if (!userId) return '/';
+
+  if (!useAuthStore.getState().termsAccepted) {
+    const ok = await hydrateLegalConsentFromMe();
+    if (!ok) return '/terms';
+  }
 
   for (let i = 0; i < attempts; i++) {
     const complete = await resolvePassengerProfileComplete(userId);

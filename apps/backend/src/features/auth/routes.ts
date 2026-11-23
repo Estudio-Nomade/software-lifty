@@ -3,7 +3,7 @@ import { logger } from '../../shared/lib/logger';
 import { safeCall } from '../../shared/lib/route-utils';
 import { rateLimit } from '../../shared/middleware/ratelimit';
 import { authGuard } from '../../shared/middleware/require-auth';
-import { loginHintBody } from './schema';
+import { legalAcceptBody, loginHintBody } from './schema';
 import { authService } from './service';
 
 /** Stricter than global: public probe surface (enumeration slowed by IP, not per-email). */
@@ -37,6 +37,21 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
   .get('/me', ({ user, set }) => safeCall(() => authService.getMe(user), set), {
     requireAuth: true,
   })
+  .post(
+    '/legal-accept',
+    ({ user, body, set }) => {
+      logger.info('[AUTH:ROUTE] POST /auth/legal-accept');
+      return safeCall(() => authService.acceptLegal(user, body), set);
+    },
+    {
+      requireAuth: true,
+      body: legalAcceptBody,
+      detail: {
+        tags: ['auth'],
+        summary: 'Accept current TyC + privacy versions',
+      },
+    },
+  )
   .post(
     '/logout',
     ({ user, set }) => {

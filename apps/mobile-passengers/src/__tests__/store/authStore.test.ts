@@ -9,6 +9,7 @@ function resetStore() {
     sessionRestored: true,
     email: null,
     fullName: null,
+    termsAccepted: false,
   });
 }
 

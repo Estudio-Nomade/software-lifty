@@ -20,4 +20,8 @@ export const users = pgTable('users', {
   transit_district_id: uuid('transit_district_id').references(() => districts.id, {
     onDelete: 'set null',
   }),
+  /** Latest explicit TyC + privacy acceptance (audit latest only; no history table). */
+  terms_accepted_at: timestamp('terms_accepted_at', { withTimezone: true }),
+  terms_version: varchar('terms_version', { length: 64 }),
+  privacy_version: varchar('privacy_version', { length: 64 }),
 });

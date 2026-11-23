@@ -4,6 +4,7 @@ import { AppState } from 'react-native';
 import { apiClient } from '../api/client';
 import { driverStatusSchema } from '../api/types';
 import { useAppNavigation } from '../hooks/useAppNavigation';
+import { isCurrentLegalAccepted } from '../legal/legalConsent';
 import { isLiveTrip } from '../lib/isLiveTrip';
 import { getCurrentPosition } from '../lib/location';
 import { refreshMessagesUnread } from '../lib/messagesUnread';
@@ -77,6 +78,9 @@ function SessionRestore() {
         try {
           const response = await apiClient.get('/auth/me');
           const user = response.data;
+
+          // Server legal is source of truth (re-prompt on version bump).
+          useAuthStore.getState().setTermsAccepted(isCurrentLegalAccepted(user?.legal ?? null));
 
           try {
             const meRes = await apiClient.get('/drivers/me');

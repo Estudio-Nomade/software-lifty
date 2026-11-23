@@ -46,6 +46,10 @@ function replacePathAfterAuth(
   path: string,
   userId: string | null | undefined,
 ) {
+  if (path === '/terms') {
+    replace('Terms');
+    return;
+  }
   if (path === '/complete-profile') {
     replace('CompleteProfile');
     return;

@@ -16,7 +16,18 @@ jest.mock('../../hooks/useAppNavigation', () => ({
   useAppNavigation: () => ({ navigate: jest.fn(), replace: mockReplace, goBack: mockGoBack }),
 }));
 
-const mockUseLocalSearchParams = jest.fn(() => ({ from: 'profile' }));
+const mockPostLegalAccept = jest.fn();
+jest.mock('../../legal/legalConsent', () => ({
+  postLegalAccept: (...args: unknown[]) => mockPostLegalAccept(...args),
+  hydrateLegalConsentFromMe: jest.fn(),
+  isCurrentLegalAccepted: jest.fn(),
+}));
+
+jest.mock('../../lib/postAuthRouting', () => ({
+  resolvePassengerPostAuthPath: jest.fn(async () => '/home'),
+}));
+
+const mockUseLocalSearchParams = jest.fn(() => ({ from: 'profile' as string | undefined }));
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockUseLocalSearchParams(),
 }));
@@ -25,10 +36,17 @@ describe('TermsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseLocalSearchParams.mockReturnValue({ from: 'profile' });
+    mockPostLegalAccept.mockResolvedValue(undefined);
+    useAuthStore.setState({
+      isAuthenticated: false,
+      termsAccepted: false,
+      userId: null,
+      token: null,
+    });
   });
 
   test('authenticated user reads terms and does not replace to LoginCredentials', async () => {
-    useAuthStore.setState({ isAuthenticated: true });
+    useAuthStore.setState({ isAuthenticated: true, termsAccepted: true });
 
     const { getByText, getAllByText } = await render(<TermsScreen />);
 
@@ -44,19 +62,61 @@ describe('TermsScreen', () => {
     expect(mockGoBack).toHaveBeenCalled();
   });
 
-  test('registration mode accepts and replaces to LoginCredentials', async () => {
-    useAuthStore.setState({ isAuthenticated: false });
+  test('accept mode: CTA no-op without checkbox; with checkbox advances unauth register', async () => {
+    useAuthStore.setState({ isAuthenticated: false, termsAccepted: false });
     mockUseLocalSearchParams.mockReturnValue({ from: 'register' });
 
-    const { getByText } = await render(<TermsScreen />);
+    const { getByText, getByLabelText } = await render(<TermsScreen />);
 
     expect(getByText(/resumen del borrador de Términos/i)).toBeTruthy();
 
     await act(async () => {
       fireEvent.press(getByText('Aceptar'));
     });
+    expect(mockReplace).not.toHaveBeenCalled();
 
+    await act(async () => {
+      fireEvent.press(
+        getByLabelText(
+          'He leído y acepto los Términos y Condiciones y la Política de Privacidad',
+        ),
+      );
+    });
+
+    await act(async () => {
+      fireEvent.press(getByText('Aceptar'));
+    });
+
+    expect(mockPostLegalAccept).not.toHaveBeenCalled();
     expect(mockReplace).toHaveBeenCalledWith('LoginCredentials');
+  });
+
+  test('authenticated accept mode POSTs legal-accept', async () => {
+    useAuthStore.setState({
+      isAuthenticated: true,
+      termsAccepted: false,
+      userId: 'user-1',
+      token: 't',
+    });
+    mockUseLocalSearchParams.mockReturnValue({});
+
+    const { getByText, getByLabelText } = await render(<TermsScreen />);
+
+    await act(async () => {
+      fireEvent.press(
+        getByLabelText(
+          'He leído y acepto los Términos y Condiciones y la Política de Privacidad',
+        ),
+      );
+    });
+
+    await act(async () => {
+      fireEvent.press(getByText('Aceptar'));
+    });
+
+    expect(mockPostLegalAccept).toHaveBeenCalled();
+    expect(useAuthStore.getState().termsAccepted).toBe(true);
+    expect(mockReplace).toHaveBeenCalledWith('Home');
   });
 
   test('opens privacy and full terms URLs without accepting', async () => {
