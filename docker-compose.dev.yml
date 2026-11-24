@@ -1,6 +1,11 @@
 # Local dev infrastructure. Port 5433/6380 on purpose: they never clash
 # with a system Postgres/Redis on the default ports.
 # Everything is wired by `bun run setup` — see README.
+#
+# Stable project name so worktrees/branches share the same compose project
+# (container_name is also fixed — one PG/Redis for the whole monorepo).
+name: lifty-dev
+
 services:
   postgres:
     image: postgres:16
