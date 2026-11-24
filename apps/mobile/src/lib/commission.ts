@@ -75,6 +75,11 @@ function formatRatePct(ratePct: number): string {
   return String(Math.round(ratePct * 100) / 100);
 }
 
+/** Plain N for "N%" UI (no "por viaje" suffix). */
+export function formatRatePctPlain(ratePct: number): string {
+  return formatRatePct(ratePct);
+}
+
 export function formatCommissionRateLabel(ratePct: number): string {
   return `${formatRatePct(ratePct)}% por viaje`;
 }

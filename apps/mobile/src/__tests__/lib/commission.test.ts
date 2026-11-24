@@ -4,6 +4,7 @@ import {
   formatCommissionReceiptDate,
   formatCommissionReceiptStatus,
   formatDebtCapLabel,
+  formatRatePctPlain,
   formatStageStatusLabel,
   isSafeHttpUrl,
   isZeroCommissionPhase,
@@ -96,6 +97,8 @@ describe('formatCommissionRateLabel / formatStageStatusLabel', () => {
   it('formats rate and stage badges', () => {
     expect(formatCommissionRateLabel(0)).toBe('0% por viaje');
     expect(formatCommissionRateLabel(10)).toBe('10% por viaje');
+    expect(formatRatePctPlain(5)).toBe('5');
+    expect(formatRatePctPlain(0)).toBe('0');
     expect(formatStageStatusLabel('current')).toBe('ACTUAL');
     expect(formatStageStatusLabel('upcoming')).toBe('PRÓXIMA');
     expect(formatStageStatusLabel('completed')).toBe('COMPLETADA');

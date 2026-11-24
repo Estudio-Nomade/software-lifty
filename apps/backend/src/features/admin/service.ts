@@ -14,7 +14,17 @@ import {
   broadcastDriverAccountUpdated,
   broadcastPlatformConfigUpdated,
 } from '../../shared/lib/broadcast';
-import { getCommissionConfig } from '../../shared/lib/commission';
+import {
+  COMMISSION_RATE_KEY,
+  COMMISSION_RATE_SOFT_CAP,
+  formatCommissionRateStored,
+  getCommissionConfig,
+  getCommissionRate,
+  parseCommissionRate,
+  setConfig,
+  toRatePct,
+} from '../../shared/lib/commission';
+import { notifyDriversCommissionRateChanged } from '../../shared/lib/commission-rate-notify';
 import { DOC_TYPES, VALID_DOC_TYPES, docTypeLabel } from '../../shared/lib/documents';
 import { AppError, NotFoundError } from '../../shared/lib/errors';
 import { evaluateIdentificationDeadline } from '../../shared/lib/identification-deadline';
@@ -1120,5 +1130,58 @@ export const adminService = {
 
   async getCurrentCommission() {
     return getCommissionConfig(db);
+  },
+
+  async getCommissionRateFlat() {
+    const rate = await getCommissionRate(db);
+    const [row] = await db
+      .select({
+        value: platformConfig.value,
+        updated_at: platformConfig.updated_at,
+      })
+      .from(platformConfig)
+      .where(eq(platformConfig.key, COMMISSION_RATE_KEY))
+      .limit(1);
+    return {
+      rate,
+      rate_pct: toRatePct(rate),
+      raw: row?.value ?? null,
+      updated_at: row?.updated_at ?? null,
+    };
+  },
+
+  async updateCommissionRateFlat(input: { rate?: number; rate_pct?: number }) {
+    let rate: number;
+    if (input.rate_pct != null && Number.isFinite(input.rate_pct)) {
+      rate = input.rate_pct / 100;
+    } else if (input.rate != null && Number.isFinite(input.rate)) {
+      rate = input.rate;
+    } else {
+      throw new AppError('rate or rate_pct required', 400, 'BAD_REQUEST');
+    }
+    if (rate < 0) throw new AppError('rate must be >= 0', 400, 'BAD_REQUEST');
+    if (rate > COMMISSION_RATE_SOFT_CAP) {
+      throw new AppError(`rate soft-cap is ${COMMISSION_RATE_SOFT_CAP}`, 400, 'BAD_REQUEST');
+    }
+
+    const prev = await getCommissionRate(db);
+    const value = formatCommissionRateStored(rate);
+    await setConfig(db, COMMISSION_RATE_KEY, value);
+    const next = parseCommissionRate(value);
+    const changed = prev !== next;
+
+    let notify: Awaited<ReturnType<typeof notifyDriversCommissionRateChanged>> | null = null;
+    if (changed) {
+      notify = await notifyDriversCommissionRateChanged(db, next);
+    }
+
+    broadcastPlatformConfigUpdated({ reason: 'commission_rate', rate: next });
+
+    return {
+      rate: next,
+      rate_pct: toRatePct(next),
+      changed,
+      notify,
+    };
   },
 };

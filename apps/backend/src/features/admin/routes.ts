@@ -21,6 +21,7 @@ import {
   rejectFraudBody,
   reviewBody,
   tripIdParams,
+  updateCommissionRateSchema,
   updatePayoutAccountSchema,
   updatePhaseSchema,
   updateStartDateSchema,
@@ -302,6 +303,22 @@ export const adminRoutes = new Elysia({ prefix: '/admin' })
       return safeCall(() => adminService.getCurrentCommission(), set);
     },
     { requireAuth: true },
+  )
+  .get(
+    '/commission/rate',
+    ({ user, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminService.getCommissionRateFlat(), set);
+    },
+    { requireAuth: true },
+  )
+  .put(
+    '/commission/rate',
+    ({ user, body, set }) => {
+      if (!isAdmin(user, set)) return { error: 'Forbidden' };
+      return safeCall(() => adminService.updateCommissionRateFlat(body), set);
+    },
+    { body: updateCommissionRateSchema, requireAuth: true },
   )
   .get(
     '/commission/payout-account',
