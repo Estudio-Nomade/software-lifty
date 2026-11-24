@@ -15,6 +15,7 @@ import {
   getCommissionScheme,
   getDebtCapArs,
   parseCommissionRate,
+  parseCommissionRateCliArg,
 } from './commission';
 
 beforeEach(async () => {
@@ -60,6 +61,25 @@ describe('parseCommissionRate', () => {
     expect(parseCommissionRate('0.30')).toBe(0.3);
     expect(parseCommissionRate('0.5')).toBe(COMMISSION_RATE_SOFT_CAP);
     expect(parseCommissionRate('1')).toBe(COMMISSION_RATE_SOFT_CAP);
+  });
+});
+
+describe('parseCommissionRateCliArg', () => {
+  test('accepts fraction and percent forms', () => {
+    expect(parseCommissionRateCliArg('0')).toBe('0');
+    expect(parseCommissionRateCliArg('0.05')).toBe('0.05');
+    expect(parseCommissionRateCliArg('5%')).toBe('0.05');
+    expect(parseCommissionRateCliArg('0%')).toBe('0');
+  });
+
+  test('rejects bare percent-looking values (ops footgun)', () => {
+    expect(() => parseCommissionRateCliArg('5')).toThrow(/percent/);
+    expect(() => parseCommissionRateCliArg('10')).toThrow(/percent/);
+  });
+
+  test('rejects above soft cap', () => {
+    expect(() => parseCommissionRateCliArg('0.5')).toThrow(/fraction/);
+    expect(() => parseCommissionRateCliArg('50%')).toThrow(/soft cap/);
   });
 });
 

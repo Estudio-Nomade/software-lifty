@@ -68,6 +68,8 @@ export async function setConfig(db: NodePgDatabase, key: string, value: string):
 /**
  * Parse platform_config.commission_rate string → fraction.
  * Missing / empty / NaN / negative → 0 (launch-safe). Soft-cap at 0.30.
+ * Missing row is intentional launch-safe 0% (same as explicit "0"); ops distinguish
+ * via admin GET /commission/rate `raw === null` or SQL row absence.
  */
 export function parseCommissionRate(raw: string | null | undefined): number {
   if (raw == null) return 0;
@@ -77,6 +79,41 @@ export function parseCommissionRate(raw: string | null | undefined): number {
   if (!Number.isFinite(n) || Number.isNaN(n) || n < 0) return 0;
   if (n > COMMISSION_RATE_SOFT_CAP) return COMMISSION_RATE_SOFT_CAP;
   return n;
+}
+
+/**
+ * CLI / ops arg → fraction string for platform_config.
+ * Bare number = fraction 0…0.30 only. Percent needs suffix: `5%` → 0.05.
+ * Bare `5` does **not** mean 5% (rejects with hint).
+ */
+export function parseCommissionRateCliArg(raw: string): string {
+  const t = raw.trim();
+  if (!t) throw new Error('empty rate');
+  if (t.endsWith('%')) {
+    const pct = Number.parseFloat(t.slice(0, -1));
+    if (!Number.isFinite(pct) || pct < 0) throw new Error(`invalid percent: ${raw}`);
+    const fraction = pct / 100;
+    if (fraction > COMMISSION_RATE_SOFT_CAP) {
+      throw new Error(
+        `rate above soft cap ${COMMISSION_RATE_SOFT_CAP} (${COMMISSION_RATE_SOFT_CAP * 100}%) — got ${pct}%`,
+      );
+    }
+    return String(fraction);
+  }
+  const n = Number.parseFloat(t);
+  if (!Number.isFinite(n) || n < 0) throw new Error(`invalid rate: ${raw}`);
+  // Bare integers like 5 look like "5%" mistakes — require explicit % or fraction.
+  if (n > COMMISSION_RATE_SOFT_CAP) {
+    if (n > 1 && n <= 100) {
+      throw new Error(
+        `bare ${raw} looks like a percent; use ${raw}% (→ ${(n / 100).toFixed(2)}) or fraction 0–${COMMISSION_RATE_SOFT_CAP}`,
+      );
+    }
+    throw new Error(
+      `bare rate must be fraction 0–${COMMISSION_RATE_SOFT_CAP} (got ${n}); for percent use e.g. 5%`,
+    );
+  }
+  return String(n);
 }
 
 export async function getCommissionRate(

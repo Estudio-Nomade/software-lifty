@@ -2,7 +2,8 @@
 
 **SoT:** `platform_config.key = 'commission_rate'`  
 **Value:** fraction string `"0"` … `"0.30"` (0%–30%). Soft-cap in code at 0.30.  
-**Default / launch:** `"0"` (0%). Missing row → app treats as **0**.  
+**Default / launch:** `"0"` (0%). Missing row → app treats as **0** (launch-safe, same split as explicit `"0"`).  
+**Monitor missing vs explicit 0:** `GET /api/admin/commission/rate` → `raw === null` means row absent; SQL `WHERE key = 'commission_rate'`. Runtime pricing does not log — apply migration `0065` on every env.  
 **Target post-launch:** `"0.05"` (5%) when ops says — **manual**, no cron.
 
 Effect: only split `platform_fee` / `driver_earnings` on **new** trips.  
@@ -37,10 +38,11 @@ Apply on Supabase **wabdd** SQL Editor or session pooler.
 
 ```bash
 cd apps/backend
-# fraction or percent:
+# bare number = fraction 0–0.30 only; percent needs % suffix
 bun run scripts/set-commission-rate.ts 0
 bun run scripts/set-commission-rate.ts 0.05
 bun run scripts/set-commission-rate.ts 5%
+# NOT: bun run scripts/set-commission-rate.ts 5   ← rejected (use 5% or 0.05)
 ```
 
 ## Migration
