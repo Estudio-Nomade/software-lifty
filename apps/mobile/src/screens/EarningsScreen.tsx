@@ -78,9 +78,30 @@ export const EarningsScreen: React.FC = () => {
     return parts.length > 1 ? parts[0].trim() : address;
   };
 
-  const schemeCard = earnings?.commission_scheme ? (
-    <CommissionSchemeCard scheme={earnings.commission_scheme} />
-  ) : null;
+  // Always show current % when API sent commission or scheme (empty day OK).
+  const schemeCard =
+    earnings?.commission_scheme != null || earnings?.commission != null ? (
+      <CommissionSchemeCard
+        scheme={
+          earnings.commission_scheme ?? {
+            current: {
+              title: 'Tu comisión actual',
+              rate: (earnings.commission?.rate_pct ?? 0) / 100,
+              rate_pct: earnings.commission?.rate_pct ?? 0,
+              blurb: '',
+              phase: earnings.commission?.phase ?? 'Vigente',
+            },
+            stages: [],
+            footnote: 'La comisión se descuenta automáticamente de cada viaje.',
+          }
+        }
+        ratePctOverride={
+          earnings.commission != null && Number.isFinite(earnings.commission.rate_pct)
+            ? earnings.commission.rate_pct
+            : earnings.commission_scheme?.current.rate_pct
+        }
+      />
+    ) : null;
 
   // First load only: keep scheme visible when a later refetch fails (cached earnings).
   const showInitialLoading = isPending && !earnings;
