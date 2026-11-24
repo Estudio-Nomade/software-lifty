@@ -2,33 +2,19 @@ import { join } from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
+import { REPO_ROOT, ensureDevContainers, printDevInfraFailure } from './dev-containers';
 
-const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
 const BACKEND_DIR = join(REPO_ROOT, 'apps', 'backend');
-const COMPOSE_FILE = join(REPO_ROOT, 'docker-compose.dev.yml');
 const MIGRATIONS = join(BACKEND_DIR, 'src', 'shared', 'db', 'migrations');
 // Matches docker-compose.dev.yml (postgres:16, user/password/db = lifty).
 const DEV_DB_URL = 'postgresql://lifty:lifty@localhost:5433/lifty';
 
-// 1. Start Postgres + Redis (idempotent). Fails fast if Docker is unavailable.
-const proc = Bun.spawnSync(
-  ['docker', 'compose', '-f', COMPOSE_FILE, 'up', '-d', '--wait'],
-  { cwd: REPO_ROOT, stdout: 'inherit', stderr: 'inherit' },
-);
-
-if (proc.exitCode !== 0) {
-  console.error('❌ Failed to start dev infrastructure (docker compose)');
-  console.error('   API will not listen on :3001 until Postgres (:5433) + Redis (:6380) are up.');
-  console.error('   Common causes:');
-  console.error('   • Docker daemon not running');
-  console.error(
-    '   • DNS/pull de Docker Hub falló (auth.docker.io / registry-1.docker.io) — fijá DNS del host o:',
-  );
-  console.error('     docker compose -f docker-compose.dev.yml pull && docker compose -f docker-compose.dev.yml up -d --wait');
-  console.error('   • Si las imágenes ya están locales: docker compose -f docker-compose.dev.yml up -d --wait');
-  console.error('   Then: curl -sS http://127.0.0.1:3001/health  (after bun run dev:backend)');
-  process.exit(proc.exitCode ?? 1);
+// 1. Start Postgres + Redis (idempotent across worktrees). Fails fast if Docker is down.
+if (!(await ensureDevContainers())) {
+  printDevInfraFailure();
+  process.exit(1);
 }
+
 // 2. Bring the dev DB up to date with the Drizzle migrations. Idempotent and
 //    fast when nothing changed. Without this, a fresh or stale `lifty-pgdata`
 //    volume drifts from the schema and the backend fails at startup with

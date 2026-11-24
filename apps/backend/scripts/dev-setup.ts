@@ -14,10 +14,10 @@ import { join } from 'node:path';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
+import { ensureDevContainers, printDevInfraFailure } from './dev-containers';
 import { ensureBackendPort } from './port';
 
 const BACKEND_DIR = join(import.meta.dir, '..');
-const REPO_ROOT = join(BACKEND_DIR, '..', '..');
 const MIGRATIONS = join(BACKEND_DIR, 'src', 'shared', 'db', 'migrations');
 const PG = 'postgresql://lifty:lifty@localhost:5433';
 
@@ -29,9 +29,12 @@ function run(cmd: string[], cwd: string) {
   }
 }
 
-// 1. Infra
+// 1. Infra (idempotent across worktrees — see dev-containers.ts)
 console.log('🐳 Starting dev infra (postgres:5433, redis:6380)...');
-run(['docker', 'compose', '-f', 'docker-compose.dev.yml', 'up', '-d', '--wait'], REPO_ROOT);
+if (!(await ensureDevContainers())) {
+  printDevInfraFailure();
+  process.exit(1);
+}
 
 // 2. Backend .env (bootstrap required vars if missing — port is assigned in step 3)
 const envPath = join(BACKEND_DIR, '.env');
