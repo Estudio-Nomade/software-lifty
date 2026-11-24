@@ -49,7 +49,10 @@ async function seedPricing() {
   await db.insert(fuelPriceLog).values({ price: 2100, updated_by: 'test' });
   await db
     .insert(platformConfig)
-    .values({ key: 'commission_start_date', value: '2026-01-01' })
+    .values([
+      { key: 'commission_start_date', value: '2026-01-01' },
+      { key: 'commission_rate', value: '0.10' },
+    ])
     .onConflictDoNothing();
 }
 

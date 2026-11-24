@@ -105,7 +105,7 @@ export const earningsService = {
       platform_debt: debt,
       debt_cap_ars: cap,
       debt_blocks_online: debt > cap,
-      // Global phase from admin commission_start_date + phases (not per-driver).
+      // Global flat rate from platform_config.commission_rate (not per-driver).
       commission: {
         rate: commissionCfg.rate,
         rate_pct: ratePct,
@@ -116,7 +116,7 @@ export const earningsService = {
         title: commissionScheme.current.title,
         blurb: commissionScheme.current.blurb,
       },
-      // Driver Cobros scheme: stages + copy without day counters.
+      // Driver Cobros scheme: single current rate stage.
       commission_scheme: commissionScheme,
     };
   },

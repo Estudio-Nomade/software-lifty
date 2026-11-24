@@ -3,8 +3,10 @@ process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://lifty:
 
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { getDb, resetDb } from '../db/client';
-import { commissionPhases, platformConfig } from '../db/schema';
+import { platformConfig } from '../db/schema';
 import {
+  COMMISSION_RATE_KEY,
+  COMMISSION_RATE_SOFT_CAP,
   DEFAULT_DEBT_CAP_ARS,
   driverBlurbForRate,
   driverTitleForPhase,
@@ -12,28 +14,13 @@ import {
   getCommissionRate,
   getCommissionScheme,
   getDebtCapArs,
+  parseCommissionRate,
+  parseCommissionRateCliArg,
 } from './commission';
-
-const DAY_SEED = [
-  { name: 'Lanzamiento', day_start: 1, day_end: 7, base_rate: 0.0 },
-  { name: 'Medición', day_start: 8, day_end: 14, base_rate: 0.05 },
-  { name: 'Estabilización', day_start: 15, day_end: 120, base_rate: 0.1 },
-  {
-    name: 'Crecimiento',
-    day_start: 121,
-    day_end: null,
-    base_rate: 0.1,
-    daily_increment: 0.0005,
-    cap_rate: 0.15,
-  },
-] as const;
 
 beforeEach(async () => {
   const db = getDb();
-  await db.delete(commissionPhases);
   await db.delete(platformConfig);
-
-  await db.insert(commissionPhases).values([...DAY_SEED]);
 });
 
 afterAll(() => {
@@ -56,158 +43,145 @@ describe('getDebtCapArs', () => {
   });
 });
 
+describe('parseCommissionRate', () => {
+  test('missing/empty/invalid → 0', () => {
+    expect(parseCommissionRate(null)).toBe(0);
+    expect(parseCommissionRate(undefined)).toBe(0);
+    expect(parseCommissionRate('')).toBe(0);
+    expect(parseCommissionRate('  ')).toBe(0);
+    expect(parseCommissionRate('nope')).toBe(0);
+    expect(parseCommissionRate('NaN')).toBe(0);
+    expect(parseCommissionRate('-0.1')).toBe(0);
+  });
+
+  test('parses fractions and soft-caps at 0.30', () => {
+    expect(parseCommissionRate('0')).toBe(0);
+    expect(parseCommissionRate('0.05')).toBe(0.05);
+    expect(parseCommissionRate('0.15')).toBe(0.15);
+    expect(parseCommissionRate('0.30')).toBe(0.3);
+    expect(parseCommissionRate('0.5')).toBe(COMMISSION_RATE_SOFT_CAP);
+    expect(parseCommissionRate('1')).toBe(COMMISSION_RATE_SOFT_CAP);
+  });
+});
+
+describe('parseCommissionRateCliArg', () => {
+  test('accepts fraction and percent forms', () => {
+    expect(parseCommissionRateCliArg('0')).toBe('0');
+    expect(parseCommissionRateCliArg('0.05')).toBe('0.05');
+    expect(parseCommissionRateCliArg('5%')).toBe('0.05');
+    expect(parseCommissionRateCliArg('0%')).toBe('0');
+  });
+
+  test('rejects bare percent-looking values (ops footgun)', () => {
+    expect(() => parseCommissionRateCliArg('5')).toThrow(/percent/);
+    expect(() => parseCommissionRateCliArg('10')).toThrow(/percent/);
+  });
+
+  test('rejects above soft cap', () => {
+    expect(() => parseCommissionRateCliArg('0.5')).toThrow(/fraction/);
+    expect(() => parseCommissionRateCliArg('50%')).toThrow(/soft cap/);
+  });
+});
+
 describe('getCommissionRate', () => {
-  test('falls back to dev default when start_date not configured', async () => {
+  test('missing row → 0 (launch-safe)', async () => {
     const db = getDb();
     const rate = await getCommissionRate(db);
-    expect(typeof rate).toBe('number');
-    expect(rate).toBeGreaterThanOrEqual(0);
-    expect(rate).toBeLessThanOrEqual(0.15);
-  });
-
-  test('returns 0% for days 1–7 (Lanzamiento)', async () => {
-    const db = getDb();
-    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    const rate = await getCommissionRate(db, new Date('2026-10-01T12:00:00Z'));
     expect(rate).toBe(0);
-    const day7 = await getCommissionRate(db, new Date('2026-10-07T12:00:00Z'));
-    expect(day7).toBe(0);
   });
 
-  test('returns 5% for day 8 (Medición)', async () => {
+  test('reads "0"', async () => {
     const db = getDb();
-    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    const rate = await getCommissionRate(db, new Date('2026-10-08T12:00:00Z'));
-    expect(rate).toBe(0.05);
+    await db.insert(platformConfig).values({ key: COMMISSION_RATE_KEY, value: '0' });
+    expect(await getCommissionRate(db)).toBe(0);
   });
 
-  test('returns 10% for day 15 (Estabilización)', async () => {
+  test('reads "0.05" → 0.05', async () => {
     const db = getDb();
-    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    const rate = await getCommissionRate(db, new Date('2026-10-15T12:00:00Z'));
-    expect(rate).toBe(0.1);
+    await db.insert(platformConfig).values({ key: COMMISSION_RATE_KEY, value: '0.05' });
+    expect(await getCommissionRate(db)).toBe(0.05);
   });
 
-  test('returns base for open-ended Crecimiento day 121', async () => {
+  test('invalid value → 0', async () => {
     const db = getDb();
-    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    // 2026-10-01 + 120 days = 2027-01-29 (day 121)
-    const rate = await getCommissionRate(db, new Date('2027-01-29T12:00:00Z'));
-    expect(rate).toBe(0.1);
+    await db.insert(platformConfig).values({ key: COMMISSION_RATE_KEY, value: 'abc' });
+    expect(await getCommissionRate(db)).toBe(0);
   });
 
-  test('applies daily_increment and caps', async () => {
+  test('soft-caps above 0.30', async () => {
     const db = getDb();
-    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    // day 121 + 20 = day 141 → 0.10 + 20*0.0005 = 0.11
-    const mid = await getCommissionRate(db, new Date('2027-02-18T12:00:00Z'));
-    expect(mid).toBeCloseTo(0.11, 5);
-    // far future → cap 0.15
-    const capped = await getCommissionRate(db, new Date('2030-01-01T12:00:00Z'));
-    expect(capped).toBe(0.15);
+    await db.insert(platformConfig).values({ key: COMMISSION_RATE_KEY, value: '0.99' });
+    expect(await getCommissionRate(db)).toBe(COMMISSION_RATE_SOFT_CAP);
   });
 
-  test('before start_date clamps to day 1 / Lanzamiento', async () => {
+  test('ignores now parameter (no calendar phases)', async () => {
     const db = getDb();
-    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    const config = await getCommissionConfig(db, new Date('2026-09-01T12:00:00Z'));
+    await db.insert(platformConfig).values({ key: COMMISSION_RATE_KEY, value: '0.05' });
+    const a = await getCommissionRate(db, new Date('2020-01-01T00:00:00Z'));
+    const b = await getCommissionRate(db, new Date('2030-01-01T00:00:00Z'));
+    expect(a).toBe(0.05);
+    expect(b).toBe(0.05);
+  });
+});
+
+describe('getCommissionConfig', () => {
+  test('flat compatible shape', async () => {
+    const db = getDb();
+    await db.insert(platformConfig).values({ key: COMMISSION_RATE_KEY, value: '0.05' });
+    const config = await getCommissionConfig(db);
+    expect(config.phase).toBe('Vigente');
     expect(config.currentDay).toBe(1);
-    expect(config.phase).toBe('Lanzamiento');
-    expect(config.rate).toBe(0);
+    expect(config.rate).toBe(0.05);
     expect(config.phaseDayStart).toBe(1);
-    expect(config.phaseDayEnd).toBe(7);
+    expect(config.phaseDayEnd).toBeNull();
   });
 
-  test('includes active phase day bounds', async () => {
+  test('missing rate → 0', async () => {
     const db = getDb();
-    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    const day8 = await getCommissionConfig(db, new Date('2026-10-08T12:00:00Z'));
-    expect(day8.phase).toBe('Medición');
-    expect(day8.phaseDayStart).toBe(8);
-    expect(day8.phaseDayEnd).toBe(14);
-    expect(day8.rate).toBe(0.05);
-
-    const open = await getCommissionConfig(db, new Date('2027-01-29T12:00:00Z'));
-    expect(open.phase).toBe('Crecimiento');
-    expect(open.phaseDayStart).toBe(121);
-    expect(open.phaseDayEnd).toBeNull();
+    const config = await getCommissionConfig(db);
+    expect(config.rate).toBe(0);
   });
 });
 
 describe('getCommissionScheme', () => {
-  test('maps stages without exposing day counters and marks current', async () => {
+  test('single current stage, no multi timeline', async () => {
     const db = getDb();
-    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    const scheme = await getCommissionScheme(db, new Date('2026-10-08T12:00:00Z'));
+    await db.insert(platformConfig).values({ key: COMMISSION_RATE_KEY, value: '0.05' });
+    const scheme = await getCommissionScheme(db);
 
-    expect(scheme.current.phase).toBe('Medición');
-    expect(scheme.current.title).toBe('Comisión promocional');
+    expect(scheme.current.phase).toBe('Vigente');
+    expect(scheme.current.title).toBe('Tu comisión actual');
     expect(scheme.current.rate_pct).toBe(5);
     expect(scheme.current.blurb).toContain('5%');
-    expect(scheme.stages).toHaveLength(4);
-    expect(scheme.stages.map((s) => s.status)).toEqual([
-      'completed',
-      'current',
-      'upcoming',
-      'upcoming',
-    ]);
-    expect(scheme.stages[0]?.title).toBe('Beneficio de lanzamiento');
+    expect(scheme.stages).toHaveLength(1);
+    expect(scheme.stages[0]?.status).toBe('current');
+    expect(scheme.stages[0]?.rate_pct).toBe(5);
     expect(JSON.stringify(scheme)).not.toContain('current_day');
     expect(JSON.stringify(scheme)).not.toContain('day_start');
-    expect(scheme.footnote.toLowerCase()).toContain('viaje');
+    expect(scheme.footnote.toLowerCase()).toContain('comisión');
   });
 
   test('zero-rate current uses keep-100% blurb', async () => {
     const db = getDb();
-    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-    const scheme = await getCommissionScheme(db, new Date('2026-10-01T12:00:00Z'));
+    await db.insert(platformConfig).values({ key: COMMISSION_RATE_KEY, value: '0' });
+    const scheme = await getCommissionScheme(db);
     expect(scheme.current.rate).toBe(0);
     expect(scheme.current.blurb).toBe('Hoy te quedás con el 100% de tus ganancias.');
+    expect(scheme.stages).toHaveLength(1);
     expect(scheme.stages[0]?.status).toBe('current');
-  });
-
-  test('completed/upcoming ramp stages use exit/entry rateForPhase not raw base', async () => {
-    const db = getDb();
-    await db.delete(commissionPhases);
-    await db.insert(commissionPhases).values([
-      { name: 'Lanzamiento', day_start: 1, day_end: 7, base_rate: 0 },
-      {
-        name: 'Crecimiento',
-        day_start: 8,
-        day_end: 27,
-        base_rate: 0.1,
-        daily_increment: 0.005,
-        cap_rate: 0.15,
-      },
-      { name: 'Estándar', day_start: 28, day_end: null, base_rate: 0.15 },
-    ]);
-    await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-10-01' });
-
-    // Day 30 → Lanzamiento completed, Crecimiento completed, Estándar current
-    const afterRamp = await getCommissionScheme(db, new Date('2026-10-30T12:00:00Z'));
-    expect(afterRamp.stages.map((s) => s.status)).toEqual(['completed', 'completed', 'current']);
-    // Crecimiento exit day 27: 0.10 + (27-8)*0.005 = 0.10 + 0.095 = 0.195 → cap 0.15
-    expect(afterRamp.stages[1]?.rate).toBe(0.15);
-    expect(afterRamp.stages[1]?.rate_pct).toBe(15);
-    expect(afterRamp.stages[2]?.rate).toBe(0.15);
-
-    // Day 10 → Crecimiento current mid-ramp: 0.10 + 2*0.005 = 0.11; Estándar upcoming entry 0.15
-    const mid = await getCommissionScheme(db, new Date('2026-10-10T12:00:00Z'));
-    expect(mid.stages.map((s) => s.status)).toEqual(['completed', 'current', 'upcoming']);
-    expect(mid.current.rate).toBeCloseTo(0.11, 5);
-    expect(mid.stages[1]?.rate).toBeCloseTo(0.11, 5);
-    expect(mid.stages[2]?.rate).toBe(0.15);
   });
 });
 
 describe('driver copy helpers', () => {
-  test('title falls back to phase name', () => {
+  test('title for flat phase', () => {
+    expect(driverTitleForPhase('Vigente')).toBe('Tu comisión actual');
+    expect(driverTitleForPhase('flat')).toBe('Tu comisión actual');
     expect(driverTitleForPhase('Custom Ops')).toBe('Custom Ops');
-    expect(driverTitleForPhase('Lanzamiento')).toBe('Beneficio de lanzamiento');
   });
 
   test('blurb switches at zero rate', () => {
     expect(driverBlurbForRate(0)).toContain('100%');
-    expect(driverBlurbForRate(0.15)).toContain('15%');
+    expect(driverBlurbForRate(0.05)).toContain('5%');
+    expect(driverBlurbForRate(0.05)).toContain('95%');
   });
 });

@@ -160,7 +160,10 @@ beforeEach(async () => {
     { name: 'Crecimiento', day_start: 121, day_end: null, base_rate: 0.10, daily_increment: null, cap_rate: 0.15 },
   ]);
   await db.insert(fuelPriceLog).values({ price: 2100, updated_by: 'test' });
-  await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-01-01' }).onConflictDoNothing();
+  await db.insert(platformConfig).values([
+    { key: 'commission_start_date', value: '2026-01-01' },
+    { key: 'commission_rate', value: '0.10' },
+  ]).onConflictDoNothing();
 });
 
 afterAll(async () => {

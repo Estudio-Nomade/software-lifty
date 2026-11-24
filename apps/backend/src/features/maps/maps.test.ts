@@ -4,7 +4,7 @@ process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://lifty:
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { createApp } from '../../index';
 import { getDb, resetDb } from '../../shared/db/client';
-import { driverLocations, drivers, users } from '../../shared/db/schema';
+import { driverLocations, drivers, platformConfig, users } from '../../shared/db/schema';
 import { createTestToken } from '../../shared/testing/utils';
 
 let app: any;
@@ -14,6 +14,7 @@ async function truncateTables() {
   await db.delete(driverLocations);
   await db.delete(drivers);
   await db.delete(users);
+  await db.delete(platformConfig);
 }
 
 async function request(method: string, path: string, body?: object, token?: string) {
@@ -58,6 +59,8 @@ beforeAll(() => {
 
 beforeEach(async () => {
   await truncateTables();
+  const db = getDb();
+  await db.insert(platformConfig).values({ key: 'commission_rate', value: '0.10' });
 });
 
 afterAll(async () => {

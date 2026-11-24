@@ -76,7 +76,10 @@ beforeEach(async () => {
     { name: 'Estabilización', day_start: 15, day_end: 120, base_rate: 0.10 },
     { name: 'Crecimiento', day_start: 121, day_end: null, base_rate: 0.10, daily_increment: null, cap_rate: 0.15 },
   ]);
-  await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-01-01' });
+  await db.insert(platformConfig).values([
+    { key: 'commission_start_date', value: '2026-01-01' },
+    { key: 'commission_rate', value: '0.10' },
+  ]);
 });
 
 afterAll(async () => {
