@@ -1,8 +1,10 @@
+import { isRunningInExpoGo } from 'expo';
 import * as Location from 'expo-location';
 import { Linking, Platform } from 'react-native';
 import { useLocationStore } from '../store/locationStore';
 import {
   BG_LOCATION_PERMISSION_MSG,
+  BG_LOCATION_UNAVAILABLE_MSG,
   LOCATION_DENIED_MSG,
   LOCATION_TASK_NAME,
   type StartTrackingOptions,
@@ -14,6 +16,7 @@ import {
 export {
   applyLocationCoords,
   BG_LOCATION_PERMISSION_MSG,
+  BG_LOCATION_UNAVAILABLE_MSG,
   BG_LOCATION_DISTANCE_INTERVAL_M,
   BG_LOCATION_TIME_INTERVAL_MS,
   buildBackgroundLocationOptions,
@@ -259,15 +262,34 @@ async function stopBackgroundUpdates(): Promise<void> {
   }
 }
 
+export type BackgroundPermissionReason =
+  | 'granted'
+  | 'fg_denied'
+  | 'bg_denied'
+  | 'unavailable'
+  | 'error';
+
 export type BackgroundPermissionResult = {
   granted: boolean;
   canAskAgain: boolean;
+  /**
+   * True when Ajustes can actually surface Always / “todo el tiempo”.
+   * False on web, Expo Go, missing Always Info.plist keys, or native throw.
+   */
+  canOpenSettings: boolean;
+  reason: BackgroundPermissionReason;
 };
 
 /** Foreground first, then background (Android 10+ / iOS Always). */
 export async function ensureBackgroundLocationPermission(): Promise<BackgroundPermissionResult> {
   if (isWebRuntime()) {
-    return { granted: false, canAskAgain: false };
+    return { granted: false, canAskAgain: false, canOpenSettings: false, reason: 'unavailable' };
+  }
+
+  // Expo Go hosts When-In-Use only on many iOS builds: Settings has no “Siempre”,
+  // and requestBackgroundPermissionsAsync often rejects (ERR_LOCATION_INFO_PLIST).
+  if (isRunningInExpoGo()) {
+    return { granted: false, canAskAgain: false, canOpenSettings: false, reason: 'unavailable' };
   }
 
   try {
@@ -276,23 +298,56 @@ export async function ensureBackgroundLocationPermission(): Promise<BackgroundPe
       useLocationStore
         .getState()
         .setLocationError('Permiso de ubicación denegado. Activálo en Ajustes e intentá de nuevo.');
-      return { granted: false, canAskAgain: fg.canAskAgain };
+      return {
+        granted: false,
+        canAskAgain: fg.canAskAgain,
+        canOpenSettings: !fg.canAskAgain,
+        reason: 'fg_denied',
+      };
     }
 
     const existing = await Location.getBackgroundPermissionsAsync();
     if (existing.granted) {
-      return { granted: true, canAskAgain: existing.canAskAgain };
+      return {
+        granted: true,
+        canAskAgain: existing.canAskAgain,
+        canOpenSettings: false,
+        reason: 'granted',
+      };
     }
-    // Don't re-open the system dialog / settings if the user already denied.
+    // Don't re-open the system dialog if the user already denied Always.
     if (!existing.canAskAgain) {
-      return { granted: false, canAskAgain: false };
+      return {
+        granted: false,
+        canAskAgain: false,
+        canOpenSettings: true,
+        reason: 'bg_denied',
+      };
     }
 
     const bg = await Location.requestBackgroundPermissionsAsync();
-    return { granted: bg.granted, canAskAgain: bg.canAskAgain };
+    if (bg.granted) {
+      return {
+        granted: true,
+        canAskAgain: bg.canAskAgain,
+        canOpenSettings: false,
+        reason: 'granted',
+      };
+    }
+    return {
+      granted: false,
+      canAskAgain: bg.canAskAgain,
+      // iOS: Always appears in Settings after a native Always request (even if denied).
+      canOpenSettings: !bg.canAskAgain || Platform.OS === 'android',
+      reason: 'bg_denied',
+    };
   } catch (error) {
-    console.error('ensureBackgroundLocationPermission failed:', error);
-    return { granted: false, canAskAgain: false };
+    // Missing NSLocationAlways* / UIBackgroundModes → throw, not a clean deny.
+    const message = error instanceof Error ? error.message : String(error);
+    if (__DEV__) {
+      console.warn('ensureBackgroundLocationPermission unavailable:', message);
+    }
+    return { granted: false, canAskAgain: false, canOpenSettings: false, reason: 'error' };
   }
 }
 
@@ -492,6 +547,11 @@ export async function requestPermissions(): Promise<boolean> {
   }
 }
 
-export function getBackgroundPermissionCopy(): string {
+export function getBackgroundPermissionCopy(
+  result?: Pick<BackgroundPermissionResult, 'reason'>,
+): string {
+  if (result?.reason === 'unavailable' || result?.reason === 'error') {
+    return BG_LOCATION_UNAVAILABLE_MSG;
+  }
   return BG_LOCATION_PERMISSION_MSG;
 }

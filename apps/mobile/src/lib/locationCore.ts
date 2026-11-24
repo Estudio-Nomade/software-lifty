@@ -10,6 +10,13 @@ export const BG_LOCATION_DISTANCE_INTERVAL_M = 50;
 export const BG_LOCATION_PERMISSION_MSG =
   'Para seguir recibiendo viajes con la app en segundo plano, permití la ubicación “siempre” / “todo el tiempo” en Ajustes.';
 
+/**
+ * Expo Go (and some bare hosts) only expose When In Use in iOS Settings.
+ * Always / background requires a native binary with UIBackgroundModes + Always plist keys.
+ */
+export const BG_LOCATION_UNAVAILABLE_MSG =
+  'En este runtime (p. ej. Expo Go) iOS no ofrece ubicación “Siempre”. Podés conectarte igual con la app abierta. Para segundo plano real usá un build nativo (dev/preview).';
+
 export const LOCATION_DENIED_MSG =
   'No pudimos obtener tu ubicación. Activá el GPS o permití el acceso e intentá de nuevo.';
 
