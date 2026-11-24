@@ -158,7 +158,7 @@ describe('driver background location tracking', () => {
     expect(mockStopUpdates).toHaveBeenCalledWith('lifty-location');
   });
 
-  it('ensureBackgroundLocationPermission skips native Always request in Expo Go', async () => {
+  it('ensureBackgroundLocationPermission still asks FG then skips Always in Expo Go', async () => {
     mockIsRunningInExpoGo.mockReturnValue(true);
 
     const result = await ensureBackgroundLocationPermission();
@@ -169,7 +169,7 @@ describe('driver background location tracking', () => {
       canOpenSettings: false,
       reason: 'unavailable',
     });
-    expect(mockRequestFg).not.toHaveBeenCalled();
+    expect(mockRequestFg).toHaveBeenCalled();
     expect(mockRequestBg).not.toHaveBeenCalled();
     expect(getBackgroundPermissionCopy(result)).toMatch(/Expo Go|Siempre|build nativo/i);
   });

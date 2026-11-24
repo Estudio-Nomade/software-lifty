@@ -286,13 +286,9 @@ export async function ensureBackgroundLocationPermission(): Promise<BackgroundPe
     return { granted: false, canAskAgain: false, canOpenSettings: false, reason: 'unavailable' };
   }
 
-  // Expo Go hosts When-In-Use only on many iOS builds: Settings has no “Siempre”,
-  // and requestBackgroundPermissionsAsync often rejects (ERR_LOCATION_INFO_PLIST).
-  if (isRunningInExpoGo()) {
-    return { granted: false, canAskAgain: false, canOpenSettings: false, reason: 'unavailable' };
-  }
-
   try {
+    // Always obtain When-In-Use first — callers (GO soft-gate / bg task) rely on this
+    // even when Always is unavailable (Expo Go).
     const fg = await Location.requestForegroundPermissionsAsync();
     if (!fg.granted) {
       useLocationStore
@@ -304,6 +300,12 @@ export async function ensureBackgroundLocationPermission(): Promise<BackgroundPe
         canOpenSettings: !fg.canAskAgain,
         reason: 'fg_denied',
       };
+    }
+
+    // Expo Go hosts When-In-Use only on many iOS builds: Settings has no “Siempre”,
+    // and requestBackgroundPermissionsAsync often rejects (ERR_LOCATION_INFO_PLIST).
+    if (isRunningInExpoGo()) {
+      return { granted: false, canAskAgain: false, canOpenSettings: false, reason: 'unavailable' };
     }
 
     const existing = await Location.getBackgroundPermissionsAsync();
