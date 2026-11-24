@@ -18,6 +18,7 @@ import {
   setConfig,
   toRatePct,
 } from '../src/shared/lib/commission';
+import { notifyDriversCommissionRateChanged } from '../src/shared/lib/commission-rate-notify';
 
 async function main() {
   const arg = process.argv[2];
@@ -38,6 +39,12 @@ async function main() {
 
   const nextRaw = await getConfig(db, COMMISSION_RATE_KEY);
   const next = parseCommissionRate(nextRaw);
+  const changed = prev !== next;
+
+  let notify: Awaited<ReturnType<typeof notifyDriversCommissionRateChanged>> | null = null;
+  if (changed) {
+    notify = await notifyDriversCommissionRateChanged(db, next);
+  }
 
   console.log(
     JSON.stringify(
@@ -55,7 +62,8 @@ async function main() {
           rate: next,
           rate_pct: toRatePct(next),
         },
-        changed: prev !== next,
+        changed,
+        notify,
       },
       null,
       2,

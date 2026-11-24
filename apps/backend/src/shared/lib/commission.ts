@@ -39,6 +39,8 @@ export interface CommissionScheme {
 }
 
 export const COMMISSION_RATE_KEY = 'commission_rate';
+/** Last rate string we already fan-out notified (idempotency for script/admin races). */
+export const COMMISSION_RATE_LAST_NOTIFIED_KEY = 'commission_rate_last_notified';
 
 /** Soft cap: platform fee fraction 0–0.30 (0%–30%). Above 0.30 clamps to 0.30. */
 export const COMMISSION_RATE_SOFT_CAP = 0.3;
@@ -82,6 +84,18 @@ export function parseCommissionRate(raw: string | null | undefined): number {
 }
 
 /**
+ * Canonical fraction string for platform_config (runbook-aligned).
+ * 0 → "0", 0.05 → "0.05", 0.1 → "0.1" (no float junk).
+ */
+export function formatCommissionRateStored(rate: number): string {
+  const n = parseCommissionRate(String(rate));
+  if (n === 0) return '0';
+  const fixed = n.toFixed(4);
+  const trimmed = fixed.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
+  return trimmed === '' ? '0' : trimmed;
+}
+
+/**
  * CLI / ops arg → fraction string for platform_config.
  * Bare number = fraction 0…0.30 only. Percent needs suffix: `5%` → 0.05.
  * Bare `5` does **not** mean 5% (rejects with hint).
@@ -98,7 +112,7 @@ export function parseCommissionRateCliArg(raw: string): string {
         `rate above soft cap ${COMMISSION_RATE_SOFT_CAP} (${COMMISSION_RATE_SOFT_CAP * 100}%) — got ${pct}%`,
       );
     }
-    return String(fraction);
+    return formatCommissionRateStored(fraction);
   }
   const n = Number.parseFloat(t);
   if (!Number.isFinite(n) || n < 0) throw new Error(`invalid rate: ${raw}`);
@@ -106,14 +120,14 @@ export function parseCommissionRateCliArg(raw: string): string {
   if (n > COMMISSION_RATE_SOFT_CAP) {
     if (n > 1 && n <= 100) {
       throw new Error(
-        `bare ${raw} looks like a percent; use ${raw}% (→ ${(n / 100).toFixed(2)}) or fraction 0–${COMMISSION_RATE_SOFT_CAP}`,
+        `bare ${raw} looks like a percent; use ${raw}% (→ ${formatCommissionRateStored(n / 100)}) or fraction 0–${COMMISSION_RATE_SOFT_CAP}`,
       );
     }
     throw new Error(
       `bare rate must be fraction 0–${COMMISSION_RATE_SOFT_CAP} (got ${n}); for percent use e.g. 5%`,
     );
   }
-  return String(n);
+  return formatCommissionRateStored(n);
 }
 
 export async function getCommissionRate(
