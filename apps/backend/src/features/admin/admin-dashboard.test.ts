@@ -134,7 +134,10 @@ beforeEach(async () => {
       cap_rate: 0.15,
     },
   ]);
-  await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-01-01' });
+  await db.insert(platformConfig).values([
+    { key: 'commission_start_date', value: '2026-01-01' },
+    { key: 'commission_rate', value: '0.10' },
+  ]);
 });
 
 afterAll(async () => {

@@ -97,7 +97,10 @@ beforeEach(async () => {
     { name: 'Estabilización', day_start: 15, day_end: 120, base_rate: 0.10 },
     { name: 'Crecimiento', day_start: 121, day_end: null, base_rate: 0.10, daily_increment: null, cap_rate: 0.15 },
   ]);
-  await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-01-01' });
+  await db.insert(platformConfig).values([
+    { key: 'commission_start_date', value: '2026-01-01' },
+    { key: 'commission_rate', value: '0.10' },
+  ]);
 });
 
 afterAll(async () => {
@@ -163,21 +166,16 @@ describe('Earnings + Stats + TVF', () => {
     expect(data.debt_blocks_online).toBe(false);
   });
 
-  test('GET /daily exposes global commission phase from admin config', async () => {
+  test('GET /daily exposes global flat commission_rate from config', async () => {
     const token = await registerAndGetToken(phone, password);
     await createDriverRow(token);
     const db = getDb();
-    // Force Lanzamiento window relative to "now"
-    const today = new Date();
-    const y = today.getUTCFullYear();
-    const m = String(today.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(today.getUTCDate()).padStart(2, '0');
     await db
       .insert(platformConfig)
-      .values({ key: 'commission_start_date', value: `${y}-${m}-${d}` })
+      .values({ key: 'commission_rate', value: '0' })
       .onConflictDoUpdate({
         target: platformConfig.key,
-        set: { value: `${y}-${m}-${d}`, updated_at: new Date() },
+        set: { value: '0', updated_at: new Date() },
       });
 
     const { status, data } = await request(
@@ -189,17 +187,17 @@ describe('Earnings + Stats + TVF', () => {
 
     expect(status).toBe(200);
     expect(data.commission).toBeDefined();
-    expect(data.commission.phase).toBe('Lanzamiento');
+    expect(data.commission.phase).toBe('Vigente');
     expect(data.commission.rate).toBe(0);
     expect(data.commission.rate_pct).toBe(0);
     expect(data.commission.current_day).toBe(1);
     expect(data.commission.phase_day_start).toBe(1);
-    expect(data.commission.phase_day_end).toBe(7);
-    expect(data.commission.title).toBe('Beneficio de lanzamiento');
+    expect(data.commission.phase_day_end).toBeNull();
+    expect(data.commission.title).toBe('Tu comisión actual');
     expect(data.commission.blurb).toContain('100%');
     expect(data.commission_scheme).toBeDefined();
     expect(data.commission_scheme.current.rate_pct).toBe(0);
-    expect(data.commission_scheme.stages.length).toBeGreaterThanOrEqual(1);
+    expect(data.commission_scheme.stages).toHaveLength(1);
     expect(data.commission_scheme.stages[0].status).toBe('current');
     expect(JSON.stringify(data.commission_scheme)).not.toContain('current_day');
   });

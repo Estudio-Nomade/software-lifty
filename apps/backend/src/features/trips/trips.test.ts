@@ -109,7 +109,10 @@ beforeEach(async () => {
     { name: 'Estabilización', day_start: 15, day_end: 120, base_rate: 0.10 },
     { name: 'Crecimiento', day_start: 121, day_end: null, base_rate: 0.10, daily_increment: null, cap_rate: 0.15 },
   ]);
-  await db.insert(platformConfig).values({ key: 'commission_start_date', value: '2026-01-01' });
+  await db.insert(platformConfig).values([
+    { key: 'commission_start_date', value: '2026-01-01' },
+    { key: 'commission_rate', value: '0.10' },
+  ]);
 });
 
 afterAll(async () => {
@@ -738,14 +741,14 @@ describe('Trip State Machine', () => {
     const driverId = await createDriverRow(token);
 
     const db = getDb();
-    // Rate 0 = "Lanzamiento" (days 1–7). Pin start_date to today so currentDay=1
-    // regardless of when CI runs (phases are day-based, not month-based).
-    const now = new Date();
-    const todayUtc = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
+    // Flat rate 0 (launch-safe default / explicit seed).
     await db
-      .update(platformConfig)
-      .set({ value: todayUtc })
-      .where(eq(platformConfig.key, 'commission_start_date'));
+      .insert(platformConfig)
+      .values({ key: 'commission_rate', value: '0' })
+      .onConflictDoUpdate({
+        target: platformConfig.key,
+        set: { value: '0', updated_at: new Date() },
+      });
 
     const { tripId } = await completeTrip(token);
     const { status, data } = await request(

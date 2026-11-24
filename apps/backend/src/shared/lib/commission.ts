@@ -1,19 +1,19 @@
-import { and, asc, eq, lte, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { commissionPhases, platformConfig } from '../db/schema';
+import { platformConfig } from '../db/schema';
 
 export interface CommissionConfig {
   phase: string;
   currentDay: number;
   rate: number;
-  /** Inclusive day bounds of the active phase (same as commission_phases). */
+  /** Inclusive day bounds (compat shape; flat rate has no window). */
   phaseDayStart: number;
   phaseDayEnd: number | null;
 }
 
 export type CommissionStageStatus = 'completed' | 'current' | 'upcoming';
 
-/** Driver-facing progressive scheme (no calendar / day counters). */
+/** Driver-facing scheme (single current rate; no multi-phase timeline). */
 export interface CommissionSchemeStage {
   id: string;
   title: string;
@@ -38,19 +38,16 @@ export interface CommissionScheme {
   footnote: string;
 }
 
-const COMMISSION_SCHEME_FOOTNOTE =
-  'Tu comisión se calcula sobre el valor de cada viaje. Podés consultar el detalle de los descuentos en tu historial de viajes.';
+export const COMMISSION_RATE_KEY = 'commission_rate';
 
-/** Human titles for known admin phase names; unknown names pass through. */
-const DRIVER_TITLE_BY_PHASE: Record<string, string> = {
-  Lanzamiento: 'Beneficio de lanzamiento',
-  Medición: 'Comisión promocional',
-  Estabilización: 'Comisión estándar',
-  Crecimiento: 'Comisión en crecimiento',
-};
+/** Soft cap: platform fee fraction 0–0.30 (0%–30%). Above 0.30 clamps to 0.30. */
+export const COMMISSION_RATE_SOFT_CAP = 0.3;
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const DEV_DEFAULT_START = '2026-10-01';
+const FLAT_PHASE = 'Vigente';
+const FLAT_STAGE_ID = 'flat';
+const FLAT_TITLE = 'Tu comisión actual';
+
+const COMMISSION_SCHEME_FOOTNOTE = 'La comisión se descuenta automáticamente de cada viaje.';
 
 export async function getConfig(db: NodePgDatabase, key: string): Promise<string> {
   const [row] = await db
@@ -68,12 +65,26 @@ export async function setConfig(db: NodePgDatabase, key: string, value: string):
     .onConflictDoUpdate({ target: platformConfig.key, set: { value, updated_at: new Date() } });
 }
 
+/**
+ * Parse platform_config.commission_rate string → fraction.
+ * Missing / empty / NaN / negative → 0 (launch-safe). Soft-cap at 0.30.
+ */
+export function parseCommissionRate(raw: string | null | undefined): number {
+  if (raw == null) return 0;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return 0;
+  const n = Number.parseFloat(trimmed);
+  if (!Number.isFinite(n) || Number.isNaN(n) || n < 0) return 0;
+  if (n > COMMISSION_RATE_SOFT_CAP) return COMMISSION_RATE_SOFT_CAP;
+  return n;
+}
+
 export async function getCommissionRate(
   db: NodePgDatabase,
-  now: Date = new Date(),
+  _now: Date = new Date(),
 ): Promise<number> {
-  const config = await getCommissionConfig(db, now);
-  return config.rate;
+  const raw = await getConfig(db, COMMISSION_RATE_KEY);
+  return parseCommissionRate(raw);
 }
 
 export const DEFAULT_DEBT_CAP_ARS = 10000;
@@ -82,63 +93,6 @@ export async function getDebtCapArs(db: NodePgDatabase): Promise<number> {
   const value = await getConfig(db, 'platform.debt_cap_ars');
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? DEFAULT_DEBT_CAP_ARS : parsed;
-}
-
-/** Day 1 = UTC calendar date of start (inclusive). Before start → day 1. */
-export function differenceInCalendarDaysUtc(now: Date, start: Date): number {
-  const nowUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const startUtc = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
-  return Math.floor((nowUtc - startUtc) / MS_PER_DAY);
-}
-
-export function currentCommissionDay(now: Date, startDate: Date): number {
-  return Math.max(1, differenceInCalendarDaysUtc(now, startDate) + 1);
-}
-
-function rateForPhase(
-  phase: {
-    name: string;
-    day_start: number;
-    base_rate: number;
-    daily_increment: number | null;
-    cap_rate: number | null;
-  },
-  day: number,
-): number {
-  let rate = phase.base_rate;
-  if (phase.daily_increment != null) {
-    const extraDays = Math.max(0, day - phase.day_start);
-    rate = phase.base_rate + extraDays * phase.daily_increment;
-    if (phase.cap_rate != null) {
-      rate = Math.min(rate, phase.cap_rate);
-    }
-  }
-  return rate;
-}
-
-/** Display rate for a scheme row: entry / live / exit of the phase window. */
-function displayRateForStage(
-  phase: {
-    name: string;
-    day_start: number;
-    day_end: number | null;
-    base_rate: number;
-    daily_increment: number | null;
-    cap_rate: number | null;
-  },
-  status: CommissionStageStatus,
-  currentDay: number,
-): number {
-  if (status === 'current') {
-    return rateForPhase(phase, currentDay);
-  }
-  if (status === 'completed') {
-    // Last day of the closed window (status requires day_end).
-    const endDay = phase.day_end ?? phase.day_start;
-    return rateForPhase(phase, endDay);
-  }
-  // upcoming: rate on the first day of the phase
-  return rateForPhase(phase, phase.day_start);
 }
 
 export function toRatePct(rate: number): number {
@@ -152,8 +106,8 @@ export function formatRatePctLabel(ratePct: number): string {
 
 export function driverTitleForPhase(phaseName: string): string {
   const trimmed = (phaseName || '').trim();
-  if (!trimmed) return 'Comisión actual';
-  return DRIVER_TITLE_BY_PHASE[trimmed] ?? trimmed;
+  if (!trimmed || trimmed === FLAT_PHASE || trimmed === 'flat') return FLAT_TITLE;
+  return trimmed;
 }
 
 export function driverBlurbForRate(rate: number): string {
@@ -162,55 +116,27 @@ export function driverBlurbForRate(rate: number): string {
     return 'Hoy te quedás con el 100% de tus ganancias.';
   }
   const pct = formatRatePctLabel(ratePct);
-  return `Por cada viaje, Lifty retiene el ${pct}% del valor correspondiente.`;
+  const keep = formatRatePctLabel(100 - ratePct);
+  return `Por cada viaje, Lifty retiene el ${pct}%. Tus ganancias: ${keep}% de la tarifa restante.`;
 }
 
-function stageStatusForDay(
-  phase: { day_start: number; day_end: number | null },
-  currentDay: number,
-): CommissionStageStatus {
-  if (phase.day_end != null && phase.day_end < currentDay) return 'completed';
-  if (phase.day_start <= currentDay && (phase.day_end == null || phase.day_end >= currentDay)) {
-    return 'current';
-  }
-  return 'upcoming';
-}
-
+/** Compat shape for admin dashboard / earnings — rate from flat config only. */
 export async function getCommissionConfig(
   db: NodePgDatabase,
-  now: Date = new Date(),
+  _now: Date = new Date(),
 ): Promise<CommissionConfig> {
-  const dateStr = (await getConfig(db, 'commission_start_date')) || DEV_DEFAULT_START;
-  const startDate = new Date(`${dateStr}T00:00:00Z`);
-  const currentDay = currentCommissionDay(now, startDate);
-
-  const [phase] = await db
-    .select()
-    .from(commissionPhases)
-    .where(
-      and(
-        lte(commissionPhases.day_start, currentDay),
-        sql`(${commissionPhases.day_end} IS NULL OR ${commissionPhases.day_end} >= ${currentDay})`,
-      ),
-    )
-    .limit(1);
-
-  if (!phase) {
-    throw new Error(`No commission phase found for day ${currentDay}`);
-  }
-
+  const rate = await getCommissionRate(db);
   return {
-    phase: phase.name,
-    currentDay,
-    rate: rateForPhase(phase, currentDay),
-    phaseDayStart: phase.day_start,
-    phaseDayEnd: phase.day_end,
+    phase: FLAT_PHASE,
+    currentDay: 1,
+    rate,
+    phaseDayStart: 1,
+    phaseDayEnd: null,
   };
 }
 
 /**
- * Progressive scheme for driver Cobros UI.
- * Backend is SoT for rates/order; day bounds stay internal (not exposed on stages).
+ * Single-stage scheme for driver Cobros (no multi-phase timeline).
  */
 export async function getCommissionScheme(
   db: NodePgDatabase,
@@ -218,40 +144,29 @@ export async function getCommissionScheme(
   configOverride?: CommissionConfig,
 ): Promise<CommissionScheme> {
   const config = configOverride ?? (await getCommissionConfig(db, now));
-  const phases = await db.select().from(commissionPhases).orderBy(asc(commissionPhases.day_start));
+  const ratePct = toRatePct(config.rate);
+  const title = driverTitleForPhase(config.phase);
+  const blurb = driverBlurbForRate(config.rate);
 
-  const stages: CommissionSchemeStage[] = phases.map((phase, index) => {
-    const status = stageStatusForDay(phase, config.currentDay);
-    const rate = displayRateForStage(phase, status, config.currentDay);
-    const ratePct = toRatePct(rate);
-    const title = driverTitleForPhase(phase.name);
-    return {
-      id: phase.id,
+  const current: CommissionSchemeCurrent = {
+    title,
+    rate: config.rate,
+    rate_pct: ratePct,
+    blurb,
+    phase: config.phase,
+  };
+
+  const stages: CommissionSchemeStage[] = [
+    {
+      id: FLAT_STAGE_ID,
       title,
-      rate,
+      rate: config.rate,
       rate_pct: ratePct,
-      blurb: driverBlurbForRate(rate),
-      status,
-      order: index + 1,
-    };
-  });
-
-  const currentStage = stages.find((s) => s.status === 'current');
-  const current: CommissionSchemeCurrent = currentStage
-    ? {
-        title: currentStage.title,
-        rate: currentStage.rate,
-        rate_pct: currentStage.rate_pct,
-        blurb: currentStage.blurb,
-        phase: config.phase,
-      }
-    : {
-        title: driverTitleForPhase(config.phase),
-        rate: config.rate,
-        rate_pct: toRatePct(config.rate),
-        blurb: driverBlurbForRate(config.rate),
-        phase: config.phase,
-      };
+      blurb,
+      status: 'current',
+      order: 1,
+    },
+  ];
 
   return {
     current,
