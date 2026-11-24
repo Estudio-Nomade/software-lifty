@@ -9,9 +9,9 @@
  *
  * Strategy:
  *  1. If both named containers are healthy → no-op.
- *  2. If they exist but are stopped → `docker start` + wait healthy.
- *  3. If some are missing → `docker compose up` only the missing services.
- *  4. On name-conflict from compose → start existing containers + wait.
+ *  2. Heal existing not-ready: stopped → `docker start`; running+unhealthy → `restart`.
+ *  3. `compose up` for missing **and** still not-ready services (not only missing).
+ *  4. On name-conflict from compose → heal existing again + wait.
  */
 import { join } from 'node:path';
 
@@ -95,11 +95,32 @@ function missingServices(): string[] {
   );
 }
 
-function startExisting(): void {
-  const names = existingNames();
-  if (names.length === 0) return;
-  // `docker start` is a no-op for already-running containers.
-  run(['docker', 'start', ...names], { inherit: true });
+/** Services whose containers exist but are not ready (stopped / unhealthy). */
+function notReadyServices(): string[] {
+  return STACK.filter(({ container }) => {
+    const state = inspectContainer(container);
+    return state.exists && !isReady(state);
+  }).map(({ service }) => service);
+}
+
+/**
+ * Bring existing containers toward ready without compose:
+ * - stopped → start
+ * - running + unhealthy → restart (start is a no-op while running)
+ * - running + starting → leave for waitUntilReady (avoid thrash during first boot)
+ */
+function healExisting(): void {
+  for (const { container } of STACK) {
+    const state = inspectContainer(container);
+    if (!state.exists || isReady(state)) continue;
+    if (!state.running) {
+      run(['docker', 'start', container], { inherit: true });
+      continue;
+    }
+    if (state.health === 'unhealthy') {
+      run(['docker', 'restart', container], { inherit: true });
+    }
+  }
 }
 
 async function waitUntilReady(timeoutMs = HEALTH_TIMEOUT_MS): Promise<boolean> {
@@ -125,6 +146,13 @@ function isNameConflict(output: string): boolean {
   return /name .* is already in use|Conflict\. The container name/i.test(output);
 }
 
+/** Services to pass to compose: missing + still not-ready (full stack → undefined). */
+function composeTargetServices(): string[] | undefined {
+  const targets = [...new Set([...missingServices(), ...notReadyServices()])];
+  if (targets.length === 0 || targets.length === STACK.length) return undefined;
+  return targets;
+}
+
 /**
  * Ensures lifty-dev-pg (:5433) + lifty-dev-redis (:6380) are up and healthy.
  * Returns false on failure so callers can print context + exit.
@@ -137,15 +165,16 @@ export async function ensureDevContainers(): Promise<boolean> {
 
   const existing = existingNames();
   if (existing.length > 0) {
-    console.log(`🐳 Starting existing containers: ${existing.join(', ')}…`);
-    startExisting();
+    console.log(`🐳 Healing existing containers: ${existing.join(', ')}…`);
+    healExisting();
     if (await waitUntilReady()) return true;
   }
 
-  const missing = missingServices();
-  const label = missing.length === STACK.length ? 'all services' : missing.join(', ');
+  const targets = composeTargetServices();
+  const label =
+    targets == null ? 'all services' : targets.length ? targets.join(', ') : 'all services';
   console.log(`🐳 docker compose up (${label})…`);
-  const result = composeUp(missing.length === STACK.length ? undefined : missing);
+  const result = composeUp(targets);
   if (result.ok) return true;
   if (await waitUntilReady()) {
     // Race: foreign project already brought them healthy while compose failed.
@@ -155,8 +184,8 @@ export async function ensureDevContainers(): Promise<boolean> {
 
   // Worktree / foreign compose project left containers with the same names.
   if (isNameConflict(result.output) && existingNames().length > 0) {
-    console.log('🐳 Compose name conflict — reusing existing lifty-dev containers…');
-    startExisting();
+    console.log('🐳 Compose name conflict — healing existing lifty-dev containers…');
+    healExisting();
     if (await waitUntilReady()) return true;
   }
 
@@ -174,7 +203,9 @@ export function printDevInfraFailure(): void {
   console.error(
     '     docker compose -f docker-compose.dev.yml pull && docker compose -f docker-compose.dev.yml up -d --wait',
   );
-  console.error('   • Name conflict leftover: docker start lifty-dev-pg lifty-dev-redis');
+  console.error(
+    '   • Stopped/unhealthy leftovers: docker start lifty-dev-pg lifty-dev-redis  (or restart if unhealthy)',
+  );
   console.error(
     '   • Nuclear (keeps PG volume): docker rm -f lifty-dev-pg lifty-dev-redis && docker compose -f docker-compose.dev.yml up -d --wait',
   );
