@@ -12,6 +12,11 @@ const mockStartUpdates = jest.fn();
 const mockStopUpdates = jest.fn();
 const mockIsTaskDefined = jest.fn(() => false);
 const mockDefineTask = jest.fn();
+const mockIsRunningInExpoGo = jest.fn(() => false);
+
+jest.mock('expo', () => ({
+  isRunningInExpoGo: () => mockIsRunningInExpoGo(),
+}));
 
 jest.mock('expo-location', () => ({
   requestForegroundPermissionsAsync: (...args: unknown[]) => mockRequestFg(...args),
@@ -37,6 +42,8 @@ jest.mock('../../api/client', () => ({
 
 import {
   buildBackgroundLocationOptions,
+  ensureBackgroundLocationPermission,
+  getBackgroundPermissionCopy,
   shouldStartBackgroundUpdates,
   startTracking,
   stopTracking,
@@ -48,6 +55,7 @@ describe('driver background location tracking', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsRunningInExpoGo.mockReturnValue(false);
     useLocationStore.setState({
       lat: null,
       lng: null,
@@ -148,5 +156,32 @@ describe('driver background location tracking', () => {
     await Promise.all([startP, stopP]);
 
     expect(mockStopUpdates).toHaveBeenCalledWith('lifty-location');
+  });
+
+  it('ensureBackgroundLocationPermission still asks FG then skips Always in Expo Go', async () => {
+    mockIsRunningInExpoGo.mockReturnValue(true);
+
+    const result = await ensureBackgroundLocationPermission();
+
+    expect(result).toEqual({
+      granted: false,
+      canAskAgain: false,
+      canOpenSettings: false,
+      reason: 'unavailable',
+    });
+    expect(mockRequestFg).toHaveBeenCalled();
+    expect(mockRequestBg).not.toHaveBeenCalled();
+    expect(getBackgroundPermissionCopy(result)).toMatch(/Expo Go|Siempre|build nativo/i);
+  });
+
+  it('ensureBackgroundLocationPermission marks settings useless when Always request throws', async () => {
+    mockRequestBg.mockRejectedValue(new Error('ERR_LOCATION_INFO_PLIST'));
+
+    const result = await ensureBackgroundLocationPermission();
+
+    expect(result.granted).toBe(false);
+    expect(result.canOpenSettings).toBe(false);
+    expect(result.reason).toBe('error');
+    expect(mockRequestBg).toHaveBeenCalled();
   });
 });

@@ -48,8 +48,8 @@ import {
   feedbackFromConnectError,
 } from '../lib/connectBlockedFeedback';
 import {
-  BG_LOCATION_PERMISSION_MSG,
   ensureBackgroundLocationPermission,
+  getBackgroundPermissionCopy,
   getCurrentPosition,
   isWebRuntime,
   openLocationSettings,
@@ -358,23 +358,31 @@ export const ActiveScreen: React.FC = () => {
 
     // Soft-gate: warn if background location is denied. Matching drops after ~5 min
     // without pin refresh; still allow GO so drivers can work in foreground.
+    // Expo Go / hosts without Always keys: no “Siempre” in iOS Settings — don't
+    // bounce to Ajustes (useless) and explain the runtime limit instead.
     if (!isWebRuntime()) {
       const bg = await ensureBackgroundLocationPermission();
       if (!bg.granted) {
+        const message = getBackgroundPermissionCopy(bg);
         showConnectFeedback({
           title: 'Ubicación en segundo plano',
-          message: BG_LOCATION_PERMISSION_MSG,
+          message,
           tone: 'warning',
         });
-        Alert.alert('Ubicación en segundo plano', BG_LOCATION_PERMISSION_MSG, [
-          { text: 'Continuar', style: 'cancel' },
-          {
+        const buttons: {
+          text: string;
+          style?: 'cancel' | 'default' | 'destructive';
+          onPress?: () => void;
+        }[] = [{ text: 'Continuar', style: 'cancel' }];
+        if (bg.canOpenSettings) {
+          buttons.push({
             text: 'Abrir Ajustes',
             onPress: () => {
               void openLocationSettings();
             },
-          },
-        ]);
+          });
+        }
+        Alert.alert('Ubicación en segundo plano', message, buttons);
       }
     }
 
