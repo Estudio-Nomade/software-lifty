@@ -627,6 +627,12 @@ export function handleNotificationResponse(
     case 'driver:commission_debt_block':
       navigate('PayCommissionDebt');
       break;
+    case 'driver:commission_rate_change': {
+      const inboxParams: Record<string, string> = {};
+      if (data?.message_id) inboxParams.messageId = data.message_id;
+      navigate('Messages', Object.keys(inboxParams).length ? inboxParams : undefined);
+      break;
+    }
     case 'trip:message': {
       // Chat reads the active trip from the store (restored by ActiveTripRecovery).
       // Pass trip_id so deep-links stay explicit if the route ever needs it.

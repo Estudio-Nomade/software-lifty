@@ -14,6 +14,7 @@ import {
   getCommissionRate,
   getCommissionScheme,
   getDebtCapArs,
+  formatCommissionRateStored,
   parseCommissionRate,
   parseCommissionRateCliArg,
 } from './commission';
@@ -64,10 +65,20 @@ describe('parseCommissionRate', () => {
   });
 });
 
+describe('formatCommissionRateStored', () => {
+  test('canonical strings match runbook style', () => {
+    expect(formatCommissionRateStored(0)).toBe('0');
+    expect(formatCommissionRateStored(0.05)).toBe('0.05');
+    expect(formatCommissionRateStored(0.1)).toBe('0.1');
+    expect(formatCommissionRateStored(0.3)).toBe('0.3');
+  });
+});
+
 describe('parseCommissionRateCliArg', () => {
-  test('accepts fraction and percent forms', () => {
+  test('accepts fraction and percent forms as canonical strings', () => {
     expect(parseCommissionRateCliArg('0')).toBe('0');
     expect(parseCommissionRateCliArg('0.05')).toBe('0.05');
+    expect(parseCommissionRateCliArg('0.10')).toBe('0.1');
     expect(parseCommissionRateCliArg('5%')).toBe('0.05');
     expect(parseCommissionRateCliArg('0%')).toBe('0');
   });

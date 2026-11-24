@@ -2683,7 +2683,12 @@ export const driversService = {
         id: r.id,
         type: r.type,
         body: r.body,
-        title: r.type === 'review_notes' ? 'Documentación' : 'Aviso de Lifty',
+        title:
+          r.type === 'review_notes'
+            ? 'Documentación'
+            : r.type === 'commission_rate_change'
+              ? 'Actualización de tu comisión'
+              : 'Aviso de Lifty',
         created_at: r.created_at,
         read_at: r.read_at,
       })),

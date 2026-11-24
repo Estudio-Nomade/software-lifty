@@ -57,8 +57,16 @@ cd apps/backend && supabase db push
 
 ## Notify drivers
 
-When rate **changes**, PR2 hooks push + in-app `driver_account_messages`.  
-Until then: optional human WA T-24h; app still serves new rate on next trip.
+When rate **changes**, `set-commission-rate.ts` (and admin PUT rate) call
+`notifyDriversCommissionRateChanged`:
+
+- Audience: drivers `status = approved`
+- Inbox: `driver_account_messages.type = commission_rate_change`
+- Push: title `Actualización de tu comisión`, data `type=driver:commission_rate_change`
+- Same rate twice → **no** notify (`changed` check + `commission_rate_last_notified` claim)
+- Concurrent script/admin with same rate → only one fan-out wins the claim
+
+Optional human WA T-24h stays outside the app.
 
 ## Out of scope
 
