@@ -2498,23 +2498,39 @@ export const driversService = {
     );
     if (!healed) return null;
 
-    await db
-      .update(drivers)
-      .set({
-        address_line: healed.address_line,
-        address_lat: healed.address_lat,
-        address_lng: healed.address_lng,
-        address_resolved_city: healed.address_resolved_city,
-        address_resolved_province: healed.address_resolved_province,
-        geocoder_city: healed.geocoder_city,
-        geocoder_province: healed.geocoder_province,
-        municipality_status: healed.municipality_status,
-        resolution_method: healed.resolution_method,
-        service_market_id: healed.service_market_id,
-        intended_district_id: healed.intended_district_id,
-        updated_at: new Date(),
-      })
-      .where(eq(drivers.id, driver.id));
+    const healCore = {
+      address_line: healed.address_line,
+      address_lat: healed.address_lat,
+      address_lng: healed.address_lng,
+      address_resolved_city: healed.address_resolved_city,
+      address_resolved_province: healed.address_resolved_province,
+      municipality_status: healed.municipality_status,
+      intended_district_id: healed.intended_district_id,
+      updated_at: new Date(),
+    };
+    try {
+      await db
+        .update(drivers)
+        .set({
+          ...healCore,
+          geocoder_city: healed.geocoder_city,
+          geocoder_province: healed.geocoder_province,
+          resolution_method: healed.resolution_method,
+          service_market_id: healed.service_market_id,
+        })
+        .where(eq(drivers.id, driver.id));
+    } catch (err) {
+      // Pre-0066 schema: still persist operational heal without audit cols.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!/geocoder_|resolution_method|service_market_id|address_accuracy_m/i.test(msg)) {
+        throw err;
+      }
+      logger.warn('[drivers] municipality heal schema drift — retry without audit cols', {
+        driverId: driver.id.slice(0, 8),
+        message: msg,
+      });
+      await db.update(drivers).set(healCore).where(eq(drivers.id, driver.id));
+    }
 
     logger.info('[DRIVERS] healed waitlisted municipality to operational', {
       driverId: driver.id.slice(0, 8),

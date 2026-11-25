@@ -691,43 +691,182 @@ describe('Driver address municipality eligibility', () => {
   });
 
   test('waitlisted driver cannot go online → MUNICIPALITY_NOT_ENABLED', async () => {
-    const db = getDb();
-    const [user] = await db
-      .insert(users)
-      .values({ phone: '+5492619000003', full_name: 'Online Block', role: 'driver' })
-      .returning({ id: users.id });
-    const token = createTestToken(user.id);
+      const db = getDb();
+      const [user] = await db
+        .insert(users)
+        .values({ phone: '+549****0003', full_name: 'Online Block', role: 'driver' })
+        .returning({ id: users.id });
+      const token = createTestToken(user.id);
 
-    const [driver] = await db
-      .insert(driversTable)
-      .values({
+      const [driver] = await db
+        .insert(driversTable)
+        .values({
+          user_id: user.id,
+          status: 'approved',
+          municipality_status: 'waitlisted',
+          address_line: 'Córdoba capital',
+          address_resolved_city: 'Córdoba',
+          // Outside every pickup market — must stay waitlisted (no false heal).
+          address_lat: -31.4201,
+          address_lng: -64.1888,
+          identification_status: 'issued',
+        })
+        .returning({ id: driversTable.id });
+
+      // Need district for other gates — still blocked by municipality
+      await db
+        .update(driversTable)
+        .set({ district_id: villaDoloresId })
+        .where(eq(driversTable.id, driver.id));
+
+      const { status, data } = await request(
+        'PUT',
+        '/api/drivers/me/online',
+        { is_online: true },
+        token,
+      );
+
+      expect(status).toBe(403);
+      expect(data.error.code).toBe('MUNICIPALITY_NOT_ENABLED');
+    });
+
+    /**
+     * Regression — Nicolás Arias / Pedanía Dolores (2026-11-25):
+     * Approved driver, pin at VD hub, stale waitlisted + Photon "Pedanía Dolores".
+     * GET status must heal → operational without re-geocode / APK.
+     */
+    test('GET status heals waitlisted Pedanía Dolores hub pin → operational (Nicolás regression)', async () => {
+      setActiveServiceMarkets([LEGACY_VD_MARKET]);
+      const db = getDb();
+      const [user] = await db
+        .insert(users)
+        .values({ phone: '+549****0025', full_name: 'Nicolas Arias', role: 'driver' })
+        .returning({ id: users.id });
+      const token = createTestToken(user.id);
+
+      await db.insert(driversTable).values({
         user_id: user.id,
         status: 'approved',
         municipality_status: 'waitlisted',
-        address_line: 'Córdoba capital',
-        address_resolved_city: 'Córdoba',
+        address_line: 'Villa Dolores, Córdoba, Argentina',
+        address_lat: -31.9449464,
+        address_lng: -65.1905677,
+        address_resolved_city: 'Pedanía Dolores',
+        address_resolved_province: 'Córdoba',
+        geocoder_city: 'Pedanía Dolores',
+        geocoder_province: 'Córdoba',
         identification_status: 'issued',
-      })
-      .returning({ id: driversTable.id });
+        district_id: villaDoloresId,
+      });
 
-    // Need district for other gates — still blocked by municipality
-    await db
-      .update(driversTable)
-      .set({ district_id: villaDoloresId })
-      .where(eq(driversTable.id, driver.id));
+      const statusRes = await request('GET', '/api/drivers/me/status', undefined, token);
+      expect(statusRes.status).toBe(200);
+      expect(statusRes.data.municipality_status).toBe('operational');
+      expect(statusRes.data.address_resolved_city).toBe('Villa Dolores');
+      expect(statusRes.data.intended_district_id).toBe(villaDoloresId);
+      expect(statusRes.data.show_municipality_waitlist_banner).toBe(false);
+      expect(statusRes.data.can_go_online).toBe(true);
 
-    const { status, data } = await request(
-      'PUT',
-      '/api/drivers/me/online',
-      { is_online: true },
-      token,
-    );
+      const [row] = await db
+        .select({
+          municipality_status: driversTable.municipality_status,
+          address_resolved_city: driversTable.address_resolved_city,
+          intended_district_id: driversTable.intended_district_id,
+          geocoder_city: driversTable.geocoder_city,
+        })
+        .from(driversTable)
+        .where(eq(driversTable.user_id, user.id))
+        .limit(1);
+      expect(row.municipality_status).toBe('operational');
+      expect(row.address_resolved_city).toBe('Villa Dolores');
+      expect(row.intended_district_id).toBe(villaDoloresId);
+      // Audit keeps raw Photon pedanía label
+      expect(row.geocoder_city).toBe('Pedanía Dolores');
+    });
 
-    expect(status).toBe(403);
-    expect(data.error.code).toBe('MUNICIPALITY_NOT_ENABLED');
-  });
+    test('toggle online heals waitlisted hub pin then allows GO', async () => {
+      setActiveServiceMarkets([LEGACY_VD_MARKET]);
+      const db = getDb();
+      const [user] = await db
+        .insert(users)
+        .values({ phone: '+549****0026', full_name: 'Heal Online', role: 'driver' })
+        .returning({ id: users.id });
+      const token = createTestToken(user.id);
 
-  test('step1 without address returns ADDRESS_REQUIRED', async () => {
+      await db.insert(driversTable).values({
+        user_id: user.id,
+        status: 'approved',
+        municipality_status: 'waitlisted',
+        address_line: 'Calle X, Pedanía Dolores, Córdoba',
+        address_lat: -31.945,
+        address_lng: -65.1902,
+        address_resolved_city: 'Pedanía Dolores',
+        address_resolved_province: 'Córdoba',
+        identification_status: 'issued',
+        district_id: villaDoloresId,
+      });
+
+      const { status, data } = await request(
+        'PUT',
+        '/api/drivers/me/online',
+        { is_online: true },
+        token,
+      );
+      expect(status).toBe(200);
+      expect(data.is_online).toBe(true);
+
+      const [row] = await db
+        .select({ municipality_status: driversTable.municipality_status })
+        .from(driversTable)
+        .where(eq(driversTable.user_id, user.id))
+        .limit(1);
+      expect(row.municipality_status).toBe('operational');
+    });
+
+    test('PUT /drivers/me with hub pin: Photon Pedanía reverse label still → operational', async () => {
+      setActiveServiceMarkets([LEGACY_VD_MARKET]);
+      const db = getDb();
+      const [user] = await db
+        .insert(users)
+        .values({ phone: '+549****0027', full_name: 'Pin Pedania', role: 'driver' })
+        .returning({ id: users.id });
+      const token = createTestToken(user.id);
+
+      // Client GPS at hub → reverse mock returns Pedanía Dolores (see geo.ts test mock).
+      const { status, data } = await request(
+        'PUT',
+        '/api/drivers/me',
+        {
+          first_name: 'Pin',
+          last_name: 'Pedania',
+          phone: '+549****0027',
+          address_line: 'Domicilio con pin GPS',
+          address_lat: -31.9449464,
+          address_lng: -65.1905677,
+          photo_url:
+            'https://example.supabase.co/storage/v1/object/public/driver-documents/avatars/test-avatar.png',
+        },
+        token,
+      );
+
+      expect(status).toBe(200);
+      expect(data.municipality_status).toBe('operational');
+      expect(data.intended_district_id).toBe(villaDoloresId);
+      expect(data.address_resolved_city).toBe('Villa Dolores');
+
+      const [row] = await db
+        .select({
+          geocoder_city: driversTable.geocoder_city,
+          municipality_status: driversTable.municipality_status,
+        })
+        .from(driversTable)
+        .where(eq(driversTable.user_id, user.id))
+        .limit(1);
+      expect(row.municipality_status).toBe('operational');
+      expect(row.geocoder_city).toBe('Pedanía Dolores');
+    });
+
+    test('step1 without address returns ADDRESS_REQUIRED', async () => {
     const db = getDb();
     const [user] = await db
       .insert(users)
