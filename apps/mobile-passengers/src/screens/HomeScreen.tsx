@@ -436,7 +436,14 @@ export function HomeScreen() {
         setFocusedField('dest');
         setSearchError(null);
       }}
-      onPickupFocus={() => setFocusedField('pickup')}
+      onPickupFocus={() => {
+        // GPS lock stays until onChange; field select-all so first key replaces label.
+        setFocusedField('pickup');
+        if (pickupPicked) {
+          setPickupFromGps(false);
+          setPickupGpsAutofill(false);
+        }
+      }}
       onDestFocus={() => setFocusedField('dest')}
       onClearPickup={clearPickup}
       onClearDest={clearDest}

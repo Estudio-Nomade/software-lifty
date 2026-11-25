@@ -13,7 +13,7 @@ jest.mock('@expo/vector-icons', () => {
   };
 });
 
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
 import { ExpandedTripSearch } from '../../components/home/ExpandedTripSearch';
 
@@ -53,6 +53,38 @@ describe('ExpandedTripSearch empty gate + address inputs', () => {
       <ExpandedTripSearch {...baseProps} destAddress="Dique" placesLoading={false} />,
     );
     expect(getByText(/No encontramos calles ni lugares/i)).toBeTruthy();
+  });
+
+  it('locked GPS origen does not show false empty suggestions', async () => {
+    const { queryByText } = await render(
+      <ExpandedTripSearch
+        {...baseProps}
+        pickupAddress="Miguel Cané 100, Villa Dolores"
+        pickupPicked
+        focusedField="pickup"
+        destAddress=""
+      />,
+    );
+    expect(queryByText(/No encontramos calles ni lugares/i)).toBeNull();
+  });
+
+  it('locked origen focus selects all so replace typing can unlock', async () => {
+    const label = 'Miguel Cané 100, Villa Dolores';
+    const onPickupFocus = jest.fn();
+    const { getByLabelText } = await render(
+      <ExpandedTripSearch
+        {...baseProps}
+        pickupAddress={label}
+        pickupPicked
+        focusedField="pickup"
+        onPickupFocus={onPickupFocus}
+      />,
+    );
+
+    const origen = getByLabelText('Origen');
+    await fireEvent(origen, 'focus');
+    expect(onPickupFocus).toHaveBeenCalled();
+    expect(origen.props.selection).toEqual({ start: 0, end: label.length });
   });
 
   it('origen and destino pin selection to start for long programmatic labels', async () => {

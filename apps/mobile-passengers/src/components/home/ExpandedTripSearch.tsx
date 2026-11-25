@@ -18,6 +18,8 @@ import { QuickChips } from '../QuickChips';
 type AddressLineInputProps = Omit<TextInputProps, 'selection' | 'onSelectionChange'> & {
   value: string;
   onChangeText: (text: string) => void;
+  /** GPS/suggestion lock: select all so the next keystroke replaces the label. */
+  selectAllOnFocus?: boolean;
 };
 
 /**
@@ -32,6 +34,7 @@ function AddressLineInput({
   onFocus,
   onBlur,
   style,
+  selectAllOnFocus = false,
   ...rest
 }: AddressLineInputProps) {
   const focusedRef = useRef(false);
@@ -45,6 +48,11 @@ function AddressLineInput({
   const pinStart = useCallback(() => {
     setSelection({ start: 0, end: 0 });
   }, []);
+
+  const selectAll = useCallback(() => {
+    const end = value.length;
+    setSelection({ start: 0, end });
+  }, [value.length]);
 
   useEffect(() => {
     if (skipNextPinRef.current) {
@@ -75,8 +83,13 @@ function AddressLineInput({
       }}
       onFocus={(e) => {
         focusedRef.current = true;
-        // Long autofill: land caret at start so the street name is visible first.
-        pinStart();
+        if (selectAllOnFocus && value.length > 0) {
+          // Locked pick: next keystroke replaces whole label → unlock + AC with new query.
+          selectAll();
+        } else {
+          // Long autofill (unlocked): land caret at start so the street name is visible.
+          pinStart();
+        }
         onFocus?.(e);
       }}
       onBlur={(e) => {
@@ -196,6 +209,7 @@ export function ExpandedTripSearch({
                   placeholder="Desde"
                   placeholderTextColor={theme.colors.mediumGray}
                   value={pickupAddress}
+                  selectAllOnFocus={pickupPicked}
                   onFocus={onPickupFocus}
                   onChangeText={onPickupChange}
                   accessibilityLabel="Origen"
