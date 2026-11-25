@@ -15,6 +15,7 @@ import { geocodeAddress } from '../../api/passenger';
 import { useLocation, requestFreshPosition } from '../../hooks/useLocation';
 import { HomeScreen } from '../../screens/HomeScreen';
 import { SEED_FAVORITES, useFavoritesStore } from '../../store/favoritesStore';
+import { useLocationStore } from '../../store/locationStore';
 import { resolveAddressLabel } from '../../utils/resolveAddressLabel';
 
 jest.mock('expo-router', () => ({
@@ -39,6 +40,7 @@ jest.mock('../../hooks/useLocation', () => ({
 
 jest.mock('../../utils/resolveAddressLabel', () => ({
   resolveAddressLabel: jest.fn().mockResolvedValue('Mi ubicación actual'),
+  MAX_LABEL_ACCURACY_M: 100,
 }));
 
 const mockUsePlaceAutocomplete = jest.fn((_query: string) => ({
@@ -84,6 +86,11 @@ async function openSearch() {
 describe('HomeScreen address clear', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useLocationStore.setState({
+      current: null,
+      permissionGranted: false,
+      locationError: null,
+    });
     mockRequestFresh.mockResolvedValue(null);
     mockResolveLabel.mockResolvedValue('Mi ubicación actual');
     mockUseLocation.mockReturnValue({
@@ -193,6 +200,199 @@ describe('HomeScreen address clear', () => {
     expect(mockResolveLabel).toHaveBeenCalled();
   });
 
+  test('Usar mi ubicacion awaits fresh and reverse uses fresh coords not stale cache', async () => {
+    // Cache = Miguel Cané side (east); fresh = 25 de Mayo centroid.
+    const cached = { lat: -31.9454898, lng: -65.1651154, accuracy: 40 };
+    const fresh = { lat: -31.9456491, lng: -65.1771662, accuracy: 12 };
+    useLocationStore.setState({
+      current: cached,
+      permissionGranted: true,
+      locationError: null,
+    });
+    let locationState = {
+      current: cached as { lat: number; lng: number; accuracy: number } | null,
+      locationError: null as string | null,
+      refresh: jest.fn().mockResolvedValue(fresh),
+    };
+    mockUseLocation.mockImplementation(() => locationState);
+    // Autofill completes on first fresh call returning cache-side coords.
+    mockRequestFresh.mockResolvedValue(cached);
+    mockResolveLabel.mockImplementation(async (lat: number, lng: number) => {
+      if (Math.abs(lat - fresh.lat) < 1e-6 && Math.abs(lng - fresh.lng) < 1e-6) {
+        return '25 de Mayo, Villa Dolores';
+      }
+      return 'Miguel Cané, Villa Dolores';
+    });
+
+    const { getByPlaceholderText, getByLabelText, getByDisplayValue, rerender } =
+      await openSearch();
+
+    await waitFor(() => {
+      expect(getByDisplayValue('Miguel Cané, Villa Dolores')).toBeTruthy();
+    });
+
+    await fireEvent.changeText(getByPlaceholderText('Desde'), 'Otra calle 9');
+    mockResolveLabel.mockClear();
+    mockRequestFresh.mockClear();
+    mockRequestFresh.mockImplementation(async () => {
+      locationState = { ...locationState, current: fresh };
+      useLocationStore.setState({
+        current: fresh,
+        permissionGranted: true,
+        locationError: null,
+      });
+      return fresh;
+    });
+    await fireEvent.press(getByLabelText('Usar mi ubicación actual'));
+    rerender(<HomeScreen />);
+
+    await waitFor(() => {
+      expect(getByDisplayValue('25 de Mayo, Villa Dolores')).toBeTruthy();
+    });
+    expect(mockRequestFresh).toHaveBeenCalled();
+    expect(mockResolveLabel).toHaveBeenCalledWith(
+      fresh.lat,
+      fresh.lng,
+      expect.objectContaining({ accuracy: fresh.accuracy }),
+    );
+    // Final label must come from fresh reverse, not a silent cache-only paint.
+    const reverseCalls = mockResolveLabel.mock.calls;
+    expect(reverseCalls.length).toBeGreaterThan(0);
+    expect(
+      reverseCalls.some(
+        (c) =>
+          Math.abs(c[0] - fresh.lat) < 1e-6 && Math.abs(c[1] - fresh.lng) < 1e-6,
+      ),
+    ).toBe(true);
+  });
+
+  test('Usar mi ubicacion shows error when fresh fails (no silent stale label)', async () => {
+    const cached = { lat: -31.9454898, lng: -65.1651154, accuracy: 40 };
+    useLocationStore.setState({
+      current: cached,
+      permissionGranted: true,
+      locationError: null,
+    });
+    mockUseLocation.mockReturnValue({
+      current: cached,
+      locationError: null,
+      refresh: jest.fn().mockResolvedValue(null),
+    });
+    mockRequestFresh.mockResolvedValue(cached);
+    mockResolveLabel.mockResolvedValue('Miguel Cané, Villa Dolores');
+
+    const { getByPlaceholderText, getByLabelText, queryByDisplayValue, getByText } =
+      await openSearch();
+
+    await waitFor(() => {
+      expect(getByPlaceholderText('Desde').props.value).toBe('Miguel Cané, Villa Dolores');
+    });
+
+    await fireEvent.changeText(getByPlaceholderText('Desde'), 'Otra calle 9');
+    mockResolveLabel.mockClear();
+    mockRequestFresh.mockResolvedValue(null);
+    await fireEvent.press(getByLabelText('Usar mi ubicación actual'));
+
+    await waitFor(() => {
+      expect(getByText(/No pudimos obtener tu ubicación/i)).toBeTruthy();
+    });
+    expect(queryByDisplayValue('Miguel Cané, Villa Dolores')).toBeNull();
+    expect(queryByDisplayValue('Otra calle 9')).toBeNull();
+    expect(mockResolveLabel).not.toHaveBeenCalled();
+  });
+
+  test('GPS autofill reverse uses awaited fresh coords not only cache', async () => {
+    const cached = { lat: -31.9454898, lng: -65.1651154, accuracy: 80 };
+    const fresh = { lat: -31.9456491, lng: -65.1771662, accuracy: 15 };
+    useLocationStore.setState({
+      current: cached,
+      permissionGranted: true,
+      locationError: null,
+    });
+    let locationState = {
+      current: cached as { lat: number; lng: number; accuracy: number } | null,
+      locationError: null as string | null,
+      refresh: jest.fn().mockResolvedValue(fresh),
+    };
+    mockUseLocation.mockImplementation(() => locationState);
+    mockRequestFresh.mockImplementation(async () => {
+      locationState = { ...locationState, current: fresh };
+      useLocationStore.setState({
+        current: fresh,
+        permissionGranted: true,
+        locationError: null,
+      });
+      return fresh;
+    });
+    mockResolveLabel.mockImplementation(async (lat: number, lng: number) => {
+      if (Math.abs(lat - fresh.lat) < 1e-6 && Math.abs(lng - fresh.lng) < 1e-6) {
+        return '25 de Mayo, Villa Dolores';
+      }
+      return 'Miguel Cané, Villa Dolores';
+    });
+
+    const { getByDisplayValue, rerender } = await openSearch();
+    rerender(<HomeScreen />);
+
+    await waitFor(() => {
+      expect(getByDisplayValue('25 de Mayo, Villa Dolores')).toBeTruthy();
+    });
+    expect(mockRequestFresh).toHaveBeenCalled();
+    expect(
+      mockResolveLabel.mock.calls.some(
+        (c) =>
+          Math.abs(c[0] - fresh.lat) < 1e-6 && Math.abs(c[1] - fresh.lng) < 1e-6,
+      ),
+    ).toBe(true);
+  });
+
+  test('GPS refine re-resolves label when store moves >20m with better fix', async () => {
+    const first = { lat: -31.9454898, lng: -65.1651154, accuracy: 40 };
+    const second = { lat: -31.9456491, lng: -65.1771662, accuracy: 12 };
+    useLocationStore.setState({
+      current: first,
+      permissionGranted: true,
+      locationError: null,
+    });
+
+    let locationState = {
+      current: first as { lat: number; lng: number; accuracy: number } | null,
+      locationError: null as string | null,
+      refresh: jest.fn().mockResolvedValue(first),
+    };
+    mockUseLocation.mockImplementation(() => locationState);
+    mockRequestFresh.mockResolvedValue(first);
+    mockResolveLabel.mockImplementation(async (lat: number, lng: number) => {
+      if (Math.abs(lat - second.lat) < 1e-6 && Math.abs(lng - second.lng) < 1e-6) {
+        return '25 de Mayo, Villa Dolores';
+      }
+      return 'Miguel Cané, Villa Dolores';
+    });
+
+    const { getByDisplayValue, rerender } = await openSearch();
+
+    await waitFor(() => {
+      expect(getByDisplayValue('Miguel Cané, Villa Dolores')).toBeTruthy();
+    });
+
+    await act(async () => {
+      locationState = {
+        ...locationState,
+        current: second,
+      };
+      useLocationStore.setState({
+        current: second,
+        permissionGranted: true,
+        locationError: null,
+      });
+      rerender(<HomeScreen />);
+    });
+
+    await waitFor(() => {
+      expect(getByDisplayValue('25 de Mayo, Villa Dolores')).toBeTruthy();
+    });
+  });
+
   test('GPS lock + focus Origen + type 25 unlocks AC with query 25', async () => {
     const gpsLabel = 'Miguel Cané 100, Villa Dolores';
     mockRequestFresh.mockResolvedValue({ lat: -31.94, lng: -65.19, accuracy: 15 });
@@ -235,6 +435,11 @@ describe('HomeScreen address clear', () => {
 describe('HomeScreen destination confirmation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useLocationStore.setState({
+      current: { lat: -34.5, lng: -58.4, accuracy: 20 },
+      permissionGranted: true,
+      locationError: null,
+    });
     mockRequestFresh.mockResolvedValue(null);
     mockResolveLabel.mockResolvedValue('Mi ubicación actual');
     mockUseLocation.mockReturnValue({
@@ -295,6 +500,11 @@ describe('HomeScreen favorite chip focused field', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    useLocationStore.setState({
+      current: null,
+      permissionGranted: false,
+      locationError: null,
+    });
     mockRequestFresh.mockResolvedValue(null);
     mockResolveLabel.mockResolvedValue('Mi ubicación actual');
     mockUseLocation.mockReturnValue({
