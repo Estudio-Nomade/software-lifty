@@ -600,12 +600,12 @@ const styles = StyleSheet.create({
     ...theme.shadows.card,
   },
   oofBannerOnHome: {
-    // Below locate; narrow so it doesn't span the whole map.
+    // Same row as locate; leave gap for the 44px recenter control.
     position: 'absolute',
-    top: theme.spacing.md + 44 + theme.spacing.sm,
+    top: theme.spacing.md,
     left: theme.spacing.sm,
+    right: theme.spacing.md + 44 + theme.spacing.sm,
     maxWidth: 280,
-    width: '72%',
     zIndex: 12,
   },
   oofBannerInSearch: {
