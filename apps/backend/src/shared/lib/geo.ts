@@ -811,13 +811,15 @@ export async function geocode(params: {
         };
       }
       if (params.lat !== undefined && params.lng !== undefined) {
-        // Test coords near Villa Dolores (approx)
+        // Reverse near Villa Dolores hub: mirror real Photon/OSM which often
+        // labels the pin as "Pedanía Dolores" (admin unit), NOT the city name.
+        // Municipality gate must ignore this city text (coords-first).
         if (params.lat > -32.1 && params.lat < -31.8 && params.lng > -65.4 && params.lng < -64.9) {
           return {
             lat: params.lat,
             lng: params.lng,
-            formatted_address: 'Villa Dolores, Córdoba, Argentina',
-            city: 'Villa Dolores',
+            formatted_address: 'Pedanía Dolores, Córdoba, Argentina',
+            city: 'Pedanía Dolores',
             province: 'Córdoba',
           };
         }
