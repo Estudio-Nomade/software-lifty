@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -26,8 +26,12 @@ import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
 import { isPassengerHomeResolved } from '../lib/passengerProfileGate';
 import {
   type ServiceAreaStatus,
+  dismissHomeOutOfServiceBanner,
   fetchServiceAreaStatus,
+  isHomeOutOfServiceBannerDismissed,
+  noteServiceAreaInside,
   shouldShowOutOfServiceBanner,
+  subscribeHomeOutOfServiceBanner,
 } from '../lib/serviceAreaStatus';
 import { getTabBarReserve } from '../lib/tabBarLayout';
 import { syncCasaFavoriteFromProfile } from '../store/favoritesStore';
@@ -61,8 +65,16 @@ export function HomeScreen() {
   const { current, locationError, refresh } = useLocation();
   const setActiveTrip = useRideStore((s) => s.setActiveTrip);
 
+  /** Force re-read of module dismiss (SoT) — never cache a stale local bool. */
+  const [, bumpHomeOof] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => subscribeHomeOutOfServiceBanner(bumpHomeOof), []);
+  const homeOofDismissed = isHomeOutOfServiceBannerDismissed();
+
   useFocusEffect(
     useCallback(() => {
+      // Module dismiss may have been reset while unfocused (logout).
+      bumpHomeOof();
+
       let cancelled = false;
       (async () => {
         const trip = await getActiveRide().catch(() => null);
@@ -108,8 +120,6 @@ export function HomeScreen() {
   /** Monotonic id so only the latest GPS fill (autofill or Usar ubicación) may write state. */
   const gpsFillIdRef = useRef(0);
   const [serviceArea, setServiceArea] = useState<ServiceAreaStatus | null>(null);
-  const [oofDismissed, setOofDismissed] = useState(false);
-  const prevServiceInsideRef = useRef<boolean | null>(null);
 
   const pickupAc = usePlaceAutocomplete(
     focusedField === 'pickup' && !pickupPicked ? pickupAddress : '',
@@ -119,7 +129,7 @@ export function HomeScreen() {
   const placesLoading = focusedField === 'pickup' ? pickupAc.loading : destAc.loading;
   const placesError = focusedField === 'pickup' ? pickupAc.error : destAc.error;
 
-  // Soft OOF banner: GPS preferred, else home pin from profile.
+  // Soft OOF status: GPS preferred, else home pin from profile.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -137,17 +147,21 @@ export function HomeScreen() {
         );
       }
       if (cancelled || !status) return;
-      const prevInside = prevServiceInsideRef.current;
-      if (prevInside !== null && prevInside !== status.inside) {
-        setOofDismissed(false);
-      }
-      prevServiceInsideRef.current = status.inside;
+      noteServiceAreaInside(status.inside);
       setServiceArea(status);
     })();
     return () => {
       cancelled = true;
     };
   }, [current?.lat, current?.lng]);
+
+  const handleDismissHomeOof = useCallback(() => {
+    dismissHomeOutOfServiceBanner();
+  }, []);
+
+  const outside = shouldShowOutOfServiceBanner(serviceArea);
+  const showOofOnHome = !searchExpanded && outside && !homeOofDismissed;
+  const showOofInBuscar = searchExpanded && outside;
 
   // "Desde" autofill: optional cache pin ASAP, final label always from awaited fresh.
   useEffect(() => {
@@ -463,6 +477,11 @@ export function HomeScreen() {
                   automaticallyAdjustKeyboardInsets
                   showsVerticalScrollIndicator={false}
                 >
+                  {showOofInBuscar ? (
+                    <View style={styles.oofBannerInSearch}>
+                      <OutOfServiceAreaBanner />
+                    </View>
+                  ) : null}
                   {searchForm}
                 </ScrollView>
               </KeyboardAvoidingView>
@@ -474,6 +493,11 @@ export function HomeScreen() {
                 keyboardDismissMode="on-drag"
                 showsVerticalScrollIndicator={false}
               >
+                {showOofInBuscar ? (
+                  <View style={styles.oofBannerInSearch}>
+                    <OutOfServiceAreaBanner />
+                  </View>
+                ) : null}
                 {searchForm}
               </ScrollView>
             )}
@@ -510,11 +534,6 @@ export function HomeScreen() {
                   <Text style={styles.geoBannerRetry}>Reintentar</Text>
                 </TouchableOpacity>
               ) : null}
-              {!oofDismissed && shouldShowOutOfServiceBanner(serviceArea) ? (
-                <View style={styles.oofBannerWrap} pointerEvents="box-none">
-                  <OutOfServiceAreaBanner onDismiss={() => setOofDismissed(true)} />
-                </View>
-              ) : null}
               <TouchableOpacity
                 style={styles.locateBtn}
                 onPress={handleLocate}
@@ -523,6 +542,11 @@ export function HomeScreen() {
               >
                 <Ionicons name="locate-outline" size={20} color={theme.colors.primary} />
               </TouchableOpacity>
+              {showOofOnHome ? (
+                <View style={styles.oofBannerOnHome} pointerEvents="box-none">
+                  <OutOfServiceAreaBanner compact onDismiss={handleDismissHomeOof} />
+                </View>
+              ) : null}
 
               <View style={[styles.searchFloat, { bottom: tabReserve + theme.spacing.sm }]}>
                 <DestinationSearchPill onPress={handleOpenSearch} />
@@ -578,12 +602,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...theme.shadows.card,
   },
-  oofBannerWrap: {
+  oofBannerOnHome: {
+    // Same row as locate; leave gap for the 44px recenter control.
     position: 'absolute',
     top: theme.spacing.md,
     left: theme.spacing.sm,
-    right: 56,
+    right: theme.spacing.md + 44 + theme.spacing.sm,
+    maxWidth: 280,
     zIndex: 12,
+  },
+  oofBannerInSearch: {
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.xs,
   },
   geoBanner: {
     position: 'absolute',

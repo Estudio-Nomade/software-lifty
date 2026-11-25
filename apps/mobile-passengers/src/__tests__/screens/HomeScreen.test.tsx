@@ -11,9 +11,13 @@ jest.mock('@expo/vector-icons', () => {
 
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import React from 'react';
-import { geocodeAddress } from '../../api/passenger';
+import { geocodeAddress, getServiceAreaStatus } from '../../api/passenger';
 import { useLocation, requestFreshPosition } from '../../hooks/useLocation';
 import { HomeScreen } from '../../screens/HomeScreen';
+import {
+  clearServiceAreaStatusCache,
+  resetOutOfServiceBannerDismissState,
+} from '../../lib/serviceAreaStatus';
 import { SEED_FAVORITES, useFavoritesStore } from '../../store/favoritesStore';
 import { useLocationStore } from '../../store/locationStore';
 import { resolveAddressLabel } from '../../utils/resolveAddressLabel';
@@ -55,6 +59,7 @@ jest.mock('../../hooks/usePlaceAutocomplete', () => ({
 jest.mock('../../api/passenger', () => ({
   getActiveRide: jest.fn().mockResolvedValue(null),
   getProfile: jest.fn().mockResolvedValue(null),
+  getServiceAreaStatus: jest.fn().mockResolvedValue({ inside: true, markets: [] }),
   geocodeAddress: jest.fn(),
   reverseGeocode: jest.fn().mockResolvedValue({
     lat: -34.5,
@@ -76,6 +81,7 @@ const mockUseLocation = useLocation as unknown as jest.Mock;
 const mockGeocodeAddress = geocodeAddress as unknown as jest.Mock;
 const mockRequestFresh = requestFreshPosition as unknown as jest.Mock;
 const mockResolveLabel = resolveAddressLabel as unknown as jest.Mock;
+const mockGetServiceAreaStatus = getServiceAreaStatus as unknown as jest.Mock;
 
 async function openSearch() {
   const utils = await render(<HomeScreen />);
@@ -603,5 +609,76 @@ describe('HomeScreen favorite chip focused field', () => {
 
     expect(getByPlaceholderText('Hacia').props.value).toBe(casaAddress);
     expect(getByPlaceholderText('Desde').props.value ?? '').not.toBe(casaAddress);
+  });
+});
+
+describe('HomeScreen out-of-service banner (Home + Buscar)', () => {
+  const outsideFix = { lat: -34.6, lng: -58.4, accuracy: 12 };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    clearServiceAreaStatusCache();
+    resetOutOfServiceBannerDismissState();
+    useLocationStore.setState({
+      current: outsideFix,
+      permissionGranted: true,
+      locationError: null,
+    });
+    mockRequestFresh.mockResolvedValue(outsideFix);
+    mockResolveLabel.mockResolvedValue('Fuera de zona');
+    mockUseLocation.mockReturnValue({
+      current: outsideFix,
+      locationError: null,
+      refresh: jest.fn().mockResolvedValue(outsideFix),
+    });
+    mockGetServiceAreaStatus.mockResolvedValue({ inside: false, markets: [] });
+  });
+
+  test('shows OOF banner on collapsed home map below locate', async () => {
+    const { getByText, getByLabelText } = await render(<HomeScreen />);
+
+    await waitFor(() => {
+      expect(mockGetServiceAreaStatus).toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
+      expect(getByText(/Todavía no estamos en tu zona/i)).toBeTruthy();
+    });
+    expect(getByLabelText('Centrar ubicación')).toBeTruthy();
+  });
+
+  test('Home X dismiss survives tab-like remount; Buscar always shows while outside', async () => {
+    const first = await render(<HomeScreen />);
+
+    await waitFor(() => {
+      expect(first.getByText(/Todavía no estamos en tu zona/i)).toBeTruthy();
+    });
+
+    await fireEvent.press(first.getByLabelText('Entendido'));
+    await waitFor(() => {
+      expect(first.queryByText(/Todavía no estamos en tu zona/i)).toBeNull();
+    });
+
+    // Remount Home (tab hop) — Home map stays dismissed this session.
+    first.unmount();
+    const second = await render(<HomeScreen />);
+    await waitFor(() => {
+      expect(mockGetServiceAreaStatus).toHaveBeenCalled();
+    });
+    expect(second.queryByText(/Todavía no estamos en tu zona/i)).toBeNull();
+
+    // Open Buscar — request-time reminder (no X; always visible while outside).
+    await fireEvent.press(second.getByText('¿A dónde vas?'));
+    await waitFor(() => {
+      expect(second.getByText(/Todavía no estamos en tu zona/i)).toBeTruthy();
+    });
+    expect(second.queryByLabelText('Entendido')).toBeNull();
+
+    // Close + reopen Buscar — still there every request attempt.
+    await fireEvent.press(second.getByLabelText('Cerrar búsqueda'));
+    await fireEvent.press(second.getByText('¿A dónde vas?'));
+    await waitFor(() => {
+      expect(second.getByText(/Todavía no estamos en tu zona/i)).toBeTruthy();
+    });
   });
 });
