@@ -21,12 +21,7 @@ import { DestinationSearchPill } from '../components/home/DestinationSearchPill'
 import { ExpandedTripSearch } from '../components/home/ExpandedTripSearch';
 import { OutOfServiceAreaBanner } from '../components/home/OutOfServiceAreaBanner';
 import { useAppNavigation } from '../hooks/useAppNavigation';
-import {
-  TARGET_ACCURACY_M,
-  requestFreshPosition,
-  toMapCoordinate,
-  useLocation,
-} from '../hooks/useLocation';
+import { requestFreshPosition, toMapCoordinate, useLocation } from '../hooks/useLocation';
 import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
 import { isPassengerHomeResolved } from '../lib/passengerProfileGate';
 import {
@@ -40,6 +35,12 @@ import { useLocationStore } from '../store/locationStore';
 import { useRideStore } from '../store/rideStore';
 import { theme } from '../theme';
 import { MAX_LABEL_ACCURACY_M, resolveAddressLabel } from '../utils/resolveAddressLabel';
+
+/** Re-reverse Origen when GPS moved this far from the labeled fix. */
+const GPS_LABEL_REFINE_M = 20;
+
+const LOCATION_UNAVAILABLE_MSG =
+  'No pudimos obtener tu ubicación. Activá el GPS o permití el acceso e intentá de nuevo.';
 
 /** Rough meters between two WGS84 points (good enough for GPS refine). */
 function metersBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -104,6 +105,8 @@ export function HomeScreen() {
    */
   const [pickupGpsAutofill, setPickupGpsAutofill] = useState(true);
   const lastGpsLabel = useRef<{ lat: number; lng: number; acc: number } | null>(null);
+  /** Monotonic id so only the latest GPS fill (autofill or Usar ubicación) may write state. */
+  const gpsFillIdRef = useRef(0);
   const [serviceArea, setServiceArea] = useState<ServiceAreaStatus | null>(null);
   const [oofDismissed, setOofDismissed] = useState(false);
   const prevServiceInsideRef = useRef<boolean | null>(null);
@@ -146,33 +149,23 @@ export function HomeScreen() {
     };
   }, [current?.lat, current?.lng]);
 
-  // "Desde" autofill: paint coords ASAP, reverse label in parallel (street via Photon).
+  // "Desde" autofill: optional cache pin ASAP, final label always from awaited fresh.
   useEffect(() => {
     if (!searchExpanded) return;
     if (!pickupGpsAutofill) return;
     if (pickupPicked || pickupAddress.trim()) return;
     let cancelled = false;
+    const fillId = ++gpsFillIdRef.current;
+    const isActive = () => !cancelled && fillId === gpsFillIdRef.current;
     setPickupLoading(true);
     (async () => {
-      // Instant path: already-warm store fix (map may already have it).
       const cached = useLocationStore.getState().current;
-      let fix =
-        cached && Number.isFinite(cached.lat) && Number.isFinite(cached.lng)
-          ? {
-              lat: cached.lat,
-              lng: cached.lng,
-              accuracy: cached.accuracy ?? Number.POSITIVE_INFINITY,
-            }
-          : null;
-
-      if (!fix) {
-        fix = await requestFreshPosition();
-      } else {
-        // Refresh in background; don't block first label.
-        void requestFreshPosition();
+      if (cached && Number.isFinite(cached.lat) && Number.isFinite(cached.lng) && isActive()) {
+        setPickupCoord({ lat: cached.lat, lng: cached.lng });
       }
 
-      if (cancelled) return;
+      const fix = await requestFreshPosition();
+      if (!isActive()) return;
       if (!fix) {
         setPickupLoading(false);
         return;
@@ -182,7 +175,7 @@ export function HomeScreen() {
       lastGpsLabel.current = { lat: fix.lat, lng: fix.lng, acc: fix.accuracy };
 
       const label = await resolveAddressLabel(fix.lat, fix.lng, { accuracy: fix.accuracy });
-      if (cancelled) return;
+      if (!isActive()) return;
       setPickupAddress(label);
       setPickupPicked(true);
       setPickupFromGps(true);
@@ -195,16 +188,16 @@ export function HomeScreen() {
     };
   }, [searchExpanded, pickupGpsAutofill, pickupPicked, pickupAddress]);
 
-  // Refine "Desde" when GPS warm-up yields a much better / moved fix.
+  // Refine "Desde" when GPS moves materially (with usable accuracy) or accuracy improves.
   useEffect(() => {
     if (!searchExpanded || !pickupFromGps || !current) return;
     const prev = lastGpsLabel.current;
     if (!prev) return;
     const acc = current.accuracy ?? Number.POSITIVE_INFINITY;
     const moved = metersBetween(prev, current);
-    const muchBetter = acc <= TARGET_ACCURACY_M && acc < prev.acc * 0.5;
-    const jumped = moved > 45 && acc <= Math.max(prev.acc, 80);
-    // Also refine when we still show the generic fallback and accuracy improved.
+    const muchBetter = acc < prev.acc - 5;
+    // Re-reverse on material move only when the new fix is not much worse than the labeled one.
+    const jumped = moved > GPS_LABEL_REFINE_M && acc <= Math.max(prev.acc + 15, 80);
     const stillGeneric =
       pickupAddress === 'Mi ubicación actual' && acc <= MAX_LABEL_ACCURACY_M && acc < prev.acc;
     if (!muchBetter && !jumped && !stillGeneric) return;
@@ -295,37 +288,41 @@ export function HomeScreen() {
 
   const handleUseMyLocation = () => {
     void (async () => {
-      setPickupGpsAutofill(true);
+      // Bump fill id + disable autofill so this tap owns GPS (no concurrent autofill reverse).
+      const fillId = ++gpsFillIdRef.current;
+      const isActive = () => fillId === gpsFillIdRef.current;
+      setPickupGpsAutofill(false);
       setPickupLoading(true);
       setSearchError(null);
       setPickupPicked(false);
       setPickupFromGps(false);
+      setPickupAddress('');
 
+      // Provisional pin from cache while fresh GPS loads (label waits on fresh).
       const cached = useLocationStore.getState().current;
-      let fix =
-        cached && Number.isFinite(cached.lat) && Number.isFinite(cached.lng)
-          ? {
-              lat: cached.lat,
-              lng: cached.lng,
-              accuracy: cached.accuracy ?? Number.POSITIVE_INFINITY,
-            }
-          : null;
-      if (!fix) {
-        fix = await requestFreshPosition();
-      } else {
-        void requestFreshPosition();
+      if (cached && Number.isFinite(cached.lat) && Number.isFinite(cached.lng) && isActive()) {
+        setPickupCoord({ lat: cached.lat, lng: cached.lng });
       }
 
+      const fix = await requestFreshPosition();
+      if (!isActive()) return;
       if (!fix) {
         setPickupLoading(false);
+        setPickupCoord(null);
+        setPickupAddress('');
+        setPickupPicked(false);
+        setPickupFromGps(false);
+        setSearchError(LOCATION_UNAVAILABLE_MSG);
         return;
       }
 
       setPickupCoord({ lat: fix.lat, lng: fix.lng });
       const label = await resolveAddressLabel(fix.lat, fix.lng, { accuracy: fix.accuracy });
+      if (!isActive()) return;
       setPickupAddress(label);
       setPickupPicked(true);
       setPickupFromGps(true);
+      setPickupGpsAutofill(true);
       setPickupLoading(false);
       lastGpsLabel.current = { lat: fix.lat, lng: fix.lng, acc: fix.accuracy };
       setFocusedField('dest');
