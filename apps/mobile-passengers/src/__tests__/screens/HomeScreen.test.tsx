@@ -194,8 +194,9 @@ describe('HomeScreen address clear', () => {
   });
 
   test('GPS lock + focus Origen + type 25 unlocks AC with query 25', async () => {
+    const gpsLabel = 'Miguel Cané 100, Villa Dolores';
     mockRequestFresh.mockResolvedValue({ lat: -31.94, lng: -65.19, accuracy: 15 });
-    mockResolveLabel.mockResolvedValue('Miguel Cané 100, Villa Dolores');
+    mockResolveLabel.mockResolvedValue(gpsLabel);
     mockUseLocation.mockReturnValue({
       current: { lat: -31.94, lng: -65.19, accuracy: 15 },
       locationError: null,
@@ -205,7 +206,7 @@ describe('HomeScreen address clear', () => {
     const { getByLabelText, getByDisplayValue } = await openSearch();
 
     await waitFor(() => {
-      expect(getByDisplayValue('Miguel Cané 100, Villa Dolores')).toBeTruthy();
+      expect(getByDisplayValue(gpsLabel)).toBeTruthy();
     });
 
     // While locked + dest focused, pickup AC query stays empty.
@@ -216,14 +217,18 @@ describe('HomeScreen address clear', () => {
     // Select-all on locked focus so replace typing does not prepend into GPS label.
     expect(origen.props.selection).toEqual({
       start: 0,
-      end: 'Miguel Cané 100, Villa Dolores'.length,
+      end: gpsLabel.length,
     });
+    // Focus alone must NOT unlock: AC must not run on the full GPS label.
+    expect(mockUsePlaceAutocomplete.mock.calls.some((c) => c[0] === gpsLabel)).toBe(false);
 
     await fireEvent.changeText(origen, '25');
 
     await waitFor(() => {
       expect(mockUsePlaceAutocomplete.mock.calls.some((c) => c[0] === '25')).toBe(true);
     });
+    // Still never queried with the old GPS string as AC input.
+    expect(mockUsePlaceAutocomplete.mock.calls.some((c) => c[0] === gpsLabel)).toBe(false);
   });
 });
 
