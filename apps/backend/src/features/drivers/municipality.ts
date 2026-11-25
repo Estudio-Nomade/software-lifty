@@ -33,6 +33,10 @@ const ALIASES: Record<string, string> = {
   'v. dolores': 'villa dolores',
   'villa d': 'villa dolores',
   vd: 'villa dolores',
+  // OSM/Photon often reverse-geocodes the VD hub as the rural pedanía, not the city.
+  'pedania dolores': 'villa dolores',
+  'pedania de dolores': 'villa dolores',
+  'pedania villa dolores': 'villa dolores',
   'v sarmiento': 'villa sarmiento',
   'v. sarmiento': 'villa sarmiento',
   'villa sarmiento cordoba': 'villa sarmiento',
@@ -151,7 +155,8 @@ export function buildMunicipalityResult(
       municipality_status: 'operational',
       intended_district_id: match.id,
       intended_district_name: match.name,
-      address_resolved_city: resolved.city ?? match.name,
+      // Prefer canonical district label when Photon returned an admin alias (e.g. Pedanía Dolores).
+      address_resolved_city: match.name,
       address_resolved_province: resolved.province ?? match.province,
       address_lat: resolved.lat,
       address_lng: resolved.lng,
@@ -169,6 +174,45 @@ export function buildMunicipalityResult(
     address_lng: resolved.lng,
     address_line: addressLine,
   };
+}
+
+/**
+ * Re-evaluate a stored waitlisted domicile without re-geocoding.
+ * Heals stale rows after market/alias fixes (e.g. Pedanía Dolores + hub pin).
+ * Returns operational result only; null means still waitlisted / not eligible.
+ */
+export function tryHealWaitlistedMunicipality(
+  stored: {
+    address_line: string | null;
+    address_lat: number | null;
+    address_lng: number | null;
+    address_resolved_city: string | null;
+    address_resolved_province: string | null;
+  },
+  candidates: DistrictMatchCandidate[],
+): MunicipalityResolveResult | null {
+  const lat = stored.address_lat;
+  const lng = stored.address_lng;
+  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+  if (!isInsidePickupArea(lat, lng)) return null;
+
+  let city = stored.address_resolved_city;
+  let province = stored.address_resolved_province;
+  if ((!city || !province) && stored.address_line) {
+    const parsed = parseLocalityFromFormatted(stored.address_line);
+    city = city ?? parsed.city;
+    province = province ?? parsed.province;
+  }
+
+  const match = resolveDistrictForAddress(city, province, candidates, lat, lng);
+  const result = buildMunicipalityResult(
+    stored.address_line?.trim() || match?.name || 'Domicilio',
+    { lat, lng, city, province },
+    match,
+  );
+  return result.municipality_status === 'operational' ? result : null;
 }
 
 export function extractLocalityFromPhotonProps(

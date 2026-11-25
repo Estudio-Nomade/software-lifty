@@ -14,6 +14,7 @@ import {
   normalizePlaceName,
   parseLocalityFromFormatted,
   resolveDistrictForAddress,
+  tryHealWaitlistedMunicipality,
 } from './municipality';
 import {
   LEGACY_VD_MARKET,
@@ -119,6 +120,53 @@ describe('municipality match helpers', () => {
     ];
     const m = matchDistrict('Villa Dolores', 'Córdoba', candidates);
     expect(m?.id).toBe('1');
+  });
+
+  test('matchDistrict maps Pedanía Dolores (OSM reverse) to Villa Dolores', () => {
+    const candidates = [
+      { id: '1', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+      { id: '2', name: 'Mina Clavero', province: 'Córdoba', status: 'active' },
+    ];
+    expect(matchDistrict('Pedanía Dolores', 'Córdoba', candidates)?.id).toBe('1');
+    expect(matchDistrict('Pedania de Dolores', 'Córdoba', candidates)?.id).toBe('1');
+  });
+
+  test('tryHealWaitlistedMunicipality: Pedanía Dolores hub pin → operational', () => {
+    setActiveServiceMarkets([LEGACY_VD_MARKET]);
+    const candidates = [
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+    ];
+    const healed = tryHealWaitlistedMunicipality(
+      {
+        address_line: 'Villa Dolores, Córdoba, Argentina',
+        address_lat: -31.945,
+        address_lng: -65.1902,
+        address_resolved_city: 'Pedanía Dolores',
+        address_resolved_province: 'Córdoba',
+      },
+      candidates,
+    );
+    expect(healed?.municipality_status).toBe('operational');
+    expect(healed?.intended_district_id).toBe('vd');
+    expect(healed?.address_resolved_city).toBe('Villa Dolores');
+  });
+
+  test('tryHealWaitlistedMunicipality: outside pickup stays null', () => {
+    setActiveServiceMarkets([LEGACY_VD_MARKET]);
+    const candidates = [
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+    ];
+    const healed = tryHealWaitlistedMunicipality(
+      {
+        address_line: 'Córdoba capital',
+        address_lat: -31.4,
+        address_lng: -64.1,
+        address_resolved_city: 'Córdoba',
+        address_resolved_province: 'Córdoba',
+      },
+      candidates,
+    );
+    expect(healed).toBeNull();
   });
 
   test('matchDistrict waitlists Córdoba capital', () => {

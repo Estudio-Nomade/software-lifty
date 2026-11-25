@@ -67,6 +67,7 @@ import {
   buildMunicipalityResult,
   parseLocalityFromFormatted,
   resolveDistrictForAddress,
+  tryHealWaitlistedMunicipality,
 } from './municipality';
 
 const VALID_DOC_TYPES: readonly string[] = CANONICAL_VALID_DOC_TYPES;
@@ -537,6 +538,8 @@ export const driversService = {
       created_at: drivers.created_at,
       municipality_status: drivers.municipality_status,
       address_line: drivers.address_line,
+      address_lat: drivers.address_lat,
+      address_lng: drivers.address_lng,
       address_resolved_city: drivers.address_resolved_city,
       address_resolved_province: drivers.address_resolved_province,
       intended_district_id: drivers.intended_district_id,
@@ -555,6 +558,8 @@ export const driversService = {
       created_at: Date;
       municipality_status: string | null;
       address_line: string | null;
+      address_lat: number | null;
+      address_lng: number | null;
       address_resolved_city: string | null;
       address_resolved_province: string | null;
       intended_district_id: string | null;
@@ -883,6 +888,12 @@ export const driversService = {
         documents_pending_review: drivers.documents_pending_review,
         district_id: drivers.district_id,
         municipality_status: drivers.municipality_status,
+        address_line: drivers.address_line,
+        address_lat: drivers.address_lat,
+        address_lng: drivers.address_lng,
+        address_resolved_city: drivers.address_resolved_city,
+        address_resolved_province: drivers.address_resolved_province,
+        intended_district_id: drivers.intended_district_id,
         identification_status: drivers.identification_status,
         approved_at: drivers.approved_at,
         admin_reviewed_at: drivers.admin_reviewed_at,
@@ -910,7 +921,15 @@ export const driversService = {
       throw new AppError('Todavia no estas aprobado para conectarte.', 403, 'DRIVER_NOT_APPROVED');
     }
 
-    if (isOnline && driver.municipality_status === 'waitlisted') {
+    let municipalityStatus = driver.municipality_status;
+    if (isOnline && municipalityStatus === 'waitlisted') {
+      const healed = await this.persistMunicipalityHealIfEligible(driver);
+      if (healed) {
+        municipalityStatus = healed.municipality_status;
+      }
+    }
+
+    if (isOnline && municipalityStatus === 'waitlisted') {
       throw new AppError(
         'Tu municipio todavía no está habilitado para hacer viajes. Te avisamos cuando abramos tu zona.',
         403,
@@ -2305,37 +2324,152 @@ export const driversService = {
   },
 
   async buildMunicipalityStatusFields(driver: {
+    id: string;
     municipality_status: string | null;
     address_line: string | null;
+    address_lat?: number | null;
+    address_lng?: number | null;
     address_resolved_city: string | null;
     address_resolved_province: string | null;
     intended_district_id: string | null;
   }) {
-    const municipality_status = (driver.municipality_status ?? 'unset') as
+    let municipality_status = (driver.municipality_status ?? 'unset') as
       | 'unset'
       | 'operational'
       | 'waitlisted';
+    let address_line = driver.address_line ?? null;
+    let address_resolved_city = driver.address_resolved_city ?? null;
+    let address_resolved_province = driver.address_resolved_province ?? null;
+    let intended_district_id = driver.intended_district_id ?? null;
+
+    if (municipality_status === 'waitlisted') {
+      const healed = await this.persistMunicipalityHealIfEligible({
+        id: driver.id,
+        municipality_status,
+        address_line,
+        address_lat: driver.address_lat ?? null,
+        address_lng: driver.address_lng ?? null,
+        address_resolved_city,
+        address_resolved_province,
+        intended_district_id,
+      });
+      if (healed) {
+        municipality_status = healed.municipality_status;
+        address_line = healed.address_line;
+        address_resolved_city = healed.address_resolved_city;
+        address_resolved_province = healed.address_resolved_province;
+        intended_district_id = healed.intended_district_id;
+      }
+    }
 
     let intended_district_name: string | null = null;
-    if (driver.intended_district_id) {
+    if (intended_district_id) {
       const [d] = await db
         .select({ name: districts.name })
         .from(districts)
-        .where(eq(districts.id, driver.intended_district_id))
+        .where(eq(districts.id, intended_district_id))
         .limit(1);
       intended_district_name = d?.name ?? null;
     }
 
     return {
       municipality_status,
-      address_line: driver.address_line ?? null,
-      address_resolved_city: driver.address_resolved_city ?? null,
-      address_resolved_province: driver.address_resolved_province ?? null,
-      intended_district_id: driver.intended_district_id ?? null,
+      address_line,
+      address_resolved_city,
+      address_resolved_province,
+      intended_district_id,
       intended_district_name,
       has_district: false as boolean,
       show_municipality_waitlist_banner: municipality_status === 'waitlisted',
     };
+  },
+
+  /**
+   * Persist operational municipality when a waitlisted pin is already inside an
+   * active pickup market (stale Photon labels like Pedanía Dolores, post-deploy heals).
+   */
+  async persistMunicipalityHealIfEligible(driver: {
+    id: string;
+    municipality_status: string | null;
+    address_line: string | null;
+    address_lat: number | null;
+    address_lng: number | null;
+    address_resolved_city: string | null;
+    address_resolved_province: string | null;
+    intended_district_id: string | null;
+  }): Promise<MunicipalityResolveResult | null> {
+    if ((driver.municipality_status ?? 'unset') !== 'waitlisted') return null;
+
+    let lat = driver.address_lat;
+    let lng = driver.address_lng;
+    let city = driver.address_resolved_city;
+    let province = driver.address_resolved_province;
+    let addressLine = driver.address_line;
+
+    // Status select may omit coords; load once if needed.
+    if (lat == null || lng == null || addressLine == null) {
+      const [row] = await db
+        .select({
+          address_line: drivers.address_line,
+          address_lat: drivers.address_lat,
+          address_lng: drivers.address_lng,
+          address_resolved_city: drivers.address_resolved_city,
+          address_resolved_province: drivers.address_resolved_province,
+        })
+        .from(drivers)
+        .where(eq(drivers.id, driver.id))
+        .limit(1);
+      if (!row) return null;
+      lat = row.address_lat;
+      lng = row.address_lng;
+      city = city ?? row.address_resolved_city;
+      province = province ?? row.address_resolved_province;
+      addressLine = addressLine ?? row.address_line;
+    }
+
+    const activeDistricts = await db
+      .select({
+        id: districts.id,
+        name: districts.name,
+        province: districts.province,
+        status: districts.status,
+      })
+      .from(districts)
+      .where(eq(districts.status, 'active'));
+
+    const healed = tryHealWaitlistedMunicipality(
+      {
+        address_line: addressLine,
+        address_lat: lat,
+        address_lng: lng,
+        address_resolved_city: city,
+        address_resolved_province: province,
+      },
+      activeDistricts,
+    );
+    if (!healed) return null;
+
+    await db
+      .update(drivers)
+      .set({
+        address_line: healed.address_line,
+        address_lat: healed.address_lat,
+        address_lng: healed.address_lng,
+        address_resolved_city: healed.address_resolved_city,
+        address_resolved_province: healed.address_resolved_province,
+        municipality_status: healed.municipality_status,
+        intended_district_id: healed.intended_district_id,
+        updated_at: new Date(),
+      })
+      .where(eq(drivers.id, driver.id));
+
+    logger.info('[DRIVERS] healed waitlisted municipality to operational', {
+      driverId: driver.id.slice(0, 8),
+      city: healed.address_resolved_city,
+      intended_district_id: healed.intended_district_id,
+    });
+
+    return healed;
   },
 
   async resolveMunicipalityFromAddress(input: {
