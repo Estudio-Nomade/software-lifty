@@ -79,7 +79,7 @@ export const driverStatusSchema = z.object({
       province: z.string(),
     })
     .optional(),
-  municipality_status: z.enum(['unset', 'operational', 'waitlisted']).optional(),
+  municipality_status: z.enum(['unset', 'operational', 'waitlisted', 'unresolved']).optional(),
   address_line: z.string().nullable().optional(),
   address_resolved_city: z.string().nullable().optional(),
   address_resolved_province: z.string().nullable().optional(),

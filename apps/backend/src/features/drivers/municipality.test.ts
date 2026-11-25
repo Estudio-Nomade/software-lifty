@@ -11,9 +11,12 @@ import { createTestAuthPlugin, createTestToken } from '../../shared/testing/util
 import {
   buildMunicipalityResult,
   matchDistrict,
+  MAX_GPS_ACCURACY_M,
   normalizePlaceName,
   parseLocalityFromFormatted,
   resolveDistrictForAddress,
+  resolveDistrictForMarket,
+  resolveTerritoryFromCoords,
   tryHealWaitlistedMunicipality,
 } from './municipality';
 import {
@@ -122,13 +125,105 @@ describe('municipality match helpers', () => {
     expect(m?.id).toBe('1');
   });
 
-  test('matchDistrict maps Pedanía Dolores (OSM reverse) to Villa Dolores', () => {
+  test('resolveTerritoryFromCoords: Pedanía Dolores geocoder label + hub pin → operational VD', () => {
+    setActiveServiceMarkets([LEGACY_VD_MARKET]);
     const candidates = [
-      { id: '1', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
-      { id: '2', name: 'Mina Clavero', province: 'Córdoba', status: 'active' },
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
     ];
-    expect(matchDistrict('Pedanía Dolores', 'Córdoba', candidates)?.id).toBe('1');
-    expect(matchDistrict('Pedania de Dolores', 'Córdoba', candidates)?.id).toBe('1');
+    const r = resolveTerritoryFromCoords(-31.945, -65.1902, candidates, {
+      addressLine: 'Villa Dolores, Córdoba, Argentina',
+      geocoderCity: 'Pedanía Dolores',
+      geocoderProvince: 'Córdoba',
+    });
+    expect(r.municipality_status).toBe('operational');
+    expect(r.resolution_method).toBe('service_market_hub');
+    expect(r.address_resolved_city).toBe('Villa Dolores');
+    expect(r.geocoder_city).toBe('Pedanía Dolores');
+    expect(r.intended_district_id).toBe('vd');
+  });
+
+  test('resolveTerritoryFromCoords: Photon department label ignored for gate', () => {
+    setActiveServiceMarkets([LEGACY_VD_MARKET]);
+    const candidates = [
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+    ];
+    const r = resolveTerritoryFromCoords(-31.945, -65.1902, candidates, {
+      geocoderCity: 'Departamento San Javier',
+      geocoderProvince: 'Córdoba',
+    });
+    expect(r.municipality_status).toBe('operational');
+    expect(r.address_resolved_city).toBe('Villa Dolores');
+  });
+
+  test('resolveTerritoryFromCoords: outside all markets → waitlisted', () => {
+    setActiveServiceMarkets([LEGACY_VD_MARKET]);
+    const candidates = [
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+    ];
+    const r = resolveTerritoryFromCoords(-31.4, -64.1, candidates, {
+      geocoderCity: 'Córdoba',
+      geocoderProvince: 'Córdoba',
+    });
+    expect(r.municipality_status).toBe('waitlisted');
+    expect(r.resolution_method).toBe('none');
+    expect(r.intended_district_id).toBeNull();
+  });
+
+  test('resolveTerritoryFromCoords: accuracy too poor → unresolved', () => {
+    setActiveServiceMarkets([LEGACY_VD_MARKET]);
+    const candidates = [
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+    ];
+    const r = resolveTerritoryFromCoords(-31.945, -65.1902, candidates, {
+      accuracyM: MAX_GPS_ACCURACY_M + 1,
+    });
+    expect(r.municipality_status).toBe('unresolved');
+    expect(r.resolution_method).toBe('accuracy_insufficient');
+  });
+
+  test('resolveTerritoryFromCoords: Tandil market pin → operational Tandil', () => {
+    const tandil: ServiceMarketGeo = {
+      id: 'm-ta',
+      slug: 'tandil',
+      name: 'Tandil',
+      province: 'Buenos Aires',
+      status: 'active',
+      hub_lat: -37.3217,
+      hub_lng: -59.1332,
+      pickup_radius_km: 8,
+      dropoff_radius_km: 50,
+      match_radius_km: 8,
+      geo_bias_radius_km: 20,
+      default_district_id: 'ta',
+    };
+    setActiveServiceMarkets([LEGACY_VD_MARKET, tandil]);
+    const candidates = [
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+      { id: 'ta', name: 'Tandil', province: 'Buenos Aires', status: 'active' },
+    ];
+    const r = resolveTerritoryFromCoords(-37.327, -59.1386, candidates, {
+      geocoderCity: 'Some barrio',
+      geocoderProvince: 'Buenos Aires',
+    });
+    expect(r.municipality_status).toBe('operational');
+    expect(r.intended_district_id).toBe('ta');
+    expect(r.address_resolved_city).toBe('Tandil');
+    expect(r.service_market_id).toBe('m-ta');
+  });
+
+  test('resolveDistrictForAddress is coords-first (ignores bad Photon city)', () => {
+    setActiveServiceMarkets([LEGACY_VD_MARKET]);
+    const candidates = [
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+    ];
+    const m = resolveDistrictForAddress(
+      'Pedanía Dolores',
+      'Córdoba',
+      candidates,
+      -31.945,
+      -65.1902,
+    );
+    expect(m?.id).toBe('vd');
   });
 
   test('tryHealWaitlistedMunicipality: Pedanía Dolores hub pin → operational', () => {
@@ -143,6 +238,7 @@ describe('municipality match helpers', () => {
         address_lng: -65.1902,
         address_resolved_city: 'Pedanía Dolores',
         address_resolved_province: 'Córdoba',
+        geocoder_city: 'Pedanía Dolores',
       },
       candidates,
     );
@@ -167,6 +263,18 @@ describe('municipality match helpers', () => {
       candidates,
     );
     expect(healed).toBeNull();
+  });
+
+  test('resolveDistrictForMarket uses default_district_id', () => {
+    const market: ServiceMarketGeo = {
+      ...LEGACY_VD_MARKET,
+      default_district_id: 'vd-custom',
+    };
+    const candidates = [
+      { id: 'vd-custom', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
+      { id: 'other', name: 'Other', province: 'Córdoba', status: 'active' },
+    ];
+    expect(resolveDistrictForMarket(market, candidates)?.id).toBe('vd-custom');
   });
 
   test('matchDistrict waitlists Córdoba capital', () => {
@@ -267,14 +375,18 @@ describe('municipality match helpers', () => {
     expect(spoof.intended_district_id).toBeNull();
   });
 
-  test('buildMunicipalityResult: SP coords + SP match → operational', () => {
+  test('buildMunicipalityResult: SP coords inside VD fence → operational via market (not Photon city)', () => {
+    setActiveServiceMarkets([LEGACY_VD_MARKET]);
+    // San Pedro pin is within VD 8km hub — fence is market, not Photon city.
     const op = buildMunicipalityResult(
       'Belgrano 50, San Pedro, Córdoba',
       { lat: -31.936553, lng: -65.2189268, city: 'San Pedro', province: 'Córdoba' },
-      { id: 'sp', name: 'San Pedro', province: 'Córdoba', status: 'active' },
+      { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
     );
     expect(op.municipality_status).toBe('operational');
-    expect(op.intended_district_id).toBe('sp');
+    expect(op.resolution_method).toBe('service_market_hub');
+    expect(op.address_resolved_city).toBe('Villa Dolores');
+    expect(op.geocoder_city).toBe('San Pedro');
   });
 
   test('resolveDistrictForAddress: Tandil pin falls back to market name when city empty', () => {
@@ -312,13 +424,13 @@ describe('municipality match helpers', () => {
     expect(op.intended_district_name).toBe('Tandil');
   });
 
-  test('resolveDistrictForAddress: Tandil city name match without market fallback', () => {
+  test('resolveDistrictForAddress: without coords never uses Photon city alone', () => {
     const candidates = [
       { id: 'vd', name: 'Villa Dolores', province: 'Córdoba', status: 'active' },
       { id: 'td', name: 'Tandil', province: 'Buenos Aires', status: 'active' },
     ];
     const match = resolveDistrictForAddress('Tandil', 'Buenos Aires', candidates, null, null);
-    expect(match?.id).toBe('td');
+    expect(match).toBeNull();
   });
 
   test('resolveDistrictForAddress: no Tandil district → null even inside hub', () => {
@@ -407,7 +519,7 @@ describe('Driver address municipality eligibility', () => {
     expect(statusRes.data.intended_district_name).toBe('Villa Dolores');
   });
 
-  test('PUT /drivers/me with San Pedro address → operational + intended_district_id', async () => {
+  test('PUT /drivers/me with San Pedro address → operational via VD market fence', async () => {
     const db = getDb();
     const [user] = await db
       .insert(users)
@@ -431,18 +543,19 @@ describe('Driver address municipality eligibility', () => {
 
     expect(status).toBe(200);
     expect(data.municipality_status).toBe('operational');
-    expect(data.intended_district_id).toBe(sanPedroId);
-    expect(data.address_resolved_city).toBe('San Pedro');
+    // Coords→market fence: SP is inside VD pickup radius → canonical VD district.
+    expect(data.intended_district_id).toBe(villaDoloresId);
+    expect(data.address_resolved_city).toBe('Villa Dolores');
 
     const statusRes = await request('GET', '/api/drivers/me/status', undefined, token);
     expect(statusRes.status).toBe(200);
     expect(statusRes.data.municipality_status).toBe('operational');
-    expect(statusRes.data.intended_district_id).toBe(sanPedroId);
+    expect(statusRes.data.intended_district_id).toBe(villaDoloresId);
     expect(statusRes.data.show_municipality_waitlist_banner).toBe(false);
-    expect(statusRes.data.intended_district_name).toBe('San Pedro');
+    expect(statusRes.data.intended_district_name).toBe('Villa Dolores');
   });
 
-  test('PUT /drivers/me with Villa Sarmiento address → operational + intended_district_id', async () => {
+  test('PUT /drivers/me with Villa Sarmiento address → operational via VD market fence', async () => {
     const db = getDb();
     const [user] = await db
       .insert(users)
@@ -466,15 +579,15 @@ describe('Driver address municipality eligibility', () => {
 
     expect(status).toBe(200);
     expect(data.municipality_status).toBe('operational');
-    expect(data.intended_district_id).toBe(villaSarmientoId);
-    expect(data.address_resolved_city).toBe('Villa Sarmiento');
+    expect(data.intended_district_id).toBe(villaDoloresId);
+    expect(data.address_resolved_city).toBe('Villa Dolores');
 
     const statusRes = await request('GET', '/api/drivers/me/status', undefined, token);
     expect(statusRes.status).toBe(200);
     expect(statusRes.data.municipality_status).toBe('operational');
-    expect(statusRes.data.intended_district_id).toBe(villaSarmientoId);
+    expect(statusRes.data.intended_district_id).toBe(villaDoloresId);
     expect(statusRes.data.show_municipality_waitlist_banner).toBe(false);
-    expect(statusRes.data.intended_district_name).toBe('Villa Sarmiento');
+    expect(statusRes.data.intended_district_name).toBe('Villa Dolores');
   });
 
   test('PUT /drivers/me with Córdoba capital → waitlisted', async () => {

@@ -258,7 +258,9 @@ export const ActiveScreen: React.FC = () => {
     driverStatus?.status === 'under_review' || driverStatus?.step === 'review';
   const municipalityWaitlisted =
     driverStatus?.municipality_status === 'waitlisted' ||
+    driverStatus?.municipality_status === 'unresolved' ||
     driverStatus?.show_municipality_waitlist_banner === true;
+  const municipalityUnresolved = driverStatus?.municipality_status === 'unresolved';
   const connectBlocked =
     documentsPendingReview ||
     awaitingApproval ||
@@ -297,7 +299,11 @@ export const ActiveScreen: React.FC = () => {
     }
 
     if (municipalityWaitlisted) {
-      showConnectFeedback(feedbackForConnectBlock('municipality_waitlisted'));
+      showConnectFeedback(
+        feedbackForConnectBlock(
+          municipalityUnresolved ? 'municipality_unresolved' : 'municipality_waitlisted',
+        ),
+      );
       return;
     }
 
@@ -702,13 +708,19 @@ export const ActiveScreen: React.FC = () => {
           )}
           {municipalityWaitlisted && (
             <View style={styles.goHint} pointerEvents="none">
-              <Text style={styles.reviewBannerTitle}>Municipio no habilitado</Text>
+              <Text style={styles.reviewBannerTitle}>
+                {municipalityUnresolved
+                  ? 'No pudimos ubicar tu domicilio'
+                  : 'Municipio no habilitado'}
+              </Text>
               <Text style={styles.reviewBannerText}>
-                {`Tu domicilio figura en ${
-                  [driverStatus?.address_resolved_city, driverStatus?.address_resolved_province]
-                    .filter(Boolean)
-                    .join(', ') || 'una zona sin cobertura'
-                }. Lifty todavía no habilita viajes ahí. Te avisamos cuando abramos tu zona.`}
+                {municipalityUnresolved
+                  ? 'Actualizá tu ubicación o el domicilio e intentá de nuevo.'
+                  : `Tu domicilio figura en ${
+                      [driverStatus?.address_resolved_city, driverStatus?.address_resolved_province]
+                        .filter(Boolean)
+                        .join(', ') || 'una zona sin cobertura'
+                    }. Lifty todavía no habilita viajes ahí. Te avisamos cuando abramos tu zona.`}
               </Text>
             </View>
           )}

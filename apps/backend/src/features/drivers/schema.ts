@@ -34,6 +34,8 @@ export const updateProfileBody = t.Object({
   address_line: t.Optional(t.String({ minLength: 3 })),
   address_lat: t.Optional(t.Number()),
   address_lng: t.Optional(t.Number()),
+  /** Device GPS horizontal accuracy in meters (optional). */
+  address_accuracy_m: t.Optional(t.Number()),
   address_place_id: t.Optional(t.String()),
 });
 
