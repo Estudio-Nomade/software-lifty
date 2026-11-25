@@ -70,34 +70,6 @@ export function HomeScreen() {
   useEffect(() => subscribeHomeOutOfServiceBanner(bumpHomeOof), []);
   const homeOofDismissed = isHomeOutOfServiceBannerDismissed();
 
-  useFocusEffect(
-    useCallback(() => {
-      // Module dismiss may have been reset while unfocused (logout).
-      bumpHomeOof();
-
-      let cancelled = false;
-      (async () => {
-        const trip = await getActiveRide().catch(() => null);
-        if (cancelled || !trip) return;
-        if (trip.status === 'pending' || trip.status === 'offered') {
-          replace('ConnectingDriver', { tripId: trip.id });
-          return;
-        }
-        if (['accepted', 'en_route', 'waiting', 'in_trip'].includes(trip.status)) {
-          setActiveTrip(trip);
-          replace('TripInProgress');
-        }
-        if (trip.status === 'completed') {
-          setActiveTrip(trip);
-          replace('TripComplete');
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, [replace, setActiveTrip]),
-  );
-
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [pickupAddress, setPickupAddress] = useState('');
   const [destAddress, setDestAddress] = useState('');
@@ -129,31 +101,73 @@ export function HomeScreen() {
   const placesLoading = focusedField === 'pickup' ? pickupAc.loading : destAc.loading;
   const placesError = focusedField === 'pickup' ? pickupAc.error : destAc.error;
 
-  // Soft OOF status: GPS preferred, else home pin from profile.
+  /**
+   * GPS preferred, else home pin. Caller must noteServiceAreaInside + setState.
+   * force bypasses TTL so focus can pick up fence flips without a GPS move.
+   */
+  const loadServiceArea = useCallback(
+    async (opts?: { force?: boolean }): Promise<ServiceAreaStatus | null> => {
+      if (current && Number.isFinite(current.lat) && Number.isFinite(current.lng)) {
+        return fetchServiceAreaStatus(current.lat, current.lng, opts);
+      }
+      const profile = await getProfile().catch(() => null);
+      if (!profile) return null;
+      syncCasaFavoriteFromProfile(profile);
+      if (!isPassengerHomeResolved(profile)) return null;
+      return fetchServiceAreaStatus(profile.home_lat as number, profile.home_lng as number, opts);
+    },
+    [current?.lat, current?.lng],
+  );
+
+  const applyServiceArea = useCallback((status: ServiceAreaStatus) => {
+    // Always note before paint — re-arms Home dismiss on fence flip.
+    noteServiceAreaInside(status.inside);
+    setServiceArea(status);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      let status: ServiceAreaStatus | null = null;
-      if (current && Number.isFinite(current.lat) && Number.isFinite(current.lng)) {
-        status = await fetchServiceAreaStatus(current.lat, current.lng);
-      } else {
-        const profile = await getProfile().catch(() => null);
-        if (cancelled || !profile) return;
-        syncCasaFavoriteFromProfile(profile);
-        if (!isPassengerHomeResolved(profile)) return;
-        status = await fetchServiceAreaStatus(
-          profile.home_lat as number,
-          profile.home_lng as number,
-        );
-      }
+      const status = await loadServiceArea();
       if (cancelled || !status) return;
-      noteServiceAreaInside(status.inside);
-      setServiceArea(status);
+      applyServiceArea(status);
     })();
     return () => {
       cancelled = true;
     };
-  }, [current?.lat, current?.lng]);
+  }, [loadServiceArea, applyServiceArea]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Module dismiss may have been reset while unfocused (logout).
+      bumpHomeOof();
+
+      let cancelled = false;
+      void (async () => {
+        // Force network so server-side fence changes re-arm Home X even if GPS stable.
+        const status = await loadServiceArea({ force: true });
+        if (!cancelled && status) applyServiceArea(status);
+
+        const trip = await getActiveRide().catch(() => null);
+        if (cancelled || !trip) return;
+        if (trip.status === 'pending' || trip.status === 'offered') {
+          replace('ConnectingDriver', { tripId: trip.id });
+          return;
+        }
+        if (['accepted', 'en_route', 'waiting', 'in_trip'].includes(trip.status)) {
+          setActiveTrip(trip);
+          replace('TripInProgress');
+        }
+        if (trip.status === 'completed') {
+          setActiveTrip(trip);
+          replace('TripComplete');
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [applyServiceArea, loadServiceArea, replace, setActiveTrip]),
+  );
 
   const handleDismissHomeOof = useCallback(() => {
     dismissHomeOutOfServiceBanner();
@@ -162,6 +176,12 @@ export function HomeScreen() {
   const outside = shouldShowOutOfServiceBanner(serviceArea);
   const showOofOnHome = !searchExpanded && outside && !homeOofDismissed;
   const showOofInBuscar = searchExpanded && outside;
+  // Single node — Platform.OS branches below are mutually exclusive (iOS KAV vs Android scroll).
+  const oofBannerInBuscar = showOofInBuscar ? (
+    <View style={styles.oofBannerInSearch}>
+      <OutOfServiceAreaBanner />
+    </View>
+  ) : null;
 
   // "Desde" autofill: optional cache pin ASAP, final label always from awaited fresh.
   useEffect(() => {
@@ -477,11 +497,7 @@ export function HomeScreen() {
                   automaticallyAdjustKeyboardInsets
                   showsVerticalScrollIndicator={false}
                 >
-                  {showOofInBuscar ? (
-                    <View style={styles.oofBannerInSearch}>
-                      <OutOfServiceAreaBanner />
-                    </View>
-                  ) : null}
+                  {oofBannerInBuscar}
                   {searchForm}
                 </ScrollView>
               </KeyboardAvoidingView>
@@ -493,11 +509,7 @@ export function HomeScreen() {
                 keyboardDismissMode="on-drag"
                 showsVerticalScrollIndicator={false}
               >
-                {showOofInBuscar ? (
-                  <View style={styles.oofBannerInSearch}>
-                    <OutOfServiceAreaBanner />
-                  </View>
-                ) : null}
+                {oofBannerInBuscar}
                 {searchForm}
               </ScrollView>
             )}
@@ -601,6 +613,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...theme.shadows.card,
+    // Android MapView: zIndex keeps the control above the native surface.
+    zIndex: 13,
   },
   oofBannerOnHome: {
     // Same row as locate; leave gap for the 44px recenter control.
@@ -609,7 +623,9 @@ const styles = StyleSheet.create({
     left: theme.spacing.sm,
     right: theme.spacing.md + 44 + theme.spacing.sm,
     maxWidth: 280,
+    // Android MapView: zIndex + elevation so compact card stays above native map / X tappable.
     zIndex: 12,
+    elevation: 4,
   },
   oofBannerInSearch: {
     paddingHorizontal: theme.spacing.md,
