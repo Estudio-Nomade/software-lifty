@@ -541,7 +541,7 @@ export function HomeScreen() {
               </TouchableOpacity>
               {showOofOnHome ? (
                 <View style={styles.oofBannerOnHome} pointerEvents="box-none">
-                  <OutOfServiceAreaBanner onDismiss={handleDismissHomeOof} />
+                  <OutOfServiceAreaBanner compact onDismiss={handleDismissHomeOof} />
                 </View>
               ) : null}
 
@@ -600,11 +600,12 @@ const styles = StyleSheet.create({
     ...theme.shadows.card,
   },
   oofBannerOnHome: {
-    // Below locate (44) so the X/card never covers recenter.
+    // Below locate; narrow so it doesn't span the whole map.
     position: 'absolute',
     top: theme.spacing.md + 44 + theme.spacing.sm,
     left: theme.spacing.sm,
-    right: theme.spacing.sm,
+    maxWidth: 280,
+    width: '72%',
     zIndex: 12,
   },
   oofBannerInSearch: {
