@@ -105,6 +105,8 @@ export function HomeScreen() {
    */
   const [pickupGpsAutofill, setPickupGpsAutofill] = useState(true);
   const lastGpsLabel = useRef<{ lat: number; lng: number; acc: number } | null>(null);
+  /** Monotonic id so only the latest GPS fill (autofill or Usar ubicación) may write state. */
+  const gpsFillIdRef = useRef(0);
   const [serviceArea, setServiceArea] = useState<ServiceAreaStatus | null>(null);
   const [oofDismissed, setOofDismissed] = useState(false);
   const prevServiceInsideRef = useRef<boolean | null>(null);
@@ -153,15 +155,17 @@ export function HomeScreen() {
     if (!pickupGpsAutofill) return;
     if (pickupPicked || pickupAddress.trim()) return;
     let cancelled = false;
+    const fillId = ++gpsFillIdRef.current;
+    const isActive = () => !cancelled && fillId === gpsFillIdRef.current;
     setPickupLoading(true);
     (async () => {
       const cached = useLocationStore.getState().current;
-      if (cached && Number.isFinite(cached.lat) && Number.isFinite(cached.lng)) {
+      if (cached && Number.isFinite(cached.lat) && Number.isFinite(cached.lng) && isActive()) {
         setPickupCoord({ lat: cached.lat, lng: cached.lng });
       }
 
       const fix = await requestFreshPosition();
-      if (cancelled) return;
+      if (!isActive()) return;
       if (!fix) {
         setPickupLoading(false);
         return;
@@ -171,7 +175,7 @@ export function HomeScreen() {
       lastGpsLabel.current = { lat: fix.lat, lng: fix.lng, acc: fix.accuracy };
 
       const label = await resolveAddressLabel(fix.lat, fix.lng, { accuracy: fix.accuracy });
-      if (cancelled) return;
+      if (!isActive()) return;
       setPickupAddress(label);
       setPickupPicked(true);
       setPickupFromGps(true);
@@ -284,7 +288,10 @@ export function HomeScreen() {
 
   const handleUseMyLocation = () => {
     void (async () => {
-      setPickupGpsAutofill(true);
+      // Bump fill id + disable autofill so this tap owns GPS (no concurrent autofill reverse).
+      const fillId = ++gpsFillIdRef.current;
+      const isActive = () => fillId === gpsFillIdRef.current;
+      setPickupGpsAutofill(false);
       setPickupLoading(true);
       setSearchError(null);
       setPickupPicked(false);
@@ -293,11 +300,12 @@ export function HomeScreen() {
 
       // Provisional pin from cache while fresh GPS loads (label waits on fresh).
       const cached = useLocationStore.getState().current;
-      if (cached && Number.isFinite(cached.lat) && Number.isFinite(cached.lng)) {
+      if (cached && Number.isFinite(cached.lat) && Number.isFinite(cached.lng) && isActive()) {
         setPickupCoord({ lat: cached.lat, lng: cached.lng });
       }
 
       const fix = await requestFreshPosition();
+      if (!isActive()) return;
       if (!fix) {
         setPickupLoading(false);
         setPickupCoord(null);
@@ -310,9 +318,11 @@ export function HomeScreen() {
 
       setPickupCoord({ lat: fix.lat, lng: fix.lng });
       const label = await resolveAddressLabel(fix.lat, fix.lng, { accuracy: fix.accuracy });
+      if (!isActive()) return;
       setPickupAddress(label);
       setPickupPicked(true);
       setPickupFromGps(true);
+      setPickupGpsAutofill(true);
       setPickupLoading(false);
       lastGpsLabel.current = { lat: fix.lat, lng: fix.lng, acc: fix.accuracy };
       setFocusedField('dest');

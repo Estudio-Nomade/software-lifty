@@ -266,6 +266,71 @@ describe('HomeScreen address clear', () => {
     ).toBe(true);
   });
 
+  test('Usar mi ubicacion does not race autofill (single fresh request)', async () => {
+    const cached = { lat: -31.9454898, lng: -65.1651154, accuracy: 40 };
+    const fresh = { lat: -31.9456491, lng: -65.1771662, accuracy: 12 };
+    useLocationStore.setState({
+      current: cached,
+      permissionGranted: true,
+      locationError: null,
+    });
+    let locationState = {
+      current: cached as { lat: number; lng: number; accuracy: number } | null,
+      locationError: null as string | null,
+      refresh: jest.fn().mockResolvedValue(fresh),
+    };
+    mockUseLocation.mockImplementation(() => locationState);
+    mockRequestFresh.mockResolvedValue(cached);
+    mockResolveLabel.mockImplementation(async (lat: number, lng: number) => {
+      if (Math.abs(lat - fresh.lat) < 1e-6 && Math.abs(lng - fresh.lng) < 1e-6) {
+        return '25 de Mayo, Villa Dolores';
+      }
+      return 'Miguel Cané, Villa Dolores';
+    });
+
+    const { getByPlaceholderText, getByLabelText, getByDisplayValue } = await openSearch();
+    await waitFor(() => {
+      expect(getByDisplayValue('Miguel Cané, Villa Dolores')).toBeTruthy();
+    });
+
+    await fireEvent.changeText(getByPlaceholderText('Desde'), 'Otra calle 9');
+    mockRequestFresh.mockClear();
+    mockResolveLabel.mockClear();
+
+    let resolveFresh!: (v: typeof fresh) => void;
+    mockRequestFresh.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFresh = (v) => {
+            locationState = { ...locationState, current: v };
+            useLocationStore.setState({
+              current: v,
+              permissionGranted: true,
+              locationError: null,
+            });
+            resolve(v);
+          };
+        }),
+    );
+
+    await fireEvent.press(getByLabelText('Usar mi ubicación actual'));
+
+    // While GPS is in flight, autofill must not start a second request.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockRequestFresh).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFresh(fresh);
+    });
+
+    await waitFor(() => {
+      expect(getByDisplayValue('25 de Mayo, Villa Dolores')).toBeTruthy();
+    });
+    expect(mockRequestFresh).toHaveBeenCalledTimes(1);
+  });
+
   test('Usar mi ubicacion shows error when fresh fails (no silent stale label)', async () => {
     const cached = { lat: -31.9454898, lng: -65.1651154, accuracy: 40 };
     useLocationStore.setState({
