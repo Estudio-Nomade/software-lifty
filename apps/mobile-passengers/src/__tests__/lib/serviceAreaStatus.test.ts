@@ -4,6 +4,7 @@ import {
   noteServiceAreaInside,
   resetHomeOutOfServiceBannerSession,
   shouldShowOutOfServiceBanner,
+  subscribeHomeOutOfServiceBanner,
 } from '../../lib/serviceAreaStatus';
 
 jest.mock('../../api/passenger', () => ({
@@ -47,5 +48,19 @@ describe('home out-of-service banner dismiss (session)', () => {
 
     resetHomeOutOfServiceBannerSession();
     expect(isHomeOutOfServiceBannerDismissed()).toBe(false);
+  });
+
+  it('subscribe fires on dismiss and reset so UI can drop local cache', () => {
+    const spy = jest.fn();
+    const unsub = subscribeHomeOutOfServiceBanner(spy);
+
+    noteServiceAreaInside(false);
+    dismissHomeOutOfServiceBanner();
+    expect(spy).toHaveBeenCalled();
+    spy.mockClear();
+
+    resetHomeOutOfServiceBannerSession();
+    expect(spy).toHaveBeenCalled();
+    unsub();
   });
 });

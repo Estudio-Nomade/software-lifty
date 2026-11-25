@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -31,6 +31,7 @@ import {
   isHomeOutOfServiceBannerDismissed,
   noteServiceAreaInside,
   shouldShowOutOfServiceBanner,
+  subscribeHomeOutOfServiceBanner,
 } from '../lib/serviceAreaStatus';
 import { getTabBarReserve } from '../lib/tabBarLayout';
 import { syncCasaFavoriteFromProfile } from '../store/favoritesStore';
@@ -64,8 +65,16 @@ export function HomeScreen() {
   const { current, locationError, refresh } = useLocation();
   const setActiveTrip = useRideStore((s) => s.setActiveTrip);
 
+  /** Force re-read of module dismiss (SoT) — never cache a stale local bool. */
+  const [, bumpHomeOof] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => subscribeHomeOutOfServiceBanner(bumpHomeOof), []);
+  const homeOofDismissed = isHomeOutOfServiceBannerDismissed();
+
   useFocusEffect(
     useCallback(() => {
+      // Module dismiss may have been reset while unfocused (logout).
+      bumpHomeOof();
+
       let cancelled = false;
       (async () => {
         const trip = await getActiveRide().catch(() => null);
@@ -111,10 +120,6 @@ export function HomeScreen() {
   /** Monotonic id so only the latest GPS fill (autofill or Usar ubicación) may write state. */
   const gpsFillIdRef = useRef(0);
   const [serviceArea, setServiceArea] = useState<ServiceAreaStatus | null>(null);
-  /** Home map X — session module state (survives remount, clears on logout). */
-  const [homeOofDismissed, setHomeOofDismissed] = useState(() =>
-    isHomeOutOfServiceBannerDismissed(),
-  );
 
   const pickupAc = usePlaceAutocomplete(
     focusedField === 'pickup' && !pickupPicked ? pickupAddress : '',
@@ -143,7 +148,6 @@ export function HomeScreen() {
       }
       if (cancelled || !status) return;
       noteServiceAreaInside(status.inside);
-      setHomeOofDismissed(isHomeOutOfServiceBannerDismissed());
       setServiceArea(status);
     })();
     return () => {
@@ -153,7 +157,6 @@ export function HomeScreen() {
 
   const handleDismissHomeOof = useCallback(() => {
     dismissHomeOutOfServiceBanner();
-    setHomeOofDismissed(true);
   }, []);
 
   const outside = shouldShowOutOfServiceBanner(serviceArea);
