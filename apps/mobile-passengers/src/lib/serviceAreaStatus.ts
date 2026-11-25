@@ -22,6 +22,35 @@ export function clearServiceAreaStatusCache(): void {
   cache = null;
 }
 
+/** Soft OOF banner dismiss — survives Home remount / tab hops (not AsyncStorage). */
+let oofBannerDismissed = false;
+let oofBannerLastInside: boolean | null = null;
+
+export function isOutOfServiceBannerDismissed(): boolean {
+  return oofBannerDismissed;
+}
+
+export function dismissOutOfServiceBanner(): void {
+  oofBannerDismissed = true;
+}
+
+/**
+ * Keep dismiss only while the inside/outside answer is stable.
+ * Crossing the fence (in↔out) re-arms the banner for the next Buscar open.
+ */
+export function noteServiceAreaInside(inside: boolean): void {
+  if (oofBannerLastInside !== null && oofBannerLastInside !== inside) {
+    oofBannerDismissed = false;
+  }
+  oofBannerLastInside = inside;
+}
+
+/** Test helper — reset module dismiss + fence memory. */
+export function resetOutOfServiceBannerDismissState(): void {
+  oofBannerDismissed = false;
+  oofBannerLastInside = null;
+}
+
 export function shouldShowOutOfServiceBanner(
   status: ServiceAreaStatus | null | undefined,
 ): boolean {

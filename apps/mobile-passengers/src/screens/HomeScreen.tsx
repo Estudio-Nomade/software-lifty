@@ -26,7 +26,10 @@ import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
 import { isPassengerHomeResolved } from '../lib/passengerProfileGate';
 import {
   type ServiceAreaStatus,
+  dismissOutOfServiceBanner,
   fetchServiceAreaStatus,
+  isOutOfServiceBannerDismissed,
+  noteServiceAreaInside,
   shouldShowOutOfServiceBanner,
 } from '../lib/serviceAreaStatus';
 import { getTabBarReserve } from '../lib/tabBarLayout';
@@ -108,8 +111,8 @@ export function HomeScreen() {
   /** Monotonic id so only the latest GPS fill (autofill or Usar ubicación) may write state. */
   const gpsFillIdRef = useRef(0);
   const [serviceArea, setServiceArea] = useState<ServiceAreaStatus | null>(null);
-  const [oofDismissed, setOofDismissed] = useState(false);
-  const prevServiceInsideRef = useRef<boolean | null>(null);
+  /** Local mirror of module dismiss so X re-renders without remount. */
+  const [oofDismissed, setOofDismissed] = useState(() => isOutOfServiceBannerDismissed());
 
   const pickupAc = usePlaceAutocomplete(
     focusedField === 'pickup' && !pickupPicked ? pickupAddress : '',
@@ -119,7 +122,7 @@ export function HomeScreen() {
   const placesLoading = focusedField === 'pickup' ? pickupAc.loading : destAc.loading;
   const placesError = focusedField === 'pickup' ? pickupAc.error : destAc.error;
 
-  // Soft OOF banner: GPS preferred, else home pin from profile.
+  // Soft OOF status for Buscar only: GPS preferred, else home pin from profile.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -137,17 +140,22 @@ export function HomeScreen() {
         );
       }
       if (cancelled || !status) return;
-      const prevInside = prevServiceInsideRef.current;
-      if (prevInside !== null && prevInside !== status.inside) {
-        setOofDismissed(false);
-      }
-      prevServiceInsideRef.current = status.inside;
+      noteServiceAreaInside(status.inside);
+      setOofDismissed(isOutOfServiceBannerDismissed());
       setServiceArea(status);
     })();
     return () => {
       cancelled = true;
     };
   }, [current?.lat, current?.lng]);
+
+  const handleDismissOofBanner = useCallback(() => {
+    dismissOutOfServiceBanner();
+    setOofDismissed(true);
+  }, []);
+
+  const showOofInBuscar =
+    searchExpanded && !oofDismissed && shouldShowOutOfServiceBanner(serviceArea);
 
   // "Desde" autofill: optional cache pin ASAP, final label always from awaited fresh.
   useEffect(() => {
@@ -463,6 +471,11 @@ export function HomeScreen() {
                   automaticallyAdjustKeyboardInsets
                   showsVerticalScrollIndicator={false}
                 >
+                  {showOofInBuscar ? (
+                    <View style={styles.oofBannerInSearch}>
+                      <OutOfServiceAreaBanner onDismiss={handleDismissOofBanner} />
+                    </View>
+                  ) : null}
                   {searchForm}
                 </ScrollView>
               </KeyboardAvoidingView>
@@ -474,6 +487,11 @@ export function HomeScreen() {
                 keyboardDismissMode="on-drag"
                 showsVerticalScrollIndicator={false}
               >
+                {showOofInBuscar ? (
+                  <View style={styles.oofBannerInSearch}>
+                    <OutOfServiceAreaBanner onDismiss={handleDismissOofBanner} />
+                  </View>
+                ) : null}
                 {searchForm}
               </ScrollView>
             )}
@@ -509,11 +527,6 @@ export function HomeScreen() {
                   </Text>
                   <Text style={styles.geoBannerRetry}>Reintentar</Text>
                 </TouchableOpacity>
-              ) : null}
-              {!oofDismissed && shouldShowOutOfServiceBanner(serviceArea) ? (
-                <View style={styles.oofBannerWrap} pointerEvents="box-none">
-                  <OutOfServiceAreaBanner onDismiss={() => setOofDismissed(true)} />
-                </View>
               ) : null}
               <TouchableOpacity
                 style={styles.locateBtn}
@@ -578,12 +591,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...theme.shadows.card,
   },
-  oofBannerWrap: {
-    position: 'absolute',
-    top: theme.spacing.md,
-    left: theme.spacing.sm,
-    right: 56,
-    zIndex: 12,
+  oofBannerInSearch: {
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.xs,
   },
   geoBanner: {
     position: 'absolute',
