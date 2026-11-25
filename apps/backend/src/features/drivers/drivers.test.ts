@@ -33,7 +33,12 @@ import {
   type StorageProvider,
 } from '../../shared/lib/storage';
 import { createTestToken } from '../../shared/testing/utils';
-import { isMissingOnboardingVehicleSchemaError, setStorageForTesting } from './service';
+import {
+  isMissingMunicipalityAuditSchemaError,
+  isMissingOnboardingVehicleSchemaError,
+  isPostgresUndefinedColumnError,
+  setStorageForTesting,
+} from './service';
 
 interface TestStorage extends StorageProvider {
   uploaded: Map<string, string>;
@@ -2527,5 +2532,61 @@ describe('isMissingOnboardingVehicleSchemaError (wabdd schema drift #451–#453)
     const { status, data } = await request('GET', '/api/drivers/me/status', undefined, token);
     expect(status).toBe(200);
     expect(data.step).toBe('documents');
+  });
+});
+
+describe('isMissingMunicipalityAuditSchemaError (wabdd schema drift 0066)', () => {
+  test('accepts Postgres 42703 for audit cols and bare undefined_column', () => {
+    expect(
+      isMissingMunicipalityAuditSchemaError(
+        new Error('column drivers.geocoder_city does not exist'),
+      ),
+    ).toBe(true);
+    expect(
+      isMissingMunicipalityAuditSchemaError(
+        new Error('column "resolution_method" of relation "drivers" does not exist'),
+      ),
+    ).toBe(true);
+    expect(
+      isMissingMunicipalityAuditSchemaError(
+        Object.assign(new Error('undefined_column'), { code: '42703' }),
+      ),
+    ).toBe(true);
+    // drizzle-style nested cause
+    expect(
+      isMissingMunicipalityAuditSchemaError(
+        Object.assign(new Error('Failed query'), {
+          cause: Object.assign(new Error('column drivers.service_market_id does not exist'), {
+            code: '42703',
+          }),
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  test('rejects non-column errors and missing core municipality columns', () => {
+    expect(isMissingMunicipalityAuditSchemaError(new Error('connection refused'))).toBe(false);
+    expect(
+      isMissingMunicipalityAuditSchemaError(
+        new Error('column drivers.address_line does not exist'),
+      ),
+    ).toBe(false);
+    expect(
+      isMissingMunicipalityAuditSchemaError(
+        new Error('column drivers.intended_district_id does not exist'),
+      ),
+    ).toBe(false);
+    // Substring in unrelated error must not match without undefined-column signal
+    expect(
+      isMissingMunicipalityAuditSchemaError(
+        new Error('validation failed: geocoder_city too long'),
+      ),
+    ).toBe(false);
+    expect(isPostgresUndefinedColumnError(new Error('connection refused'))).toBe(false);
+    expect(
+      isPostgresUndefinedColumnError(
+        Object.assign(new Error('x'), { code: '42703' }),
+      ),
+    ).toBe(true);
   });
 });

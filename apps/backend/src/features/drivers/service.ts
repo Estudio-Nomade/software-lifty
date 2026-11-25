@@ -218,22 +218,62 @@ async function assertCanAppendDoc(driverId: string, docType: string): Promise<vo
 }
 
 /**
- * Prod wabdd often lags monorepo migrations (#451–#453):
- * drivers.license_* / vehicles.engine_cc / vehicles.insurance_coverage_type.
- * Missing columns surface as Postgres 42703 → safeCall 500 on GET /me/status
- * (SessionRestore) and PUT /me vehicle step. Detect drift so we can soft-fallback.
+ * Prod wabdd often lags monorepo migrations (#451-#453, #585/0066):
+ * drivers license_* cols, vehicles engine_cc / insurance_coverage_type,
+ * and municipality audit cols (geocoder_city/province, resolution_method,
+ * service_market_id, address_accuracy_m).
+ * Missing columns surface as Postgres 42703 then safeCall 500. Detect drift for soft-fallback.
  */
 /** Only known #451–#453 onboarding cols — never blanket “any drivers/vehicles column”. */
 const ONBOARDING_SCHEMA_COL_RE =
   /license_category|license_professional_status|professional_license_grace_started_at|professional_license_due_at|engine_cc|insurance_coverage_type/i;
 
+/** Migration 0066 audit cols only — never soft-retry missing core municipality fields. */
+const MUNICIPALITY_AUDIT_COL_RE =
+  /geocoder_city|geocoder_province|resolution_method|service_market_id|address_accuracy_m/i;
+
+type PgishError = {
+  message?: string;
+  code?: string;
+  cause?: { message?: string; code?: string };
+};
+
+function pgErrorParts(err: unknown): { msg: string; code: string } {
+  const e = err as PgishError;
+  return {
+    msg: String(e?.message ?? e?.cause?.message ?? err ?? ''),
+    code: String(e?.code ?? e?.cause?.code ?? ''),
+  };
+}
+
+/** Postgres undefined_column (42703), including drizzle-wrapped cause. */
+export function isPostgresUndefinedColumnError(err: unknown): boolean {
+  const { msg, code } = pgErrorParts(err);
+  return (
+    code === '42703' ||
+    /42703/.test(msg) ||
+    /undefined_column/i.test(msg) ||
+    /column .+ does not exist/i.test(msg)
+  );
+}
+
 export function isMissingOnboardingVehicleSchemaError(err: unknown): boolean {
-  const e = err as { message?: string; code?: string; cause?: { message?: string; code?: string } };
-  const msg = String(e?.message ?? e?.cause?.message ?? err ?? '');
-  const code = String(e?.code ?? e?.cause?.code ?? '');
-  const looksMissing = /does not exist/i.test(msg) || code === '42703' || /42703/.test(msg);
-  if (!looksMissing) return false;
-  return ONBOARDING_SCHEMA_COL_RE.test(msg);
+  if (!isPostgresUndefinedColumnError(err)) return false;
+  return ONBOARDING_SCHEMA_COL_RE.test(pgErrorParts(err).msg);
+}
+
+/**
+ * Pre-0066 wabdd: audit write fails with 42703.
+ * If the driver names a column, it must be an audit col (don't swallow core drops).
+ * Bare 42703 (no column name in message) is accepted — callers only add audit cols
+ * on top of already-existing core municipality fields.
+ */
+export function isMissingMunicipalityAuditSchemaError(err: unknown): boolean {
+  if (!isPostgresUndefinedColumnError(err)) return false;
+  const { msg } = pgErrorParts(err);
+  const namesColumn = /column\s+["']?[\w.]+/i.test(msg);
+  if (!namesColumn) return true;
+  return MUNICIPALITY_AUDIT_COL_RE.test(msg);
 }
 
 const EMPTY_PROFESSIONAL_LICENSE_ROW = {
@@ -1348,13 +1388,10 @@ export const driversService = {
         await db.update(drivers).set(municipalityPatch).where(eq(drivers.id, driverId));
       } catch (err) {
         // Pre-0066 schema: drop audit cols and retry core municipality fields.
-        const msg = err instanceof Error ? err.message : String(err);
-        if (!/geocoder_|resolution_method|service_market_id|address_accuracy_m/i.test(msg)) {
-          throw err;
-        }
+        if (!isMissingMunicipalityAuditSchemaError(err)) throw err;
         logger.warn('[drivers] municipality patch schema drift — retry without audit cols', {
           driverId: driverId.slice(0, 8),
-          message: msg,
+          message: err instanceof Error ? err.message : String(err),
         });
         await db
           .update(drivers)
@@ -2521,13 +2558,10 @@ export const driversService = {
         .where(eq(drivers.id, driver.id));
     } catch (err) {
       // Pre-0066 schema: still persist operational heal without audit cols.
-      const msg = err instanceof Error ? err.message : String(err);
-      if (!/geocoder_|resolution_method|service_market_id|address_accuracy_m/i.test(msg)) {
-        throw err;
-      }
+      if (!isMissingMunicipalityAuditSchemaError(err)) throw err;
       logger.warn('[drivers] municipality heal schema drift — retry without audit cols', {
         driverId: driver.id.slice(0, 8),
-        message: msg,
+        message: err instanceof Error ? err.message : String(err),
       });
       await db.update(drivers).set(healCore).where(eq(drivers.id, driver.id));
     }
