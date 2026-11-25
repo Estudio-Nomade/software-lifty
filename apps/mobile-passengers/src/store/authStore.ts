@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { resetHomeOutOfServiceBannerSession } from '../lib/homeOutOfServiceBannerSession';
 import { invalidatePassengerProfileCompleteCache } from '../lib/passengerProfileGate';
-import { resetHomeOutOfServiceBannerSession } from '../lib/serviceAreaStatus';
 
 interface AuthState {
   token: string | null;

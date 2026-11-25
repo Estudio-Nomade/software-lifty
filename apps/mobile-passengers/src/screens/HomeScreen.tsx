@@ -601,6 +601,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...theme.shadows.card,
+    // Android MapView: zIndex keeps the control above the native surface.
+    zIndex: 13,
   },
   oofBannerOnHome: {
     // Same row as locate; leave gap for the 44px recenter control.
@@ -609,7 +611,9 @@ const styles = StyleSheet.create({
     left: theme.spacing.sm,
     right: theme.spacing.md + 44 + theme.spacing.sm,
     maxWidth: 280,
+    // Android MapView: zIndex + elevation so compact card stays above native map / X tappable.
     zIndex: 12,
+    elevation: 4,
   },
   oofBannerInSearch: {
     paddingHorizontal: theme.spacing.md,
