@@ -41,16 +41,18 @@ export function shouldShowOutOfServiceBanner(
 /**
  * Auth GET /passenger/service-area/status with short in-memory cache.
  * Returns null on network/auth failure (do not show banner on unknown).
+ * `force: true` bypasses TTL so focus / fence re-checks can re-arm Home dismiss.
  */
 export async function fetchServiceAreaStatus(
   lat: number,
   lng: number,
+  opts?: { force?: boolean },
 ): Promise<ServiceAreaStatus | null> {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
 
   const key = cacheKey(lat, lng);
   const now = Date.now();
-  if (cache && cache.key === key && now - cache.at < TTL_MS) {
+  if (!opts?.force && cache && cache.key === key && now - cache.at < TTL_MS) {
     return cache.value;
   }
 
