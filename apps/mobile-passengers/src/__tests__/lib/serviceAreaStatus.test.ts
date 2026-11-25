@@ -1,8 +1,8 @@
 import {
-  dismissOutOfServiceBanner,
-  isOutOfServiceBannerDismissed,
+  dismissHomeOutOfServiceBanner,
+  isHomeOutOfServiceBannerDismissed,
   noteServiceAreaInside,
-  resetOutOfServiceBannerDismissState,
+  resetHomeOutOfServiceBannerSession,
   shouldShowOutOfServiceBanner,
 } from '../../lib/serviceAreaStatus';
 
@@ -19,26 +19,33 @@ describe('shouldShowOutOfServiceBanner', () => {
   });
 });
 
-describe('out-of-service banner dismiss', () => {
+describe('home out-of-service banner dismiss (session)', () => {
   beforeEach(() => {
-    resetOutOfServiceBannerDismissState();
+    resetHomeOutOfServiceBannerSession();
   });
 
-  it('keeps dismiss across remount-equivalent reads until fence flips', () => {
+  it('keeps Home dismiss across remount until logout or fence flip', () => {
     noteServiceAreaInside(false);
-    expect(isOutOfServiceBannerDismissed()).toBe(false);
+    expect(isHomeOutOfServiceBannerDismissed()).toBe(false);
 
-    dismissOutOfServiceBanner();
-    expect(isOutOfServiceBannerDismissed()).toBe(true);
+    dismissHomeOutOfServiceBanner();
+    expect(isHomeOutOfServiceBannerDismissed()).toBe(true);
 
-    // Same side of the fence — stay dismissed (tab hop / Home remount).
     noteServiceAreaInside(false);
-    expect(isOutOfServiceBannerDismissed()).toBe(true);
+    expect(isHomeOutOfServiceBannerDismissed()).toBe(true);
 
-    // Crossing in → out re-arms so Buscar can warn again.
     noteServiceAreaInside(true);
-    expect(isOutOfServiceBannerDismissed()).toBe(false);
+    expect(isHomeOutOfServiceBannerDismissed()).toBe(false);
     noteServiceAreaInside(false);
-    expect(isOutOfServiceBannerDismissed()).toBe(false);
+    expect(isHomeOutOfServiceBannerDismissed()).toBe(false);
+  });
+
+  it('resetHomeOutOfServiceBannerSession re-arms after logout', () => {
+    noteServiceAreaInside(false);
+    dismissHomeOutOfServiceBanner();
+    expect(isHomeOutOfServiceBannerDismissed()).toBe(true);
+
+    resetHomeOutOfServiceBannerSession();
+    expect(isHomeOutOfServiceBannerDismissed()).toBe(false);
   });
 });

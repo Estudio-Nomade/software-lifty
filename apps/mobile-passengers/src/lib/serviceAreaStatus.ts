@@ -22,33 +22,42 @@ export function clearServiceAreaStatusCache(): void {
   cache = null;
 }
 
-/** Soft OOF banner dismiss — survives Home remount / tab hops (not AsyncStorage). */
-let oofBannerDismissed = false;
-let oofBannerLastInside: boolean | null = null;
+/**
+ * Soft OOF on collapsed Home: dismiss lasts this app session only
+ * (module memory — survives tab hops / Home remount, dies on process kill).
+ * New login clears it via resetHomeOutOfServiceBannerSession().
+ */
+let homeOofDismissed = false;
+let homeOofLastInside: boolean | null = null;
 
-export function isOutOfServiceBannerDismissed(): boolean {
-  return oofBannerDismissed;
+export function isHomeOutOfServiceBannerDismissed(): boolean {
+  return homeOofDismissed;
 }
 
-export function dismissOutOfServiceBanner(): void {
-  oofBannerDismissed = true;
+export function dismissHomeOutOfServiceBanner(): void {
+  homeOofDismissed = true;
 }
 
 /**
- * Keep dismiss only while the inside/outside answer is stable.
- * Crossing the fence (in↔out) re-arms the banner for the next Buscar open.
+ * Keep Home dismiss only while inside/outside is stable.
+ * Crossing the fence re-arms the Home map banner.
  */
 export function noteServiceAreaInside(inside: boolean): void {
-  if (oofBannerLastInside !== null && oofBannerLastInside !== inside) {
-    oofBannerDismissed = false;
+  if (homeOofLastInside !== null && homeOofLastInside !== inside) {
+    homeOofDismissed = false;
   }
-  oofBannerLastInside = inside;
+  homeOofLastInside = inside;
 }
 
-/** Test helper — reset module dismiss + fence memory. */
+/** Call on logout / clearAuth so the next session sees Home OOF again. */
+export function resetHomeOutOfServiceBannerSession(): void {
+  homeOofDismissed = false;
+  homeOofLastInside = null;
+}
+
+/** @deprecated alias — tests/old call sites */
 export function resetOutOfServiceBannerDismissState(): void {
-  oofBannerDismissed = false;
-  oofBannerLastInside = null;
+  resetHomeOutOfServiceBannerSession();
 }
 
 export function shouldShowOutOfServiceBanner(

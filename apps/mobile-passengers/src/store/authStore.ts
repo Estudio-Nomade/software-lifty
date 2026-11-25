@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { invalidatePassengerProfileCompleteCache } from '../lib/passengerProfileGate';
+import { resetHomeOutOfServiceBannerSession } from '../lib/serviceAreaStatus';
 
 interface AuthState {
   token: string | null;
@@ -111,6 +112,7 @@ export const useAuthStore = create<AuthState>()(
           if (state.userId) {
             invalidatePassengerProfileCompleteCache();
           }
+          resetHomeOutOfServiceBannerSession();
           return {
             token: null,
             userId: null,
@@ -125,6 +127,7 @@ export const useAuthStore = create<AuthState>()(
         }),
       clearAuthLocal: () => {
         invalidatePassengerProfileCompleteCache();
+        resetHomeOutOfServiceBannerSession();
         set({
           token: null,
           userId: null,

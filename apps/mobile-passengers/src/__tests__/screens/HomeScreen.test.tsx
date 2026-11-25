@@ -612,7 +612,7 @@ describe('HomeScreen favorite chip focused field', () => {
   });
 });
 
-describe('HomeScreen out-of-service banner (Buscar only)', () => {
+describe('HomeScreen out-of-service banner (Home + Buscar)', () => {
   const outsideFix = { lat: -34.6, lng: -58.4, accuracy: 12 };
 
   beforeEach(() => {
@@ -634,39 +634,51 @@ describe('HomeScreen out-of-service banner (Buscar only)', () => {
     mockGetServiceAreaStatus.mockResolvedValue({ inside: false, markets: [] });
   });
 
-  test('does not show OOF banner on collapsed home map', async () => {
-    const { queryByText, queryByLabelText } = await render(<HomeScreen />);
+  test('shows OOF banner on collapsed home map below locate', async () => {
+    const { getByText, getByLabelText } = await render(<HomeScreen />);
 
     await waitFor(() => {
       expect(mockGetServiceAreaStatus).toHaveBeenCalled();
     });
 
-    expect(queryByText(/Todavía no estamos en tu zona/i)).toBeNull();
-    expect(queryByLabelText('Entendido')).toBeNull();
+    await waitFor(() => {
+      expect(getByText(/Todavía no estamos en tu zona/i)).toBeTruthy();
+    });
+    expect(getByLabelText('Centrar ubicación')).toBeTruthy();
   });
 
-  test('shows OOF banner in Buscar and keeps dismiss after close+reopen', async () => {
-    const utils = await render(<HomeScreen />);
+  test('Home X dismiss survives tab-like remount; Buscar always shows while outside', async () => {
+    const first = await render(<HomeScreen />);
 
+    await waitFor(() => {
+      expect(first.getByText(/Todavía no estamos en tu zona/i)).toBeTruthy();
+    });
+
+    await fireEvent.press(first.getByLabelText('Entendido'));
+    await waitFor(() => {
+      expect(first.queryByText(/Todavía no estamos en tu zona/i)).toBeNull();
+    });
+
+    // Remount Home (tab hop) — Home map stays dismissed this session.
+    first.unmount();
+    const second = await render(<HomeScreen />);
     await waitFor(() => {
       expect(mockGetServiceAreaStatus).toHaveBeenCalled();
     });
+    expect(second.queryByText(/Todavía no estamos en tu zona/i)).toBeNull();
 
-    await fireEvent.press(utils.getByText('¿A dónde vas?'));
-
+    // Open Buscar — request-time reminder (no X; always visible while outside).
+    await fireEvent.press(second.getByText('¿A dónde vas?'));
     await waitFor(() => {
-      expect(utils.getByText(/Todavía no estamos en tu zona/i)).toBeTruthy();
+      expect(second.getByText(/Todavía no estamos en tu zona/i)).toBeTruthy();
     });
+    expect(second.queryByLabelText('Entendido')).toBeNull();
 
-    await fireEvent.press(utils.getByLabelText('Entendido'));
-    expect(utils.queryByText(/Todavía no estamos en tu zona/i)).toBeNull();
-
-    // Close search (collapsed home) — banner must stay gone.
-    await fireEvent.press(utils.getByLabelText('Cerrar búsqueda'));
-    expect(utils.queryByText(/Todavía no estamos en tu zona/i)).toBeNull();
-
-    // Re-open Buscar — still dismissed (module state survives).
-    await fireEvent.press(utils.getByText('¿A dónde vas?'));
-    expect(utils.queryByText(/Todavía no estamos en tu zona/i)).toBeNull();
+    // Close + reopen Buscar — still there every request attempt.
+    await fireEvent.press(second.getByLabelText('Cerrar búsqueda'));
+    await fireEvent.press(second.getByText('¿A dónde vas?'));
+    await waitFor(() => {
+      expect(second.getByText(/Todavía no estamos en tu zona/i)).toBeTruthy();
+    });
   });
 });

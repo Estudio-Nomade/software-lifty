@@ -26,9 +26,9 @@ import { usePlaceAutocomplete } from '../hooks/usePlaceAutocomplete';
 import { isPassengerHomeResolved } from '../lib/passengerProfileGate';
 import {
   type ServiceAreaStatus,
-  dismissOutOfServiceBanner,
+  dismissHomeOutOfServiceBanner,
   fetchServiceAreaStatus,
-  isOutOfServiceBannerDismissed,
+  isHomeOutOfServiceBannerDismissed,
   noteServiceAreaInside,
   shouldShowOutOfServiceBanner,
 } from '../lib/serviceAreaStatus';
@@ -111,8 +111,10 @@ export function HomeScreen() {
   /** Monotonic id so only the latest GPS fill (autofill or Usar ubicación) may write state. */
   const gpsFillIdRef = useRef(0);
   const [serviceArea, setServiceArea] = useState<ServiceAreaStatus | null>(null);
-  /** Local mirror of module dismiss so X re-renders without remount. */
-  const [oofDismissed, setOofDismissed] = useState(() => isOutOfServiceBannerDismissed());
+  /** Home map X — session module state (survives remount, clears on logout). */
+  const [homeOofDismissed, setHomeOofDismissed] = useState(() =>
+    isHomeOutOfServiceBannerDismissed(),
+  );
 
   const pickupAc = usePlaceAutocomplete(
     focusedField === 'pickup' && !pickupPicked ? pickupAddress : '',
@@ -122,7 +124,7 @@ export function HomeScreen() {
   const placesLoading = focusedField === 'pickup' ? pickupAc.loading : destAc.loading;
   const placesError = focusedField === 'pickup' ? pickupAc.error : destAc.error;
 
-  // Soft OOF status for Buscar only: GPS preferred, else home pin from profile.
+  // Soft OOF status: GPS preferred, else home pin from profile.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -141,7 +143,7 @@ export function HomeScreen() {
       }
       if (cancelled || !status) return;
       noteServiceAreaInside(status.inside);
-      setOofDismissed(isOutOfServiceBannerDismissed());
+      setHomeOofDismissed(isHomeOutOfServiceBannerDismissed());
       setServiceArea(status);
     })();
     return () => {
@@ -149,13 +151,14 @@ export function HomeScreen() {
     };
   }, [current?.lat, current?.lng]);
 
-  const handleDismissOofBanner = useCallback(() => {
-    dismissOutOfServiceBanner();
-    setOofDismissed(true);
+  const handleDismissHomeOof = useCallback(() => {
+    dismissHomeOutOfServiceBanner();
+    setHomeOofDismissed(true);
   }, []);
 
-  const showOofInBuscar =
-    searchExpanded && !oofDismissed && shouldShowOutOfServiceBanner(serviceArea);
+  const outside = shouldShowOutOfServiceBanner(serviceArea);
+  const showOofOnHome = !searchExpanded && outside && !homeOofDismissed;
+  const showOofInBuscar = searchExpanded && outside;
 
   // "Desde" autofill: optional cache pin ASAP, final label always from awaited fresh.
   useEffect(() => {
@@ -473,7 +476,7 @@ export function HomeScreen() {
                 >
                   {showOofInBuscar ? (
                     <View style={styles.oofBannerInSearch}>
-                      <OutOfServiceAreaBanner onDismiss={handleDismissOofBanner} />
+                      <OutOfServiceAreaBanner />
                     </View>
                   ) : null}
                   {searchForm}
@@ -489,7 +492,7 @@ export function HomeScreen() {
               >
                 {showOofInBuscar ? (
                   <View style={styles.oofBannerInSearch}>
-                    <OutOfServiceAreaBanner onDismiss={handleDismissOofBanner} />
+                    <OutOfServiceAreaBanner />
                   </View>
                 ) : null}
                 {searchForm}
@@ -536,6 +539,11 @@ export function HomeScreen() {
               >
                 <Ionicons name="locate-outline" size={20} color={theme.colors.primary} />
               </TouchableOpacity>
+              {showOofOnHome ? (
+                <View style={styles.oofBannerOnHome} pointerEvents="box-none">
+                  <OutOfServiceAreaBanner onDismiss={handleDismissHomeOof} />
+                </View>
+              ) : null}
 
               <View style={[styles.searchFloat, { bottom: tabReserve + theme.spacing.sm }]}>
                 <DestinationSearchPill onPress={handleOpenSearch} />
@@ -590,6 +598,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...theme.shadows.card,
+  },
+  oofBannerOnHome: {
+    // Below locate (44) so the X/card never covers recenter.
+    position: 'absolute',
+    top: theme.spacing.md + 44 + theme.spacing.sm,
+    left: theme.spacing.sm,
+    right: theme.spacing.sm,
+    zIndex: 12,
   },
   oofBannerInSearch: {
     paddingHorizontal: theme.spacing.md,
