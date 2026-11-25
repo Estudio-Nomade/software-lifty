@@ -50,6 +50,24 @@ describe('usePlaceAutocomplete', () => {
     jest.useRealTimers();
   });
 
+  it('does not fetch when query is empty or 1 char', async () => {
+    mockSearch.mockResolvedValue([]);
+    const { getByTestId, rerender } = await render(
+      <HookProbe query="" onResult={() => undefined} />,
+    );
+    expect(getByTestId('probe').props.children).toBe('idle:0:');
+    expect(mockSearch).not.toHaveBeenCalled();
+
+    await act(async () => {
+      rerender(<HookProbe query="2" onResult={() => undefined} />);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+    });
+    expect(mockSearch).not.toHaveBeenCalled();
+    expect(getByTestId('probe').props.children).toBe('idle:0:');
+  });
+
   it('marks loading true as soon as query is ≥2 chars (no empty flash during debounce)', async () => {
     mockSearch.mockResolvedValue([]);
     const { getByTestId } = await render(<HookProbe query="Di" onResult={() => undefined} />);
