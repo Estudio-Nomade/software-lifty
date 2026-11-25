@@ -67,6 +67,12 @@ const BY_CODE: Record<string, ConnectBlockedFeedback> = {
       'Tu domicilio figura en una zona donde Lifty todavía no habilita viajes. Te avisamos cuando abramos tu zona.',
     tone: 'warning',
   },
+  MUNICIPALITY_UNRESOLVED: {
+    title: 'No pudimos ubicar tu domicilio',
+    message:
+      'Actualizá tu ubicación o el domicilio e intentá de nuevo. Necesitamos confirmar la zona para conectarte.',
+    tone: 'warning',
+  },
   COMMISSION_DEBT_CAP: {
     title: 'Deuda de comisión con Lifty',
     message:
@@ -84,6 +90,7 @@ export function feedbackForConnectBlock(
     | 'stickers_revoked'
     | 'no_location'
     | 'municipality_waitlisted'
+    | 'municipality_unresolved'
     | 'notifications_denied'
     | 'notifications_register_failed',
 ): ConnectBlockedFeedback {
@@ -93,6 +100,7 @@ export function feedbackForConnectBlock(
   if (reason === 'stickers_revoked') return BY_CODE.STICKERS_REVOKED;
   if (reason === 'stickers') return BY_CODE.STICKERS_REQUIRED;
   if (reason === 'municipality_waitlisted') return BY_CODE.MUNICIPALITY_NOT_ENABLED;
+  if (reason === 'municipality_unresolved') return BY_CODE.MUNICIPALITY_UNRESOLVED;
   if (reason === 'notifications_denied') return BY_CODE.NOTIFICATIONS_REQUIRED;
   if (reason === 'notifications_register_failed') return BY_CODE.NOTIFICATIONS_REGISTER_FAILED;
   return BY_CODE.LOCATION_REQUIRED;

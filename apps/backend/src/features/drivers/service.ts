@@ -64,9 +64,9 @@ import { notifyAdminNewDriver, notifyAdminsDriverDocsResubmitted } from '../admi
 import { publishDriverLocationIfOnTrip, upsertLocation } from '../location/service';
 import {
   type MunicipalityResolveResult,
-  buildMunicipalityResult,
   parseLocalityFromFormatted,
-  resolveDistrictForAddress,
+  resolveTerritoryFromCoords,
+  tryHealWaitlistedMunicipality,
 } from './municipality';
 
 const VALID_DOC_TYPES: readonly string[] = CANONICAL_VALID_DOC_TYPES;
@@ -537,6 +537,8 @@ export const driversService = {
       created_at: drivers.created_at,
       municipality_status: drivers.municipality_status,
       address_line: drivers.address_line,
+      address_lat: drivers.address_lat,
+      address_lng: drivers.address_lng,
       address_resolved_city: drivers.address_resolved_city,
       address_resolved_province: drivers.address_resolved_province,
       intended_district_id: drivers.intended_district_id,
@@ -555,6 +557,8 @@ export const driversService = {
       created_at: Date;
       municipality_status: string | null;
       address_line: string | null;
+      address_lat: number | null;
+      address_lng: number | null;
       address_resolved_city: string | null;
       address_resolved_province: string | null;
       intended_district_id: string | null;
@@ -645,7 +649,9 @@ export const driversService = {
       professional_license_days_remaining: professionalLicense.days_remaining,
       professional_license_days_elapsed: professionalLicense.days_elapsed,
     };
-    const waitlisted = municipalityFields.municipality_status === 'waitlisted';
+    const waitlisted =
+      municipalityFields.municipality_status === 'waitlisted' ||
+      municipalityFields.municipality_status === 'unresolved';
     const canGoOnline =
       driver.status === 'approved' &&
       !documentsPendingReview &&
@@ -883,6 +889,12 @@ export const driversService = {
         documents_pending_review: drivers.documents_pending_review,
         district_id: drivers.district_id,
         municipality_status: drivers.municipality_status,
+        address_line: drivers.address_line,
+        address_lat: drivers.address_lat,
+        address_lng: drivers.address_lng,
+        address_resolved_city: drivers.address_resolved_city,
+        address_resolved_province: drivers.address_resolved_province,
+        intended_district_id: drivers.intended_district_id,
         identification_status: drivers.identification_status,
         approved_at: drivers.approved_at,
         admin_reviewed_at: drivers.admin_reviewed_at,
@@ -910,11 +922,23 @@ export const driversService = {
       throw new AppError('Todavia no estas aprobado para conectarte.', 403, 'DRIVER_NOT_APPROVED');
     }
 
-    if (isOnline && driver.municipality_status === 'waitlisted') {
+    let municipalityStatus = driver.municipality_status;
+    if (isOnline && (municipalityStatus === 'waitlisted' || municipalityStatus === 'unresolved')) {
+      const healed = await this.persistMunicipalityHealIfEligible(driver);
+      if (healed) {
+        municipalityStatus = healed.municipality_status;
+      }
+    }
+
+    if (isOnline && (municipalityStatus === 'waitlisted' || municipalityStatus === 'unresolved')) {
       throw new AppError(
-        'Tu municipio todavía no está habilitado para hacer viajes. Te avisamos cuando abramos tu zona.',
+        municipalityStatus === 'unresolved'
+          ? 'No pudimos confirmar tu domicilio. Actualizá la ubicación o el domicilio e intentá de nuevo.'
+          : 'Tu municipio todavía no está habilitado para hacer viajes. Te avisamos cuando abramos tu zona.',
         403,
-        'MUNICIPALITY_NOT_ENABLED',
+        municipalityStatus === 'unresolved'
+          ? 'MUNICIPALITY_UNRESOLVED'
+          : 'MUNICIPALITY_NOT_ENABLED',
       );
     }
 
@@ -1127,6 +1151,7 @@ export const driversService = {
       address_line?: string;
       address_lat?: number;
       address_lng?: number;
+      address_accuracy_m?: number;
       address_place_id?: string;
     },
   ) {
@@ -1299,20 +1324,52 @@ export const driversService = {
         address_line: addressLine,
         address_lat: data.address_lat,
         address_lng: data.address_lng,
+        address_accuracy_m: data.address_accuracy_m,
       });
-      await db
-        .update(drivers)
-        .set({
-          address_line: municipalityResult.address_line,
-          address_lat: municipalityResult.address_lat,
-          address_lng: municipalityResult.address_lng,
-          address_resolved_city: municipalityResult.address_resolved_city,
-          address_resolved_province: municipalityResult.address_resolved_province,
-          municipality_status: municipalityResult.municipality_status,
-          intended_district_id: municipalityResult.intended_district_id,
-          updated_at: new Date(),
-        })
-        .where(eq(drivers.id, driverId));
+      const municipalityPatch = {
+        address_line: municipalityResult.address_line,
+        address_lat: municipalityResult.address_lat,
+        address_lng: municipalityResult.address_lng,
+        address_resolved_city: municipalityResult.address_resolved_city,
+        address_resolved_province: municipalityResult.address_resolved_province,
+        geocoder_city: municipalityResult.geocoder_city,
+        geocoder_province: municipalityResult.geocoder_province,
+        municipality_status: municipalityResult.municipality_status,
+        resolution_method: municipalityResult.resolution_method,
+        service_market_id: municipalityResult.service_market_id,
+        address_accuracy_m:
+          data.address_accuracy_m != null && Number.isFinite(data.address_accuracy_m)
+            ? data.address_accuracy_m
+            : null,
+        intended_district_id: municipalityResult.intended_district_id,
+        updated_at: new Date(),
+      };
+      try {
+        await db.update(drivers).set(municipalityPatch).where(eq(drivers.id, driverId));
+      } catch (err) {
+        // Pre-0066 schema: drop audit cols and retry core municipality fields.
+        const msg = err instanceof Error ? err.message : String(err);
+        if (!/geocoder_|resolution_method|service_market_id|address_accuracy_m/i.test(msg)) {
+          throw err;
+        }
+        logger.warn('[drivers] municipality patch schema drift — retry without audit cols', {
+          driverId: driverId.slice(0, 8),
+          message: msg,
+        });
+        await db
+          .update(drivers)
+          .set({
+            address_line: municipalityResult.address_line,
+            address_lat: municipalityResult.address_lat,
+            address_lng: municipalityResult.address_lng,
+            address_resolved_city: municipalityResult.address_resolved_city,
+            address_resolved_province: municipalityResult.address_resolved_province,
+            municipality_status: municipalityResult.municipality_status,
+            intended_district_id: municipalityResult.intended_district_id,
+            updated_at: new Date(),
+          })
+          .where(eq(drivers.id, driverId));
+      }
     }
 
     // After saving profile data, advance from 'step1' so the KYC gate in
@@ -2305,85 +2362,232 @@ export const driversService = {
   },
 
   async buildMunicipalityStatusFields(driver: {
+    id: string;
     municipality_status: string | null;
     address_line: string | null;
+    address_lat?: number | null;
+    address_lng?: number | null;
     address_resolved_city: string | null;
     address_resolved_province: string | null;
     intended_district_id: string | null;
   }) {
-    const municipality_status = (driver.municipality_status ?? 'unset') as
+    let municipality_status = (driver.municipality_status ?? 'unset') as
       | 'unset'
       | 'operational'
-      | 'waitlisted';
+      | 'waitlisted'
+      | 'unresolved';
+    let address_line = driver.address_line ?? null;
+    let address_resolved_city = driver.address_resolved_city ?? null;
+    let address_resolved_province = driver.address_resolved_province ?? null;
+    let intended_district_id = driver.intended_district_id ?? null;
+
+    if (municipality_status === 'waitlisted' || municipality_status === 'unresolved') {
+      const healed = await this.persistMunicipalityHealIfEligible({
+        id: driver.id,
+        municipality_status,
+        address_line,
+        address_lat: driver.address_lat ?? null,
+        address_lng: driver.address_lng ?? null,
+        address_resolved_city,
+        address_resolved_province,
+        intended_district_id,
+      });
+      if (healed) {
+        municipality_status = healed.municipality_status;
+        address_line = healed.address_line;
+        address_resolved_city = healed.address_resolved_city;
+        address_resolved_province = healed.address_resolved_province;
+        intended_district_id = healed.intended_district_id;
+      }
+    }
 
     let intended_district_name: string | null = null;
-    if (driver.intended_district_id) {
+    if (intended_district_id) {
       const [d] = await db
         .select({ name: districts.name })
         .from(districts)
-        .where(eq(districts.id, driver.intended_district_id))
+        .where(eq(districts.id, intended_district_id))
         .limit(1);
       intended_district_name = d?.name ?? null;
     }
 
     return {
       municipality_status,
-      address_line: driver.address_line ?? null,
-      address_resolved_city: driver.address_resolved_city ?? null,
-      address_resolved_province: driver.address_resolved_province ?? null,
-      intended_district_id: driver.intended_district_id ?? null,
+      address_line,
+      address_resolved_city,
+      address_resolved_province,
+      intended_district_id,
       intended_district_name,
       has_district: false as boolean,
-      show_municipality_waitlist_banner: municipality_status === 'waitlisted',
+      show_municipality_waitlist_banner:
+        municipality_status === 'waitlisted' || municipality_status === 'unresolved',
     };
+  },
+
+  /**
+   * Persist operational municipality when a waitlisted/unresolved pin is already inside an
+   * active pickup market (stale Photon labels, post-deploy heals, coords-first gate).
+   */
+  async persistMunicipalityHealIfEligible(driver: {
+    id: string;
+    municipality_status: string | null;
+    address_line: string | null;
+    address_lat: number | null;
+    address_lng: number | null;
+    address_resolved_city: string | null;
+    address_resolved_province: string | null;
+    intended_district_id: string | null;
+  }): Promise<MunicipalityResolveResult | null> {
+    const status = driver.municipality_status ?? 'unset';
+    if (status !== 'waitlisted' && status !== 'unresolved') return null;
+
+    let lat = driver.address_lat;
+    let lng = driver.address_lng;
+    let city = driver.address_resolved_city;
+    let province = driver.address_resolved_province;
+    let addressLine = driver.address_line;
+    let geocoderCity: string | null = null;
+    let geocoderProvince: string | null = null;
+
+    // Status select may omit coords; load once if needed.
+    if (lat == null || lng == null || addressLine == null) {
+      const [row] = await db
+        .select({
+          address_line: drivers.address_line,
+          address_lat: drivers.address_lat,
+          address_lng: drivers.address_lng,
+          address_resolved_city: drivers.address_resolved_city,
+          address_resolved_province: drivers.address_resolved_province,
+          geocoder_city: drivers.geocoder_city,
+          geocoder_province: drivers.geocoder_province,
+        })
+        .from(drivers)
+        .where(eq(drivers.id, driver.id))
+        .limit(1);
+      if (!row) return null;
+      lat = row.address_lat;
+      lng = row.address_lng;
+      city = city ?? row.address_resolved_city;
+      province = province ?? row.address_resolved_province;
+      addressLine = addressLine ?? row.address_line;
+      geocoderCity = row.geocoder_city;
+      geocoderProvince = row.geocoder_province;
+    }
+
+    const activeDistricts = await db
+      .select({
+        id: districts.id,
+        name: districts.name,
+        province: districts.province,
+        status: districts.status,
+      })
+      .from(districts)
+      .where(eq(districts.status, 'active'));
+
+    const healed = tryHealWaitlistedMunicipality(
+      {
+        address_line: addressLine,
+        address_lat: lat,
+        address_lng: lng,
+        address_resolved_city: city,
+        address_resolved_province: province,
+        geocoder_city: geocoderCity,
+        geocoder_province: geocoderProvince,
+      },
+      activeDistricts,
+    );
+    if (!healed) return null;
+
+    await db
+      .update(drivers)
+      .set({
+        address_line: healed.address_line,
+        address_lat: healed.address_lat,
+        address_lng: healed.address_lng,
+        address_resolved_city: healed.address_resolved_city,
+        address_resolved_province: healed.address_resolved_province,
+        geocoder_city: healed.geocoder_city,
+        geocoder_province: healed.geocoder_province,
+        municipality_status: healed.municipality_status,
+        resolution_method: healed.resolution_method,
+        service_market_id: healed.service_market_id,
+        intended_district_id: healed.intended_district_id,
+        updated_at: new Date(),
+      })
+      .where(eq(drivers.id, driver.id));
+
+    logger.info('[DRIVERS] healed waitlisted municipality to operational', {
+      driverId: driver.id.slice(0, 8),
+      city: healed.address_resolved_city,
+      intended_district_id: healed.intended_district_id,
+      method: healed.resolution_method,
+    });
+
+    return healed;
   },
 
   async resolveMunicipalityFromAddress(input: {
     address_line: string;
     address_lat?: number;
     address_lng?: number;
+    /** Optional GPS horizontal accuracy in meters (from device). */
+    address_accuracy_m?: number;
   }): Promise<MunicipalityResolveResult> {
     const addressLine = input.address_line.trim();
-    let lat: number | null = input.address_lat ?? null;
-    let lng: number | null = input.address_lng ?? null;
-    let city: string | null = null;
-    let province: string | null = null;
+    let lat: number | null =
+      input.address_lat != null && Number.isFinite(input.address_lat) ? input.address_lat : null;
+    let lng: number | null =
+      input.address_lng != null && Number.isFinite(input.address_lng) ? input.address_lng : null;
+    const accuracyM =
+      input.address_accuracy_m != null && Number.isFinite(input.address_accuracy_m)
+        ? input.address_accuracy_m
+        : null;
 
-    const geo = await geocode(lat != null && lng != null ? { lat, lng } : { address: addressLine });
+    // Geocoding is best-effort for human labels only. Territorial status is coords-first.
+    let geocoderCity: string | null = null;
+    let geocoderProvince: string | null = null;
+    let formattedFromGeo: string | null = null;
 
-    lat = geo.lat;
-    lng = geo.lng;
-    city = geo.city ?? null;
-    province = geo.province ?? null;
-
-    if (!city) {
-      const parsed = parseLocalityFromFormatted(geo.formatted_address || addressLine);
-      city = parsed.city;
-      province = province ?? parsed.province;
+    try {
+      const geo = await geocode(
+        lat != null && lng != null ? { lat, lng } : { address: addressLine },
+      );
+      // Prefer client GPS when present; only adopt geocode coords if we had none.
+      if (lat == null || lng == null) {
+        lat = geo.lat;
+        lng = geo.lng;
+      }
+      geocoderCity = geo.city ?? null;
+      geocoderProvince = geo.province ?? null;
+      formattedFromGeo = geo.formatted_address ?? null;
+    } catch (err) {
+      logger.warn('[DRIVERS] geocode soft-fail during municipality resolve', {
+        message: err instanceof Error ? err.message : String(err),
+        had_client_coords: lat != null && lng != null,
+      });
     }
 
-    if (!city && !province) {
-      const fromLine = parseLocalityFromFormatted(addressLine);
-      city = fromLine.city;
-      province = fromLine.province;
+    if (!geocoderCity) {
+      const parsed = parseLocalityFromFormatted(formattedFromGeo || addressLine);
+      geocoderCity = parsed.city;
+      geocoderProvince = geocoderProvince ?? parsed.province;
     }
 
-    if (lat == null || lng == null) {
+    if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
       throw new AppError(
-        'No pudimos ubicar ese domicilio. Probá con calle, altura y localidad.',
+        'No pudimos ubicar ese domicilio. Probá con calle, altura y localidad, o usá tu ubicación.',
         400,
         'ADDRESS_UNRESOLVABLE',
       );
     }
 
-    // Geo hard gate (LOCK D A2): name match alone cannot make operational.
     if (!isInsidePickupArea(lat, lng)) {
       logger.warn('[DRIVERS] address outside pickup area', {
         code: 'ADDRESS_OUT_OF_PICKUP_AREA',
         lat,
         lng,
-        city,
-        province,
+        geocoder_city: geocoderCity,
+        geocoder_province: geocoderProvince,
         address_line: addressLine,
       });
     }
@@ -2398,11 +2602,13 @@ export const driversService = {
       .from(districts)
       .where(eq(districts.status, 'active'));
 
-    // District match labels intended_district after coords pass pickup gate inside
-    // buildMunicipalityResult. Multi-city: if Photon city misses, fall back to the
-    // active pickup market name (Tandil hub → district Tandil).
-    const match = resolveDistrictForAddress(city, province, activeDistricts, lat, lng);
-    return buildMunicipalityResult(addressLine, { lat, lng, city, province }, match);
+    // Coords → service market hub fence → canonical district. Photon labels are audit only.
+    return resolveTerritoryFromCoords(lat, lng, activeDistricts, {
+      addressLine,
+      geocoderCity,
+      geocoderProvince,
+      accuracyM,
+    });
   },
 
   async getPayoutInfo(user: AuthUser) {

@@ -33,9 +33,18 @@ export const drivers = pgTable('drivers', {
   address_line: text('address_line'),
   address_lat: real('address_lat'),
   address_lng: real('address_lng'),
+  /** Canonical municipality / market label after territorial resolve. */
   address_resolved_city: text('address_resolved_city'),
   address_resolved_province: text('address_resolved_province'),
+  /** Raw Photon/Nominatim locality — audit only; never operational gate. */
+  geocoder_city: text('geocoder_city'),
+  geocoder_province: text('geocoder_province'),
+  /** unset | operational | waitlisted | unresolved */
   municipality_status: varchar('municipality_status', { length: 20 }).notNull().default('unset'),
+  /** service_market_hub | none | accuracy_insufficient | coords_missing */
+  resolution_method: varchar('resolution_method', { length: 40 }),
+  service_market_id: uuid('service_market_id'),
+  address_accuracy_m: real('address_accuracy_m'),
   intended_district_id: uuid('intended_district_id').references(() => districts.id, {
     onDelete: 'set null',
   }),

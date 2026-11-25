@@ -18,6 +18,8 @@ export type ServiceMarketGeo = {
   dropoff_radius_km: number;
   match_radius_km: number;
   geo_bias_radius_km: number;
+  /** Legal district annex linked to this market (optional). */
+  default_district_id?: string | null;
 };
 
 /** Legacy single-hub constants (LOCK D Villa Dolores) — used as boot/test fallback. */
@@ -43,6 +45,7 @@ export const LEGACY_VD_MARKET: ServiceMarketGeo = {
   dropoff_radius_km: DROPOFF_RADIUS_KM,
   match_radius_km: MATCH_RADIUS_KM,
   geo_bias_radius_km: 20,
+  default_district_id: null,
 };
 
 let activeMarkets: ServiceMarketGeo[] = [LEGACY_VD_MARKET];

@@ -78,6 +78,7 @@ function toGeo(row: {
   dropoff_radius_km: number;
   match_radius_km: number;
   geo_bias_radius_km: number;
+  default_district_id?: string | null;
 }): ServiceMarketGeo {
   return {
     id: row.id,
@@ -91,6 +92,7 @@ function toGeo(row: {
     dropoff_radius_km: row.dropoff_radius_km,
     match_radius_km: row.match_radius_km,
     geo_bias_radius_km: row.geo_bias_radius_km,
+    default_district_id: row.default_district_id ?? null,
   };
 }
 
@@ -149,6 +151,7 @@ export async function reloadServiceMarketsCache(): Promise<number> {
         dropoff_radius_km: serviceMarkets.dropoff_radius_km,
         match_radius_km: serviceMarkets.match_radius_km,
         geo_bias_radius_km: serviceMarkets.geo_bias_radius_km,
+        default_district_id: serviceMarkets.default_district_id,
       })
       .from(serviceMarkets)
       .where(eq(serviceMarkets.status, 'active'));
