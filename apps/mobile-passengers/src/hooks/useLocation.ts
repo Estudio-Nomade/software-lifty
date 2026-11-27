@@ -59,8 +59,8 @@ const WEB_GEO_OPTS_BALANCED: GeoOptions = {
   maximumAge: 5_000,
 };
 
-/** Good enough to reverse-geocode a street name. */
-export const TARGET_ACCURACY_M = 40;
+/** Pickup precision target (product decision 2026-11-26: as precise as possible). */
+export const TARGET_ACCURACY_M = 15;
 
 const LOCATION_DENIED_MSG =
   'No pudimos obtener tu ubicación. Activá el GPS o permití el acceso e intentá de nuevo.';
@@ -79,7 +79,7 @@ function isJestRuntime(): boolean {
   }
 }
 
-const MAX_WAIT_MS = isJestRuntime() ? 80 : 16_000;
+const MAX_WAIT_MS = isJestRuntime() ? 80 : 15_000;
 const MIN_WAIT_MS = isJestRuntime() ? 0 : 2_500;
 /** Cap native getCurrentPosition so a hung BestForNavigation cannot block forever. */
 /** Per-attempt ceiling — keep low so Origen label feels instant (lastKnown seeds first). */
@@ -384,7 +384,7 @@ export function nativeWatchOptions(): {
   distanceInterval: number;
 } {
   return {
-    accuracy: Location.Accuracy.Balanced,
+    accuracy: Location.Accuracy.BestForNavigation,
     timeInterval: 3000,
     // Android: 0 so the first fix arrives without requiring movement.
     // iOS: 5m filter is fine and reduces noise.
@@ -395,8 +395,7 @@ export function nativeWatchOptions(): {
 /**
  * Best-effort position with accuracy.
  * Web waits for GPS warm-up; still may return coarse WiFi after timeout.
- * Native: last-known seed (instant) → Balanced → High → BestForNavigation.
- * Prefer returning a usable fix fast for Origen label over waiting on BestForNavigation.
+ * Native: last-known seed (instant) → BestForNavigation → High → Balanced.
  */
 export async function requestFreshPosition(): Promise<PositionFix | null> {
   if (isWebRuntime()) {
@@ -419,11 +418,12 @@ export async function requestFreshPosition(): Promise<PositionFix | null> {
       useLocationStore.getState().applyFix(seed, { force: false });
     }
 
-    // Balanced first (fast). BestForNavigation last — often slow on cold iOS.
+    // Most precise first; each attempt is capped by NATIVE_FIX_TIMEOUT_MS and the
+    // last-known seed above already fills the Origen label while GPS warms up.
     const pos =
-      (await getNativePositionOnce(Location.Accuracy.Balanced)) ??
-      (await getNativePositionOnce(Location.Accuracy.High)) ??
       (await getNativePositionOnce(Location.Accuracy.BestForNavigation)) ??
+      (await getNativePositionOnce(Location.Accuracy.High)) ??
+      (await getNativePositionOnce(Location.Accuracy.Balanced)) ??
       lastKnown;
 
     if (!pos) {

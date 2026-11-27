@@ -28,7 +28,7 @@ jest.mock('expo-location', () => ({
   hasStartedLocationUpdatesAsync: (...args: unknown[]) => mockHasStarted(...args),
   startLocationUpdatesAsync: (...args: unknown[]) => mockStartUpdates(...args),
   stopLocationUpdatesAsync: (...args: unknown[]) => mockStopUpdates(...args),
-  Accuracy: { High: 4, Balanced: 3 },
+  Accuracy: { High: 4, Balanced: 3, BestForNavigation: 6 },
 }));
 
 jest.mock('expo-task-manager', () => ({
@@ -86,12 +86,37 @@ describe('driver background location tracking', () => {
     expect(shouldStartBackgroundUpdates(undefined, false)).toBe(false);
   });
 
-  it('buildBackgroundLocationOptions uses balanced interval + FGS copy', () => {
-    const opts = buildBackgroundLocationOptions(3);
-    expect(opts.accuracy).toBe(3);
-    expect(opts.timeInterval).toBe(60_000);
-    expect(opts.distanceInterval).toBe(50);
+  it('buildBackgroundLocationOptions is max-rate: 2 s, no distance filter, no deferral', () => {
+    const opts = buildBackgroundLocationOptions(6);
+    expect(opts.accuracy).toBe(6);
+    expect(opts.timeInterval).toBe(2_000);
+    expect(opts.distanceInterval).toBe(0);
+    expect('deferredUpdatesInterval' in opts).toBe(false);
     expect(opts.foregroundService.notificationTitle).toContain('Lifty');
+  });
+
+  it('foreground watch uses BestForNavigation at 1 s with no distance filter', async () => {
+    await startTracking();
+
+    expect(mockWatch).toHaveBeenCalledWith(
+      expect.objectContaining({ accuracy: 6, timeInterval: 1_000, distanceInterval: 0 }),
+      expect.any(Function),
+    );
+  });
+
+  it('refuses to track when Android only grants approximate location', async () => {
+    mockRequestFg.mockResolvedValue({
+      granted: true,
+      canAskAgain: true,
+      status: 'granted',
+      android: { accuracy: 'coarse' },
+    });
+
+    await startTracking({ enableBackground: true });
+
+    expect(mockStartUpdates).not.toHaveBeenCalled();
+    expect(mockWatch).not.toHaveBeenCalled();
+    expect(useLocationStore.getState().locationError).toMatch(/precisa|exacta/i);
   });
 
   it('startTracking({ enableBackground: true }) starts location updates task', async () => {
@@ -102,7 +127,8 @@ describe('driver background location tracking', () => {
     expect(mockStartUpdates).toHaveBeenCalledWith(
       'lifty-location',
       expect.objectContaining({
-        timeInterval: 60_000,
+        accuracy: 6,
+        timeInterval: 2_000,
         foregroundService: expect.objectContaining({
           notificationTitle: 'Lifty — en línea',
         }),

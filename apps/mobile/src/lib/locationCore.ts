@@ -1,11 +1,22 @@
 import { useLocationStore } from '../store/locationStore';
+import { createSmoother } from './locationSmoother';
+
+const smoother = createSmoother();
+
+/** Call when tracking stops so the next session starts from a raw fix. */
+export function resetLocationSmoothing(): void {
+  smoother.reset();
+}
 
 /** Shared task name — keep in sync with stop/start Location APIs. */
 export const LOCATION_TASK_NAME = 'lifty-location';
 
-/** BG location interval targets BE freshness (5 min) with battery headroom. */
-export const BG_LOCATION_TIME_INTERVAL_MS = 60_000;
-export const BG_LOCATION_DISTANCE_INTERVAL_M = 50;
+/** Max-precision tracking: battery is not a constraint (product decision 2026-11-26). */
+export const BG_LOCATION_TIME_INTERVAL_MS = 2_000;
+export const BG_LOCATION_DISTANCE_INTERVAL_M = 0;
+export const FG_LOCATION_TIME_INTERVAL_MS = 1_000;
+export const PRECISE_LOCATION_REQUIRED_MSG =
+  'Lifty necesita tu ubicación exacta. Activá “Ubicación precisa” en Ajustes e intentá de nuevo.';
 
 export const BG_LOCATION_PERMISSION_MSG =
   'Para seguir recibiendo viajes con la app en segundo plano, permití la ubicación “siempre” / “todo el tiempo” en Ajustes.';
@@ -46,13 +57,23 @@ export function applyLocationCoords(
   lng: number,
   heading?: number | null,
   accuracy?: number | null,
+  speed?: number | null,
+  timestamp?: number | null,
 ): boolean {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
   if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return false;
   if (lat === 0 && lng === 0) return false;
-  useLocationStore
-    .getState()
-    .setLocation(lat, lng, heading ?? null, normalizeGpsAccuracyM(accuracy));
+  const acc = normalizeGpsAccuracyM(accuracy);
+  const spd = speed != null && Number.isFinite(speed) && speed >= 0 ? speed : null;
+  const ts = timestamp != null && Number.isFinite(timestamp) ? timestamp : null;
+  const smooth = smoother.update({
+    lat,
+    lng,
+    accuracy: acc,
+    speed: spd,
+    timestamp: ts ?? Date.now(),
+  });
+  useLocationStore.getState().setLocation(smooth.lat, smooth.lng, heading ?? null, acc, spd, ts);
   useLocationStore.getState().setLocationError(null);
   return true;
 }
@@ -74,7 +95,6 @@ export function buildBackgroundLocationOptions(accuracyBalanced: number) {
     accuracy: accuracyBalanced,
     timeInterval: BG_LOCATION_TIME_INTERVAL_MS,
     distanceInterval: BG_LOCATION_DISTANCE_INTERVAL_M,
-    deferredUpdatesInterval: BG_LOCATION_TIME_INTERVAL_MS,
     showsBackgroundLocationIndicator: true,
     foregroundService: {
       notificationTitle: 'Lifty — en línea',
@@ -82,4 +102,32 @@ export function buildBackgroundLocationOptions(accuracyBalanced: number) {
       notificationColor: '#1BBFAE',
     },
   };
+}
+
+/** Backend rejects fixes older than 10 s; do not bother sending them. */
+const MAX_SEND_AGE_MS = 10_000;
+
+export type FixPayload = {
+  lat: number;
+  lng: number;
+  heading?: number;
+  accuracy?: number;
+  speed?: number;
+  timestamp?: number;
+};
+
+/**
+ * Body for WS frames and heartbeat PUTs, from the last stored fix.
+ * Null fields are omitted (the backend schema takes optional numbers, not nulls).
+ */
+export function buildFixPayload(now: number = Date.now()): FixPayload | null {
+  const { lat, lng, heading, accuracy, speed, fixAt } = useLocationStore.getState();
+  if (lat == null || lng == null) return null;
+  if (fixAt != null && now - fixAt > MAX_SEND_AGE_MS) return null;
+  const payload: FixPayload = { lat, lng };
+  if (heading != null) payload.heading = heading;
+  if (accuracy != null) payload.accuracy = accuracy;
+  if (speed != null) payload.speed = speed;
+  if (fixAt != null) payload.timestamp = fixAt;
+  return payload;
 }

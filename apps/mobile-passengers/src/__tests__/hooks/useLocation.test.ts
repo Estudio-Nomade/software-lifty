@@ -25,6 +25,7 @@ jest.mock('expo-location', () => ({
 
 import {
   isValidLatLng,
+  TARGET_ACCURACY_M,
   nativeWatchOptions,
   requestFreshPosition,
   toMapCoordinate,
@@ -123,6 +124,16 @@ describe('locationStore.applyFix accuracy gate', () => {
   });
 });
 
+describe('max-precision targets', () => {
+  it('pickup target is 15 m', () => {
+    expect(TARGET_ACCURACY_M).toBe(15);
+  });
+
+  it('native watch uses BestForNavigation', () => {
+    expect(nativeWatchOptions().accuracy).toBe(6);
+  });
+});
+
 describe('nativeWatchOptions (Android cold start)', () => {
   const originalOS = Platform.OS;
 
@@ -153,6 +164,17 @@ describe('requestFreshPosition (native path)', () => {
       permissionGranted: false,
       locationError: null,
     });
+  });
+
+  it('asks for BestForNavigation first', async () => {
+    mockRequestForegroundPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    mockGetCurrentPositionAsync.mockResolvedValue({
+      coords: { latitude: -31.9, longitude: -65.1, accuracy: 6 },
+    });
+
+    await requestFreshPosition();
+
+    expect(mockGetCurrentPositionAsync).toHaveBeenNthCalledWith(1, { accuracy: 6 });
   });
 
   it('falls back to Balanced when BestForNavigation fails', async () => {
