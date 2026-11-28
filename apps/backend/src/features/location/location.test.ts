@@ -498,7 +498,7 @@ describe('Location WebSocket', () => {
       expect(first!.lng).toBeCloseTo(20.0, 1);
 
       const { ws: ws2 } = await wsConnect(port, token);
-      await wsSendAndWait({ lat: 30.0, lng: 40.0 }, ws2, driverId);
+      await wsSendAndWait({ lat: 10.0002, lng: 20.0 }, ws2, driverId);
       ws2.close();
       await new Promise((r) => setTimeout(r, 300));
 
@@ -508,8 +508,8 @@ describe('Location WebSocket', () => {
         .where(eq(driverLocations.driver_id, driverId))
         .limit(1);
       expect(second).toBeDefined();
-      expect(second!.lat).toBeCloseTo(30.0, 1);
-      expect(second!.lng).toBeCloseTo(40.0, 1);
+      expect(second!.lat).toBeCloseTo(10.0002, 4);
+      expect(second!.lng).toBeCloseTo(20.0, 4);
       expect(second!.updated_at.getTime()).toBeGreaterThanOrEqual(first!.updated_at.getTime());
     },
     { timeout: 20000 },
@@ -760,5 +760,91 @@ describe('Broadcast on location update', () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+describe('Fix quality ingestion', () => {
+  const phone = '+5492619990001';
+
+  async function readLoc(driverId: string) {
+    const [loc] = await getDb()
+      .select()
+      .from(driverLocations)
+      .where(eq(driverLocations.driver_id, driverId))
+      .limit(1);
+    return loc;
+  }
+
+  test('POST /location/update stores accuracy, speed and fix_at', async () => {
+    const { token, driverId } = await registerAndCreateDriver(phone, 'x');
+    const ts = Date.now() - 1000;
+    const { status } = await request(
+      'POST',
+      '/api/location/update',
+      { lat: -32.89, lng: -68.84, accuracy: 12, speed: 3.5, timestamp: ts },
+      token,
+    );
+    expect(status).toBe(200);
+    const loc = await readLoc(driverId);
+    expect(loc.accuracy).toBe(12);
+    expect(loc.speed).toBeCloseTo(3.5, 1);
+    expect(loc.fix_at?.getTime()).toBe(ts);
+  });
+
+  test('a low-accuracy fix does not overwrite the last good position', async () => {
+    const { token, driverId } = await registerAndCreateDriver(phone, 'x');
+    await request('POST', '/api/location/update', { lat: -32.89, lng: -68.84, accuracy: 10 }, token);
+    await request('POST', '/api/location/update', { lat: -32.5, lng: -68.1, accuracy: 400 }, token);
+    const loc = await readLoc(driverId);
+    expect(loc.lat).toBeCloseTo(-32.89, 1);
+    expect(loc.lng).toBeCloseTo(-68.84, 1);
+  });
+
+  test('a fix without accuracy is stored with accuracy NULL', async () => {
+    const { token, driverId } = await registerAndCreateDriver(phone, 'x');
+    await request('POST', '/api/location/update', { lat: -32.89, lng: -68.84 }, token);
+    const loc = await readLoc(driverId);
+    expect(loc.accuracy).toBeNull();
+  });
+
+  test('heartbeat with a low-accuracy fix keeps position but updates last_heartbeat', async () => {
+    const { token, driverId } = await registerAndCreateDriver(phone, 'x');
+    await request('POST', '/api/location/update', { lat: -32.89, lng: -68.84, accuracy: 10 }, token);
+    const { status } = await request(
+      'PUT',
+      '/api/drivers/me/heartbeat',
+      { lat: -32.5, lng: -68.1, accuracy: 400 },
+      token,
+    );
+    expect(status).toBe(200);
+    const loc = await readLoc(driverId);
+    expect(loc.lat).toBeCloseTo(-32.89, 1);
+    const [d] = await getDb().select().from(drivers).where(eq(drivers.id, driverId)).limit(1);
+    expect(d.last_heartbeat).not.toBeNull();
+  });
+
+  test('three consistent fixes after a "jump" are accepted (no lockout after a bad fix)', async () => {
+    const { token, driverId } = await registerAndCreateDriver(phone, 'x');
+    await request('POST', '/api/location/update', { lat: -32.0, lng: -65.0, accuracy: 10 }, token);
+    const far = { lat: -32.5, lng: -65.0, accuracy: 10 }; // ~55 km away
+    for (let i = 0; i < 2; i++) {
+      await request('POST', '/api/location/update', far, token);
+      expect((await readLoc(driverId)).lat).toBeCloseTo(-32.0, 3);
+    }
+    await request('POST', '/api/location/update', far, token);
+    expect((await readLoc(driverId)).lat).toBeCloseTo(-32.5, 3);
+  });
+
+  test('an older fix never overwrites a newer stored one', async () => {
+    const { token, driverId } = await registerAndCreateDriver(phone, 'x');
+    const now = Date.now();
+    await request('POST', '/api/location/update', { lat: -32.0, lng: -65.0, timestamp: now }, token);
+    await request(
+      'POST',
+      '/api/location/update',
+      { lat: -32.0001, lng: -65.0, timestamp: now - 5000 },
+      token,
+    );
+    expect((await readLoc(driverId)).lat).toBeCloseTo(-32.0, 4);
   });
 });

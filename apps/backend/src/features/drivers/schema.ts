@@ -81,4 +81,7 @@ export const heartbeatBody = t.Object({
   lat: t.Optional(t.Number()),
   lng: t.Optional(t.Number()),
   heading: t.Optional(t.Number()),
+  accuracy: t.Optional(t.Number()),
+  speed: t.Optional(t.Number()),
+  timestamp: t.Optional(t.Number()),
 });

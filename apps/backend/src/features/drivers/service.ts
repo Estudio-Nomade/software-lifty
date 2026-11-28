@@ -61,7 +61,7 @@ import { geocode } from '../../shared/lib/geo';
 import { isInsidePickupArea } from '../../shared/lib/service-area';
 import type { AuthUser } from '../../shared/middleware/auth';
 import { notifyAdminNewDriver, notifyAdminsDriverDocsResubmitted } from '../admin/notifications';
-import { publishDriverLocationIfOnTrip, upsertLocation } from '../location/service';
+import { ingestDriverFix } from '../location/service';
 import {
   type MunicipalityResolveResult,
   parseLocalityFromFormatted,
@@ -1108,7 +1108,17 @@ export const driversService = {
     };
   },
 
-  async heartbeat(user: AuthUser, body?: { lat?: number; lng?: number; heading?: number }) {
+  async heartbeat(
+    user: AuthUser,
+    body?: {
+      lat?: number;
+      lng?: number;
+      heading?: number;
+      accuracy?: number;
+      speed?: number;
+      timestamp?: number;
+    },
+  ) {
     const [driver] = await db
       .select({
         id: drivers.id,
@@ -1164,8 +1174,7 @@ export const driversService = {
     await db.update(drivers).set({ last_heartbeat: now }).where(eq(drivers.id, driver.id));
 
     if (body?.lat != null && body?.lng != null) {
-      await upsertLocation(driver.id, body.lat, body.lng, body.heading);
-      await publishDriverLocationIfOnTrip(driver.id, body.lat, body.lng, body.heading);
+      await ingestDriverFix(driver.id, { ...body, lat: body.lat, lng: body.lng });
     }
 
     return { ok: true };

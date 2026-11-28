@@ -9,5 +9,8 @@ export const driverLocations = pgTable('driver_locations', {
   lat: real('lat').notNull(),
   lng: real('lng').notNull(),
   heading: real('heading'),
+  accuracy: real('accuracy'),
+  speed: real('speed'),
+  fix_at: timestamp('fix_at'),
   updated_at: timestamp('updated_at').defaultNow().notNull(),
 });

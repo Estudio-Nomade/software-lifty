@@ -477,6 +477,13 @@
       "when": 1790100000000,
       "tag": "0066_driver_territorial_resolution_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1790200000000,
+      "tag": "0067_driver_locations_quality",
+      "breakpoints": true
     }
   ]
 }

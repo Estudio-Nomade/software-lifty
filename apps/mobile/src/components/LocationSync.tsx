@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { apiClient } from '../api/client';
 import { useLocationWS } from '../hooks/useLocationWS';
 import { startTracking, stopTracking } from '../lib/location';
-import { useLocationStore } from '../store/locationStore';
+import { buildFixPayload } from '../lib/locationCore';
 import { useOnlineStore } from '../store/onlineStore';
 import { useTripStore } from '../store/tripStore';
 
@@ -21,8 +21,8 @@ export function LocationSync() {
 
     let cancelled = false;
     const heartbeatInterval = setInterval(() => {
-      const { lat, lng, heading } = useLocationStore.getState();
-      apiClient.put('/drivers/me/heartbeat', { lat, lng, heading }).catch(() => {});
+      // No fresh fix → heartbeat without coords (still refreshes last_heartbeat).
+      apiClient.put('/drivers/me/heartbeat', buildFixPayload() ?? {}).catch(() => {});
     }, 30_000);
     useOnlineStore.getState().setHeartbeatRef(heartbeatInterval);
 

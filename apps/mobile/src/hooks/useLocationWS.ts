@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { buildFixPayload } from '../lib/locationCore';
 import { getWsUrl } from '../lib/wsUrl';
-import { useLocationStore } from '../store/locationStore';
 
 const SEND_INTERVAL_MS = 5000;
 const INITIAL_BACKOFF_MS = 1000;
@@ -46,9 +46,9 @@ export function useLocationWS(enabled = true) {
 
       sendIntervalRef.current = setInterval(() => {
         if (ws.readyState !== WebSocket.OPEN) return;
-        const { lat, lng, heading } = useLocationStore.getState();
-        if (lat == null || lng == null) return;
-        ws.send(JSON.stringify({ lat, lng, heading }));
+        const payload = buildFixPayload();
+        if (!payload) return;
+        ws.send(JSON.stringify(payload));
       }, SEND_INTERVAL_MS);
     };
 

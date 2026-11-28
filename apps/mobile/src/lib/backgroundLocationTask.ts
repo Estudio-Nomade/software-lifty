@@ -2,7 +2,7 @@ import type * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { apiClient } from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import { LOCATION_TASK_NAME, applyLocationCoords } from './locationCore';
+import { LOCATION_TASK_NAME, applyLocationCoords, buildFixPayload } from './locationCore';
 
 /**
  * Shared handler so unit tests can exercise auth guard without TaskManager.
@@ -17,15 +17,14 @@ export async function handleBackgroundLocationUpdate(
   if (!token) return;
 
   const latest = locations[locations.length - 1];
-  const { latitude, longitude, heading, accuracy } = latest.coords;
-  if (!applyLocationCoords(latitude, longitude, heading, accuracy)) return;
+  const { latitude, longitude, heading, accuracy, speed } = latest.coords;
+  if (!applyLocationCoords(latitude, longitude, heading, accuracy, speed, latest.timestamp)) return;
+
+  const payload = buildFixPayload();
+  if (!payload) return;
 
   try {
-    await apiClient.put('/drivers/me/heartbeat', {
-      lat: latitude,
-      lng: longitude,
-      heading: heading ?? null,
-    });
+    await apiClient.put('/drivers/me/heartbeat', payload);
   } catch {
     // Best-effort: OS may fire updates without network; next tick retries.
   }

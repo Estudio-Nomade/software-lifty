@@ -130,6 +130,36 @@ export function haversineDistance(lat1: number, lng1: number, lat2: number, lng2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+const SNAP_TIMEOUT_MS = 800;
+const SNAP_MIN_RADIUS_M = 15;
+
+/**
+ * Snap a GPS point to the nearest road via OSRM /nearest. Only snaps when the road is
+ * within max(accuracy, 15) m (otherwise the driver is probably off-road or the fix is
+ * better than the map); any failure or timeout returns the input unchanged.
+ */
+export async function snapToRoad(
+  lat: number,
+  lng: number,
+  accuracy?: number | null,
+): Promise<{ lat: number; lng: number }> {
+  try {
+    const res = await fetch(`${OSRM_URL}/nearest/v1/driving/${lng},${lat}?number=1`, {
+      signal: AbortSignal.timeout(SNAP_TIMEOUT_MS),
+    });
+    if (!res.ok) return { lat, lng };
+    const data = (await res.json()) as {
+      code?: string;
+      waypoints?: Array<{ location: [number, number]; distance: number }>;
+    };
+    const wp = data.code === 'Ok' ? data.waypoints?.[0] : undefined;
+    if (!wp || wp.distance > Math.max(accuracy ?? 0, SNAP_MIN_RADIUS_M)) return { lat, lng };
+    return { lat: wp.location[1], lng: wp.location[0] };
+  } catch {
+    return { lat, lng };
+  }
+}
+
 async function cacheGet(key: string): Promise<string | null> {
   const redis = getRedis();
   if (!redis) return null;

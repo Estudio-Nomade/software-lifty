@@ -56,6 +56,7 @@ import {
   startTracking,
   stopTracking,
 } from '../lib/location';
+import { buildFixPayload } from '../lib/locationCore';
 import {
   PUSH_PERMISSION_DENIED_MSG,
   ensurePushRegistration,
@@ -401,9 +402,9 @@ export const ActiveScreen: React.FC = () => {
     setConnecting(true);
     try {
       await apiClient.put('/drivers/me/online', { is_online: true });
-      const { lat, lng, heading } = useLocationStore.getState();
-      if (lat != null && lng != null) {
-        await apiClient.put('/drivers/me/heartbeat', { lat, lng, heading }).catch(() => {});
+      const fix = buildFixPayload();
+      if (fix) {
+        await apiClient.put('/drivers/me/heartbeat', fix).catch(() => {});
       }
       const now = Date.now();
       setOnlineSince(now);

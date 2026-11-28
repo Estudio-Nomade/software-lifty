@@ -7,12 +7,7 @@ import { getSupabaseClient } from '../../shared/lib/supabase';
 import { invalidateTripCache } from '../../shared/lib/trip-utils';
 import { authGuard } from '../../shared/middleware/require-auth';
 import { locationUpdateBody } from './schema';
-import {
-  getDriverIdByUserId,
-  markDriverSeen,
-  publishDriverLocationIfOnTrip,
-  upsertLocation,
-} from './service';
+import { getDriverIdByUserId, ingestDriverFix, markDriverSeen } from './service';
 
 async function resolveUserIdFromToken(token: string): Promise<string | null> {
   if (process.env.NODE_ENV === 'test') {
@@ -90,8 +85,15 @@ export const locationWsPlugin = new Elysia().ws('/ws/location', {
       if (!driverId) return;
     }
 
-    await upsertLocation(driverId, data.lat, data.lng, data.heading);
-    await publishDriverLocationIfOnTrip(driverId, data.lat, data.lng, data.heading);
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+    await ingestDriverFix(driverId, {
+      lat: data.lat,
+      lng: data.lng,
+      heading: num(data.heading),
+      accuracy: num(data.accuracy),
+      speed: num(data.speed),
+      timestamp: num(data.timestamp),
+    });
   },
   async close(ws) {
     const driverId = (ws.data as any).driverId as string | undefined;
@@ -113,8 +115,7 @@ export const locationHttpPlugin = new Elysia({ prefix: '/location' }).use(authGu
   ({ user, body, set }) => {
     return safeCall(async () => {
       const driverId = await getDriverIdByUserId(user.id);
-      await upsertLocation(driverId, body.lat, body.lng, body.heading);
-      await publishDriverLocationIfOnTrip(driverId, body.lat, body.lng, body.heading);
+      await ingestDriverFix(driverId, body);
       return { message: 'Location updated' };
     }, set);
   },

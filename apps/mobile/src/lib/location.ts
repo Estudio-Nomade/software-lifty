@@ -5,11 +5,14 @@ import { useLocationStore } from '../store/locationStore';
 import {
   BG_LOCATION_PERMISSION_MSG,
   BG_LOCATION_UNAVAILABLE_MSG,
+  FG_LOCATION_TIME_INTERVAL_MS,
   LOCATION_DENIED_MSG,
   LOCATION_TASK_NAME,
+  PRECISE_LOCATION_REQUIRED_MSG,
   type StartTrackingOptions,
   applyLocationCoords,
   buildBackgroundLocationOptions,
+  resetLocationSmoothing,
   shouldStartBackgroundUpdates,
 } from './locationCore';
 
@@ -366,8 +369,9 @@ async function startForegroundWatch(): Promise<void> {
 
   nativeSubscription = await Location.watchPositionAsync(
     {
-      accuracy: Location.Accuracy.High,
-      timeInterval: 5000,
+      accuracy: Location.Accuracy.BestForNavigation,
+      timeInterval: FG_LOCATION_TIME_INTERVAL_MS,
+      distanceInterval: 0,
     },
     (loc) => {
       applyLocationCoords(
@@ -375,6 +379,8 @@ async function startForegroundWatch(): Promise<void> {
         loc.coords.longitude,
         loc.coords.heading,
         loc.coords.accuracy,
+        loc.coords.speed,
+        loc.timestamp,
       );
     },
   );
@@ -382,6 +388,7 @@ async function startForegroundWatch(): Promise<void> {
 
 /** Tear down any native location source (bg task + fg watch). */
 async function tearDownNativeTracking(): Promise<void> {
+  resetLocationSmoothing();
   await stopBackgroundUpdates();
   stopNativeWatch();
 }
@@ -407,7 +414,7 @@ async function startBackgroundLocationUpdates(isCurrent: () => boolean): Promise
   if (!already) {
     await Location.startLocationUpdatesAsync(
       LOCATION_TASK_NAME,
-      buildBackgroundLocationOptions(Location.Accuracy.Balanced),
+      buildBackgroundLocationOptions(Location.Accuracy.BestForNavigation),
     );
   }
 
@@ -427,14 +434,19 @@ export async function startTracking(options: StartTrackingOptions = {}): Promise
     }
 
     try {
-      const { granted } = await Location.requestForegroundPermissionsAsync();
+      const fg = await Location.requestForegroundPermissionsAsync();
       if (!isCurrent()) return;
-      if (!granted) {
+      if (!fg.granted) {
         useLocationStore
           .getState()
           .setLocationError(
             'Permiso de ubicación denegado. Activálo en Ajustes e intentá de nuevo.',
           );
+        return;
+      }
+      // Android 12+ lets the user grant approximate only; that defeats precise tracking.
+      if (fg.android?.accuracy === 'coarse') {
+        useLocationStore.getState().setLocationError(PRECISE_LOCATION_REQUIRED_MSG);
         return;
       }
 
@@ -487,6 +499,9 @@ export async function getCurrentPosition(): Promise<boolean> {
     }
 
     const pos =
+      (await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.BestForNavigation,
+      }).catch(() => null)) ??
       (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }).catch(
         () => null,
       )) ??
@@ -504,6 +519,8 @@ export async function getCurrentPosition(): Promise<boolean> {
       pos.coords.longitude,
       pos.coords.heading,
       pos.coords.accuracy,
+      pos.coords.speed,
+      pos.timestamp,
     );
   } catch (error) {
     console.error('getCurrentPosition failed:', error);

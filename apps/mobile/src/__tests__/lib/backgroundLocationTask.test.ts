@@ -52,6 +52,7 @@ describe('handleBackgroundLocationUpdate', () => {
 
   it('applies coords and heartbeats when token is present', async () => {
     useAuthStore.setState({ token: 'tok', isAuthenticated: true });
+    const ts = Date.now();
 
     await handleBackgroundLocationUpdate([
       {
@@ -64,7 +65,7 @@ describe('handleBackgroundLocationUpdate', () => {
           heading: 12,
           speed: null,
         },
-        timestamp: Date.now(),
+        timestamp: ts,
       },
     ]);
 
@@ -74,6 +75,8 @@ describe('handleBackgroundLocationUpdate', () => {
       lat: -34.6,
       lng: -58.4,
       heading: 12,
+      accuracy: 10,
+      timestamp: ts,
     });
   });
 });
